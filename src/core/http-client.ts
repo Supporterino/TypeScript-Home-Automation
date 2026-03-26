@@ -46,7 +46,8 @@ export class HttpClient {
       };
 
       if (body !== undefined) {
-        fetchOptions.body = JSON.stringify(body);
+        fetchOptions.body =
+          typeof body === "string" ? body : JSON.stringify(body);
       }
 
       const response = await fetch(url, fetchOptions);
