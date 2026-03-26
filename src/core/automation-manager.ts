@@ -7,6 +7,7 @@ import type { CronScheduler } from "./cron-scheduler.js";
 import type { HttpClient } from "./http-client.js";
 import type { MqttService, MqttMessageHandler } from "./mqtt-service.js";
 import type { ShellyService } from "./shelly-service.js";
+import type { NotificationService } from "./notification-service.js";
 
 /**
  * Discovers, registers, and manages the lifecycle of all automations.
@@ -25,6 +26,7 @@ export class AutomationManager {
     private readonly cron: CronScheduler,
     private readonly http: HttpClient,
     private readonly shelly: ShellyService,
+    private readonly notifications: NotificationService | null,
     private readonly config: Config,
     private readonly logger: Logger,
   ) {}
@@ -94,7 +96,7 @@ export class AutomationManager {
   async register(automation: Automation): Promise<void> {
     const childLogger = this.logger.child({ automation: automation.name });
 
-    automation._inject(this.mqtt, this.shelly, this.http, childLogger, this.config);
+    automation._inject(this.mqtt, this.shelly, this.http, childLogger, this.config, this.notifications);
 
     const handlers: { topic: string; handler: MqttMessageHandler }[] = [];
 

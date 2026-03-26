@@ -276,6 +276,7 @@ Inside `execute()` (and `onStart`/`onStop`), the following are available:
 | `this.shelly.getStatus(name)` | Get Shelly switch status (power, voltage, etc.) |
 | `this.shelly.isOn(name)` | Check if a Shelly switch is on |
 | `this.shelly.getPower(name)` | Get current power draw in Watts |
+| `this.notify({ title, message, ... })` | Send a push notification (requires notification service) |
 | `this.http.get(url)` | HTTP GET request |
 | `this.http.post(url, body)` | HTTP POST request |
 | `this.http.put(url, body)` | HTTP PUT request |
@@ -366,6 +367,57 @@ const status = await this.shelly.getStatus("living_room_plug");
 // status.current     — current in Amps
 // status.aenergy     — { total: Wh, by_minute: mWh[], minute_ts: unix }
 // status.temperature — { tC: number, tF: number }
+```
+
+## Notifications
+
+The engine supports an optional notification service for sending push notifications from automations. The `NotificationService` interface is abstract — implement it for any provider.
+
+### Built-in: ntfy.sh
+
+```ts
+import { createEngine, NtfyNotificationService } from "ts-home-automation";
+
+const engine = createEngine({
+  automationsDir: "...",
+  notifications: new NtfyNotificationService({
+    topic: "my-home-alerts",
+    // url: "https://ntfy.example.com",  // optional, defaults to ntfy.sh
+    // token: "tk_...",                   // optional, for auth
+  }),
+});
+```
+
+### Using in automations
+
+```ts
+await this.notify({
+  title: "Front door opened",
+  message: "Front door was opened while nobody is home",
+  priority: "urgent",
+  tags: ["warning", "door"],
+});
+```
+
+If no notification service is configured, `this.notify()` logs a warning and does nothing.
+
+### Custom notification service
+
+Implement the `NotificationService` interface to integrate any provider:
+
+```ts
+import type { NotificationService, NotificationOptions } from "ts-home-automation";
+
+class TelegramNotificationService implements NotificationService {
+  async send(options: NotificationOptions): Promise<void> {
+    // Send via Telegram Bot API
+  }
+}
+
+const engine = createEngine({
+  automationsDir: "...",
+  notifications: new TelegramNotificationService(),
+});
 ```
 
 ## Device Types

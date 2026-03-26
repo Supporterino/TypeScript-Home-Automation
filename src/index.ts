@@ -18,6 +18,17 @@ export {
   type TriggerContext,
 } from "./core/automation.js";
 
+// Notification services
+export type {
+  NotificationService,
+  NotificationOptions,
+  NotificationPriority,
+} from "./core/notification-service.js";
+export {
+  NtfyNotificationService,
+  type NtfyConfig,
+} from "./core/ntfy-notification-service.js";
+
 // Core services (exposed for advanced usage)
 export { MqttService, type MqttMessageHandler } from "./core/mqtt-service.js";
 export { ShellyService, type ShellyDevice } from "./core/shelly-service.js";

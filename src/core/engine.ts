@@ -4,6 +4,8 @@ import { MqttService } from "./mqtt-service.js";
 import { CronScheduler } from "./cron-scheduler.js";
 import { HttpClient } from "./http-client.js";
 import { ShellyService } from "./shelly-service.js";
+import type { NotificationService } from "./notification-service.js";
+import type { NtfyNotificationService } from "./ntfy-notification-service.js";
 import { AutomationManager } from "./automation-manager.js";
 
 /**
@@ -30,6 +32,26 @@ export interface EngineOptions {
    * If omitted, a default logger is created based on the config log level.
    */
   logger?: Logger;
+
+  /**
+   * Optional notification service for sending push notifications.
+   *
+   * If provided, automations can use `this.notify()` to send notifications.
+   * If omitted, `this.notify()` will log a warning and do nothing.
+   *
+   * @example
+   * ```ts
+   * import { createEngine, NtfyNotificationService } from "ts-home-automation";
+   *
+   * const engine = createEngine({
+   *   automationsDir: "...",
+   *   notifications: new NtfyNotificationService({
+   *     topic: "my-home-alerts",
+   *   }),
+   * });
+   * ```
+   */
+  notifications?: NotificationService;
 }
 
 /**
@@ -56,6 +78,9 @@ export interface Engine {
 
   /** The HTTP client (for advanced usage). */
   readonly http: HttpClient;
+
+  /** The notification service (if configured). */
+  readonly notifications: NotificationService | null;
 
   /** The automation manager (for advanced usage, e.g. manual registration). */
   readonly manager: AutomationManager;
@@ -105,11 +130,22 @@ export function createEngine(options: EngineOptions): Engine {
   const cron = new CronScheduler(logger.child({ service: "cron" }));
   const http = new HttpClient(logger.child({ service: "http" }));
   const shelly = new ShellyService(http, logger.child({ service: "shelly" }));
+
+  // Initialize optional notification service
+  const notifications = options.notifications ?? null;
+  if (notifications && "_inject" in notifications) {
+    (notifications as NtfyNotificationService)._inject(
+      http,
+      logger.child({ service: "notifications" }),
+    );
+  }
+
   const manager = new AutomationManager(
     mqtt,
     cron,
     http,
     shelly,
+    notifications,
     config,
     logger.child({ service: "manager" }),
   );
@@ -122,6 +158,7 @@ export function createEngine(options: EngineOptions): Engine {
     mqtt,
     shelly,
     http,
+    notifications,
     manager,
 
     async start(): Promise<void> {
