@@ -1,0 +1,39 @@
+services:
+  home-automation:
+    build: .
+    container_name: home-automation
+    restart: unless-stopped
+    environment:
+      - MQTT_HOST=mosquitto
+      - MQTT_PORT=1883
+      - ZIGBEE2MQTT_PREFIX=zigbee2mqtt
+      - LOG_LEVEL=info
+      - NODE_ENV=production
+    depends_on:
+      mosquitto:
+        condition: service_started
+    networks:
+      - home-automation
+
+  # Only include this if you don't already have Mosquitto running elsewhere.
+  # If your Mosquitto broker is on another host, remove this service and
+  # update MQTT_HOST above to point to your broker's IP/hostname.
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: mosquitto
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+    volumes:
+      - mosquitto-data:/mosquitto/data
+      - mosquitto-log:/mosquitto/log
+    networks:
+      - home-automation
+
+networks:
+  home-automation:
+    driver: bridge
+
+volumes:
+  mosquitto-data:
+  mosquitto-log:
