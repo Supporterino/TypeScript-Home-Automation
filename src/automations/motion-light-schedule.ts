@@ -117,11 +117,15 @@ export default class MotionLightSchedule extends Automation {
    * If no window matches, motion is ignored (but active lamps remain on
    * until the turn-off timer expires).
    *
-   * Example setup:
+   * Example setup (multiple windows):
    * - Morning (06:00–09:00): hallway at full brightness
    * - Day (09:00–18:00): hallway at 60%
    * - Evening (18:00–22:00): hallway + accent lamp, warm brightness
    * - Night (22:00–06:00): hallway only at very low brightness
+   *
+   * For a single window covering the whole day, use an overnight range:
+   *   [{ from: "00:00", to: "00:00", lamps: [{ name: "light", brightness: 200 }] }]
+   * Since from === to, the window matches all times.
    */
   private readonly TIME_WINDOWS: TimeWindow[] = [
     {
