@@ -44,6 +44,10 @@
     "smart-home",
     "typescript"
   ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Supporterino/TypeScript-Home-Automation"
+  },
   "license": "GPL-3.0-only",
   "dependencies": {
     "cron": "^4.3.0",
