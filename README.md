@@ -87,8 +87,12 @@ await engine.start();
 ### Writing automations
 
 ```ts
-import { Automation, type Trigger, type TriggerContext } from "ts-home-automation";
-import type { OccupancyPayload } from "ts-home-automation/types";
+import {
+  Automation,
+  type Trigger,
+  type TriggerContext,
+  type OccupancyPayload,
+} from "ts-home-automation";
 
 export default class MotionLight extends Automation {
   readonly name = "motion-light";
@@ -97,7 +101,7 @@ export default class MotionLight extends Automation {
     {
       type: "mqtt",
       topic: "zigbee2mqtt/hallway_sensor",
-      filter: (p) => (p as unknown as OccupancyPayload).occupancy === true,
+      filter: (p) => (p as OccupancyPayload).occupancy === true,
     },
   ];
 
@@ -285,6 +289,80 @@ async onStart(): Promise<void> {
 async onStop(): Promise<void> {
   // Called on shutdown (e.g. clear timers)
 }
+```
+
+## Device Types
+
+The framework provides typed payloads organized in three layers:
+
+1. **Generic types** — work across any brand (e.g. `DimmableLightPayload`, `OccupancyPayload`, `ButtonPayload`)
+2. **Brand-specific types** — narrowed types with exact fields and action values per manufacturer
+3. **Common primitives** — shared enums and color types (`DeviceState`, `ColorXY`, `PowerOnBehavior`)
+
+Use generic types when writing automations that should work with any device in a category. Use brand-specific types when you need exact typing for a particular model.
+
+### Generic types
+
+| Type | Category | Description |
+|---|---|---|
+| `DimmableLightPayload` / `DimmableLightSetCommand` | Lights | Any dimmable bulb |
+| `WhiteSpectrumLightPayload` / `WhiteSpectrumLightSetCommand` | Lights | Any color-temperature bulb |
+| `ColorLightPayload` / `ColorLightSetCommand` | Lights | Any RGB/color bulb |
+| `LightPayload` / `LightSetCommand` | Lights | Catch-all for any light |
+| `OccupancyPayload` | Sensors | Any motion/occupancy sensor |
+| `TemperatureHumidityPayload` | Sensors | Any temp/humidity sensor |
+| `ContactPayload` | Sensors | Any door/window contact sensor |
+| `WaterLeakPayload` | Sensors | Any water leak sensor |
+| `AirQualitySensorPayload` | Sensors | Any air quality sensor |
+| `AirPurifierPayload` | Appliances | Any air purifier |
+| `ButtonPayload` | Remotes | Any button/remote (`action: string`) |
+| `PlugPayload` / `SwitchSetCommand` | Plugs | Any smart plug/switch |
+
+### Brand-specific types
+
+**Philips Hue:**
+
+| Type | Devices |
+|---|---|
+| `PhilipsDimmableLightSetCommand` | LWG004, 9290030514, 929002241201, 8718699673147 |
+| `PhilipsWhiteSpectrumLightSetCommand` | 8719514301481 |
+| `PhilipsColorLightSetCommand` | 9290022166, 8718699703424 |
+| `PhilipsHueMotionSensorPayload` / `PhilipsHueMotionSensorSetCommand` | 9290012607, 9290030675 |
+
+**IKEA:**
+
+| Type | Devices |
+|---|---|
+| `IkeaDimmableLightSetCommand` | LED2102G3, ICPSHC24 |
+| `IkeaWhiteSpectrumLightSetCommand` | LED2005R5/LED2106R3 |
+| `IkeaStarkvindPayload` / `IkeaStarkvindSetCommand` | E2007 (STARKVIND air purifier) |
+| `IkeaVindstyrkaPayload` | E2112 (VINDSTYRKA air quality sensor) |
+| `IkeaStyrbarPayload` / `IkeaStyrbarAction` | E2001/E2002/E2313 (STYRBAR remote) |
+| `IkeaShortcutButtonPayload` / `IkeaShortcutButtonAction` | E1812 (shortcut button) |
+| `IkeaRodretPayload` / `IkeaRodretAction` | E2201 (RODRET dimmer) |
+
+**Aqara:**
+
+| Type | Devices |
+|---|---|
+| `AqaraRemoteSwitchH1Payload` / `AqaraRemoteSwitchH1SetCommand` | WXKG15LM/WRS-R02 (double rocker) |
+| `AqaraWaterLeakPayload` | SJCGQ11LM (water leak sensor) |
+| `AqaraTemperatureHumidityPayload` | WSDCGQ11LM (temp/humidity/pressure) |
+
+### Example: generic vs brand-specific
+
+```ts
+// Generic — works with any motion sensor
+import type { OccupancyPayload } from "ts-home-automation";
+
+// Brand-specific — includes Philips-specific fields like motion_sensitivity
+import type { PhilipsHueMotionSensorPayload } from "ts-home-automation";
+
+// Generic — works with any remote (action is a plain string)
+import type { ButtonPayload } from "ts-home-automation";
+
+// Brand-specific — action is a typed union of exact STYRBAR values
+import type { IkeaStyrbarPayload } from "ts-home-automation";
 ```
 
 ## Building the Package
