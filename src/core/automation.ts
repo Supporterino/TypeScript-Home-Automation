@@ -2,6 +2,10 @@ import type { Logger } from "pino";
 import type { MqttService } from "./mqtt-service.js";
 import type { HttpClient } from "./http-client.js";
 import type { ShellyService } from "./shelly-service.js";
+import type {
+  NotificationService,
+  NotificationOptions,
+} from "./notification-service.js";
 import type { Config } from "../config.js";
 
 /**
@@ -54,6 +58,7 @@ export type TriggerContext =
  * The base class provides access to:
  * - `this.mqtt`   - Publish messages and interact with Zigbee2MQTT devices
  * - `this.shelly` - Control Shelly Gen 2 devices (plugs, switches)
+ * - `this.notify` - Send push notifications (if a NotificationService is configured)
  * - `this.http`   - Make outbound HTTP requests
  * - `this.logger` - Structured logger (child logger scoped to this automation)
  * - `this.config` - Application configuration
@@ -93,6 +98,7 @@ export abstract class Automation {
   protected http!: HttpClient;
   protected logger!: Logger;
   protected config!: Config;
+  private notificationService: NotificationService | null = null;
 
   /**
    * Called by the AutomationManager to inject dependencies.
@@ -104,12 +110,40 @@ export abstract class Automation {
     http: HttpClient,
     logger: Logger,
     config: Config,
+    notifications: NotificationService | null,
   ): void {
     this.mqtt = mqtt;
     this.shelly = shelly;
     this.http = http;
     this.logger = logger;
     this.config = config;
+    this.notificationService = notifications;
+  }
+
+  /**
+   * Send a push notification via the configured notification service.
+   *
+   * If no notification service is configured on the engine, this logs a
+   * warning and does nothing.
+   *
+   * @example
+   * ```ts
+   * await this.notify({
+   *   title: "Door opened",
+   *   message: "Front door was opened at 3 AM",
+   *   priority: "urgent",
+   *   tags: ["warning", "door"],
+   * });
+   * ```
+   */
+  protected async notify(options: NotificationOptions): Promise<void> {
+    if (!this.notificationService) {
+      this.logger.warn(
+        "notify() called but no notification service is configured",
+      );
+      return;
+    }
+    await this.notificationService.send(options);
   }
 
   /**

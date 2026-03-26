@@ -10,7 +10,7 @@ import type { AqaraTemperatureHumidityPayload } from "../types/zigbee.js";
  * Set to null to disable the threshold.
  */
 interface Threshold {
-  /** Warning threshold — sends a low-priority notification. */
+  /** Warning threshold — sends a high-priority notification. */
   warning: number | null;
   /** Critical threshold — sends an urgent notification. */
   critical: number | null;
@@ -30,45 +30,36 @@ interface SensorConfig {
   humidity: Threshold;
 }
 
-/** ntfy.sh priority levels. */
-type NtfyPriority = "min" | "low" | "default" | "high" | "urgent";
-
 /**
- * Example: Temperature and humidity monitoring with ntfy.sh notifications.
+ * Example: Temperature and humidity monitoring with push notifications.
  *
  * Listens to one or more Aqara WSDCGQ11LM temperature/humidity sensors
- * and sends push notifications via ntfy.sh when warning or critical
- * thresholds are exceeded.
+ * and sends push notifications via the engine's notification service when
+ * warning or critical thresholds are exceeded.
+ *
+ * Requires a notification service to be configured on the engine:
+ *
+ * ```ts
+ * import { createEngine, NtfyNotificationService } from "ts-home-automation";
+ *
+ * const engine = createEngine({
+ *   automationsDir: "...",
+ *   notifications: new NtfyNotificationService({
+ *     topic: "my-home-alerts",
+ *   }),
+ * });
+ * ```
  *
  * Features:
  * - Multiple sensors, each with independent thresholds
  * - Separate warning and critical levels for temperature and humidity
  * - Cooldown period to prevent notification spam
- * - Notifications via ntfy.sh (self-hosted or ntfy.sh cloud)
+ * - Uses the engine's notification service (ntfy.sh, or any custom impl)
  *
- * Adjust NTFY_URL, NTFY_TOPIC, SENSORS, and COOLDOWN_MS to your setup.
- *
- * ntfy.sh setup:
- * 1. Install the ntfy app on your phone
- * 2. Subscribe to your chosen topic
- * 3. Set NTFY_TOPIC below to the same topic name
+ * Adjust SENSORS and COOLDOWN_MS to your setup.
  */
 export default class TemperatureAlert extends Automation {
   readonly name = "temperature-alert";
-
-  // ---- ntfy.sh configuration ----
-
-  /** ntfy.sh server URL (use your own server or the public one). */
-  private readonly NTFY_URL = "https://ntfy.sh";
-
-  /** ntfy.sh topic to publish to. Pick something hard to guess. */
-  private readonly NTFY_TOPIC = "my-home-alerts";
-
-  /**
-   * Optional: ntfy.sh auth token for access-controlled topics.
-   * Set to null if your topic is open.
-   */
-  private readonly NTFY_TOKEN: string | null = null;
 
   // ---- Sensor configuration ----
 
@@ -77,9 +68,6 @@ export default class TemperatureAlert extends Automation {
    *
    * Each sensor has its own warning and critical thresholds for
    * temperature and humidity. Set a threshold to null to disable it.
-   *
-   * Example: a bathroom sensor with high humidity alert, and a server
-   * room sensor with tight temperature limits.
    */
   private readonly SENSORS: SensorConfig[] = [
     {
@@ -134,7 +122,6 @@ export default class TemperatureAlert extends Automation {
     const payload =
       context.payload as unknown as AqaraTemperatureHumidityPayload;
 
-    // Check temperature thresholds
     if (payload.temperature !== undefined) {
       await this.checkThreshold(
         sensor,
@@ -145,7 +132,6 @@ export default class TemperatureAlert extends Automation {
       );
     }
 
-    // Check humidity thresholds
     if (payload.humidity !== undefined) {
       await this.checkThreshold(
         sensor,
@@ -169,21 +155,35 @@ export default class TemperatureAlert extends Automation {
     unit: string,
     threshold: Threshold,
   ): Promise<void> {
-    // Check critical first (higher priority wins)
     if (threshold.critical !== null && value >= threshold.critical) {
-      await this.notify(sensor, metric, value, unit, "critical", threshold.critical);
+      await this.sendAlert(
+        sensor,
+        metric,
+        value,
+        unit,
+        "critical",
+        threshold.critical,
+      );
       return;
     }
 
     if (threshold.warning !== null && value >= threshold.warning) {
-      await this.notify(sensor, metric, value, unit, "warning", threshold.warning);
+      await this.sendAlert(
+        sensor,
+        metric,
+        value,
+        unit,
+        "warning",
+        threshold.warning,
+      );
     }
   }
 
   /**
-   * Send a notification via ntfy.sh, respecting the cooldown period.
+   * Send a notification via the engine's notification service,
+   * respecting the cooldown period.
    */
-  private async notify(
+  private async sendAlert(
     sensor: SensorConfig,
     metric: string,
     value: number,
@@ -197,7 +197,7 @@ export default class TemperatureAlert extends Automation {
 
     if (now - lastTime < this.COOLDOWN_MS) {
       this.logger.debug(
-        { sensor: sensor.name, metric, level, cooldownKey },
+        { sensor: sensor.name, metric, level },
         "Notification suppressed (cooldown active)",
       );
       return;
@@ -205,61 +205,25 @@ export default class TemperatureAlert extends Automation {
 
     const metricLabel = metric.charAt(0).toUpperCase() + metric.slice(1);
     const levelLabel = level.charAt(0).toUpperCase() + level.slice(1);
-    const title = `${sensor.label}: ${metricLabel} ${levelLabel}`;
-    const message = [
-      `${metricLabel}: ${value}${unit} (threshold: ${thresholdValue}${unit})`,
-      `Sensor: ${sensor.label} (${sensor.name})`,
-    ].join("\n");
-
     const isCritical = level === "critical";
-    const priority: NtfyPriority = isCritical ? "urgent" : "high";
-    const tags = isCritical
-      ? "rotating_light,thermometer"
-      : "warning,thermometer";
 
     this.logger.info(
       { sensor: sensor.name, metric, value, unit, level },
       `Sending ${level} notification`,
     );
 
-    try {
-      const headers: Record<string, string> = {
-        "Content-Type": "text/plain",
-        Title: title,
-        Priority: priority,
-        Tags: tags,
-      };
+    await this.notify({
+      title: `${sensor.label}: ${metricLabel} ${levelLabel}`,
+      message: [
+        `${metricLabel}: ${value}${unit} (threshold: ${thresholdValue}${unit})`,
+        `Sensor: ${sensor.label} (${sensor.name})`,
+      ].join("\n"),
+      priority: isCritical ? "urgent" : "high",
+      tags: isCritical
+        ? ["rotating_light", "thermometer"]
+        : ["warning", "thermometer"],
+    });
 
-      if (this.NTFY_TOKEN) {
-        headers.Authorization = `Bearer ${this.NTFY_TOKEN}`;
-      }
-
-      const response = await this.http.request(
-        `${this.NTFY_URL}/${this.NTFY_TOPIC}`,
-        {
-          method: "POST",
-          headers,
-          body: message,
-        },
-      );
-
-      if (response.ok) {
-        this.lastNotified.set(cooldownKey, now);
-        this.logger.info(
-          { sensor: sensor.name, metric, level },
-          "Notification sent",
-        );
-      } else {
-        this.logger.error(
-          { status: response.status, sensor: sensor.name },
-          "ntfy.sh returned non-OK status",
-        );
-      }
-    } catch (err) {
-      this.logger.error(
-        { err, sensor: sensor.name },
-        "Failed to send ntfy.sh notification",
-      );
-    }
+    this.lastNotified.set(cooldownKey, now);
   }
 }
