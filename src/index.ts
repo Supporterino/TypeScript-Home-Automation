@@ -31,17 +31,80 @@ export { AutomationManager } from "./core/automation-manager.js";
 // Configuration
 export { loadConfig, type Config } from "./config.js";
 
-// Zigbee2MQTT types
+// Zigbee2MQTT types — common primitives
 export type {
   DeviceState,
-  OccupancyPayload,
-  ContactPayload,
-  TemperatureHumidityPayload,
+  DeviceStateSet,
+  PowerOnBehavior,
+  ColorXY,
+  ColorHS,
+  ColorRGB,
+  ColorHex,
+  Color,
+} from "./types/zigbee.js";
+
+// Zigbee2MQTT types — generic payloads (work across brands)
+export type {
+  DimmableLightPayload,
+  WhiteSpectrumLightPayload,
+  ColorLightPayload,
   LightPayload,
-  PlugPayload,
+  DimmableLightSetCommand,
+  WhiteSpectrumLightSetCommand,
+  ColorLightSetCommand,
   LightSetCommand,
-  SwitchSetCommand,
+  OccupancyPayload,
+  TemperatureHumidityPayload,
+  ContactPayload,
+  WaterLeakPayload,
+  AirQualitySensorPayload,
+  AirPurifierPayload,
   ButtonPayload,
+  PlugPayload,
+  SwitchSetCommand,
   BridgeState,
   GenericPayload,
 } from "./types/zigbee.js";
+
+// Zigbee2MQTT types — Philips Hue specific
+export type {
+  PhilipsLightEffect,
+  PhilipsColorLightEffect,
+  PhilipsDimmableLightSetCommand,
+  PhilipsWhiteSpectrumLightSetCommand,
+  PhilipsColorLightSetCommand,
+  PhilipsMotionSensitivity,
+  PhilipsHueMotionSensorPayload,
+  PhilipsHueMotionSensorSetCommand,
+} from "./types/zigbee.js";
+
+// Zigbee2MQTT types — IKEA specific
+export type {
+  IkeaLightEffect,
+  IkeaDimmableLightSetCommand,
+  IkeaWhiteSpectrumLightSetCommand,
+  IkeaAirQuality,
+  IkeaFanMode,
+  IkeaStarkvindPayload,
+  IkeaStarkvindSetCommand,
+  IkeaVindstyrkaPayload,
+  IkeaStyrbarAction,
+  IkeaStyrbarPayload,
+  IkeaShortcutButtonAction,
+  IkeaShortcutButtonPayload,
+  IkeaRodretAction,
+  IkeaRodretPayload,
+} from "./types/zigbee.js";
+
+// Zigbee2MQTT types — Aqara specific
+export type {
+  AqaraRemoteSwitchH1Action,
+  AqaraClickMode,
+  AqaraOperationMode,
+  AqaraRemoteSwitchH1Payload,
+  AqaraRemoteSwitchH1SetCommand,
+  AqaraWaterLeakPayload,
+  AqaraTemperatureHumidityPayload,
+} from "./types/zigbee.js";
+
+
