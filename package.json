@@ -1,16 +1,45 @@
 {
-  "name": "typescript-home-automation",
+  "name": "ts-home-automation",
   "version": "1.0.0",
   "description": "TypeScript-based home automation framework for Zigbee2MQTT",
   "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./types": {
+      "types": "./dist/types/zigbee.d.ts",
+      "import": "./dist/types/zigbee.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
-    "dev": "bun run --watch src/index.ts",
-    "start": "bun run src/index.ts",
+    "dev": "bun run --watch src/standalone.ts",
+    "start": "bun run src/standalone.ts",
     "typecheck": "tsc --noEmit",
+    "build": "tsc -p tsconfig.build.json",
+    "prepublishOnly": "bun run build",
     "docker:build": "docker build -t home-automation .",
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down"
   },
+  "keywords": [
+    "home-automation",
+    "mqtt",
+    "zigbee2mqtt",
+    "zigbee",
+    "iot",
+    "smart-home",
+    "typescript"
+  ],
+  "license": "MIT",
   "dependencies": {
     "cron": "^4.3.0",
     "mqtt": "^5.10.0",
@@ -21,5 +50,13 @@
     "@types/bun": "^1.2.0",
     "pino-pretty": "^13.0.0",
     "typescript": "^5.7.0"
+  },
+  "peerDependencies": {
+    "pino-pretty": ">=13.0.0"
+  },
+  "peerDependenciesMeta": {
+    "pino-pretty": {
+      "optional": true
+    }
   }
 }

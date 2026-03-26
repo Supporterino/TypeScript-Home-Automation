@@ -17,4 +17,4 @@ COPY package.json ./
 COPY src ./src
 COPY tsconfig.json ./
 
-CMD ["bun", "run", "src/index.ts"]
+CMD ["bun", "run", "src/standalone.ts"]
