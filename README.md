@@ -1,8 +1,13 @@
 # TypeScript Home Automation
 
-A lightweight, TypeScript-based home automation engine built on MQTT. Designed to replace Home Assistant automations with fully typed, testable logic that runs as a standalone service alongside [Zigbee2MQTT](https://www.zigbee2mqtt.io/).
+A lightweight, TypeScript-based home automation framework built on MQTT. Designed to replace Home Assistant automations with fully typed, testable logic that runs as a standalone service alongside [Zigbee2MQTT](https://www.zigbee2mqtt.io/).
 
 Each automation is a single TypeScript class. No YAML, no UI — just code.
+
+Can be used in two ways:
+
+1. **As a package** — install `ts-home-automation` in your own project and write automations there
+2. **Standalone** — clone this repo, write automations in `src/automations/`, and run directly
 
 ## Architecture
 
@@ -10,19 +15,19 @@ Each automation is a single TypeScript class. No YAML, no UI — just code.
 ┌──────────────────────────────────────────────────┐
 │              Automation Engine                   │
 │                                                  │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐        │
-│  │ Motion   │  │ Schedule │  │  Door    │  ...   │
-│  │ Light    │  │ Report   │  │  Alert   │        │
-│  └────┬─────┘  └─────┬────┘  └──────┬───┘        │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐       │
+│  │ Motion   │  │ Schedule │  │  Door    │  ...  │
+│  │ Light    │  │ Report   │  │  Alert   │       │
+│  └────┬─────┘  └────┬─────┘  └────┬─────┘       │
 │       │              │              │            │
 │  ┌────▼──────────────▼──────────────▼────┐       │
 │  │         AutomationManager             │       │
 │  └────┬──────────────┬──────────────┬────┘       │
 │       │              │              │            │
-│  ┌────▼────┐   ┌─────▼─────┐  ┌─────▼───┐        │
-│  │  MQTT   │   │   Cron    │  │  HTTP   │        │
-│  │ Service │   │ Scheduler │  │ Client  │        │
-│  └────┬────┘   └───────────┘  └─────────┘        │
+│  ┌────▼────┐   ┌─────▼─────┐  ┌────▼────┐       │
+│  │  MQTT   │   │   Cron    │  │  HTTP   │       │
+│  │ Service │   │ Scheduler │  │ Client  │       │
+│  └────┬────┘   └───────────┘  └─────────┘       │
 └───────┼──────────────────────────────────────────┘
         │
    ┌────▼──────┐      ┌───────────────┐
@@ -37,13 +42,118 @@ Each automation is a single TypeScript class. No YAML, no UI — just code.
 - An MQTT broker (e.g. [Mosquitto](https://mosquitto.org/))
 - [Zigbee2MQTT](https://www.zigbee2mqtt.io/) connected to the same broker
 
-## Getting Started
+---
+
+## Usage as a Package
+
+Install the framework in your own project:
 
 ```bash
-# Install dependencies
-bun install
+bun add ts-home-automation
+```
 
-# Copy and edit configuration
+Create your project structure:
+
+```
+my-home/
+├── package.json
+├── tsconfig.json
+├── .env
+├── src/
+│   ├── index.ts
+│   └── automations/
+│       ├── motion-light.ts
+│       └── night-mode.ts
+```
+
+### Entry point (`src/index.ts`)
+
+```ts
+import { createEngine } from "ts-home-automation";
+
+const engine = createEngine({
+  automationsDir: new URL("./automations", import.meta.url).pathname,
+});
+
+// Graceful shutdown
+process.on("SIGINT", async () => {
+  await engine.stop();
+  process.exit(0);
+});
+
+await engine.start();
+```
+
+### Writing automations
+
+```ts
+import { Automation, type Trigger, type TriggerContext } from "ts-home-automation";
+import type { OccupancyPayload } from "ts-home-automation/types";
+
+export default class MotionLight extends Automation {
+  readonly name = "motion-light";
+
+  readonly triggers: Trigger[] = [
+    {
+      type: "mqtt",
+      topic: "zigbee2mqtt/hallway_sensor",
+      filter: (p) => (p as unknown as OccupancyPayload).occupancy === true,
+    },
+  ];
+
+  async execute(context: TriggerContext): Promise<void> {
+    this.mqtt.publishToDevice("hallway_light", { state: "ON", brightness: 254 });
+  }
+}
+```
+
+### Engine options
+
+```ts
+const engine = createEngine({
+  // Required: path to your automations directory
+  automationsDir: "./src/automations",
+
+  // Optional: override environment-based config
+  config: {
+    mqtt: { host: "192.168.1.10", port: 1883 },
+    zigbee2mqttPrefix: "zigbee2mqtt",
+    logLevel: "debug",
+  },
+
+  // Optional: provide your own pino logger
+  logger: myCustomLogger,
+});
+```
+
+### Publishing your own Docker image
+
+In your consumer project, create a `Dockerfile`:
+
+```dockerfile
+FROM oven/bun:1
+WORKDIR /app
+
+COPY package.json bun.lock ./
+RUN bun install --frozen-lockfile --production
+
+COPY src ./src
+COPY tsconfig.json ./
+
+CMD ["bun", "run", "src/index.ts"]
+```
+
+---
+
+## Standalone Usage
+
+Clone this repo and work directly in it:
+
+```bash
+git clone https://github.com/Supporterino/TypeScript-Home-Automation.git
+cd TypeScript-Home-Automation
+
+bun install
 cp .env.example .env
 
 # Run in development mode (hot-reload)
@@ -52,6 +162,39 @@ bun run dev
 # Run in production mode
 bun run start
 ```
+
+Write automations in `src/automations/` — they are auto-discovered on startup.
+
+### Standalone project structure
+
+```
+src/
+├── index.ts                   # Package entry point (re-exports public API)
+├── standalone.ts              # Standalone runner (used by `bun run dev/start`)
+├── config.ts                  # Zod-validated environment config
+├── core/
+│   ├── engine.ts              # createEngine() factory
+│   ├── automation.ts          # Abstract Automation base class
+│   ├── automation-manager.ts  # Auto-discovery and lifecycle management
+│   ├── mqtt-service.ts        # MQTT client wrapper
+│   ├── cron-scheduler.ts      # Cron job scheduling
+│   └── http-client.ts         # HTTP client with logging
+├── automations/               # Your automations go here (auto-discovered)
+│   ├── motion-light.ts        # Example: motion → light on
+│   └── scheduled-report.ts    # Example: daily cron → HTTP fetch
+└── types/
+    └── zigbee.ts              # Zigbee2MQTT payload type definitions
+```
+
+### Docker (standalone)
+
+```bash
+bun run docker:build
+bun run docker:up      # starts engine + Mosquitto via docker-compose
+bun run docker:down
+```
+
+---
 
 ## Configuration
 
@@ -66,38 +209,11 @@ Set these environment variables (or use a `.env` file):
 
 ## Writing an Automation
 
-Create a new file in `src/automations/`. It will be auto-discovered on startup — no registration needed.
-
 Every automation extends the `Automation` base class and defines three things:
 
 1. **`name`** — a unique identifier (used in logs)
 2. **`triggers`** — what causes it to run (MQTT messages and/or cron schedules)
 3. **`execute(context)`** — the logic to run when triggered
-
-### Minimal Example
-
-```ts
-import { Automation, type Trigger, type TriggerContext } from "../core/automation.js";
-
-export default class DoorAlert extends Automation {
-  readonly name = "door-alert";
-
-  readonly triggers: Trigger[] = [
-    {
-      type: "mqtt",
-      topic: "zigbee2mqtt/front_door",
-      filter: (payload) => payload.contact === false,
-    },
-  ];
-
-  async execute(context: TriggerContext): Promise<void> {
-    this.logger.warn("Front door opened!");
-    await this.http.post("https://hooks.example.com/notify", {
-      text: "Front door was opened",
-    });
-  }
-}
-```
 
 ### Trigger Types
 
@@ -171,48 +287,31 @@ async onStop(): Promise<void> {
 }
 ```
 
-## Project Structure
+## Building the Package
 
-```
-src/
-├── index.ts                   # Entry point
-├── config.ts                  # Zod-validated environment config
-├── core/
-│   ├── automation.ts          # Abstract Automation base class
-│   ├── automation-manager.ts  # Auto-discovery and lifecycle management
-│   ├── mqtt-service.ts        # MQTT client wrapper
-│   ├── cron-scheduler.ts      # Cron job scheduling
-│   └── http-client.ts         # HTTP client with logging
-├── automations/               # Your automations go here (auto-discovered)
-│   ├── motion-light.ts        # Example: motion → light on
-│   └── scheduled-report.ts    # Example: daily cron → HTTP fetch
-└── types/
-    └── zigbee.ts              # Zigbee2MQTT payload type definitions
-```
-
-## Docker
-
-Build and run as a container:
+To build the distributable package (compiled JS + type declarations):
 
 ```bash
-# Build the image
-bun run docker:build
-
-# Start with Docker Compose (includes Mosquitto)
-bun run docker:up
-
-# Stop
-bun run docker:down
+bun run build
 ```
 
-The included `docker-compose.yml` runs both the automation engine and a Mosquitto broker. If your Mosquitto is already running elsewhere, remove the `mosquitto` service and point `MQTT_HOST` to your broker.
+This outputs to `dist/` using `tsconfig.build.json`. The build excludes `standalone.ts` and the example automations — only the framework core is included.
+
+To publish:
+
+```bash
+npm publish
+```
+
+The `prepublishOnly` script runs the build automatically before publishing.
 
 ## Scripts
 
 | Command | Description |
 |---|---|
-| `bun run dev` | Development with hot-reload |
-| `bun run start` | Production run |
+| `bun run dev` | Development with hot-reload (standalone mode) |
+| `bun run start` | Production run (standalone mode) |
+| `bun run build` | Build package (JS + declarations to `dist/`) |
 | `bun run typecheck` | TypeScript type checking |
 | `bun run docker:build` | Build Docker image |
 | `bun run docker:up` | Start via Docker Compose |
