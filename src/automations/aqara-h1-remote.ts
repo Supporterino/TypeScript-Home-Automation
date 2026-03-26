@@ -64,11 +64,15 @@ export default class AqaraH1Remote extends Automation {
   }
 
   /**
-   * Single left click: toggle the lamp.
-   * Also stops any active dimming cycle.
+   * Single left click: if dimming is active, stop it. Otherwise toggle the lamp.
    */
   private async handleSingleLeft(): Promise<void> {
-    this.stopDimming();
+    if (this.dimInterval) {
+      this.logger.info("Stopping dimming");
+      this.stopDimming();
+      return;
+    }
+
     this.logger.info("Toggling lamp");
     this.mqtt.publishToDevice(this.LAMP_NAME, { state: "TOGGLE" });
   }
@@ -77,7 +81,6 @@ export default class AqaraH1Remote extends Automation {
    * Double left click: turn lamp on at full brightness.
    */
   private handleDoubleLeft(): void {
-    this.stopDimming();
     this.logger.info("Setting lamp to 100% brightness");
     this.mqtt.publishToDevice(this.LAMP_NAME, {
       state: "ON",
