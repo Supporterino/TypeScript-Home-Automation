@@ -20,6 +20,7 @@ export {
 
 // Core services (exposed for advanced usage)
 export { MqttService, type MqttMessageHandler } from "./core/mqtt-service.js";
+export { ShellyService, type ShellyDevice } from "./core/shelly-service.js";
 export {
   HttpClient,
   type HttpRequestOptions,
@@ -65,6 +66,18 @@ export type {
   BridgeState,
   GenericPayload,
 } from "./types/zigbee.js";
+
+// Shelly Gen 2 types
+export type {
+  ShellyDeviceInfo,
+  ShellyEnergyCounters,
+  ShellyTemperature,
+  ShellySwitchError,
+  ShellySwitchStatus,
+  ShellySwitchSetResult,
+  ShellySwitchConfig,
+  ShellySysStatus,
+} from "./types/shelly.js";
 
 // Zigbee2MQTT types — Philips Hue specific
 export type {

@@ -1,6 +1,7 @@
 import type { Logger } from "pino";
 import type { MqttService } from "./mqtt-service.js";
 import type { HttpClient } from "./http-client.js";
+import type { ShellyService } from "./shelly-service.js";
 import type { Config } from "../config.js";
 
 /**
@@ -52,6 +53,7 @@ export type TriggerContext =
  *
  * The base class provides access to:
  * - `this.mqtt`   - Publish messages and interact with Zigbee2MQTT devices
+ * - `this.shelly` - Control Shelly Gen 2 devices (plugs, switches)
  * - `this.http`   - Make outbound HTTP requests
  * - `this.logger` - Structured logger (child logger scoped to this automation)
  * - `this.config` - Application configuration
@@ -87,6 +89,7 @@ export abstract class Automation {
 
   /** Injected services - set by AutomationManager before start. */
   protected mqtt!: MqttService;
+  protected shelly!: ShellyService;
   protected http!: HttpClient;
   protected logger!: Logger;
   protected config!: Config;
@@ -97,11 +100,13 @@ export abstract class Automation {
    */
   _inject(
     mqtt: MqttService,
+    shelly: ShellyService,
     http: HttpClient,
     logger: Logger,
     config: Config,
   ): void {
     this.mqtt = mqtt;
+    this.shelly = shelly;
     this.http = http;
     this.logger = logger;
     this.config = config;

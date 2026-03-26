@@ -13,6 +13,10 @@
     "./types": {
       "types": "./dist/types/zigbee.d.ts",
       "import": "./dist/types/zigbee.js"
+    },
+    "./types/shelly": {
+      "types": "./dist/types/shelly.d.ts",
+      "import": "./dist/types/shelly.js"
     }
   },
   "files": [
@@ -35,6 +39,7 @@
     "mqtt",
     "zigbee2mqtt",
     "zigbee",
+    "shelly",
     "iot",
     "smart-home",
     "typescript"

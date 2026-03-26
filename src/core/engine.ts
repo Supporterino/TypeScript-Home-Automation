@@ -3,6 +3,7 @@ import { loadConfig, type Config } from "../config.js";
 import { MqttService } from "./mqtt-service.js";
 import { CronScheduler } from "./cron-scheduler.js";
 import { HttpClient } from "./http-client.js";
+import { ShellyService } from "./shelly-service.js";
 import { AutomationManager } from "./automation-manager.js";
 
 /**
@@ -49,6 +50,9 @@ export interface Engine {
 
   /** The MQTT service (for advanced usage). */
   readonly mqtt: MqttService;
+
+  /** The Shelly service for controlling Shelly Gen 2 devices. */
+  readonly shelly: ShellyService;
 
   /** The HTTP client (for advanced usage). */
   readonly http: HttpClient;
@@ -100,10 +104,12 @@ export function createEngine(options: EngineOptions): Engine {
   const mqtt = new MqttService(config, logger.child({ service: "mqtt" }));
   const cron = new CronScheduler(logger.child({ service: "cron" }));
   const http = new HttpClient(logger.child({ service: "http" }));
+  const shelly = new ShellyService(http, logger.child({ service: "shelly" }));
   const manager = new AutomationManager(
     mqtt,
     cron,
     http,
+    shelly,
     config,
     logger.child({ service: "manager" }),
   );
@@ -114,6 +120,7 @@ export function createEngine(options: EngineOptions): Engine {
     config,
     logger,
     mqtt,
+    shelly,
     http,
     manager,
 

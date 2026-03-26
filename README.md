@@ -270,6 +270,12 @@ Inside `execute()` (and `onStart`/`onStop`), the following are available:
 |---|---|
 | `this.mqtt.publishToDevice(name, payload)` | Send a command to a Zigbee2MQTT device (publishes to `zigbee2mqtt/<name>/set`) |
 | `this.mqtt.publish(topic, payload)` | Publish to any MQTT topic |
+| `this.shelly.turnOn(name)` | Turn a Shelly plug/switch on |
+| `this.shelly.turnOff(name)` | Turn a Shelly plug/switch off |
+| `this.shelly.toggle(name)` | Toggle a Shelly plug/switch |
+| `this.shelly.getStatus(name)` | Get Shelly switch status (power, voltage, etc.) |
+| `this.shelly.isOn(name)` | Check if a Shelly switch is on |
+| `this.shelly.getPower(name)` | Get current power draw in Watts |
 | `this.http.get(url)` | HTTP GET request |
 | `this.http.post(url, body)` | HTTP POST request |
 | `this.http.put(url, body)` | HTTP PUT request |
@@ -289,6 +295,77 @@ async onStart(): Promise<void> {
 async onStop(): Promise<void> {
   // Called on shutdown (e.g. clear timers)
 }
+```
+
+## Shelly Devices
+
+The framework includes a built-in `ShellyService` for controlling Shelly Gen 2 devices (like the Plus Plug S) over their local HTTP RPC API. No cloud required.
+
+### Registering devices
+
+Register Shelly devices in your automation's `onStart` hook or in your entry point:
+
+```ts
+// In your entry point (before engine.start()):
+const engine = createEngine({ automationsDir: "..." });
+engine.shelly.registerMany({
+  "living_room_plug": "192.168.1.50",
+  "tv_plug": "192.168.1.51",
+  "desk_lamp": "192.168.1.52",
+});
+await engine.start();
+```
+
+### Using in automations
+
+```ts
+export default class TvAutoOff extends Automation {
+  readonly name = "tv-auto-off";
+
+  readonly triggers: Trigger[] = [
+    { type: "cron", expression: "0 23 * * *" },  // Every night at 11 PM
+  ];
+
+  async execute(): Promise<void> {
+    const status = await this.shelly.getStatus("tv_plug");
+
+    if (status.output && status.apower < 5) {
+      this.logger.info("TV appears idle, turning off plug");
+      await this.shelly.turnOff("tv_plug");
+    }
+  }
+}
+```
+
+### Available methods
+
+| Method | Description |
+|---|---|
+| `shelly.register(name, host)` | Register a device by name and IP |
+| `shelly.registerMany(devices)` | Register multiple devices at once |
+| `shelly.turnOn(name, toggleAfter?)` | Turn on (optional auto-off timer in seconds) |
+| `shelly.turnOff(name, toggleAfter?)` | Turn off (optional auto-on timer in seconds) |
+| `shelly.toggle(name)` | Toggle the switch |
+| `shelly.getStatus(name)` | Get full status (power, voltage, current, energy, temperature) |
+| `shelly.getConfig(name)` | Get switch configuration |
+| `shelly.getDeviceInfo(name)` | Get device identification (model, firmware, MAC) |
+| `shelly.getSysStatus(name)` | Get system status (uptime, RAM, updates) |
+| `shelly.isOn(name)` | Check if the switch is currently on |
+| `shelly.getPower(name)` | Get current power consumption in Watts |
+| `shelly.reboot(name, delayMs?)` | Reboot the device |
+
+### Typed status response
+
+The `getStatus()` method returns a `ShellySwitchStatus` with full power metering:
+
+```ts
+const status = await this.shelly.getStatus("living_room_plug");
+// status.output      — boolean (on/off)
+// status.apower      — active power in Watts
+// status.voltage     — voltage in Volts
+// status.current     — current in Amps
+// status.aenergy     — { total: Wh, by_minute: mWh[], minute_ts: unix }
+// status.temperature — { tC: number, tF: number }
 ```
 
 ## Device Types
