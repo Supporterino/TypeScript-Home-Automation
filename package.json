@@ -1,6 +1,6 @@
 {
   "name": "ts-home-automation",
-  "version": "1.0.0",
+  "version": "0.0.0",
   "description": "TypeScript-based home automation framework for Zigbee2MQTT",
   "type": "module",
   "main": "./dist/index.js",
@@ -39,7 +39,7 @@
     "smart-home",
     "typescript"
   ],
-  "license": "MIT",
+  "license": "GPL-3.0-only",
   "dependencies": {
     "cron": "^4.3.0",
     "mqtt": "^5.10.0",
