@@ -386,9 +386,24 @@ export default class TvAutoOff extends Automation {
 | `shelly.getPower(name)` | Get current power consumption in Watts |
 | `shelly.reboot(name, delayMs?)` | Reboot the device |
 
-### Typed status response
+**Cover/shutter methods** (Shelly Plus 2PM in roller mode):
 
-The `getStatus()` method returns a `ShellySwitchStatus` with full power metering:
+| Method | Description |
+|---|---|
+| `shelly.coverOpen(name, duration?)` | Open the cover (optional: stop after N seconds) |
+| `shelly.coverClose(name, duration?)` | Close the cover (optional: stop after N seconds) |
+| `shelly.coverStop(name)` | Stop cover movement |
+| `shelly.coverGoToPosition(name, pos)` | Move to absolute position 0–100 (requires calibration) |
+| `shelly.coverMoveRelative(name, offset)` | Move by relative offset -100 to 100 |
+| `shelly.getCoverStatus(name)` | Get cover status (position, state, power) |
+| `shelly.getCoverConfig(name)` | Get cover configuration |
+| `shelly.getCoverPosition(name)` | Get current position 0–100 (null if uncalibrated) |
+| `shelly.getCoverState(name)` | Get current state (open/closed/opening/closing/stopped) |
+| `shelly.coverCalibrate(name)` | Start calibration (cover opens and closes fully) |
+
+### Typed status responses
+
+**Switch status** (`getStatus()`) — Plus Plug S, Plus 1PM Mini:
 
 ```ts
 const status = await this.shelly.getStatus("living_room_plug");
@@ -398,6 +413,16 @@ const status = await this.shelly.getStatus("living_room_plug");
 // status.current     — current in Amps
 // status.aenergy     — { total: Wh, by_minute: mWh[], minute_ts: unix }
 // status.temperature — { tC: number, tF: number }
+```
+
+**Cover status** (`getCoverStatus()`) — Plus 2PM in roller mode:
+
+```ts
+const status = await this.shelly.getCoverStatus("bedroom_shutter");
+// status.state       — "open" | "closed" | "opening" | "closing" | "stopped"
+// status.current_pos — 0–100 (null if uncalibrated)
+// status.apower      — active power in Watts
+// status.pos_control — true if calibrated
 ```
 
 ## Notifications

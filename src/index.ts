@@ -50,6 +50,10 @@ export {
 } from "./core/state-manager.js";
 // Shelly Gen 2 types
 export type {
+  ShellyCoverConfig,
+  ShellyCoverError,
+  ShellyCoverState,
+  ShellyCoverStatus,
   ShellyDeviceInfo,
   ShellyEnergyCounters,
   ShellySwitchConfig,
