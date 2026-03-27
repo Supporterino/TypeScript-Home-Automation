@@ -1,5 +1,8 @@
 import type { Logger } from "pino";
 import type {
+  ShellyCoverConfig,
+  ShellyCoverState,
+  ShellyCoverStatus,
   ShellyDeviceInfo,
   ShellySwitchConfig,
   ShellySwitchSetResult,
@@ -118,7 +121,126 @@ export class ShellyService {
   }
 
   // -------------------------------------------------------------------------
-  // Status and info
+  // Cover/shutter control (Shelly Plus 2PM in roller mode)
+  // -------------------------------------------------------------------------
+
+  /**
+   * Open a Shelly cover/shutter.
+   *
+   * @param name Device friendly name
+   * @param duration Optional: stop after N seconds (partial open)
+   */
+  async coverOpen(name: string, duration?: number): Promise<void> {
+    const params = new URLSearchParams({ id: "0" });
+    if (duration !== undefined) {
+      params.set("duration", String(duration));
+    }
+    this.logger.info({ device: name }, "Opening Shelly cover");
+    await this.rpc(name, "Cover.Open", params);
+  }
+
+  /**
+   * Close a Shelly cover/shutter.
+   *
+   * @param name Device friendly name
+   * @param duration Optional: stop after N seconds (partial close)
+   */
+  async coverClose(name: string, duration?: number): Promise<void> {
+    const params = new URLSearchParams({ id: "0" });
+    if (duration !== undefined) {
+      params.set("duration", String(duration));
+    }
+    this.logger.info({ device: name }, "Closing Shelly cover");
+    await this.rpc(name, "Cover.Close", params);
+  }
+
+  /**
+   * Stop a Shelly cover/shutter.
+   *
+   * @param name Device friendly name
+   */
+  async coverStop(name: string): Promise<void> {
+    this.logger.info({ device: name }, "Stopping Shelly cover");
+    await this.rpc(name, "Cover.Stop", new URLSearchParams({ id: "0" }));
+  }
+
+  /**
+   * Move a Shelly cover/shutter to an absolute position.
+   * Requires the cover to be calibrated.
+   *
+   * @param name Device friendly name
+   * @param position Target position 0–100 (0 = closed, 100 = fully open)
+   */
+  async coverGoToPosition(name: string, position: number): Promise<void> {
+    const params = new URLSearchParams({ id: "0", pos: String(position) });
+    this.logger.info({ device: name, position }, "Moving Shelly cover to position");
+    await this.rpc(name, "Cover.GoToPosition", params);
+  }
+
+  /**
+   * Move a Shelly cover/shutter by a relative offset.
+   * Requires the cover to be calibrated.
+   *
+   * @param name Device friendly name
+   * @param offset Relative position change (-100 to 100, positive = open, negative = close)
+   */
+  async coverMoveRelative(name: string, offset: number): Promise<void> {
+    const params = new URLSearchParams({ id: "0", rel: String(offset) });
+    this.logger.info({ device: name, offset }, "Moving Shelly cover by relative offset");
+    await this.rpc(name, "Cover.GoToPosition", params);
+  }
+
+  /**
+   * Get the current status of a Shelly cover (position, state, power).
+   *
+   * @param name Device friendly name
+   */
+  async getCoverStatus(name: string): Promise<ShellyCoverStatus> {
+    return this.rpc<ShellyCoverStatus>(name, "Cover.GetStatus", new URLSearchParams({ id: "0" }));
+  }
+
+  /**
+   * Get the configuration of a Shelly cover.
+   *
+   * @param name Device friendly name
+   */
+  async getCoverConfig(name: string): Promise<ShellyCoverConfig> {
+    return this.rpc<ShellyCoverConfig>(name, "Cover.GetConfig", new URLSearchParams({ id: "0" }));
+  }
+
+  /**
+   * Start calibration of a Shelly cover. The cover will open and close
+   * fully to measure travel times.
+   *
+   * @param name Device friendly name
+   */
+  async coverCalibrate(name: string): Promise<void> {
+    this.logger.warn({ device: name }, "Starting Shelly cover calibration");
+    await this.rpc(name, "Cover.Calibrate", new URLSearchParams({ id: "0" }));
+  }
+
+  /**
+   * Get the current position of a Shelly cover (0–100, null if uncalibrated).
+   *
+   * @param name Device friendly name
+   */
+  async getCoverPosition(name: string): Promise<number | null> {
+    const status = await this.getCoverStatus(name);
+    return status.current_pos;
+  }
+
+  /**
+   * Get the current state of a Shelly cover.
+   *
+   * @param name Device friendly name
+   */
+  async getCoverState(name: string): Promise<ShellyCoverState> {
+    const status = await this.getCoverStatus(name);
+    return status.state;
+  }
+
+  // -------------------------------------------------------------------------
+  // Status and info (shared across Switch and Cover devices)
   // -------------------------------------------------------------------------
 
   /**
