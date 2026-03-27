@@ -1,5 +1,5 @@
 import { Automation, type Trigger, type TriggerContext } from "../core/automation.js";
-import type { IkeaShortcutButtonAction } from "../types/zigbee.js";
+import type { ColorXY, IkeaShortcutButtonAction } from "../types/zigbee.js";
 
 /**
  * Color presets in CIE xy for common flash colors.
@@ -13,25 +13,25 @@ const COLORS = {
 } as const;
 
 /**
- * Example: IKEA shortcut button triggers a colored flash on a Hue light strip.
+ * Example: IKEA shortcut button triggers a colored flash on a Hue light.
  *
- * Pressing the IKEA E1812 shortcut button makes a Philips Hue light strip
- * flash in a configured color for a set duration, then restores the light
- * to its previous state.
+ * Pressing the IKEA E1812 shortcut button makes a Philips Hue light briefly
+ * flash in a configured color, then return to its previous state.
  *
  * Use case: visual alert button — press to flash the light strip red as
- * a "dinner is ready" signal, a doorbell indicator for hearing-impaired
- * users, or a fun party effect.
+ * a "dinner is ready" signal, a doorbell indicator, or an attention getter.
+ * The light returns to whatever it was doing before (on, off, any color).
  *
  * How it works:
- * 1. Button press starts a flash loop toggling the light on/off
- * 2. Each "on" phase sets the configured color at full brightness
- * 3. After FLASH_DURATION_MS, the loop stops and the light is turned off
+ * 1. The automation subscribes to the light's MQTT topic to continuously
+ *    cache its current state (on/off, brightness, color)
+ * 2. On button press, the light is set to the flash color at full brightness
+ * 3. After FLASH_HOLD_MS, the original state is restored
  *
- * Pressing the button while a flash is active restarts the sequence.
+ * Pressing the button again while flashing restarts the hold timer.
  *
- * Adjust BUTTON_NAME, LIGHT_NAME, FLASH_COLOR, FLASH_DURATION_MS,
- * and FLASH_INTERVAL_MS to match your setup.
+ * Adjust BUTTON_NAME, LIGHT_NAME, FLASH_COLOR, and FLASH_HOLD_MS
+ * to match your setup.
  */
 export default class ShortcutButtonFlash extends Automation {
   readonly name = "shortcut-button-flash";
@@ -41,22 +41,22 @@ export default class ShortcutButtonFlash extends Automation {
   /** Zigbee2MQTT friendly name of the IKEA E1812 shortcut button. */
   private readonly BUTTON_NAME = "alert_button";
 
-  /** Zigbee2MQTT friendly name of the Hue light strip. */
+  /** Zigbee2MQTT friendly name of the Hue light (strip, bulb, etc.). */
   private readonly LIGHT_NAME = "living_room_lightstrip";
 
   /** Color to flash (pick from COLORS or use custom CIE xy values). */
-  private readonly FLASH_COLOR = COLORS.red;
+  private readonly FLASH_COLOR: ColorXY = COLORS.red;
 
-  /** Total duration of the flash sequence (in ms). */
-  private readonly FLASH_DURATION_MS = 10 * 1000; // 10 seconds
-
-  /** Interval between on/off toggles (in ms). Lower = faster flashing. */
-  private readonly FLASH_INTERVAL_MS = 500;
+  /** How long to hold the flash color before restoring (in ms). */
+  private readonly FLASH_HOLD_MS = 1000;
 
   // ---- Internal state ----
 
-  private flashInterval: ReturnType<typeof setInterval> | null = null;
-  private flashTimeout: ReturnType<typeof setTimeout> | null = null;
+  private restoreTimer: ReturnType<typeof setTimeout> | null = null;
+  private isFlashing = false;
+
+  /** Cached previous state from the light's MQTT topic. */
+  private previousState: { on: boolean; brightness?: number; color?: ColorXY } = { on: false };
 
   readonly triggers: Trigger[] = [
     {
@@ -64,65 +64,80 @@ export default class ShortcutButtonFlash extends Automation {
       topic: `zigbee2mqtt/${this.BUTTON_NAME}`,
       filter: (payload) => (payload.action as IkeaShortcutButtonAction | undefined) === "on",
     },
+    // Subscribe to the light's state to keep a cached copy for restoration
+    {
+      type: "mqtt",
+      topic: `zigbee2mqtt/${this.LIGHT_NAME}`,
+    },
   ];
 
   async execute(context: TriggerContext): Promise<void> {
     if (context.type !== "mqtt") return;
 
-    // Stop any active flash before starting a new one
-    this.stopFlash();
+    // Update cached light state (ignore updates caused by our own flash)
+    if (context.topic === `zigbee2mqtt/${this.LIGHT_NAME}`) {
+      if (!this.isFlashing) {
+        this.previousState = {
+          on: context.payload.state === "ON",
+          brightness: context.payload.brightness as number | undefined,
+          color: context.payload.color as ColorXY | undefined,
+        };
+      }
+      return;
+    }
 
+    // Button was pressed — flash the light
     this.logger.info(
-      {
-        light: this.LIGHT_NAME,
-        color: this.FLASH_COLOR,
-        durationMs: this.FLASH_DURATION_MS,
-      },
-      "Starting color flash",
+      { light: this.LIGHT_NAME, color: this.FLASH_COLOR },
+      "Button pressed, flashing light",
     );
 
-    // Start the flash loop
-    let on = true;
-    this.flashInterval = setInterval(() => {
-      if (on) {
+    // Cancel any pending restore from a previous flash
+    if (this.restoreTimer) {
+      clearTimeout(this.restoreTimer);
+    }
+
+    this.isFlashing = true;
+
+    // Set the flash color at full brightness with instant transition
+    this.mqtt.publishToDevice(this.LIGHT_NAME, {
+      state: "ON",
+      color: this.FLASH_COLOR,
+      brightness: 254,
+      transition: 0,
+    });
+
+    // Restore previous state after the hold duration
+    this.restoreTimer = setTimeout(() => {
+      this.restoreTimer = null;
+      this.isFlashing = false;
+
+      if (this.previousState.on) {
+        this.logger.debug("Restoring light to previous on-state");
         this.mqtt.publishToDevice(this.LIGHT_NAME, {
           state: "ON",
-          color: this.FLASH_COLOR,
-          brightness: 254,
+          ...(this.previousState.brightness !== undefined && {
+            brightness: this.previousState.brightness,
+          }),
+          ...(this.previousState.color && {
+            color: this.previousState.color,
+          }),
           transition: 0,
         });
       } else {
+        this.logger.debug("Restoring light to off-state");
         this.mqtt.publishToDevice(this.LIGHT_NAME, {
           state: "OFF",
           transition: 0,
         });
       }
-      on = !on;
-    }, this.FLASH_INTERVAL_MS);
-
-    // Stop flashing after the configured duration and restore state
-    this.flashTimeout = setTimeout(() => {
-      this.logger.info("Flash sequence complete, turning off light");
-      this.stopFlash();
-      this.mqtt.publishToDevice(this.LIGHT_NAME, { state: "OFF" });
-    }, this.FLASH_DURATION_MS);
-  }
-
-  /**
-   * Stop the flash loop and cancel the timeout.
-   */
-  private stopFlash(): void {
-    if (this.flashInterval) {
-      clearInterval(this.flashInterval);
-      this.flashInterval = null;
-    }
-    if (this.flashTimeout) {
-      clearTimeout(this.flashTimeout);
-      this.flashTimeout = null;
-    }
+    }, this.FLASH_HOLD_MS);
   }
 
   async onStop(): Promise<void> {
-    this.stopFlash();
+    if (this.restoreTimer) {
+      clearTimeout(this.restoreTimer);
+      this.restoreTimer = null;
+    }
   }
 }
