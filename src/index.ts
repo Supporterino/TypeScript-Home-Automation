@@ -11,7 +11,8 @@
 // Configuration
 export { type Config, loadConfig } from "./config.js";
 
-// Automation base class and trigger types
+// Automation base classes and trigger types
+export { AqaraH1Automation } from "./core/aqara-h1-automation.js";
 export {
   Automation,
   type Trigger,
