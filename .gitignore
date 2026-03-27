@@ -10,6 +10,9 @@ dist/
 # TypeScript cache
 *.tsbuildinfo
 
+# Persisted state
+state.json
+
 # Environment variables
 .env
 .env.*

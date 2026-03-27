@@ -210,6 +210,8 @@ Set these environment variables (or use a `.env` file):
 | `MQTT_PORT` | `1883` | Mosquitto broker port |
 | `ZIGBEE2MQTT_PREFIX` | `zigbee2mqtt` | Zigbee2MQTT MQTT topic prefix |
 | `LOG_LEVEL` | `info` | Log level (`fatal`, `error`, `warn`, `info`, `debug`, `trace`) |
+| `STATE_PERSIST` | `false` | Persist state to disk on shutdown (`true`/`false`) |
+| `STATE_FILE_PATH` | `./state.json` | Path to the state persistence file |
 
 ## Writing an Automation
 
@@ -242,6 +244,16 @@ Topics support MQTT wildcards: `+` matches one level, `#` matches all remaining 
 }
 ```
 
+**State trigger** — reacts to shared state changes (set by any automation):
+
+```ts
+{
+  type: "state",
+  key: "night_mode",
+  filter: (newValue) => newValue === true,  // Optional filter
+}
+```
+
 ### Multiple Triggers
 
 An automation can have multiple triggers. The `context` parameter tells you which one fired:
@@ -256,8 +268,10 @@ readonly triggers: Trigger[] = [
 async execute(context: TriggerContext): Promise<void> {
   if (context.type === "mqtt") {
     this.logger.info(`Triggered by ${context.topic}`);
-  } else {
+  } else if (context.type === "cron") {
     this.logger.info("Triggered by cron schedule");
+  } else if (context.type === "state") {
+    this.logger.info(`State "${context.key}" changed to ${context.newValue}`);
   }
 }
 ```
@@ -277,6 +291,10 @@ Inside `execute()` (and `onStart`/`onStop`), the following are available:
 | `this.shelly.isOn(name)` | Check if a Shelly switch is on |
 | `this.shelly.getPower(name)` | Get current power draw in Watts |
 | `this.notify({ title, message, ... })` | Send a push notification (requires notification service) |
+| `this.state.get<T>(key, default?)` | Get a value from shared state |
+| `this.state.set<T>(key, value)` | Set a value in shared state (fires state triggers) |
+| `this.state.delete(key)` | Delete a key from shared state |
+| `this.state.has(key)` | Check if a key exists |
 | `this.http.get(url)` | HTTP GET request |
 | `this.http.post(url, body)` | HTTP POST request |
 | `this.http.put(url, body)` | HTTP PUT request |
@@ -419,6 +437,68 @@ const engine = createEngine({
   notifications: new TelegramNotificationService(),
 });
 ```
+
+## State Management
+
+The engine includes a shared state manager for persisting values across automations and engine restarts. Any automation can read/write state, and other automations can react to changes via `state` triggers.
+
+### Setup
+
+```ts
+const engine = createEngine({
+  automationsDir: "...",
+  state: {
+    persist: true,                    // Save state to disk on shutdown
+    filePath: "./data/state.json",    // Optional, defaults to ./state.json
+  },
+});
+```
+
+State is always available in-memory. The `persist` flag controls whether it's saved to and restored from a JSON file.
+
+### Using in automations
+
+```ts
+// Set state (fires state triggers in other automations)
+this.state.set<boolean>("night_mode", true);
+this.state.set<number>("motion_count", 42);
+this.state.set("last_motion", { room: "hallway", time: Date.now() });
+
+// Get state (typed with generics)
+const isNight = this.state.get<boolean>("night_mode", false);
+const count = this.state.get<number>("motion_count", 0);
+
+// Check and delete
+if (this.state.has("temporary_flag")) {
+  this.state.delete("temporary_flag");
+}
+```
+
+### Reacting to state changes
+
+Use the `state` trigger type to run an automation when a key changes:
+
+```ts
+export default class NightModeReaction extends Automation {
+  readonly name = "night-mode-reaction";
+
+  readonly triggers: Trigger[] = [
+    {
+      type: "state",
+      key: "night_mode",
+      filter: (newValue) => newValue === true,
+    },
+  ];
+
+  async execute(context: TriggerContext): Promise<void> {
+    if (context.type !== "state") return;
+    this.logger.info("Night mode activated, dimming all lights");
+    // ...
+  }
+}
+```
+
+This enables cross-automation communication: one automation sets `night_mode`, and any number of other automations react to it.
 
 ## Device Types
 
