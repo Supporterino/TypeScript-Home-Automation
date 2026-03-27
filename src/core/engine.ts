@@ -4,6 +4,7 @@ import { MqttService } from "./mqtt-service.js";
 import { CronScheduler } from "./cron-scheduler.js";
 import { HttpClient } from "./http-client.js";
 import { ShellyService } from "./shelly-service.js";
+import { StateManager, type StateManagerOptions } from "./state-manager.js";
 import type { NotificationService } from "./notification-service.js";
 import type { NtfyNotificationService } from "./ntfy-notification-service.js";
 import { AutomationManager } from "./automation-manager.js";
@@ -52,6 +53,25 @@ export interface EngineOptions {
    * ```
    */
   notifications?: NotificationService;
+
+  /**
+   * State manager options.
+   *
+   * Controls whether state is persisted to disk on shutdown and restored
+   * on startup. State is always available in-memory regardless of this setting.
+   *
+   * @example
+   * ```ts
+   * const engine = createEngine({
+   *   automationsDir: "...",
+   *   state: {
+   *     persist: true,
+   *     filePath: "./data/state.json",
+   *   },
+   * });
+   * ```
+   */
+  state?: StateManagerOptions;
 }
 
 /**
@@ -78,6 +98,9 @@ export interface Engine {
 
   /** The HTTP client (for advanced usage). */
   readonly http: HttpClient;
+
+  /** The shared state manager. */
+  readonly state: StateManager;
 
   /** The notification service (if configured). */
   readonly notifications: NotificationService | null;
@@ -130,6 +153,13 @@ export function createEngine(options: EngineOptions): Engine {
   const cron = new CronScheduler(logger.child({ service: "cron" }));
   const http = new HttpClient(logger.child({ service: "http" }));
   const shelly = new ShellyService(http, logger.child({ service: "shelly" }));
+  const stateManager = new StateManager(
+    logger.child({ service: "state" }),
+    {
+      persist: options.state?.persist ?? config.state.persist,
+      filePath: options.state?.filePath ?? config.state.filePath,
+    },
+  );
 
   // Initialize optional notification service
   const notifications = options.notifications ?? null;
@@ -145,6 +175,7 @@ export function createEngine(options: EngineOptions): Engine {
     cron,
     http,
     shelly,
+    stateManager,
     notifications,
     config,
     logger.child({ service: "manager" }),
@@ -158,6 +189,7 @@ export function createEngine(options: EngineOptions): Engine {
     mqtt,
     shelly,
     http,
+    state: stateManager,
     notifications,
     manager,
 
@@ -168,6 +200,7 @@ export function createEngine(options: EngineOptions): Engine {
       }
 
       logger.info("Starting Home Automation Engine");
+      await stateManager.load();
       await mqtt.connect();
       await manager.discoverAndRegister(options.automationsDir);
       started = true;
@@ -182,6 +215,7 @@ export function createEngine(options: EngineOptions): Engine {
       logger.info("Stopping Home Automation Engine");
       await manager.stopAll();
       cron.stopAll();
+      await stateManager.save();
       await mqtt.disconnect();
       started = false;
       logger.info("Home Automation Engine stopped");

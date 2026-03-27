@@ -6,17 +6,21 @@ import type {
   NotificationService,
   NotificationOptions,
 } from "./notification-service.js";
+import type { StateManager } from "./state-manager.js";
 import type { Config } from "../config.js";
 
 /**
  * Trigger types for automations.
  *
- * - mqtt: Fires when a message is received on the given topic.
- *         Use the Zigbee2MQTT friendly name as the topic suffix.
- *         Supports MQTT wildcards (+ for single level, # for multi level).
- *         An optional `filter` function can narrow which payloads trigger execution.
+ * - mqtt:  Fires when a message is received on the given topic.
+ *          Use the Zigbee2MQTT friendly name as the topic suffix.
+ *          Supports MQTT wildcards (+ for single level, # for multi level).
+ *          An optional `filter` function can narrow which payloads trigger execution.
  *
- * - cron: Fires on a cron schedule (e.g. "0 7 * * *" = daily at 7 AM).
+ * - cron:  Fires on a cron schedule (e.g. "0 7 * * *" = daily at 7 AM).
+ *
+ * - state: Fires when a state key changes value. Use this to react to state
+ *          changes made by other automations.
  */
 export type Trigger =
   | {
@@ -27,6 +31,13 @@ export type Trigger =
   | {
       type: "cron";
       expression: string;
+    }
+  | {
+      type: "state";
+      /** The state key to watch. */
+      key: string;
+      /** Optional filter — return true to trigger, false to ignore. */
+      filter?: (newValue: unknown, oldValue: unknown) => boolean;
     };
 
 /**
@@ -34,6 +45,7 @@ export type Trigger =
  *
  * For MQTT triggers, contains the topic that fired and the parsed payload.
  * For cron triggers, contains the cron expression and the time it fired.
+ * For state triggers, contains the key, new value, and old value.
  */
 export type TriggerContext =
   | {
@@ -45,6 +57,12 @@ export type TriggerContext =
       type: "cron";
       expression: string;
       firedAt: Date;
+    }
+  | {
+      type: "state";
+      key: string;
+      newValue: unknown;
+      oldValue: unknown;
     };
 
 /**
@@ -59,6 +77,7 @@ export type TriggerContext =
  * - `this.mqtt`   - Publish messages and interact with Zigbee2MQTT devices
  * - `this.shelly` - Control Shelly Gen 2 devices (plugs, switches)
  * - `this.notify` - Send push notifications (if a NotificationService is configured)
+ * - `this.state`  - Shared state manager (get/set/delete, persisted across restarts)
  * - `this.http`   - Make outbound HTTP requests
  * - `this.logger` - Structured logger (child logger scoped to this automation)
  * - `this.config` - Application configuration
@@ -96,6 +115,7 @@ export abstract class Automation {
   protected mqtt!: MqttService;
   protected shelly!: ShellyService;
   protected http!: HttpClient;
+  protected state!: StateManager;
   protected logger!: Logger;
   protected config!: Config;
   private notificationService: NotificationService | null = null;
@@ -108,6 +128,7 @@ export abstract class Automation {
     mqtt: MqttService,
     shelly: ShellyService,
     http: HttpClient,
+    state: StateManager,
     logger: Logger,
     config: Config,
     notifications: NotificationService | null,
@@ -115,6 +136,7 @@ export abstract class Automation {
     this.mqtt = mqtt;
     this.shelly = shelly;
     this.http = http;
+    this.state = state;
     this.logger = logger;
     this.config = config;
     this.notificationService = notifications;

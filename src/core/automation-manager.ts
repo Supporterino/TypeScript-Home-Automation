@@ -8,17 +8,22 @@ import type { HttpClient } from "./http-client.js";
 import type { MqttService, MqttMessageHandler } from "./mqtt-service.js";
 import type { ShellyService } from "./shelly-service.js";
 import type { NotificationService } from "./notification-service.js";
+import type { StateManager, StateChangeHandler } from "./state-manager.js";
 
 /**
  * Discovers, registers, and manages the lifecycle of all automations.
  *
  * On startup it scans the automations directory, dynamically imports each file,
- * and wires up the declared triggers (MQTT subscriptions and cron jobs).
+ * and wires up the declared triggers (MQTT subscriptions, cron jobs, and
+ * state change listeners).
  */
 export class AutomationManager {
   private automations: Automation[] = [];
   /** Track MQTT handlers so we can cleanly unsubscribe on shutdown. */
   private mqttHandlers: Map<Automation, { topic: string; handler: MqttMessageHandler }[]> =
+    new Map();
+  /** Track state handlers so we can cleanly unsubscribe on shutdown. */
+  private stateHandlers: Map<Automation, { key: string; handler: StateChangeHandler }[]> =
     new Map();
 
   constructor(
@@ -26,6 +31,7 @@ export class AutomationManager {
     private readonly cron: CronScheduler,
     private readonly http: HttpClient,
     private readonly shelly: ShellyService,
+    private readonly stateManager: StateManager,
     private readonly notifications: NotificationService | null,
     private readonly config: Config,
     private readonly logger: Logger,
@@ -96,16 +102,24 @@ export class AutomationManager {
   async register(automation: Automation): Promise<void> {
     const childLogger = this.logger.child({ automation: automation.name });
 
-    automation._inject(this.mqtt, this.shelly, this.http, childLogger, this.config, this.notifications);
+    automation._inject(
+      this.mqtt,
+      this.shelly,
+      this.http,
+      this.stateManager,
+      childLogger,
+      this.config,
+      this.notifications,
+    );
 
-    const handlers: { topic: string; handler: MqttMessageHandler }[] = [];
+    const mqttHandlers: { topic: string; handler: MqttMessageHandler }[] = [];
+    const stateHandlers: { key: string; handler: StateChangeHandler }[] = [];
 
     for (let i = 0; i < automation.triggers.length; i++) {
       const trigger = automation.triggers[i];
 
       if (trigger.type === "mqtt") {
         const handler: MqttMessageHandler = (topic, payload) => {
-          // Apply optional filter
           if (trigger.filter && !trigger.filter(payload)) {
             return;
           }
@@ -119,7 +133,7 @@ export class AutomationManager {
         };
 
         this.mqtt.subscribe(trigger.topic, handler);
-        handlers.push({ topic: trigger.topic, handler });
+        mqttHandlers.push({ topic: trigger.topic, handler });
         childLogger.debug(
           { topic: trigger.topic },
           "Registered MQTT trigger",
@@ -148,10 +162,34 @@ export class AutomationManager {
           { expression: trigger.expression },
           "Registered cron trigger",
         );
+      } else if (trigger.type === "state") {
+        const handler: StateChangeHandler = (key, newValue, oldValue) => {
+          if (trigger.filter && !trigger.filter(newValue, oldValue)) {
+            return;
+          }
+
+          childLogger.info({ key }, "State trigger fired");
+          automation
+            .execute({ type: "state", key, newValue, oldValue })
+            .catch((err) => {
+              childLogger.error(
+                { err, key },
+                "Automation execution failed",
+              );
+            });
+        };
+
+        this.stateManager.onChange(trigger.key, handler);
+        stateHandlers.push({ key: trigger.key, handler });
+        childLogger.debug(
+          { key: trigger.key },
+          "Registered state trigger",
+        );
       }
     }
 
-    this.mqttHandlers.set(automation, handlers);
+    this.mqttHandlers.set(automation, mqttHandlers);
+    this.stateHandlers.set(automation, stateHandlers);
     this.automations.push(automation);
 
     try {
@@ -165,16 +203,22 @@ export class AutomationManager {
 
   /**
    * Gracefully stop all automations.
-   * Unsubscribes MQTT handlers, stops cron jobs, and calls onStop.
+   * Unsubscribes MQTT handlers, state handlers, stops cron jobs, and calls onStop.
    */
   async stopAll(): Promise<void> {
     this.logger.info("Stopping all automations");
 
     for (const automation of this.automations) {
       // Unsubscribe MQTT handlers
-      const handlers = this.mqttHandlers.get(automation) ?? [];
-      for (const { topic, handler } of handlers) {
+      const mqttH = this.mqttHandlers.get(automation) ?? [];
+      for (const { topic, handler } of mqttH) {
         this.mqtt.unsubscribe(topic, handler);
+      }
+
+      // Unsubscribe state handlers
+      const stateH = this.stateHandlers.get(automation) ?? [];
+      for (const { key, handler } of stateH) {
+        this.stateManager.offChange(key, handler);
       }
 
       // Stop cron jobs for this automation
@@ -193,6 +237,7 @@ export class AutomationManager {
 
     this.automations = [];
     this.mqttHandlers.clear();
+    this.stateHandlers.clear();
     this.logger.info("All automations stopped");
   }
 }

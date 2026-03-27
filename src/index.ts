@@ -29,6 +29,13 @@ export {
   type NtfyConfig,
 } from "./core/ntfy-notification-service.js";
 
+// State management
+export {
+  StateManager,
+  type StateManagerOptions,
+  type StateChangeHandler,
+} from "./core/state-manager.js";
+
 // Core services (exposed for advanced usage)
 export { MqttService, type MqttMessageHandler } from "./core/mqtt-service.js";
 export { ShellyService, type ShellyDevice } from "./core/shelly-service.js";
