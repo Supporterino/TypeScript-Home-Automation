@@ -22,6 +22,8 @@ interface TimeWindow {
   from: string;
   /** End time in "HH:MM" format (exclusive). */
   to: string;
+  /** How long to keep lights on after last motion event (in ms). */
+  durationMs: number;
   /** Lamps to control during this window. */
   lamps: LampTarget[];
 }
@@ -69,7 +71,7 @@ const STATE_PREFIX = "motion-light-schedule";
  * - Each window can target different lamps with different brightness levels
  * - Handles time window transitions correctly: orphaned lamps from the
  *   previous window are turned off when the window changes
- * - Auto-off after a configurable duration of no motion from any sensor
+ * - Per-window auto-off duration (longer in the evening, shorter at night)
  * - State is shared via the state manager so other automations can check
  *   if lights are currently active (key: "motion-light-schedule:lights_on")
  * - On engine restart, recovers gracefully: turns off any lights that
@@ -82,9 +84,9 @@ const STATE_PREFIX = "motion-light-schedule";
  * 4. The current time is matched against TIME_WINDOWS (first match wins)
  * 5. If the time window changed, orphaned lamps are turned off
  * 6. The lamps for the matching window are turned on
- * 7. After LIGHT_DURATION_MS with no motion from any sensor, lights turn off
+ * 7. After the window's durationMs with no motion from any sensor, lights turn off
  *
- * Adjust SENSORS, LUX_THRESHOLD, LIGHT_DURATION_MS, and TIME_WINDOWS
+ * Adjust SENSORS, LUX_THRESHOLD, and TIME_WINDOWS
  * to match your setup.
  */
 export default class MotionLightSchedule extends Automation {
@@ -110,40 +112,46 @@ export default class MotionLightSchedule extends Automation {
   /** Only trigger when illuminance (lux) is below this value. */
   private readonly LUX_THRESHOLD = 30;
 
-  /** How long to keep lights on after last motion event (in ms). */
-  private readonly LIGHT_DURATION_MS = 5 * 60 * 1000; // 5 minutes
-
   /**
-   * Time windows defining which lamps to turn on and at what brightness.
+   * Time windows defining which lamps to turn on, at what brightness,
+   * and how long to keep them on after the last motion event.
    *
    * Windows are evaluated in order — the first matching window wins.
    * If no window matches, motion is ignored (but active lamps remain on
    * until the turn-off timer expires).
    *
+   * Each window has its own `durationMs` so you can keep lights on longer
+   * during the evening (when you're likely settled) and shorter at night
+   * (just enough to walk through).
+   *
    * Example setup (multiple windows):
-   * - Morning (06:00–09:00): hallway at full brightness
-   * - Day (09:00–18:00): hallway at 60%
-   * - Evening (18:00–22:00): hallway + accent lamp, warm brightness
-   * - Night (22:00–06:00): hallway only at very low brightness
+   * - Morning (06:00–09:00): hallway at full brightness, 5 min duration
+   * - Day (09:00–18:00): hallway at 60%, 3 min duration
+   * - Evening (18:00–22:00): hallway + accent lamp, 10 min duration
+   * - Night (22:00–06:00): hallway only at very low brightness, 2 min duration
    *
    * For a single window covering the whole day, use an overnight range:
-   *   [{ from: "00:00", to: "00:00", lamps: [{ name: "light", brightness: 200 }] }]
+   *   [{ from: "00:00", to: "00:00", durationMs: 5 * 60 * 1000,
+   *      lamps: [{ name: "light", brightness: 200 }] }]
    * Since from === to, the window matches all times.
    */
   private readonly TIME_WINDOWS: TimeWindow[] = [
     {
       from: "06:00",
       to: "09:00",
+      durationMs: 5 * 60 * 1000, // 5 minutes
       lamps: [{ name: "hallway_light", brightness: 254 }],
     },
     {
       from: "09:00",
       to: "18:00",
+      durationMs: 3 * 60 * 1000, // 3 minutes
       lamps: [{ name: "hallway_light", brightness: 150 }],
     },
     {
       from: "18:00",
       to: "22:00",
+      durationMs: 10 * 60 * 1000, // 10 minutes
       lamps: [
         { name: "hallway_light", brightness: 200 },
         { name: "accent_lamp", brightness: 120 },
@@ -152,6 +160,7 @@ export default class MotionLightSchedule extends Automation {
     {
       from: "22:00",
       to: "06:00",
+      durationMs: 2 * 60 * 1000, // 2 minutes
       lamps: [{ name: "hallway_light", brightness: 30 }],
     },
   ];
@@ -229,9 +238,9 @@ export default class MotionLightSchedule extends Automation {
 
     if (!window) {
       this.logger.debug("No time window matches current time, ignoring motion");
-      // Still reset the timer if lights are on — they'll turn off on schedule
+      // Still reset the timer if lights are on — use a short fallback duration
       if (lightsAreOn) {
-        this.resetTurnOffTimer();
+        this.resetTurnOffTimer(60 * 1000); // 1 minute fallback
       }
       return;
     }
@@ -260,11 +269,12 @@ export default class MotionLightSchedule extends Automation {
       "Turning on lamps",
     );
 
-    // Turn on all lamps for this window
+    // Turn on all lamps for this window with a 1-second transition
     for (const lamp of window.lamps) {
       this.mqtt.publishToDevice(lamp.name, {
         state: "ON",
         brightness: lamp.brightness,
+        transition: 1,
       });
     }
 
@@ -272,8 +282,8 @@ export default class MotionLightSchedule extends Automation {
     this.state.set(this.ACTIVE_LAMPS_KEY, newLampNames);
     this.state.set(this.LIGHTS_ON_KEY, true);
 
-    // Reset the turn-off timer
-    this.resetTurnOffTimer();
+    // Reset the turn-off timer using this window's duration
+    this.resetTurnOffTimer(window.durationMs);
   }
 
   /**
@@ -319,8 +329,10 @@ export default class MotionLightSchedule extends Automation {
 
   /**
    * Reset the turn-off timer. Each motion event from any sensor restarts it.
+   *
+   * @param durationMs How long to wait before turning off (from the active time window)
    */
-  private resetTurnOffTimer(): void {
+  private resetTurnOffTimer(durationMs: number): void {
     if (this.turnOffTimer) {
       clearTimeout(this.turnOffTimer);
     }
@@ -333,7 +345,7 @@ export default class MotionLightSchedule extends Automation {
       this.state.set(this.LIGHTS_ON_KEY, false);
       this.state.delete(this.ACTIVE_LAMPS_KEY);
       this.turnOffTimer = null;
-    }, this.LIGHT_DURATION_MS);
+    }, durationMs);
   }
 
   async onStop(): Promise<void> {
