@@ -59,10 +59,7 @@ export class CronScheduler {
     }
     this.jobs = this.jobs.filter((j) => !j.id.startsWith(prefix));
     if (toRemove.length > 0) {
-      this.logger.debug(
-        { prefix, count: toRemove.length },
-        "Cron jobs removed by prefix",
-      );
+      this.logger.debug({ prefix, count: toRemove.length }, "Cron jobs removed by prefix");
     }
   }
 

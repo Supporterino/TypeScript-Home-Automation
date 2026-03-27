@@ -1,9 +1,6 @@
 import type { Logger } from "pino";
 import type { HttpClient } from "./http-client.js";
-import type {
-  NotificationService,
-  NotificationOptions,
-} from "./notification-service.js";
+import type { NotificationOptions, NotificationService } from "./notification-service.js";
 
 /**
  * Configuration for the ntfy.sh notification service.
@@ -80,10 +77,7 @@ export class NtfyNotificationService implements NotificationService {
 
     const endpoint = `${this.url}/${this.topic}`;
 
-    this.logger.debug(
-      { title, priority, tags, endpoint },
-      "Sending ntfy.sh notification",
-    );
+    this.logger.debug({ title, priority, tags, endpoint }, "Sending ntfy.sh notification");
 
     try {
       const response = await this.http.request(endpoint, {
@@ -95,10 +89,7 @@ export class NtfyNotificationService implements NotificationService {
       if (response.ok) {
         this.logger.info({ title, priority }, "Notification sent via ntfy.sh");
       } else {
-        this.logger.error(
-          { status: response.status, title },
-          "ntfy.sh returned non-OK status",
-        );
+        this.logger.error({ status: response.status, title }, "ntfy.sh returned non-OK status");
       }
     } catch (err) {
       this.logger.error({ err, title }, "Failed to send ntfy.sh notification");

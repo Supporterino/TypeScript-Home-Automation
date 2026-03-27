@@ -385,10 +385,7 @@ export type PhilipsLightEffect =
  * Adds `fireplace` and `colorloop`.
  * Supported by: 9290022166, 8718699703424.
  */
-export type PhilipsColorLightEffect =
-  | PhilipsLightEffect
-  | "fireplace"
-  | "colorloop";
+export type PhilipsColorLightEffect = PhilipsLightEffect | "fireplace" | "colorloop";
 
 /**
  * Set command for Philips Hue dimmable-only bulbs.
@@ -409,7 +406,8 @@ export interface PhilipsDimmableLightSetCommand extends Omit<DimmableLightSetCom
  * Supported devices:
  * - Philips 8719514301481 (Hue Filament Globe Ambiance E27, 222–454 mired)
  */
-export interface PhilipsWhiteSpectrumLightSetCommand extends Omit<WhiteSpectrumLightSetCommand, "effect"> {
+export interface PhilipsWhiteSpectrumLightSetCommand
+  extends Omit<WhiteSpectrumLightSetCommand, "effect"> {
   effect?: PhilipsLightEffect;
 }
 
@@ -493,7 +491,8 @@ export interface IkeaDimmableLightSetCommand extends Omit<DimmableLightSetComman
  * Supported devices:
  * - IKEA LED2005R5 / LED2106R3 (TRADFRI bulb GU10, white spectrum 345/380 lm, 250–454 mired)
  */
-export interface IkeaWhiteSpectrumLightSetCommand extends Omit<WhiteSpectrumLightSetCommand, "effect"> {
+export interface IkeaWhiteSpectrumLightSetCommand
+  extends Omit<WhiteSpectrumLightSetCommand, "effect"> {
   effect?: IkeaLightEffect;
 }
 
@@ -604,11 +603,7 @@ export interface IkeaStyrbarPayload {
  * Supported devices:
  * - IKEA E1812 (TRADFRI shortcut button, single button)
  */
-export type IkeaShortcutButtonAction =
-  | "on"
-  | "off"
-  | "brightness_move_up"
-  | "brightness_stop";
+export type IkeaShortcutButtonAction = "on" | "off" | "brightness_move_up" | "brightness_stop";
 
 /**
  * State payload for IKEA TRADFRI shortcut button.
@@ -729,5 +724,3 @@ export interface AqaraWaterLeakPayload extends WaterLeakPayload {
  * - Aqara WSDCGQ11LM (temperature/humidity/pressure sensor)
  */
 export interface AqaraTemperatureHumidityPayload extends TemperatureHumidityPayload {}
-
-

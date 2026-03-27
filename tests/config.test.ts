@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, mock } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { loadConfig } from "../src/config.js";
 
 describe("loadConfig", () => {
@@ -61,14 +61,18 @@ describe("loadConfig", () => {
   });
 
   describe("log level", () => {
-    it.each(["fatal", "error", "warn", "info", "debug", "trace"] as const)(
-      "accepts valid log level '%s'",
-      (level) => {
-        process.env.LOG_LEVEL = level;
-        const config = loadConfig();
-        expect(config.logLevel).toBe(level);
-      },
-    );
+    it.each([
+      "fatal",
+      "error",
+      "warn",
+      "info",
+      "debug",
+      "trace",
+    ] as const)("accepts valid log level '%s'", (level) => {
+      process.env.LOG_LEVEL = level;
+      const config = loadConfig();
+      expect(config.logLevel).toBe(level);
+    });
   });
 
   describe("state config", () => {

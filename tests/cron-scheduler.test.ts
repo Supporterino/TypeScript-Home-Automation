@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "bun:test";
+import { beforeEach, describe, expect, it } from "bun:test";
 import pino from "pino";
 import { CronScheduler } from "../src/core/cron-scheduler.js";
 

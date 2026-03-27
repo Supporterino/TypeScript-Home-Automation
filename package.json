@@ -28,6 +28,11 @@
     "dev": "bun run --watch src/standalone.ts",
     "start": "bun run src/standalone.ts",
     "test": "bun test",
+    "format": "biome format --write .",
+    "format:check": "biome format .",
+    "lint": "biome lint .",
+    "lint:fix": "biome lint --write .",
+    "check": "biome check --write .",
     "typecheck": "tsc --noEmit",
     "build": "tsc -p tsconfig.build.json",
     "prepublishOnly": "bun run build",
@@ -57,6 +62,7 @@
     "zod": "^4.0.0"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.4.9",
     "@types/bun": "^1.2.0",
     "pino-pretty": "^13.0.0",
     "typescript": "^5.7.0"

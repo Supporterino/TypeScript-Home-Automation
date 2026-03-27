@@ -1,8 +1,4 @@
-import {
-  Automation,
-  type Trigger,
-  type TriggerContext,
-} from "../core/automation.js";
+import { Automation, type Trigger, type TriggerContext } from "../core/automation.js";
 import type { AqaraTemperatureHumidityPayload } from "../types/zigbee.js";
 
 /**
@@ -118,8 +114,7 @@ export default class TemperatureAlert extends Automation {
     const sensor = this.sensorByTopic.get(context.topic);
     if (!sensor) return;
 
-    const payload =
-      context.payload as unknown as AqaraTemperatureHumidityPayload;
+    const payload = context.payload as unknown as AqaraTemperatureHumidityPayload;
 
     if (payload.temperature !== undefined) {
       await this.checkThreshold(
@@ -132,13 +127,7 @@ export default class TemperatureAlert extends Automation {
     }
 
     if (payload.humidity !== undefined) {
-      await this.checkThreshold(
-        sensor,
-        "humidity",
-        payload.humidity,
-        "%",
-        sensor.humidity,
-      );
+      await this.checkThreshold(sensor, "humidity", payload.humidity, "%", sensor.humidity);
     }
   }
 
@@ -155,26 +144,12 @@ export default class TemperatureAlert extends Automation {
     threshold: Threshold,
   ): Promise<void> {
     if (threshold.critical !== null && value >= threshold.critical) {
-      await this.sendAlert(
-        sensor,
-        metric,
-        value,
-        unit,
-        "critical",
-        threshold.critical,
-      );
+      await this.sendAlert(sensor, metric, value, unit, "critical", threshold.critical);
       return;
     }
 
     if (threshold.warning !== null && value >= threshold.warning) {
-      await this.sendAlert(
-        sensor,
-        metric,
-        value,
-        unit,
-        "warning",
-        threshold.warning,
-      );
+      await this.sendAlert(sensor, metric, value, unit, "warning", threshold.warning);
     }
   }
 
@@ -218,9 +193,7 @@ export default class TemperatureAlert extends Automation {
         `Sensor: ${sensor.label} (${sensor.name})`,
       ].join("\n"),
       priority: isCritical ? "urgent" : "high",
-      tags: isCritical
-        ? ["rotating_light", "thermometer"]
-        : ["warning", "thermometer"],
+      tags: isCritical ? ["rotating_light", "thermometer"] : ["warning", "thermometer"],
     });
 
     this.lastNotified.set(cooldownKey, now);

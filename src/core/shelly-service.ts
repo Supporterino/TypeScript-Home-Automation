@@ -1,12 +1,12 @@
 import type { Logger } from "pino";
-import type { HttpClient } from "./http-client.js";
 import type {
   ShellyDeviceInfo,
-  ShellySwitchStatus,
-  ShellySwitchSetResult,
   ShellySwitchConfig,
+  ShellySwitchSetResult,
+  ShellySwitchStatus,
   ShellySysStatus,
 } from "../types/shelly.js";
+import type { HttpClient } from "./http-client.js";
 
 /**
  * A registered Shelly device with its name and IP/hostname.
@@ -58,9 +58,7 @@ export class ShellyService {
    *
    * @param devices Array of { name, host } objects or a Record<name, host>
    */
-  registerMany(
-    devices: ShellyDevice[] | Record<string, string>,
-  ): void {
+  registerMany(devices: ShellyDevice[] | Record<string, string>): void {
     if (Array.isArray(devices)) {
       for (const device of devices) {
         this.register(device.name, device.host);
@@ -83,10 +81,7 @@ export class ShellyService {
    * @param toggleAfter Optional: automatically toggle back after N seconds
    * @returns The switch state before the command
    */
-  async turnOn(
-    name: string,
-    toggleAfter?: number,
-  ): Promise<ShellySwitchSetResult> {
+  async turnOn(name: string, toggleAfter?: number): Promise<ShellySwitchSetResult> {
     const params = new URLSearchParams({ id: "0", on: "true" });
     if (toggleAfter !== undefined) {
       params.set("toggle_after", String(toggleAfter));
@@ -102,10 +97,7 @@ export class ShellyService {
    * @param toggleAfter Optional: automatically toggle back after N seconds
    * @returns The switch state before the command
    */
-  async turnOff(
-    name: string,
-    toggleAfter?: number,
-  ): Promise<ShellySwitchSetResult> {
+  async turnOff(name: string, toggleAfter?: number): Promise<ShellySwitchSetResult> {
     const params = new URLSearchParams({ id: "0", on: "false" });
     if (toggleAfter !== undefined) {
       params.set("toggle_after", String(toggleAfter));
@@ -122,11 +114,7 @@ export class ShellyService {
    */
   async toggle(name: string): Promise<ShellySwitchSetResult> {
     this.logger.info({ device: name }, "Toggling Shelly switch");
-    return this.rpc<ShellySwitchSetResult>(
-      name,
-      "Switch.Toggle",
-      new URLSearchParams({ id: "0" }),
-    );
+    return this.rpc<ShellySwitchSetResult>(name, "Switch.Toggle", new URLSearchParams({ id: "0" }));
   }
 
   // -------------------------------------------------------------------------
@@ -139,11 +127,7 @@ export class ShellyService {
    * @param name Device friendly name
    */
   async getStatus(name: string): Promise<ShellySwitchStatus> {
-    return this.rpc<ShellySwitchStatus>(
-      name,
-      "Switch.GetStatus",
-      new URLSearchParams({ id: "0" }),
-    );
+    return this.rpc<ShellySwitchStatus>(name, "Switch.GetStatus", new URLSearchParams({ id: "0" }));
   }
 
   /**
@@ -152,11 +136,7 @@ export class ShellyService {
    * @param name Device friendly name
    */
   async getConfig(name: string): Promise<ShellySwitchConfig> {
-    return this.rpc<ShellySwitchConfig>(
-      name,
-      "Switch.GetConfig",
-      new URLSearchParams({ id: "0" }),
-    );
+    return this.rpc<ShellySwitchConfig>(name, "Switch.GetConfig", new URLSearchParams({ id: "0" }));
   }
 
   /**
@@ -204,9 +184,7 @@ export class ShellyService {
    * @param delayMs Optional: delay in milliseconds before rebooting
    */
   async reboot(name: string, delayMs?: number): Promise<void> {
-    const params = delayMs
-      ? new URLSearchParams({ delay_ms: String(delayMs) })
-      : undefined;
+    const params = delayMs ? new URLSearchParams({ delay_ms: String(delayMs) }) : undefined;
     this.logger.warn({ device: name }, "Rebooting Shelly device");
     await this.rpc(name, "Shelly.Reboot", params);
   }
@@ -236,11 +214,7 @@ export class ShellyService {
    * @param method RPC method (e.g. "Switch.Set")
    * @param params URL search params for the request
    */
-  private async rpc<T>(
-    name: string,
-    method: string,
-    params?: URLSearchParams,
-  ): Promise<T> {
+  private async rpc<T>(name: string, method: string, params?: URLSearchParams): Promise<T> {
     const device = this.getDevice(name);
     const query = params ? `?${params.toString()}` : "";
     const url = `http://${device.host}/rpc/${method}${query}`;
@@ -256,10 +230,7 @@ export class ShellyService {
       throw new Error(errMsg);
     }
 
-    this.logger.debug(
-      { device: name, method, result: response.data },
-      "Shelly RPC response",
-    );
+    this.logger.debug({ device: name, method, result: response.data }, "Shelly RPC response");
 
     return response.data;
   }

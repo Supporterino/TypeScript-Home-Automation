@@ -1,16 +1,12 @@
-import { describe, it, expect, mock } from "bun:test";
+import { describe, expect, it, mock } from "bun:test";
 import pino from "pino";
-import {
-  Automation,
-  type Trigger,
-  type TriggerContext,
-} from "../src/core/automation.js";
-import type { MqttService } from "../src/core/mqtt-service.js";
+import type { Config } from "../src/config.js";
+import { Automation, type Trigger, type TriggerContext } from "../src/core/automation.js";
 import type { HttpClient } from "../src/core/http-client.js";
+import type { MqttService } from "../src/core/mqtt-service.js";
+import type { NotificationService } from "../src/core/notification-service.js";
 import type { ShellyService } from "../src/core/shelly-service.js";
 import type { StateManager } from "../src/core/state-manager.js";
-import type { NotificationService } from "../src/core/notification-service.js";
-import type { Config } from "../src/config.js";
 
 const logger = pino({ level: "silent" });
 
@@ -25,12 +21,24 @@ class TestAutomation extends Automation {
   }
 
   // Expose protected members for testing
-  getMqtt() { return this.mqtt; }
-  getShelly() { return this.shelly; }
-  getHttp() { return this.http; }
-  getState() { return this.state; }
-  getLogger() { return this.logger; }
-  getConfig() { return this.config; }
+  getMqtt() {
+    return this.mqtt;
+  }
+  getShelly() {
+    return this.shelly;
+  }
+  getHttp() {
+    return this.http;
+  }
+  getState() {
+    return this.state;
+  }
+  getLogger() {
+    return this.logger;
+  }
+  getConfig() {
+    return this.config;
+  }
   async callNotify(options: Parameters<Automation["notify"]>[0]) {
     return this.notify(options);
   }

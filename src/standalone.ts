@@ -11,10 +11,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createEngine } from "./core/engine.js";
 
-const automationsDir = join(
-  dirname(fileURLToPath(import.meta.url)),
-  "automations",
-);
+const automationsDir = join(dirname(fileURLToPath(import.meta.url)), "automations");
 
 const engine = createEngine({ automationsDir });
 

@@ -46,8 +46,7 @@ export class HttpClient {
       };
 
       if (body !== undefined) {
-        fetchOptions.body =
-          typeof body === "string" ? body : JSON.stringify(body);
+        fetchOptions.body = typeof body === "string" ? body : JSON.stringify(body);
       }
 
       const response = await fetch(url, fetchOptions);
@@ -60,10 +59,7 @@ export class HttpClient {
         data = (await response.text()) as unknown as T;
       }
 
-      this.logger.debug(
-        { url, method, status: response.status },
-        "HTTP response",
-      );
+      this.logger.debug({ url, method, status: response.status }, "HTTP response");
 
       return {
         status: response.status,
@@ -80,10 +76,7 @@ export class HttpClient {
   }
 
   /** Convenience: GET request */
-  async get<T = unknown>(
-    url: string,
-    headers?: Record<string, string>,
-  ): Promise<HttpResponse<T>> {
+  async get<T = unknown>(url: string, headers?: Record<string, string>): Promise<HttpResponse<T>> {
     return this.request<T>(url, { method: "GET", headers });
   }
 
@@ -115,10 +108,7 @@ export class HttpClient {
   }
 
   /** Convenience: DELETE request */
-  async del<T = unknown>(
-    url: string,
-    headers?: Record<string, string>,
-  ): Promise<HttpResponse<T>> {
+  async del<T = unknown>(url: string, headers?: Record<string, string>): Promise<HttpResponse<T>> {
     return this.request<T>(url, { method: "DELETE", headers });
   }
 }

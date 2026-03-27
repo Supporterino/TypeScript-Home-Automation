@@ -1,12 +1,7 @@
 /**
  * Notification priority levels.
  */
-export type NotificationPriority =
-  | "min"
-  | "low"
-  | "default"
-  | "high"
-  | "urgent";
+export type NotificationPriority = "min" | "low" | "default" | "high" | "urgent";
 
 /**
  * Options for sending a notification.

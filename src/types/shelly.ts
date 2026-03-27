@@ -61,11 +61,7 @@ export interface ShellyTemperature {
 }
 
 /** Error conditions that can be reported by a switch. */
-export type ShellySwitchError =
-  | "overtemp"
-  | "overpower"
-  | "overvoltage"
-  | "undervoltage";
+export type ShellySwitchError = "overtemp" | "overpower" | "overvoltage" | "undervoltage";
 
 /**
  * Response from `Switch.GetStatus`.
