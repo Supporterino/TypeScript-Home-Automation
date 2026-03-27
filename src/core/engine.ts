@@ -5,6 +5,7 @@ import { CronScheduler } from "./cron-scheduler.js";
 import { HttpClient } from "./http-client.js";
 import { ShellyService } from "./shelly-service.js";
 import { StateManager, type StateManagerOptions } from "./state-manager.js";
+import { HealthServer } from "./health-server.js";
 import type { NotificationService } from "./notification-service.js";
 import type { NtfyNotificationService } from "./ntfy-notification-service.js";
 import { AutomationManager } from "./automation-manager.js";
@@ -170,6 +171,12 @@ export function createEngine(options: EngineOptions): Engine {
     );
   }
 
+  // Initialize optional health server
+  const healthPort = config.health.port;
+  const healthServer = healthPort > 0
+    ? new HealthServer(healthPort, mqtt, logger.child({ service: "health" }))
+    : null;
+
   const manager = new AutomationManager(
     mqtt,
     cron,
@@ -200,10 +207,12 @@ export function createEngine(options: EngineOptions): Engine {
       }
 
       logger.info("Starting Home Automation Engine");
+      healthServer?.start();
       await stateManager.load();
       await mqtt.connect();
       await manager.discoverAndRegister(options.automationsDir);
       started = true;
+      healthServer?.setEngineStarted(true);
       logger.info("Home Automation Engine is running");
     },
 
@@ -213,10 +222,12 @@ export function createEngine(options: EngineOptions): Engine {
       }
 
       logger.info("Stopping Home Automation Engine");
+      healthServer?.setEngineStarted(false);
       await manager.stopAll();
       cron.stopAll();
       await stateManager.save();
       await mqtt.disconnect();
+      healthServer?.stop();
       started = false;
       logger.info("Home Automation Engine stopped");
     },

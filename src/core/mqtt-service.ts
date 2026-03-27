@@ -17,6 +17,11 @@ export class MqttService {
   private subscriptions: Subscription[] = [];
   private connected = false;
 
+  /** Whether the MQTT client is currently connected to the broker. */
+  get isConnected(): boolean {
+    return this.connected;
+  }
+
   constructor(
     private readonly config: Config,
     private readonly logger: Logger,

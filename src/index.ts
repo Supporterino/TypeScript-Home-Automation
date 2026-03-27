@@ -29,6 +29,9 @@ export {
   type NtfyConfig,
 } from "./core/ntfy-notification-service.js";
 
+// Health server
+export { HealthServer } from "./core/health-server.js";
+
 // State management
 export {
   StateManager,

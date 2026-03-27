@@ -9,6 +9,13 @@ services:
       - ZIGBEE2MQTT_PREFIX=zigbee2mqtt
       - LOG_LEVEL=info
       - NODE_ENV=production
+      - HEALTH_PORT=8080
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/readyz"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
     depends_on:
       mosquitto:
         condition: service_started
