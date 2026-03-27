@@ -15,6 +15,10 @@ export interface NtfyConfig {
   topic: string;
   /** Optional: bearer token for access-controlled topics. */
   token?: string;
+  /** HTTP client instance (injected by the engine). */
+  http: HttpClient;
+  /** Logger instance (injected by the engine). */
+  logger: Logger;
 }
 
 /**
@@ -28,13 +32,15 @@ export interface NtfyConfig {
  * ```ts
  * import { createEngine, NtfyNotificationService } from "ts-home-automation";
  *
+ * // The engine provides http and logger automatically:
  * const engine = createEngine({
  *   automationsDir: "...",
- *   notifications: new NtfyNotificationService({
- *     topic: "my-home-alerts",
- *     // url: "https://ntfy.example.com",  // optional, defaults to ntfy.sh
- *     // token: "tk_...",                   // optional, for auth
- *   }),
+ *   notifications: (http, logger) =>
+ *     new NtfyNotificationService({
+ *       topic: "my-home-alerts",
+ *       http,
+ *       logger,
+ *     }),
  * });
  * ```
  *
@@ -44,22 +50,15 @@ export class NtfyNotificationService implements NotificationService {
   private readonly url: string;
   private readonly topic: string;
   private readonly token?: string;
-  private http!: HttpClient;
-  private logger!: Logger;
+  private readonly http: HttpClient;
+  private readonly logger: Logger;
 
   constructor(config: NtfyConfig) {
     this.url = config.url ?? "https://ntfy.sh";
     this.topic = config.topic;
     this.token = config.token;
-  }
-
-  /**
-   * Inject dependencies. Called by the engine during setup.
-   * @internal
-   */
-  _inject(http: HttpClient, logger: Logger): void {
-    this.http = http;
-    this.logger = logger;
+    this.http = config.http;
+    this.logger = config.logger;
   }
 
   async send(options: NotificationOptions): Promise<void> {

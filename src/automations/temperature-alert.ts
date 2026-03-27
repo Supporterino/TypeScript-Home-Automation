@@ -44,9 +44,8 @@ interface SensorConfig {
  *
  * const engine = createEngine({
  *   automationsDir: "...",
- *   notifications: new NtfyNotificationService({
- *     topic: "my-home-alerts",
- *   }),
+ *   notifications: (http, logger) =>
+ *     new NtfyNotificationService({ topic: "my-home-alerts", http, logger }),
  * });
  * ```
  *

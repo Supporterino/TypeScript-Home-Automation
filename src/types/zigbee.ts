@@ -728,9 +728,6 @@ export interface AqaraWaterLeakPayload extends WaterLeakPayload {
  * Supported devices:
  * - Aqara WSDCGQ11LM (temperature/humidity/pressure sensor)
  */
-export interface AqaraTemperatureHumidityPayload extends TemperatureHumidityPayload {
-  /** Atmospheric pressure in hPa. */
-  pressure?: number;
-}
+export interface AqaraTemperatureHumidityPayload extends TemperatureHumidityPayload {}
 
 

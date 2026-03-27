@@ -12,28 +12,31 @@ Can be used in two ways:
 ## Architecture
 
 ```
-┌──────────────────────────────────────────────────┐
-│              Automation Engine                   │
-│                                                  │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐       │
-│  │ Motion   │  │ Schedule │  │  Door    │  ...  │
-│  │ Light    │  │ Report   │  │  Alert   │       │
-│  └────┬─────┘  └────┬─────┘  └────┬─────┘       │
-│       │              │              │            │
-│  ┌────▼──────────────▼──────────────▼────┐       │
-│  │         AutomationManager             │       │
-│  └────┬──────────────┬──────────────┬────┘       │
-│       │              │              │            │
-│  ┌────▼────┐   ┌─────▼─────┐  ┌────▼────┐       │
-│  │  MQTT   │   │   Cron    │  │  HTTP   │       │
-│  │ Service │   │ Scheduler │  │ Client  │       │
-│  └────┬────┘   └───────────┘  └─────────┘       │
-└───────┼──────────────────────────────────────────┘
-        │
-   ┌────▼──────┐      ┌───────────────┐
-   │ Mosquitto │◄────►│ Zigbee2MQTT   │
-   │  Broker   │      │ zigbee2mqtt/# │
-   └───────────┘      └───────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│                     Automation Engine                        │
+│                                                              │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐    │
+│  │ Motion   │  │ Temp     │  │ Remote   │  │ Schedule │ .. │
+│  │ Light    │  │ Alert    │  │ Control  │  │ Report   │    │
+│  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘    │
+│       │              │              │              │         │
+│  ┌────▼──────────────▼──────────────▼──────────────▼────┐    │
+│  │                AutomationManager                     │    │
+│  └──┬─────────┬──────────┬──────────┬─────────┬─────┬───┘    │
+│     │         │          │          │         │     │        │
+│  ┌──▼───┐ ┌──▼────┐ ┌───▼──┐ ┌─────▼───┐ ┌──▼──┐ ┌▼─────┐ │
+│  │ MQTT │ │ Cron  │ │ HTTP │ │ Shelly  │ │State│ │Notify│ │
+│  └──┬───┘ └───────┘ └──────┘ └─────────┘ └─────┘ └──────┘ │
+│     │                                                       │
+│  ┌──▼─────────────┐                                         │
+│  │ Health Server  │  (/healthz, /readyz)                    │
+│  └────────────────┘                                         │
+└──────┬───────────────────────────────────────────────────────┘
+       │
+  ┌────▼──────┐      ┌───────────────┐
+  │ Mosquitto │◄────►│ Zigbee2MQTT   │
+  │  Broker   │      │ zigbee2mqtt/# │
+  └───────────┘      └───────────────┘
 ```
 
 ## Prerequisites
@@ -173,21 +176,30 @@ Write automations in `src/automations/` — they are auto-discovered on startup.
 
 ```
 src/
-├── index.ts                   # Package entry point (re-exports public API)
-├── standalone.ts              # Standalone runner (used by `bun run dev/start`)
-├── config.ts                  # Zod-validated environment config
+├── index.ts                          # Package entry point (re-exports public API)
+├── standalone.ts                     # Standalone runner (used by `bun run dev/start`)
+├── config.ts                         # Zod-validated environment config
 ├── core/
-│   ├── engine.ts              # createEngine() factory
-│   ├── automation.ts          # Abstract Automation base class
-│   ├── automation-manager.ts  # Auto-discovery and lifecycle management
-│   ├── mqtt-service.ts        # MQTT client wrapper
-│   ├── cron-scheduler.ts      # Cron job scheduling
-│   └── http-client.ts         # HTTP client with logging
-├── automations/               # Your automations go here (auto-discovered)
-│   ├── motion-light.ts        # Example: motion → light on
-│   └── scheduled-report.ts    # Example: daily cron → HTTP fetch
+│   ├── engine.ts                     # createEngine() factory
+│   ├── automation.ts                 # Abstract Automation base class
+│   ├── automation-manager.ts         # Auto-discovery and lifecycle management
+│   ├── mqtt-service.ts               # MQTT client wrapper
+│   ├── cron-scheduler.ts             # Cron job scheduling
+│   ├── http-client.ts                # HTTP client with logging
+│   ├── shelly-service.ts             # Shelly Gen 2 device control
+│   ├── state-manager.ts              # Shared state with persistence
+│   ├── notification-service.ts       # NotificationService interface
+│   ├── ntfy-notification-service.ts  # ntfy.sh notification implementation
+│   └── health-server.ts              # Liveness/readiness HTTP server
+├── automations/                      # Your automations go here (auto-discovered)
+│   ├── motion-light.ts               # Example: simple motion → light on
+│   ├── motion-light-schedule.ts      # Example: multi-sensor motion with time windows
+│   ├── aqara-h1-remote.ts            # Example: remote → lamp + Shelly plug
+│   ├── temperature-alert.ts          # Example: temp/humidity → ntfy notification
+│   └── scheduled-report.ts           # Example: daily cron → HTTP fetch
 └── types/
-    └── zigbee.ts              # Zigbee2MQTT payload type definitions
+    ├── zigbee.ts                     # Zigbee2MQTT payload type definitions
+    └── shelly.ts                     # Shelly Gen 2 API type definitions
 ```
 
 ### Docker (standalone)
@@ -399,11 +411,14 @@ import { createEngine, NtfyNotificationService } from "ts-home-automation";
 
 const engine = createEngine({
   automationsDir: "...",
-  notifications: new NtfyNotificationService({
-    topic: "my-home-alerts",
-    // url: "https://ntfy.example.com",  // optional, defaults to ntfy.sh
-    // token: "tk_...",                   // optional, for auth
-  }),
+  notifications: (http, logger) =>
+    new NtfyNotificationService({
+      topic: "my-home-alerts",
+      http,
+      logger,
+      // url: "https://ntfy.example.com",  // optional, defaults to ntfy.sh
+      // token: "tk_...",                   // optional, for auth
+    }),
 });
 ```
 

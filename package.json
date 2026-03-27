@@ -27,6 +27,7 @@
   "scripts": {
     "dev": "bun run --watch src/standalone.ts",
     "start": "bun run src/standalone.ts",
+    "test": "bun test",
     "typecheck": "tsc --noEmit",
     "build": "tsc -p tsconfig.build.json",
     "prepublishOnly": "bun run build",

@@ -7,7 +7,6 @@ import { ShellyService } from "./shelly-service.js";
 import { StateManager, type StateManagerOptions } from "./state-manager.js";
 import { HealthServer } from "./health-server.js";
 import type { NotificationService } from "./notification-service.js";
-import type { NtfyNotificationService } from "./ntfy-notification-service.js";
 import { AutomationManager } from "./automation-manager.js";
 
 /**
@@ -38,6 +37,9 @@ export interface EngineOptions {
   /**
    * Optional notification service for sending push notifications.
    *
+   * Can be a `NotificationService` instance or a factory function that
+   * receives the engine's `HttpClient` and `Logger` for dependency injection.
+   *
    * If provided, automations can use `this.notify()` to send notifications.
    * If omitted, `this.notify()` will log a warning and do nothing.
    *
@@ -47,13 +49,14 @@ export interface EngineOptions {
    *
    * const engine = createEngine({
    *   automationsDir: "...",
-   *   notifications: new NtfyNotificationService({
-   *     topic: "my-home-alerts",
-   *   }),
+   *   notifications: (http, logger) =>
+   *     new NtfyNotificationService({ topic: "my-home-alerts", http, logger }),
    * });
    * ```
    */
-  notifications?: NotificationService;
+  notifications?:
+    | NotificationService
+    | ((http: HttpClient, logger: Logger) => NotificationService);
 
   /**
    * State manager options.
@@ -163,12 +166,12 @@ export function createEngine(options: EngineOptions): Engine {
   );
 
   // Initialize optional notification service
-  const notifications = options.notifications ?? null;
-  if (notifications && "_inject" in notifications) {
-    (notifications as NtfyNotificationService)._inject(
-      http,
-      logger.child({ service: "notifications" }),
-    );
+  let notifications: NotificationService | null = null;
+  if (options.notifications) {
+    notifications =
+      typeof options.notifications === "function"
+        ? options.notifications(http, logger.child({ service: "notifications" }))
+        : options.notifications;
   }
 
   // Initialize optional health server
