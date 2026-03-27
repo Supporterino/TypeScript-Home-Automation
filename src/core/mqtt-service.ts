@@ -1,6 +1,7 @@
 import mqtt, { type MqttClient, type IClientOptions } from "mqtt";
 import type { Logger } from "pino";
 import type { Config } from "../config.js";
+import { topicMatches } from "./mqtt-utils.js";
 
 export type MqttMessageHandler = (
   topic: string,
@@ -88,7 +89,7 @@ export class MqttService {
         this.logger.debug({ topic, payload }, "MQTT message received");
 
         for (const sub of this.subscriptions) {
-          if (this.topicMatches(sub.topic, topic)) {
+          if (topicMatches(sub.topic, topic)) {
             try {
               sub.handler(topic, payload);
             } catch (err) {
@@ -174,27 +175,4 @@ export class MqttService {
     }
   }
 
-  /**
-   * Match MQTT topic patterns with wildcards.
-   * '+' matches a single level, '#' matches multiple levels.
-   */
-  private topicMatches(pattern: string, topic: string): boolean {
-    const patternParts = pattern.split("/");
-    const topicParts = topic.split("/");
-
-    for (let i = 0; i < patternParts.length; i++) {
-      if (patternParts[i] === "#") {
-        return true;
-      }
-      if (patternParts[i] === "+") {
-        if (i >= topicParts.length) return false;
-        continue;
-      }
-      if (patternParts[i] !== topicParts[i]) {
-        return false;
-      }
-    }
-
-    return patternParts.length === topicParts.length;
-  }
 }

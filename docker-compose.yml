@@ -11,7 +11,7 @@ services:
       - NODE_ENV=production
       - HEALTH_PORT=8080
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/readyz"]
+      test: ["CMD", "bun", "-e", "const r = await fetch('http://localhost:8080/readyz'); process.exit(r.ok ? 0 : 1)"]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -32,6 +32,7 @@ services:
     ports:
       - "1883:1883"
     volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
       - mosquitto-data:/mosquitto/data
       - mosquitto-log:/mosquitto/log
     networks:

@@ -104,4 +104,21 @@ export class HttpClient {
   ): Promise<HttpResponse<T>> {
     return this.request<T>(url, { method: "PUT", body, headers });
   }
+
+  /** Convenience: PATCH request */
+  async patch<T = unknown>(
+    url: string,
+    body: unknown,
+    headers?: Record<string, string>,
+  ): Promise<HttpResponse<T>> {
+    return this.request<T>(url, { method: "PATCH", body, headers });
+  }
+
+  /** Convenience: DELETE request */
+  async del<T = unknown>(
+    url: string,
+    headers?: Record<string, string>,
+  ): Promise<HttpResponse<T>> {
+    return this.request<T>(url, { method: "DELETE", headers });
+  }
 }
