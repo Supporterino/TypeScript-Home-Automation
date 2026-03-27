@@ -117,11 +117,13 @@ export default class MotionLightState extends Automation {
     durationMs: 5 * 60 * 1000, // 5 minutes
   };
 
+  // ---- State keys ----
+  private readonly LIGHTS_ON_KEY = "motion-light-state:lights_on";
+  private readonly ACTIVE_LAMPS_KEY = "motion-light-state:active_lamps";
+
   // ---- Internal state ----
 
   private turnOffTimer: ReturnType<typeof setTimeout> | null = null;
-  private activeLamps: Set<string> = new Set();
-  private lightsAreOn = false;
   /** Map sensor topics to their configuration for quick lookup. */
   private sensorByTopic: Map<string, MotionSensor> = new Map();
 
@@ -136,6 +138,22 @@ export default class MotionLightState extends Automation {
     for (const sensor of this.SENSORS) {
       this.sensorByTopic.set(`zigbee2mqtt/${sensor.name}`, sensor);
     }
+
+    // Recovery: if lights were left on from a previous run, turn them off
+    const wasOn = this.state.get<boolean>(this.LIGHTS_ON_KEY, false);
+    const previousLamps = this.getActiveLamps();
+
+    if (wasOn && previousLamps.length > 0) {
+      this.logger.info(
+        { lamps: previousLamps },
+        "Recovering from restart: turning off previously active lamps",
+      );
+      for (const name of previousLamps) {
+        this.mqtt.publishToDevice(name, { state: "OFF" });
+      }
+      this.state.set(this.LIGHTS_ON_KEY, false);
+      this.state.delete(this.ACTIVE_LAMPS_KEY);
+    }
   }
 
   async execute(context: TriggerContext): Promise<void> {
@@ -147,7 +165,8 @@ export default class MotionLightState extends Automation {
     if (!sensor) return;
 
     // Check lux threshold (skip if this sensor is affected and lights are on)
-    const skipLux = sensor.luxAffectedByLights && this.lightsAreOn;
+    const lightsAreOn = this.state.get<boolean>(this.LIGHTS_ON_KEY, false);
+    const skipLux = sensor.luxAffectedByLights && lightsAreOn;
     if (!skipLux) {
       const lux = payload.illuminance ?? 0;
       if (lux >= this.LUX_THRESHOLD) {
@@ -162,7 +181,8 @@ export default class MotionLightState extends Automation {
     // Read the boolean state to select the active profile
     const stateValue = this.state.get<boolean>(this.STATE_KEY, false);
     const profile = stateValue ? this.PROFILE_ON : this.PROFILE_OFF;
-    const newLamps = new Set(profile.lamps.map((l) => l.name));
+    const newLampNames = profile.lamps.map((l) => l.name);
+    const newLamps = new Set(newLampNames);
 
     this.logger.info(
       {
@@ -176,8 +196,8 @@ export default class MotionLightState extends Automation {
     );
 
     // Turn off orphaned lamps from a previous profile (e.g. boolean changed)
-    if (this.lightsAreOn) {
-      const orphaned = [...this.activeLamps].filter((name) => !newLamps.has(name));
+    if (lightsAreOn) {
+      const orphaned = this.getActiveLamps().filter((name) => !newLamps.has(name));
       if (orphaned.length > 0) {
         this.logger.info({ orphaned }, "Profile changed, turning off orphaned lamps");
         for (const name of orphaned) {
@@ -195,11 +215,19 @@ export default class MotionLightState extends Automation {
       });
     }
 
-    this.activeLamps = newLamps;
-    this.lightsAreOn = true;
+    // Update shared state
+    this.state.set(this.ACTIVE_LAMPS_KEY, newLampNames);
+    this.state.set(this.LIGHTS_ON_KEY, true);
 
     // Reset the turn-off timer using this profile's duration
     this.resetTurnOffTimer(profile.durationMs);
+  }
+
+  /**
+   * Get the list of currently active lamp names from state.
+   */
+  private getActiveLamps(): string[] {
+    return this.state.get<string[]>(this.ACTIVE_LAMPS_KEY) ?? [];
   }
 
   /**
@@ -212,11 +240,11 @@ export default class MotionLightState extends Automation {
 
     this.turnOffTimer = setTimeout(() => {
       this.logger.info("No recent motion, turning off lamps");
-      for (const name of this.activeLamps) {
+      for (const name of this.getActiveLamps()) {
         this.mqtt.publishToDevice(name, { state: "OFF" });
       }
-      this.activeLamps.clear();
-      this.lightsAreOn = false;
+      this.state.set(this.LIGHTS_ON_KEY, false);
+      this.state.delete(this.ACTIVE_LAMPS_KEY);
       this.turnOffTimer = null;
     }, durationMs);
   }
