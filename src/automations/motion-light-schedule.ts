@@ -46,6 +46,9 @@ interface MotionSensor {
   luxAffectedByLights: boolean;
 }
 
+/** State key prefix for this automation. */
+const STATE_PREFIX = "motion-light-schedule";
+
 /**
  * Example: Motion-activated lights with multiple sensors, lux threshold,
  * and time-based schedules.
@@ -67,6 +70,10 @@ interface MotionSensor {
  * - Handles time window transitions correctly: orphaned lamps from the
  *   previous window are turned off when the window changes
  * - Auto-off after a configurable duration of no motion from any sensor
+ * - State is shared via the state manager so other automations can check
+ *   if lights are currently active (key: "motion-light-schedule:lights_on")
+ * - On engine restart, recovers gracefully: turns off any lights that
+ *   were left on from a previous run
  *
  * How it works:
  * 1. Any configured sensor reports occupancy + illuminance
@@ -152,10 +159,6 @@ export default class MotionLightSchedule extends Automation {
   // ---- Internal state ----
 
   private turnOffTimer: ReturnType<typeof setTimeout> | null = null;
-  /** Track which lamps are currently active so we can turn them off. */
-  private activeLamps: Set<string> = new Set();
-  /** Whether lamps are currently on (managed by this automation). */
-  private lightsAreOn = false;
   /** Map sensor topics to their configuration for quick lookup. */
   private sensorByTopic: Map<string, MotionSensor> = new Map();
 
@@ -166,10 +169,32 @@ export default class MotionLightSchedule extends Automation {
       (payload as unknown as PhilipsHueMotionSensorPayload).occupancy === true,
   }));
 
+  // ---- State keys ----
+  private readonly LIGHTS_ON_KEY = `${STATE_PREFIX}:lights_on`;
+  private readonly ACTIVE_LAMPS_KEY = `${STATE_PREFIX}:active_lamps`;
+
   async onStart(): Promise<void> {
     // Build topic → sensor lookup for O(1) access in execute
     for (const sensor of this.SENSORS) {
       this.sensorByTopic.set(`zigbee2mqtt/${sensor.name}`, sensor);
+    }
+
+    // Recovery: if lights were left on from a previous run (state was persisted),
+    // turn them off and reset state. The timer didn't survive the restart, so
+    // we can't know how long they've been on — safest to turn them off.
+    const wasOn = this.state.get<boolean>(this.LIGHTS_ON_KEY, false);
+    const previousLamps = this.state.get<string[]>(this.ACTIVE_LAMPS_KEY, []);
+
+    if (wasOn && previousLamps && previousLamps.length > 0) {
+      this.logger.info(
+        { lamps: previousLamps },
+        "Recovering from restart: turning off previously active lamps",
+      );
+      for (const name of previousLamps) {
+        this.mqtt.publishToDevice(name, { state: "OFF" });
+      }
+      this.state.set(this.LIGHTS_ON_KEY, false);
+      this.state.delete(this.ACTIVE_LAMPS_KEY);
     }
   }
 
@@ -181,10 +206,12 @@ export default class MotionLightSchedule extends Automation {
 
     if (!sensor) return;
 
+    const lightsAreOn = this.state.get<boolean>(this.LIGHTS_ON_KEY, false);
+
     this.logger.debug({ sensor: sensor.name, lux: payload.illuminance }, "Motion detected");
 
     // Check lux threshold (skip if this sensor is affected and lights are on)
-    const skipLux = sensor.luxAffectedByLights && this.lightsAreOn;
+    const skipLux = sensor.luxAffectedByLights && lightsAreOn;
     if (!skipLux) {
       const lux = payload.illuminance ?? 0;
       if (lux >= this.LUX_THRESHOLD) {
@@ -203,17 +230,18 @@ export default class MotionLightSchedule extends Automation {
     if (!window) {
       this.logger.debug("No time window matches current time, ignoring motion");
       // Still reset the timer if lights are on — they'll turn off on schedule
-      if (this.lightsAreOn) {
+      if (lightsAreOn) {
         this.resetTurnOffTimer();
       }
       return;
     }
 
-    const newLamps = new Set(window.lamps.map((l) => l.name));
+    const newLampNames = window.lamps.map((l) => l.name);
+    const newLampSet = new Set(newLampNames);
 
     // Handle time window transition: turn off lamps that are no longer needed
-    if (this.lightsAreOn) {
-      const orphaned = [...this.activeLamps].filter((name) => !newLamps.has(name));
+    if (lightsAreOn) {
+      const orphaned = this.getActiveLamps().filter((name) => !newLampSet.has(name));
       if (orphaned.length > 0) {
         this.logger.info({ orphaned }, "Time window changed, turning off orphaned lamps");
         for (const name of orphaned) {
@@ -233,14 +261,16 @@ export default class MotionLightSchedule extends Automation {
     );
 
     // Turn on all lamps for this window
-    this.activeLamps = newLamps;
     for (const lamp of window.lamps) {
       this.mqtt.publishToDevice(lamp.name, {
         state: "ON",
         brightness: lamp.brightness,
       });
     }
-    this.lightsAreOn = true;
+
+    // Update shared state
+    this.state.set(this.ACTIVE_LAMPS_KEY, newLampNames);
+    this.state.set(this.LIGHTS_ON_KEY, true);
 
     // Reset the turn-off timer
     this.resetTurnOffTimer();
@@ -273,6 +303,13 @@ export default class MotionLightSchedule extends Automation {
   }
 
   /**
+   * Get the list of currently active lamp names from state.
+   */
+  private getActiveLamps(): string[] {
+    return this.state.get<string[]>(this.ACTIVE_LAMPS_KEY) ?? [];
+  }
+
+  /**
    * Parse a "HH:MM" time string into minutes since midnight.
    */
   private parseTime(time: string): number {
@@ -290,11 +327,11 @@ export default class MotionLightSchedule extends Automation {
 
     this.turnOffTimer = setTimeout(() => {
       this.logger.info("No recent motion, turning off lamps");
-      for (const name of this.activeLamps) {
+      for (const name of this.getActiveLamps()) {
         this.mqtt.publishToDevice(name, { state: "OFF" });
       }
-      this.activeLamps.clear();
-      this.lightsAreOn = false;
+      this.state.set(this.LIGHTS_ON_KEY, false);
+      this.state.delete(this.ACTIVE_LAMPS_KEY);
       this.turnOffTimer = null;
     }, this.LIGHT_DURATION_MS);
   }
