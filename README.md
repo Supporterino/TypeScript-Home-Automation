@@ -212,6 +212,7 @@ Set these environment variables (or use a `.env` file):
 | `LOG_LEVEL` | `info` | Log level (`fatal`, `error`, `warn`, `info`, `debug`, `trace`) |
 | `STATE_PERSIST` | `false` | Persist state to disk on shutdown (`true`/`false`) |
 | `STATE_FILE_PATH` | `./state.json` | Path to the state persistence file |
+| `HEALTH_PORT` | `0` (disabled) | Port for health probe HTTP server (set to `8080` to enable) |
 
 ## Writing an Automation
 
@@ -573,6 +574,58 @@ import type { ButtonPayload } from "ts-home-automation";
 // Brand-specific — action is a typed union of exact STYRBAR values
 import type { IkeaStyrbarPayload } from "ts-home-automation";
 ```
+
+## Health Probes
+
+The engine includes an optional HTTP health server for container deployments (Docker, Kubernetes). Enable it by setting the `HEALTH_PORT` environment variable.
+
+```bash
+HEALTH_PORT=8080
+```
+
+### Endpoints
+
+| Endpoint | Purpose | Success | Failure |
+|---|---|---|---|
+| `GET /healthz` | Liveness — is the process alive? | `200` always | Process is dead |
+| `GET /readyz` | Readiness — is the engine ready? | `200` when all checks pass | `503` with failed checks |
+
+### Readiness checks
+
+The `/readyz` endpoint verifies:
+
+- **`mqtt`** — MQTT client is connected to the broker
+- **`engine`** — the engine has completed startup
+
+Response body:
+
+```json
+{
+  "status": "ready",
+  "checks": { "mqtt": true, "engine": true }
+}
+```
+
+### Kubernetes example
+
+```yaml
+livenessProbe:
+  httpGet:
+    path: /healthz
+    port: 8080
+  initialDelaySeconds: 5
+  periodSeconds: 10
+readinessProbe:
+  httpGet:
+    path: /readyz
+    port: 8080
+  initialDelaySeconds: 10
+  periodSeconds: 5
+```
+
+### Docker Compose
+
+The included `docker-compose.yml` configures a healthcheck automatically when `HEALTH_PORT` is set.
 
 ## Building the Package
 
