@@ -23,6 +23,22 @@ interface LampProfile {
 }
 
 /**
+ * Configuration for a single motion sensor.
+ */
+interface MotionSensor {
+  /** Zigbee2MQTT friendly name of the motion sensor. */
+  name: string;
+  /**
+   * Whether this sensor's lux reading is affected by the lights this
+   * automation controls (e.g. sensor is in the same room as the lights).
+   *
+   * When true, the lux check is skipped for this sensor while lights are
+   * already on.
+   */
+  luxAffectedByLights: boolean;
+}
+
+/**
  * Example: Motion-activated lights controlled by an external boolean state.
  *
  * A boolean state key (e.g. "night_mode") determines which set of lamps
@@ -36,6 +52,7 @@ interface LampProfile {
  * at full brightness.
  *
  * Features:
+ * - Multiple motion sensors with per-sensor lux handling
  * - Two lamp profiles selected by a boolean state key
  * - Lux threshold to avoid triggering in bright conditions
  * - Auto-off timer with per-profile duration
@@ -50,7 +67,7 @@ interface LampProfile {
  * // At 07:00 → this.state.set("night_mode", false);
  * ```
  *
- * Adjust STATE_KEY, SENSOR_NAME, LUX_THRESHOLD, PROFILE_ON, and PROFILE_OFF
+ * Adjust STATE_KEY, SENSORS, LUX_THRESHOLD, PROFILE_ON, and PROFILE_OFF
  * to match your setup.
  */
 export default class MotionLightState extends Automation {
@@ -65,18 +82,19 @@ export default class MotionLightState extends Automation {
    */
   private readonly STATE_KEY = "night_mode";
 
-  /** Zigbee2MQTT friendly name of the motion sensor. */
-  private readonly SENSOR_NAME = "hallway_motion_sensor";
+  /**
+   * Motion sensors that trigger this automation.
+   *
+   * Any sensor firing resets the turn-off timer. Each sensor can
+   * independently control whether lux is checked when lights are on.
+   */
+  private readonly SENSORS: MotionSensor[] = [
+    { name: "hallway_entry_sensor", luxAffectedByLights: false },
+    { name: "hallway_middle_sensor", luxAffectedByLights: true },
+  ];
 
   /** Only trigger when illuminance (lux) is below this value. */
   private readonly LUX_THRESHOLD = 30;
-
-  /**
-   * Whether the sensor's lux reading is affected by the lights
-   * this automation controls. When true, lux check is skipped
-   * while lights are already on.
-   */
-  private readonly LUX_SENSOR_AFFECTED_BY_LIGHTS = true;
 
   /**
    * Lamp profile used when the state key is `true`.
@@ -104,27 +122,37 @@ export default class MotionLightState extends Automation {
   private turnOffTimer: ReturnType<typeof setTimeout> | null = null;
   private activeLamps: Set<string> = new Set();
   private lightsAreOn = false;
+  /** Map sensor topics to their configuration for quick lookup. */
+  private sensorByTopic: Map<string, MotionSensor> = new Map();
 
-  readonly triggers: Trigger[] = [
-    {
-      type: "mqtt",
-      topic: `zigbee2mqtt/${this.SENSOR_NAME}`,
-      filter: (payload: Record<string, unknown>) =>
-        (payload as unknown as PhilipsHueMotionSensorPayload).occupancy === true,
-    },
-  ];
+  readonly triggers: Trigger[] = this.SENSORS.map((sensor) => ({
+    type: "mqtt" as const,
+    topic: `zigbee2mqtt/${sensor.name}`,
+    filter: (payload: Record<string, unknown>) =>
+      (payload as unknown as PhilipsHueMotionSensorPayload).occupancy === true,
+  }));
+
+  async onStart(): Promise<void> {
+    for (const sensor of this.SENSORS) {
+      this.sensorByTopic.set(`zigbee2mqtt/${sensor.name}`, sensor);
+    }
+  }
 
   async execute(context: TriggerContext): Promise<void> {
     if (context.type !== "mqtt") return;
 
     const payload = context.payload as unknown as PhilipsHueMotionSensorPayload;
+    const sensor = this.sensorByTopic.get(context.topic);
 
-    // Check lux threshold (skip if sensor is affected and lights are on)
-    if (!(this.LUX_SENSOR_AFFECTED_BY_LIGHTS && this.lightsAreOn)) {
+    if (!sensor) return;
+
+    // Check lux threshold (skip if this sensor is affected and lights are on)
+    const skipLux = sensor.luxAffectedByLights && this.lightsAreOn;
+    if (!skipLux) {
       const lux = payload.illuminance ?? 0;
       if (lux >= this.LUX_THRESHOLD) {
         this.logger.debug(
-          { lux, threshold: this.LUX_THRESHOLD },
+          { sensor: sensor.name, lux, threshold: this.LUX_THRESHOLD },
           "Illuminance above threshold, ignoring motion",
         );
         return;
@@ -138,6 +166,7 @@ export default class MotionLightState extends Automation {
 
     this.logger.info(
       {
+        sensor: sensor.name,
         stateKey: this.STATE_KEY,
         stateValue,
         lamps: profile.lamps.length,
