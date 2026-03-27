@@ -69,10 +69,7 @@ export class HealthServer {
       fetch: (req) => this.handleRequest(req),
     });
 
-    this.logger.info(
-      { port: this.port },
-      "Health server listening",
-    );
+    this.logger.info({ port: this.port }, "Health server listening");
   }
 
   /**
@@ -116,16 +113,10 @@ export class HealthServer {
     const result = this.checkReadiness();
 
     if (result.ready) {
-      return Response.json(
-        { status: "ready", checks: result.checks },
-        { status: 200 },
-      );
+      return Response.json({ status: "ready", checks: result.checks }, { status: 200 });
     }
 
-    return Response.json(
-      { status: "not ready", checks: result.checks },
-      { status: 503 },
-    );
+    return Response.json({ status: "not ready", checks: result.checks }, { status: 503 });
   }
 
   /**

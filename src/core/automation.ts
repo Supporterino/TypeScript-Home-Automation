@@ -1,13 +1,10 @@
 import type { Logger } from "pino";
-import type { MqttService } from "./mqtt-service.js";
-import type { HttpClient } from "./http-client.js";
-import type { ShellyService } from "./shelly-service.js";
-import type {
-  NotificationService,
-  NotificationOptions,
-} from "./notification-service.js";
-import type { StateManager } from "./state-manager.js";
 import type { Config } from "../config.js";
+import type { HttpClient } from "./http-client.js";
+import type { MqttService } from "./mqtt-service.js";
+import type { NotificationOptions, NotificationService } from "./notification-service.js";
+import type { ShellyService } from "./shelly-service.js";
+import type { StateManager } from "./state-manager.js";
 
 /**
  * Trigger types for automations.
@@ -160,9 +157,7 @@ export abstract class Automation {
    */
   protected async notify(options: NotificationOptions): Promise<void> {
     if (!this.notificationService) {
-      this.logger.warn(
-        "notify() called but no notification service is configured",
-      );
+      this.logger.warn("notify() called but no notification service is configured");
       return;
     }
     await this.notificationService.send(options);

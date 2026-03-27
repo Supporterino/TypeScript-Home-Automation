@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, mock } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
 import { unlink } from "node:fs/promises";
 import pino from "pino";
 import { StateManager } from "../src/core/state-manager.js";

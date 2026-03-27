@@ -1,4 +1,4 @@
-import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import type { Logger } from "pino";
 
@@ -214,15 +214,9 @@ export class StateManager {
       );
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code === "ENOENT") {
-        this.logger.debug(
-          { file: this.filePath },
-          "No persisted state file found, starting fresh",
-        );
+        this.logger.debug({ file: this.filePath }, "No persisted state file found, starting fresh");
       } else {
-        this.logger.error(
-          { err, file: this.filePath },
-          "Failed to load persisted state",
-        );
+        this.logger.error({ err, file: this.filePath }, "Failed to load persisted state");
       }
     }
   }
@@ -243,15 +237,9 @@ export class StateManager {
       await mkdir(dirname(this.filePath), { recursive: true });
       await writeFile(this.filePath, JSON.stringify(data, null, 2), "utf-8");
 
-      this.logger.info(
-        { keys: this.store.size, file: this.filePath },
-        "State persisted to disk",
-      );
+      this.logger.info({ keys: this.store.size, file: this.filePath }, "State persisted to disk");
     } catch (err) {
-      this.logger.error(
-        { err, file: this.filePath },
-        "Failed to persist state",
-      );
+      this.logger.error({ err, file: this.filePath }, "Failed to persist state");
     }
   }
 
@@ -259,11 +247,7 @@ export class StateManager {
   // Internal
   // -------------------------------------------------------------------------
 
-  private notifyListeners(
-    key: string,
-    newValue: unknown,
-    oldValue: unknown,
-  ): void {
+  private notifyListeners(key: string, newValue: unknown, oldValue: unknown): void {
     // Key-specific listeners
     const handlers = this.listeners.get(key);
     if (handlers) {

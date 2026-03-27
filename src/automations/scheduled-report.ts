@@ -1,8 +1,4 @@
-import {
-  Automation,
-  type Trigger,
-  type TriggerContext,
-} from "../core/automation.js";
+import { Automation, type Trigger, type TriggerContext } from "../core/automation.js";
 
 /**
  * Example: Fetch weather data on a cron schedule and log it.
@@ -43,10 +39,7 @@ export default class ScheduledReport extends Automation {
       if (response.ok) {
         this.logger.info({ weather: response.data }, "Weather report fetched");
       } else {
-        this.logger.warn(
-          { status: response.status },
-          "Weather API returned non-OK status",
-        );
+        this.logger.warn({ status: response.status }, "Weather API returned non-OK status");
       }
     } catch (err) {
       this.logger.error({ err }, "Failed to fetch weather report");

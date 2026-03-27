@@ -5,10 +5,10 @@ import type { Config } from "../config.js";
 import { Automation } from "./automation.js";
 import type { CronScheduler } from "./cron-scheduler.js";
 import type { HttpClient } from "./http-client.js";
-import type { MqttService, MqttMessageHandler } from "./mqtt-service.js";
-import type { ShellyService } from "./shelly-service.js";
+import type { MqttMessageHandler, MqttService } from "./mqtt-service.js";
 import type { NotificationService } from "./notification-service.js";
-import type { StateManager, StateChangeHandler } from "./state-manager.js";
+import type { ShellyService } from "./shelly-service.js";
+import type { StateChangeHandler, StateManager } from "./state-manager.js";
 
 /**
  * Discovers, registers, and manages the lifecycle of all automations.
@@ -52,10 +52,7 @@ export class AutomationManager {
         (f) => (f.endsWith(".ts") || f.endsWith(".js")) && !f.endsWith(".d.ts"),
       );
     } catch (err) {
-      this.logger.error(
-        { err, dir: absoluteDir },
-        "Failed to read automations directory",
-      );
+      this.logger.error({ err, dir: absoluteDir }, "Failed to read automations directory");
       return;
     }
 
@@ -75,10 +72,7 @@ export class AutomationManager {
           typeof AutomationClass !== "function" ||
           !(AutomationClass.prototype instanceof Automation)
         ) {
-          this.logger.warn(
-            { file },
-            "Skipping file - no valid Automation default export",
-          );
+          this.logger.warn({ file }, "Skipping file - no valid Automation default export");
           continue;
         }
 
@@ -89,10 +83,7 @@ export class AutomationManager {
       }
     }
 
-    this.logger.info(
-      { count: this.automations.length },
-      "Automations registered",
-    );
+    this.logger.info({ count: this.automations.length }, "Automations registered");
   }
 
   /**
@@ -125,26 +116,18 @@ export class AutomationManager {
           }
 
           childLogger.info({ topic }, "MQTT trigger fired");
-          automation
-            .execute({ type: "mqtt", topic, payload })
-            .catch((err) => {
-              childLogger.error({ err, topic }, "Automation execution failed");
-            });
+          automation.execute({ type: "mqtt", topic, payload }).catch((err) => {
+            childLogger.error({ err, topic }, "Automation execution failed");
+          });
         };
 
         this.mqtt.subscribe(trigger.topic, handler);
         mqttHandlers.push({ topic: trigger.topic, handler });
-        childLogger.debug(
-          { topic: trigger.topic },
-          "Registered MQTT trigger",
-        );
+        childLogger.debug({ topic: trigger.topic }, "Registered MQTT trigger");
       } else if (trigger.type === "cron") {
         const jobId = `${automation.name}:cron:${i}`;
         this.cron.schedule(jobId, trigger.expression, () => {
-          childLogger.info(
-            { expression: trigger.expression },
-            "Cron trigger fired",
-          );
+          childLogger.info({ expression: trigger.expression }, "Cron trigger fired");
           automation
             .execute({
               type: "cron",
@@ -158,10 +141,7 @@ export class AutomationManager {
               );
             });
         });
-        childLogger.debug(
-          { expression: trigger.expression },
-          "Registered cron trigger",
-        );
+        childLogger.debug({ expression: trigger.expression }, "Registered cron trigger");
       } else if (trigger.type === "state") {
         const handler: StateChangeHandler = (key, newValue, oldValue) => {
           if (trigger.filter && !trigger.filter(newValue, oldValue)) {
@@ -169,22 +149,14 @@ export class AutomationManager {
           }
 
           childLogger.info({ key }, "State trigger fired");
-          automation
-            .execute({ type: "state", key, newValue, oldValue })
-            .catch((err) => {
-              childLogger.error(
-                { err, key },
-                "Automation execution failed",
-              );
-            });
+          automation.execute({ type: "state", key, newValue, oldValue }).catch((err) => {
+            childLogger.error({ err, key }, "Automation execution failed");
+          });
         };
 
         this.stateManager.onChange(trigger.key, handler);
         stateHandlers.push({ key: trigger.key, handler });
-        childLogger.debug(
-          { key: trigger.key },
-          "Registered state trigger",
-        );
+        childLogger.debug({ key: trigger.key }, "Registered state trigger");
       }
     }
 
@@ -228,10 +200,7 @@ export class AutomationManager {
       try {
         await automation.onStop();
       } catch (err) {
-        this.logger.error(
-          { err, automation: automation.name },
-          "Automation onStop failed",
-        );
+        this.logger.error({ err, automation: automation.name }, "Automation onStop failed");
       }
     }
 

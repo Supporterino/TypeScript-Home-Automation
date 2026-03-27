@@ -1,12 +1,9 @@
-import mqtt, { type MqttClient, type IClientOptions } from "mqtt";
+import mqtt, { type IClientOptions, type MqttClient } from "mqtt";
 import type { Logger } from "pino";
 import type { Config } from "../config.js";
 import { topicMatches } from "./mqtt-utils.js";
 
-export type MqttMessageHandler = (
-  topic: string,
-  payload: Record<string, unknown>,
-) => void;
+export type MqttMessageHandler = (topic: string, payload: Record<string, unknown>) => void;
 
 interface Subscription {
   topic: string;
@@ -48,12 +45,9 @@ export class MqttService {
 
         // Re-subscribe to all registered topics on reconnect
         for (const sub of this.subscriptions) {
-          this.client!.subscribe(sub.topic, (err) => {
+          this.client?.subscribe(sub.topic, (err) => {
             if (err) {
-              this.logger.error(
-                { topic: sub.topic, err },
-                "Failed to subscribe",
-              );
+              this.logger.error({ topic: sub.topic, err }, "Failed to subscribe");
             }
           });
         }
@@ -151,10 +145,7 @@ export class MqttService {
    * Publish a command to a Zigbee2MQTT device.
    * Convenience method that prepends the configured prefix and appends /set.
    */
-  publishToDevice(
-    friendlyName: string,
-    payload: Record<string, unknown>,
-  ): void {
+  publishToDevice(friendlyName: string, payload: Record<string, unknown>): void {
     const topic = `${this.config.zigbee2mqttPrefix}/${friendlyName}/set`;
     this.publish(topic, payload);
   }
@@ -174,5 +165,4 @@ export class MqttService {
       this.connected = false;
     }
   }
-
 }

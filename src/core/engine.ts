@@ -1,13 +1,13 @@
 import pino, { type Logger } from "pino";
-import { loadConfig, type Config } from "../config.js";
-import { MqttService } from "./mqtt-service.js";
+import { type Config, loadConfig } from "../config.js";
+import { AutomationManager } from "./automation-manager.js";
 import { CronScheduler } from "./cron-scheduler.js";
+import { HealthServer } from "./health-server.js";
 import { HttpClient } from "./http-client.js";
+import { MqttService } from "./mqtt-service.js";
+import type { NotificationService } from "./notification-service.js";
 import { ShellyService } from "./shelly-service.js";
 import { StateManager, type StateManagerOptions } from "./state-manager.js";
-import { HealthServer } from "./health-server.js";
-import type { NotificationService } from "./notification-service.js";
-import { AutomationManager } from "./automation-manager.js";
 
 /**
  * Options for creating an automation engine.
@@ -54,9 +54,7 @@ export interface EngineOptions {
    * });
    * ```
    */
-  notifications?:
-    | NotificationService
-    | ((http: HttpClient, logger: Logger) => NotificationService);
+  notifications?: NotificationService | ((http: HttpClient, logger: Logger) => NotificationService);
 
   /**
    * State manager options.
@@ -157,13 +155,10 @@ export function createEngine(options: EngineOptions): Engine {
   const cron = new CronScheduler(logger.child({ service: "cron" }));
   const http = new HttpClient(logger.child({ service: "http" }));
   const shelly = new ShellyService(http, logger.child({ service: "shelly" }));
-  const stateManager = new StateManager(
-    logger.child({ service: "state" }),
-    {
-      persist: options.state?.persist ?? config.state.persist,
-      filePath: options.state?.filePath ?? config.state.filePath,
-    },
-  );
+  const stateManager = new StateManager(logger.child({ service: "state" }), {
+    persist: options.state?.persist ?? config.state.persist,
+    filePath: options.state?.filePath ?? config.state.filePath,
+  });
 
   // Initialize optional notification service
   let notifications: NotificationService | null = null;
@@ -176,9 +171,8 @@ export function createEngine(options: EngineOptions): Engine {
 
   // Initialize optional health server
   const healthPort = config.health.port;
-  const healthServer = healthPort > 0
-    ? new HealthServer(healthPort, mqtt, logger.child({ service: "health" }))
-    : null;
+  const healthServer =
+    healthPort > 0 ? new HealthServer(healthPort, mqtt, logger.child({ service: "health" })) : null;
 
   const manager = new AutomationManager(
     mqtt,

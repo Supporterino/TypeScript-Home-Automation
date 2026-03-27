@@ -15,9 +15,7 @@ const configSchema = z.object({
     port: z.coerce.number().int().positive().default(1883),
   }),
   zigbee2mqttPrefix: z.string().default("zigbee2mqtt"),
-  logLevel: z
-    .enum(["fatal", "error", "warn", "info", "debug", "trace"])
-    .default("info"),
+  logLevel: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info"),
   state: z.object({
     persist: z.boolean().default(false),
     filePath: z.string().default("./state.json"),

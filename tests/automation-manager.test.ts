@@ -1,17 +1,13 @@
-import { describe, it, expect, beforeEach, mock } from "bun:test";
+import { beforeEach, describe, expect, it, mock } from "bun:test";
 import pino from "pino";
+import type { Config } from "../src/config.js";
+import { Automation, type Trigger, type TriggerContext } from "../src/core/automation.js";
 import { AutomationManager } from "../src/core/automation-manager.js";
-import {
-  Automation,
-  type Trigger,
-  type TriggerContext,
-} from "../src/core/automation.js";
-import type { MqttService, MqttMessageHandler } from "../src/core/mqtt-service.js";
 import type { CronScheduler } from "../src/core/cron-scheduler.js";
 import type { HttpClient } from "../src/core/http-client.js";
+import type { MqttMessageHandler, MqttService } from "../src/core/mqtt-service.js";
 import type { ShellyService } from "../src/core/shelly-service.js";
-import type { StateManager, StateChangeHandler } from "../src/core/state-manager.js";
-import type { Config } from "../src/config.js";
+import type { StateChangeHandler, StateManager } from "../src/core/state-manager.js";
 
 const logger = pino({ level: "silent" });
 
@@ -107,17 +103,13 @@ describe("AutomationManager", () => {
 
     it("catches and logs onStart failure without throwing", async () => {
       const auto = new TestAutomation("test");
-      auto.onStartFn.mockImplementation(() =>
-        Promise.reject(new Error("start failed")),
-      );
+      auto.onStartFn.mockImplementation(() => Promise.reject(new Error("start failed")));
       // Should not throw
       await manager.register(auto);
     });
 
     it("subscribes to MQTT topic for mqtt triggers", async () => {
-      const auto = new TestAutomation("test", [
-        { type: "mqtt", topic: "zigbee2mqtt/sensor" },
-      ]);
+      const auto = new TestAutomation("test", [{ type: "mqtt", topic: "zigbee2mqtt/sensor" }]);
       await manager.register(auto);
       expect(mocks.mqtt.subscribe).toHaveBeenCalledTimes(1);
       expect((mocks.mqtt.subscribe as ReturnType<typeof mock>).mock.calls[0][0]).toBe(
@@ -126,9 +118,7 @@ describe("AutomationManager", () => {
     });
 
     it("schedules cron job for cron triggers", async () => {
-      const auto = new TestAutomation("test", [
-        { type: "cron", expression: "0 7 * * *" },
-      ]);
+      const auto = new TestAutomation("test", [{ type: "cron", expression: "0 7 * * *" }]);
       await manager.register(auto);
       expect(mocks.cron.schedule).toHaveBeenCalledTimes(1);
       const call = (mocks.cron.schedule as ReturnType<typeof mock>).mock.calls[0];
@@ -137,14 +127,10 @@ describe("AutomationManager", () => {
     });
 
     it("registers state change listener for state triggers", async () => {
-      const auto = new TestAutomation("test", [
-        { type: "state", key: "night_mode" },
-      ]);
+      const auto = new TestAutomation("test", [{ type: "state", key: "night_mode" }]);
       await manager.register(auto);
       expect(mocks.state.onChange).toHaveBeenCalledTimes(1);
-      expect((mocks.state.onChange as ReturnType<typeof mock>).mock.calls[0][0]).toBe(
-        "night_mode",
-      );
+      expect((mocks.state.onChange as ReturnType<typeof mock>).mock.calls[0][0]).toBe("night_mode");
     });
 
     it("registers multiple triggers of different types", async () => {
@@ -162,9 +148,7 @@ describe("AutomationManager", () => {
 
   describe("MQTT trigger execution", () => {
     it("calls execute when MQTT message arrives", async () => {
-      const auto = new TestAutomation("test", [
-        { type: "mqtt", topic: "zigbee2mqtt/sensor" },
-      ]);
+      const auto = new TestAutomation("test", [{ type: "mqtt", topic: "zigbee2mqtt/sensor" }]);
       await manager.register(auto);
 
       // Simulate MQTT message
@@ -213,9 +197,7 @@ describe("AutomationManager", () => {
 
   describe("state trigger execution", () => {
     it("calls execute when state changes", async () => {
-      const auto = new TestAutomation("test", [
-        { type: "state", key: "night_mode" },
-      ]);
+      const auto = new TestAutomation("test", [{ type: "state", key: "night_mode" }]);
       await manager.register(auto);
 
       const handler = mocks.stateHandlers[0].handler;
@@ -245,27 +227,21 @@ describe("AutomationManager", () => {
 
   describe("stopAll", () => {
     it("unsubscribes MQTT handlers", async () => {
-      const auto = new TestAutomation("test", [
-        { type: "mqtt", topic: "zigbee2mqtt/sensor" },
-      ]);
+      const auto = new TestAutomation("test", [{ type: "mqtt", topic: "zigbee2mqtt/sensor" }]);
       await manager.register(auto);
       await manager.stopAll();
       expect(mocks.mqtt.unsubscribe).toHaveBeenCalledTimes(1);
     });
 
     it("removes state handlers", async () => {
-      const auto = new TestAutomation("test", [
-        { type: "state", key: "mode" },
-      ]);
+      const auto = new TestAutomation("test", [{ type: "state", key: "mode" }]);
       await manager.register(auto);
       await manager.stopAll();
       expect(mocks.state.offChange).toHaveBeenCalledTimes(1);
     });
 
     it("removes cron jobs by prefix", async () => {
-      const auto = new TestAutomation("my-auto", [
-        { type: "cron", expression: "0 * * * *" },
-      ]);
+      const auto = new TestAutomation("my-auto", [{ type: "cron", expression: "0 * * * *" }]);
       await manager.register(auto);
       await manager.stopAll();
       expect(mocks.cron.removeByPrefix).toHaveBeenCalledWith("my-auto:");
@@ -280,9 +256,7 @@ describe("AutomationManager", () => {
 
     it("catches and logs onStop failure without throwing", async () => {
       const auto = new TestAutomation("test");
-      auto.onStopFn.mockImplementation(() =>
-        Promise.reject(new Error("stop failed")),
-      );
+      auto.onStopFn.mockImplementation(() => Promise.reject(new Error("stop failed")));
       await manager.register(auto);
       // Should not throw
       await manager.stopAll();

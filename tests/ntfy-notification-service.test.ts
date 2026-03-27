@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach, mock } from "bun:test";
+import { beforeEach, describe, expect, it, mock } from "bun:test";
 import pino from "pino";
-import { NtfyNotificationService } from "../src/core/ntfy-notification-service.js";
 import type { HttpClient, HttpResponse } from "../src/core/http-client.js";
+import { NtfyNotificationService } from "../src/core/ntfy-notification-service.js";
 
 const logger = pino({ level: "silent" });
 

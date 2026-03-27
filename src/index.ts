@@ -8,8 +8,8 @@
  * ```
  */
 
-// Engine factory
-export { createEngine, type Engine, type EngineOptions } from "./core/engine.js";
+// Configuration
+export { type Config, loadConfig } from "./config.js";
 
 // Automation base class and trigger types
 export {
@@ -17,128 +17,107 @@ export {
   type Trigger,
   type TriggerContext,
 } from "./core/automation.js";
-
-// Notification services
-export type {
-  NotificationService,
-  NotificationOptions,
-  NotificationPriority,
-} from "./core/notification-service.js";
-export {
-  NtfyNotificationService,
-  type NtfyConfig,
-} from "./core/ntfy-notification-service.js";
-
+export { AutomationManager } from "./core/automation-manager.js";
+export { CronScheduler } from "./core/cron-scheduler.js";
+// Engine factory
+export { createEngine, type Engine, type EngineOptions } from "./core/engine.js";
 // Health server
 export { HealthServer } from "./core/health-server.js";
-
-// State management
-export {
-  StateManager,
-  type StateManagerOptions,
-  type StateChangeHandler,
-} from "./core/state-manager.js";
-
-// Core services (exposed for advanced usage)
-export { MqttService, type MqttMessageHandler } from "./core/mqtt-service.js";
-export { ShellyService, type ShellyDevice } from "./core/shelly-service.js";
 export {
   HttpClient,
   type HttpRequestOptions,
   type HttpResponse,
 } from "./core/http-client.js";
-export { CronScheduler } from "./core/cron-scheduler.js";
-export { AutomationManager } from "./core/automation-manager.js";
-
-// Configuration
-export { loadConfig, type Config } from "./config.js";
-
-// Zigbee2MQTT types — common primitives
+// Core services (exposed for advanced usage)
+export { type MqttMessageHandler, MqttService } from "./core/mqtt-service.js";
+// Notification services
 export type {
-  DeviceState,
-  DeviceStateSet,
-  PowerOnBehavior,
-  ColorXY,
-  ColorHS,
-  ColorRGB,
-  ColorHex,
-  Color,
-} from "./types/zigbee.js";
-
-// Zigbee2MQTT types — generic payloads (work across brands)
-export type {
-  DimmableLightPayload,
-  WhiteSpectrumLightPayload,
-  ColorLightPayload,
-  LightPayload,
-  DimmableLightSetCommand,
-  WhiteSpectrumLightSetCommand,
-  ColorLightSetCommand,
-  LightSetCommand,
-  OccupancyPayload,
-  TemperatureHumidityPayload,
-  ContactPayload,
-  WaterLeakPayload,
-  AirQualitySensorPayload,
-  AirPurifierPayload,
-  ButtonPayload,
-  PlugPayload,
-  SwitchSetCommand,
-  BridgeState,
-  GenericPayload,
-} from "./types/zigbee.js";
-
+  NotificationOptions,
+  NotificationPriority,
+  NotificationService,
+} from "./core/notification-service.js";
+export {
+  type NtfyConfig,
+  NtfyNotificationService,
+} from "./core/ntfy-notification-service.js";
+export { type ShellyDevice, ShellyService } from "./core/shelly-service.js";
+// State management
+export {
+  type StateChangeHandler,
+  StateManager,
+  type StateManagerOptions,
+} from "./core/state-manager.js";
 // Shelly Gen 2 types
 export type {
   ShellyDeviceInfo,
   ShellyEnergyCounters,
-  ShellyTemperature,
-  ShellySwitchError,
-  ShellySwitchStatus,
-  ShellySwitchSetResult,
   ShellySwitchConfig,
+  ShellySwitchError,
+  ShellySwitchSetResult,
+  ShellySwitchStatus,
   ShellySysStatus,
+  ShellyTemperature,
 } from "./types/shelly.js";
-
+// Zigbee2MQTT types — common primitives
+// Zigbee2MQTT types — generic payloads (work across brands)
 // Zigbee2MQTT types — Philips Hue specific
-export type {
-  PhilipsLightEffect,
-  PhilipsColorLightEffect,
-  PhilipsDimmableLightSetCommand,
-  PhilipsWhiteSpectrumLightSetCommand,
-  PhilipsColorLightSetCommand,
-  PhilipsMotionSensitivity,
-  PhilipsHueMotionSensorPayload,
-  PhilipsHueMotionSensorSetCommand,
-} from "./types/zigbee.js";
-
 // Zigbee2MQTT types — IKEA specific
-export type {
-  IkeaLightEffect,
-  IkeaDimmableLightSetCommand,
-  IkeaWhiteSpectrumLightSetCommand,
-  IkeaAirQuality,
-  IkeaFanMode,
-  IkeaStarkvindPayload,
-  IkeaStarkvindSetCommand,
-  IkeaVindstyrkaPayload,
-  IkeaStyrbarAction,
-  IkeaStyrbarPayload,
-  IkeaShortcutButtonAction,
-  IkeaShortcutButtonPayload,
-  IkeaRodretAction,
-  IkeaRodretPayload,
-} from "./types/zigbee.js";
-
 // Zigbee2MQTT types — Aqara specific
 export type {
-  AqaraRemoteSwitchH1Action,
+  AirPurifierPayload,
+  AirQualitySensorPayload,
   AqaraClickMode,
   AqaraOperationMode,
+  AqaraRemoteSwitchH1Action,
   AqaraRemoteSwitchH1Payload,
   AqaraRemoteSwitchH1SetCommand,
-  AqaraWaterLeakPayload,
   AqaraTemperatureHumidityPayload,
+  AqaraWaterLeakPayload,
+  BridgeState,
+  ButtonPayload,
+  Color,
+  ColorHex,
+  ColorHS,
+  ColorLightPayload,
+  ColorLightSetCommand,
+  ColorRGB,
+  ColorXY,
+  ContactPayload,
+  DeviceState,
+  DeviceStateSet,
+  DimmableLightPayload,
+  DimmableLightSetCommand,
+  GenericPayload,
+  IkeaAirQuality,
+  IkeaDimmableLightSetCommand,
+  IkeaFanMode,
+  IkeaLightEffect,
+  IkeaRodretAction,
+  IkeaRodretPayload,
+  IkeaShortcutButtonAction,
+  IkeaShortcutButtonPayload,
+  IkeaStarkvindPayload,
+  IkeaStarkvindSetCommand,
+  IkeaStyrbarAction,
+  IkeaStyrbarPayload,
+  IkeaVindstyrkaPayload,
+  IkeaWhiteSpectrumLightSetCommand,
+  LightPayload,
+  LightSetCommand,
+  OccupancyPayload,
+  PhilipsColorLightEffect,
+  PhilipsColorLightSetCommand,
+  PhilipsDimmableLightSetCommand,
+  PhilipsHueMotionSensorPayload,
+  PhilipsHueMotionSensorSetCommand,
+  PhilipsLightEffect,
+  PhilipsMotionSensitivity,
+  PhilipsWhiteSpectrumLightSetCommand,
+  PlugPayload,
+  PowerOnBehavior,
+  SwitchSetCommand,
+  TemperatureHumidityPayload,
+  WaterLeakPayload,
+  WhiteSpectrumLightPayload,
+  WhiteSpectrumLightSetCommand,
 } from "./types/zigbee.js";
-
-

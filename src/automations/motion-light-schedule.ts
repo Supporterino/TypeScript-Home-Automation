@@ -1,8 +1,4 @@
-import {
-  Automation,
-  type Trigger,
-  type TriggerContext,
-} from "../core/automation.js";
+import { Automation, type Trigger, type TriggerContext } from "../core/automation.js";
 import type { PhilipsHueMotionSensorPayload } from "../types/zigbee.js";
 
 /**
@@ -180,16 +176,12 @@ export default class MotionLightSchedule extends Automation {
   async execute(context: TriggerContext): Promise<void> {
     if (context.type !== "mqtt") return;
 
-    const payload =
-      context.payload as unknown as PhilipsHueMotionSensorPayload;
+    const payload = context.payload as unknown as PhilipsHueMotionSensorPayload;
     const sensor = this.sensorByTopic.get(context.topic);
 
     if (!sensor) return;
 
-    this.logger.debug(
-      { sensor: sensor.name, lux: payload.illuminance },
-      "Motion detected",
-    );
+    this.logger.debug({ sensor: sensor.name, lux: payload.illuminance }, "Motion detected");
 
     // Check lux threshold (skip if this sensor is affected and lights are on)
     const skipLux = sensor.luxAffectedByLights && this.lightsAreOn;
@@ -221,14 +213,9 @@ export default class MotionLightSchedule extends Automation {
 
     // Handle time window transition: turn off lamps that are no longer needed
     if (this.lightsAreOn) {
-      const orphaned = [...this.activeLamps].filter(
-        (name) => !newLamps.has(name),
-      );
+      const orphaned = [...this.activeLamps].filter((name) => !newLamps.has(name));
       if (orphaned.length > 0) {
-        this.logger.info(
-          { orphaned },
-          "Time window changed, turning off orphaned lamps",
-        );
+        this.logger.info({ orphaned }, "Time window changed, turning off orphaned lamps");
         for (const name of orphaned) {
           this.mqtt.publishToDevice(name, { state: "OFF" });
         }

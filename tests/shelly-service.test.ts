@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach, mock } from "bun:test";
+import { beforeEach, describe, expect, it, mock } from "bun:test";
 import pino from "pino";
-import { ShellyService } from "../src/core/shelly-service.js";
 import type { HttpClient, HttpResponse } from "../src/core/http-client.js";
+import { ShellyService } from "../src/core/shelly-service.js";
 
 const logger = pino({ level: "silent" });
 
@@ -58,9 +58,7 @@ describe("ShellyService", () => {
     });
 
     it("throws for unregistered devices", () => {
-      expect(shelly.turnOn("unknown")).rejects.toThrow(
-        'Shelly device "unknown" is not registered',
-      );
+      expect(shelly.turnOn("unknown")).rejects.toThrow('Shelly device "unknown" is not registered');
     });
   });
 
