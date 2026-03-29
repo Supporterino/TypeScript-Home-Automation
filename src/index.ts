@@ -29,6 +29,8 @@ export {
 } from "./core/http-client.js";
 // Health server
 export { HttpServer, type WebhookHandler } from "./core/http-server.js";
+export { IkeaRodretAutomation } from "./core/ikea-rodret-automation.js";
+export { IkeaStyrbarAutomation } from "./core/ikea-styrbar-automation.js";
 // Core services (exposed for advanced usage)
 export { type MqttMessageHandler, MqttService } from "./core/mqtt-service.js";
 // Notification services
