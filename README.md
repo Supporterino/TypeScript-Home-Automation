@@ -224,6 +224,7 @@ Set these environment variables (or use a `.env` file):
 | `LOG_LEVEL` | `info` | Log level (`fatal`, `error`, `warn`, `info`, `debug`, `trace`) |
 | `STATE_PERSIST` | `false` | Persist state to disk on shutdown (`true`/`false`) |
 | `STATE_FILE_PATH` | `./state.json` | Path to the state persistence file |
+| `AUTOMATIONS_RECURSIVE` | `false` | Scan subdirectories recursively for automation files |
 | `HTTP_PORT` | `8080` | Port for HTTP server (health probes + webhooks). Set to `0` to disable. |
 
 ## Writing an Automation

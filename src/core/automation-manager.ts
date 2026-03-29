@@ -44,14 +44,17 @@ export class AutomationManager {
   /**
    * Discover and register all automations from the given directory.
    * Each file should have a default export that is a class extending Automation.
+   *
+   * @param automationsDir Path to the automations directory
+   * @param recursive Whether to scan subdirectories recursively (default: false)
    */
-  async discoverAndRegister(automationsDir: string): Promise<void> {
+  async discoverAndRegister(automationsDir: string, recursive = false): Promise<void> {
     const absoluteDir = resolve(automationsDir);
-    this.logger.info({ dir: absoluteDir }, "Discovering automations");
+    this.logger.info({ dir: absoluteDir, recursive }, "Discovering automations");
 
     let files: string[];
     try {
-      const entries = await readdir(absoluteDir);
+      const entries = await readdir(absoluteDir, { recursive });
       files = entries.filter(
         (f) => (f.endsWith(".ts") || f.endsWith(".js")) && !f.endsWith(".d.ts"),
       );

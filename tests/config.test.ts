@@ -12,6 +12,7 @@ describe("loadConfig", () => {
     delete process.env.LOG_LEVEL;
     delete process.env.STATE_PERSIST;
     delete process.env.STATE_FILE_PATH;
+    delete process.env.AUTOMATIONS_RECURSIVE;
     delete process.env.HTTP_PORT;
   });
 
@@ -34,6 +35,7 @@ describe("loadConfig", () => {
       expect(config.logLevel).toBe("info");
       expect(config.state.persist).toBe(false);
       expect(config.state.filePath).toBe("./state.json");
+      expect(config.automations.recursive).toBe(false);
       expect(config.httpServer.port).toBe(8080);
     });
   });

@@ -20,6 +20,10 @@ const configSchema = z.object({
     persist: z.boolean().default(false),
     filePath: z.string().default("./state.json"),
   }),
+  automations: z.object({
+    /** Whether to scan subdirectories recursively for automation files. */
+    recursive: z.boolean().default(false),
+  }),
   httpServer: z.object({
     /** Port for the HTTP server (health probes + webhooks). Set to 0 to disable. */
     port: z.coerce.number().int().min(0).default(8080),
@@ -30,6 +34,7 @@ export type Config = z.infer<typeof configSchema>;
 
 export function loadConfig(): Config {
   const parsedPersist = booleanString.parse(process.env.STATE_PERSIST);
+  const parsedRecursive = booleanString.parse(process.env.AUTOMATIONS_RECURSIVE);
 
   const result = configSchema.safeParse({
     mqtt: {
@@ -41,6 +46,9 @@ export function loadConfig(): Config {
     state: {
       persist: parsedPersist,
       filePath: process.env.STATE_FILE_PATH,
+    },
+    automations: {
+      recursive: parsedRecursive,
     },
     httpServer: {
       port: process.env.HTTP_PORT,
