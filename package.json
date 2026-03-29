@@ -20,7 +20,7 @@
     }
   },
   "bin": {
-    "ts-ha": "./src/cli/index.ts"
+    "ts-ha": "./dist/cli/index.js"
   },
   "files": [
     "dist",
