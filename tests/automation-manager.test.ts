@@ -16,6 +16,7 @@ const config: Config = {
   zigbee2mqttPrefix: "zigbee2mqtt",
   logLevel: "info",
   state: { persist: false, filePath: "./state.json" },
+  automations: { recursive: false },
   httpServer: { port: 0 },
 };
 

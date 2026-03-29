@@ -23,6 +23,15 @@ export interface EngineOptions {
   automationsDir: string;
 
   /**
+   * Whether to scan subdirectories recursively for automation files.
+   * When true, all `.ts` / `.js` files in subdirectories are also loaded.
+   * Useful for organizing automations into folders (e.g. `lights/`, `sensors/`).
+   *
+   * @default false
+   */
+  recursive?: boolean;
+
+  /**
    * Override the environment-derived config.
    * If omitted, config is loaded from environment variables.
    */
@@ -216,7 +225,8 @@ export function createEngine(options: EngineOptions): Engine {
       httpServer?.start();
       await stateManager.load();
       await mqtt.connect();
-      await manager.discoverAndRegister(options.automationsDir);
+      const recursive = options.recursive ?? config.automations.recursive;
+      await manager.discoverAndRegister(options.automationsDir, recursive);
       started = true;
       httpServer?.setEngineStarted(true);
       logger.info("Home Automation Engine is running");
