@@ -12,7 +12,7 @@ describe("loadConfig", () => {
     delete process.env.LOG_LEVEL;
     delete process.env.STATE_PERSIST;
     delete process.env.STATE_FILE_PATH;
-    delete process.env.HEALTH_PORT;
+    delete process.env.HTTP_PORT;
   });
 
   afterEach(() => {
@@ -34,7 +34,7 @@ describe("loadConfig", () => {
       expect(config.logLevel).toBe("info");
       expect(config.state.persist).toBe(false);
       expect(config.state.filePath).toBe("./state.json");
-      expect(config.health.port).toBe(0);
+      expect(config.httpServer.port).toBe(8080);
     });
   });
 
@@ -96,11 +96,11 @@ describe("loadConfig", () => {
     });
   });
 
-  describe("health config", () => {
-    it("reads and coerces HEALTH_PORT from env", () => {
-      process.env.HEALTH_PORT = "8080";
+  describe("HTTP server config", () => {
+    it("reads and coerces HTTP_PORT from env", () => {
+      process.env.HTTP_PORT = "9090";
       const config = loadConfig();
-      expect(config.health.port).toBe(8080);
+      expect(config.httpServer.port).toBe(9090);
     });
   });
 });

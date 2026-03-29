@@ -54,7 +54,7 @@ function createMocks() {
     zigbee2mqttPrefix: "zigbee2mqtt",
     logLevel: "info" as const,
     state: { persist: false, filePath: "./state.json" },
-    health: { port: 0 },
+    httpServer: { port: 0 },
   } satisfies Config;
 
   return { mqtt, shelly, http, state, config };

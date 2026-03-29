@@ -22,13 +22,13 @@ export { AutomationManager } from "./core/automation-manager.js";
 export { CronScheduler } from "./core/cron-scheduler.js";
 // Engine factory
 export { createEngine, type Engine, type EngineOptions } from "./core/engine.js";
-// Health server
-export { HealthServer } from "./core/health-server.js";
 export {
   HttpClient,
   type HttpRequestOptions,
   type HttpResponse,
 } from "./core/http-client.js";
+// Health server
+export { HttpServer, type WebhookHandler } from "./core/http-server.js";
 // Core services (exposed for advanced usage)
 export { type MqttMessageHandler, MqttService } from "./core/mqtt-service.js";
 // Notification services

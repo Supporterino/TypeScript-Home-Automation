@@ -20,9 +20,9 @@ const configSchema = z.object({
     persist: z.boolean().default(false),
     filePath: z.string().default("./state.json"),
   }),
-  health: z.object({
-    /** Set to 0 or omit to disable the health server. */
-    port: z.coerce.number().int().min(0).default(0),
+  httpServer: z.object({
+    /** Port for the HTTP server (health probes + webhooks). Set to 0 to disable. */
+    port: z.coerce.number().int().min(0).default(8080),
   }),
 });
 
@@ -42,8 +42,8 @@ export function loadConfig(): Config {
       persist: parsedPersist,
       filePath: process.env.STATE_FILE_PATH,
     },
-    health: {
-      port: process.env.HEALTH_PORT,
+    httpServer: {
+      port: process.env.HTTP_PORT,
     },
   });
 

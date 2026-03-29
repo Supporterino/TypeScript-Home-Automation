@@ -29,7 +29,7 @@ Can be used in two ways:
 │  └──┬───┘ └───────┘ └──────┘ └─────────┘ └─────┘ └──────┘ │
 │     │                                                       │
 │  ┌──▼─────────────┐                                         │
-│  │ Health Server  │  (/healthz, /readyz)                    │
+│  │ HTTP Server   │  (/healthz, /readyz, /webhook/*)         │
 │  └────────────────┘                                         │
 └──────┬───────────────────────────────────────────────────────┘
        │
@@ -190,7 +190,7 @@ src/
 │   ├── state-manager.ts              # Shared state with persistence
 │   ├── notification-service.ts       # NotificationService interface
 │   ├── ntfy-notification-service.ts  # ntfy.sh notification implementation
-│   └── health-server.ts              # Liveness/readiness HTTP server
+│   └── http-server.ts                # HTTP server (health probes + webhooks)
 ├── automations/                      # Your automations go here (auto-discovered)
 │   ├── motion-light.ts               # Example: simple motion → light on
 │   ├── motion-light-schedule.ts      # Example: multi-sensor motion with time windows
@@ -224,7 +224,7 @@ Set these environment variables (or use a `.env` file):
 | `LOG_LEVEL` | `info` | Log level (`fatal`, `error`, `warn`, `info`, `debug`, `trace`) |
 | `STATE_PERSIST` | `false` | Persist state to disk on shutdown (`true`/`false`) |
 | `STATE_FILE_PATH` | `./state.json` | Path to the state persistence file |
-| `HEALTH_PORT` | `0` (disabled) | Port for health probe HTTP server (set to `8080` to enable) |
+| `HTTP_PORT` | `8080` | Port for HTTP server (health probes + webhooks). Set to `0` to disable. |
 
 ## Writing an Automation
 
@@ -267,6 +267,18 @@ Topics support MQTT wildcards: `+` matches one level, `#` matches all remaining 
 }
 ```
 
+**Webhook trigger** — fires when an HTTP request hits a registered endpoint:
+
+```ts
+{
+  type: "webhook",
+  path: "deploy",              // Endpoint: POST /webhook/deploy
+  methods: ["POST"],           // Optional, defaults to ["POST"]
+}
+```
+
+Webhooks are served on the same port as health probes (default: 8080). Set `HTTP_PORT=0` to disable both. The context provides `method`, `headers`, `query`, and `body`.
+
 ### Multiple Triggers
 
 An automation can have multiple triggers. The `context` parameter tells you which one fired:
@@ -274,8 +286,8 @@ An automation can have multiple triggers. The `context` parameter tells you whic
 ```ts
 readonly triggers: Trigger[] = [
   { type: "mqtt", topic: "zigbee2mqtt/sensor_a" },
-  { type: "mqtt", topic: "zigbee2mqtt/sensor_b" },
   { type: "cron", expression: "*/5 * * * *" },
+  { type: "webhook", path: "trigger-me" },
 ];
 
 async execute(context: TriggerContext): Promise<void> {
@@ -285,6 +297,8 @@ async execute(context: TriggerContext): Promise<void> {
     this.logger.info("Triggered by cron schedule");
   } else if (context.type === "state") {
     this.logger.info(`State "${context.key}" changed to ${context.newValue}`);
+  } else if (context.type === "webhook") {
+    this.logger.info(`Webhook ${context.path} called via ${context.method}`);
   }
 }
 ```
@@ -617,11 +631,7 @@ import type { IkeaStyrbarPayload } from "ts-home-automation";
 
 ## Health Probes
 
-The engine includes an optional HTTP health server for container deployments (Docker, Kubernetes). Enable it by setting the `HEALTH_PORT` environment variable.
-
-```bash
-HEALTH_PORT=8080
-```
+The engine includes an HTTP server (enabled by default on port 8080) for health probes and webhook triggers. Set `HTTP_PORT=0` to disable it (this also disables webhook triggers).
 
 ### Endpoints
 
@@ -665,7 +675,7 @@ readinessProbe:
 
 ### Docker Compose
 
-The included `docker-compose.yml` configures a healthcheck automatically when `HEALTH_PORT` is set.
+The included `docker-compose.yml` configures a healthcheck automatically.
 
 ## Building the Package
 

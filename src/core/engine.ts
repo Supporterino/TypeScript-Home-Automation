@@ -2,8 +2,8 @@ import pino, { type Logger } from "pino";
 import { type Config, loadConfig } from "../config.js";
 import { AutomationManager } from "./automation-manager.js";
 import { CronScheduler } from "./cron-scheduler.js";
-import { HealthServer } from "./health-server.js";
 import { HttpClient } from "./http-client.js";
+import { HttpServer } from "./http-server.js";
 import { MqttService } from "./mqtt-service.js";
 import type { NotificationService } from "./notification-service.js";
 import { ShellyService } from "./shelly-service.js";
@@ -169,10 +169,18 @@ export function createEngine(options: EngineOptions): Engine {
         : options.notifications;
   }
 
-  // Initialize optional health server
-  const healthPort = config.health.port;
-  const healthServer =
-    healthPort > 0 ? new HealthServer(healthPort, mqtt, logger.child({ service: "health" })) : null;
+  // Initialize HTTP server (health probes + webhooks)
+  const httpServerPort = config.httpServer.port;
+  const httpServer =
+    httpServerPort > 0
+      ? new HttpServer(httpServerPort, mqtt, logger.child({ service: "http-server" }))
+      : null;
+
+  if (!httpServer) {
+    logger.info(
+      "HTTP server disabled (HTTP_PORT=0) — health probes and webhook triggers unavailable",
+    );
+  }
 
   const manager = new AutomationManager(
     mqtt,
@@ -180,6 +188,7 @@ export function createEngine(options: EngineOptions): Engine {
     http,
     shelly,
     stateManager,
+    httpServer,
     notifications,
     config,
     logger.child({ service: "manager" }),
@@ -204,12 +213,12 @@ export function createEngine(options: EngineOptions): Engine {
       }
 
       logger.info("Starting Home Automation Engine");
-      healthServer?.start();
+      httpServer?.start();
       await stateManager.load();
       await mqtt.connect();
       await manager.discoverAndRegister(options.automationsDir);
       started = true;
-      healthServer?.setEngineStarted(true);
+      httpServer?.setEngineStarted(true);
       logger.info("Home Automation Engine is running");
     },
 
@@ -219,12 +228,12 @@ export function createEngine(options: EngineOptions): Engine {
       }
 
       logger.info("Stopping Home Automation Engine");
-      healthServer?.setEngineStarted(false);
+      httpServer?.setEngineStarted(false);
       await manager.stopAll();
       cron.stopAll();
       await stateManager.save();
       await mqtt.disconnect();
-      healthServer?.stop();
+      httpServer?.stop();
       started = false;
       logger.info("Home Automation Engine stopped");
     },
