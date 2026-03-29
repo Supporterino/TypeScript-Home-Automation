@@ -10,5 +10,5 @@
     "types": []
   },
   "include": ["src/**/*.ts"],
-  "exclude": ["node_modules", "dist", "src/standalone.ts", "src/automations/**", "src/cli/**"]
+  "exclude": ["node_modules", "dist", "src/standalone.ts", "src/automations/**"]
 }
