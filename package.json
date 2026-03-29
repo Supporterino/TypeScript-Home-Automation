@@ -19,6 +19,9 @@
       "import": "./dist/types/shelly.js"
     }
   },
+  "bin": {
+    "ts-ha": "./src/cli/index.ts"
+  },
   "files": [
     "dist",
     "README.md",

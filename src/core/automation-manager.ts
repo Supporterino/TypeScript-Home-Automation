@@ -253,4 +253,43 @@ export class AutomationManager {
     this.webhookPaths.clear();
     this.logger.info("All automations stopped");
   }
+
+  // -------------------------------------------------------------------------
+  // Query methods (used by debug API)
+  // -------------------------------------------------------------------------
+
+  /**
+   * List all registered automations with their trigger summaries.
+   */
+  listAutomations(): { name: string; triggers: { type: string; [key: string]: unknown }[] }[] {
+    return this.automations.map((auto) => ({
+      name: auto.name,
+      triggers: auto.triggers.map((t) => {
+        if (t.type === "mqtt") {
+          return { type: "mqtt", topic: t.topic, hasFilter: !!t.filter };
+        }
+        if (t.type === "cron") {
+          return { type: "cron", expression: t.expression };
+        }
+        if (t.type === "state") {
+          return { type: "state", key: t.key, hasFilter: !!t.filter };
+        }
+        if (t.type === "webhook") {
+          return { type: "webhook", path: t.path, methods: t.methods ?? ["POST"] };
+        }
+        return { type: (t as { type: string }).type };
+      }),
+    }));
+  }
+
+  /**
+   * Get details for a single automation by name.
+   * Returns null if not found.
+   */
+  getAutomation(
+    name: string,
+  ): { name: string; triggers: { type: string; [key: string]: unknown }[] } | null {
+    const list = this.listAutomations();
+    return list.find((a) => a.name === name) ?? null;
+  }
 }

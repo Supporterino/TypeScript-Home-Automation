@@ -182,7 +182,12 @@ export function createEngine(options: EngineOptions): Engine {
   const httpServerPort = config.httpServer.port;
   const httpServer =
     httpServerPort > 0
-      ? new HttpServer(httpServerPort, mqtt, logger.child({ service: "http-server" }))
+      ? new HttpServer(
+          httpServerPort,
+          mqtt,
+          config.httpServer.token,
+          logger.child({ service: "http-server" }),
+        )
       : null;
 
   if (!httpServer) {
@@ -222,6 +227,7 @@ export function createEngine(options: EngineOptions): Engine {
       }
 
       logger.info("Starting Home Automation Engine");
+      httpServer?.setManagers(stateManager, manager);
       httpServer?.start();
       await stateManager.load();
       await mqtt.connect();

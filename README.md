@@ -226,6 +226,7 @@ Set these environment variables (or use a `.env` file):
 | `STATE_FILE_PATH` | `./state.json` | Path to the state persistence file |
 | `AUTOMATIONS_RECURSIVE` | `false` | Scan subdirectories recursively for automation files |
 | `HTTP_PORT` | `8080` | Port for HTTP server (health probes + webhooks). Set to `0` to disable. |
+| `HTTP_TOKEN` | | Bearer token for debug/webhook endpoints. Empty = no auth. |
 
 ## Writing an Automation
 
@@ -678,6 +679,125 @@ readinessProbe:
 
 The included `docker-compose.yml` configures a healthcheck automatically.
 
+## CLI Tool
+
+The `ts-ha` CLI lets you inspect and manage a running engine instance via its debug API.
+
+### Usage
+
+```bash
+ts-ha [options] <command> <subcommand> [args]
+```
+
+### Options
+
+| Option | Default | Description |
+|---|---|---|
+| `--host <host:port>` | from config | Override target host |
+| `--token <token>` | from config | Override auth token |
+| `--json` | | Output raw JSON instead of formatted text |
+| `--help` | | Show help |
+
+### Automations
+
+```bash
+# List all registered automations
+ts-ha automations list
+
+# Short alias
+ts-ha a ls
+
+# Get details for a specific automation
+ts-ha automations get motion-light-schedule
+```
+
+Example output:
+
+```
+NAME                        TRIGGERS
+motion-light-schedule       mqtt(2)
+contact-sensor-alarm        mqtt(3)
+shortcut-button-timer       mqtt(1)
+
+3 automation(s)
+```
+
+```
+Name:     motion-light-schedule
+Triggers:
+  mqtt     zigbee2mqtt/hallway_entry_sensor  (filtered)
+  mqtt     zigbee2mqtt/hallway_middle_sensor  (filtered)
+```
+
+### State Management
+
+```bash
+# List all state keys and values
+ts-ha state list
+
+# Get a single value
+ts-ha state get night_mode
+
+# Set a value (JSON-parsed: booleans, numbers, strings, objects)
+ts-ha state set night_mode true
+ts-ha state set alarm_mode false
+ts-ha state set motion_count 42
+ts-ha state set config '{"threshold": 30}'
+
+# Delete a key
+ts-ha state delete temporary_flag
+
+# Short aliases
+ts-ha s ls
+ts-ha s get night_mode
+ts-ha s set alarm_mode true
+ts-ha s rm old_key
+```
+
+Setting state via the CLI fires state triggers in automations — it's equivalent to calling `this.state.set()` inside an automation.
+
+### Saved Targets
+
+The CLI stores target configurations in `~/.config/ts-ha/config.json`. A `local` target (localhost:8080) is created by default.
+
+```bash
+# List saved targets (* = active)
+ts-ha config list
+
+# Add a remote target with auth token
+ts-ha config add prod 192.168.1.100:8080 my-secret-token
+
+# Switch to the remote target
+ts-ha config use prod
+
+# Now all commands go to the prod target
+ts-ha state list
+
+# Remove a target
+ts-ha config remove prod
+
+# Override target for a single command
+ts-ha --host 192.168.1.200:8080 --token secret s ls
+
+# Output JSON for scripting
+ts-ha --json state list | jq '.state.night_mode'
+```
+
+### Authentication
+
+Set `HTTP_TOKEN` on the engine to require a bearer token for debug and webhook endpoints. Health probes (`/healthz`, `/readyz`) remain unauthenticated for Kubernetes compatibility.
+
+```bash
+# Engine side
+HTTP_TOKEN=my-secret-token
+
+# CLI side — save the token with a target
+ts-ha config add prod 192.168.1.100:8080 my-secret-token
+
+# Or pass it directly
+ts-ha --host 192.168.1.100:8080 --token my-secret-token state list
+```
+
 ## Building the Package
 
 To build the distributable package (compiled JS + type declarations):
@@ -702,8 +822,11 @@ The `prepublishOnly` script runs the build automatically before publishing.
 |---|---|
 | `bun run dev` | Development with hot-reload (standalone mode) |
 | `bun run start` | Production run (standalone mode) |
-| `bun run build` | Build package (JS + declarations to `dist/`) |
+| `bun run test` | Run tests |
+| `bun run check` | Format + lint (Biome) |
 | `bun run typecheck` | TypeScript type checking |
+| `bun run build` | Build package (JS + declarations to `dist/`) |
+| `ts-ha` | CLI tool for managing a running instance |
 | `bun run docker:build` | Build Docker image |
 | `bun run docker:up` | Start via Docker Compose |
 | `bun run docker:down` | Stop Docker Compose |
