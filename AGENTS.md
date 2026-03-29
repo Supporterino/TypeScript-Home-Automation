@@ -1,0 +1,176 @@
+# AGENTS.md
+
+Coding conventions and instructions for AI agents working in this repository.
+
+## Build / Lint / Test Commands
+
+```bash
+bun install                  # Install dependencies
+bun run dev                  # Run with hot-reload (standalone mode)
+bun run start                # Production run
+bun run typecheck            # TypeScript type checking (tsc --noEmit)
+bun run check                # Biome format + lint + import organize (auto-fix)
+bun run format               # Format only
+bun run lint                 # Lint only
+bun run build                # Build package to dist/ (tsconfig.build.json)
+bun test                     # Run all tests
+bun test tests/state-manager.test.ts           # Run a single test file
+bun test --filter "topicMatches"               # Run tests matching a name pattern
+```
+
+Always run `bun run typecheck && bun run check && bun test` before committing.
+
+## Project Structure
+
+- `src/core/` — Framework core (engine, services, base classes)
+- `src/automations/` — Example automations (excluded from npm package build)
+- `src/types/` — Zigbee2MQTT and Shelly device type definitions
+- `src/cli/` — CLI tool (`ts-ha`) for managing running instances
+- `tests/` — Unit tests (flat directory, `*.test.ts`)
+
+## Runtime & Module System
+
+- **Runtime:** Bun (not Node.js) — use `Bun.serve()`, `bun:test`, etc.
+- **Module system:** ESM (`"type": "module"`)
+- **TypeScript target:** ESNext with `"moduleResolution": "bundler"`
+- **Always use `.js` extensions** in relative imports: `from "./automation.js"`
+- **Use `node:` prefix** for Node built-ins: `from "node:fs/promises"`
+
+## Formatting (Biome)
+
+- **2 spaces** indent, **100 char** line width, **LF** line endings
+- Biome auto-organizes imports — don't manually reorder
+- `noForEach` is disabled but prefer `for...of` loops in practice
+
+## Import Conventions
+
+Order (enforced by Biome):
+1. Node built-ins (`node:fs/promises`, `node:path`)
+2. Third-party packages (`pino`, `mqtt`, `zod`)
+3. Internal/relative imports (`../config.js`, `./http-client.js`)
+
+Use `import type` for type-only imports:
+```ts
+import type { Logger } from "pino";
+import type { Config } from "../config.js";
+import { type StateManagerOptions, StateManager } from "./state-manager.js";
+```
+
+## Naming Conventions
+
+| Entity | Convention | Example |
+|---|---|---|
+| Classes | PascalCase | `MqttService`, `StateManager` |
+| Interfaces | PascalCase, no `I` prefix | `EngineOptions`, `NotificationService` |
+| Type aliases | PascalCase | `Trigger`, `TriggerContext`, `DeviceState` |
+| Module-level constants | SCREAMING_SNAKE | `STATE_PREFIX`, `COLORS` |
+| Private class config | `private readonly` SCREAMING_SNAKE | `ALARM_STATE_KEY`, `LUX_THRESHOLD` |
+| Private fields | `private` keyword, camelCase | `private connected`, `private store` |
+| Methods | camelCase | `publishToDevice()`, `turnOn()` |
+| Files | kebab-case | `mqtt-service.ts`, `state-manager.ts` |
+| Automation names | kebab-case string | `"motion-light-schedule"` |
+| State keys | snake_case, colon prefix for scoping | `"night_mode"`, `"motion-light:lights_on"` |
+| Booleans | camelCase, descriptive | `lightsAreOn`, `skipLux`, `stillArmed` |
+
+## Class Patterns
+
+**Automation base class:** Abstract class with `abstract readonly name`, `abstract readonly triggers`, and `abstract execute()`. Dependencies injected via `_inject()` with definite assignment (`!`). Optional lifecycle hooks `onStart()`/`onStop()` have empty default implementations.
+
+**Service classes:** Constructor DI with `private readonly` parameters. No interfaces for services themselves. Internal helpers under `// Internal` section separator.
+
+**Device-specific abstracts** (e.g., `AqaraH1Automation`): Extend `Automation`, use `get triggers()` getter (not field) because abstract properties aren't available during super construction. Dispatcher pattern in `execute()` routing to `protected async` handler methods with no-op defaults.
+
+**Factory functions:** `createEngine()` returns an object literal with closures, not a class instance.
+
+## Automation File Pattern
+
+```ts
+import { Automation, type Trigger, type TriggerContext } from "../core/automation.js";
+import type { SomePayload } from "../types/zigbee.js";
+
+interface LocalConfig { /* file-scoped, not exported */ }
+
+export default class MyAutomation extends Automation {
+  readonly name = "my-automation";
+
+  // ---- Configuration ----
+  private readonly SOME_SETTING = "value";
+
+  // ---- Internal state ----
+  private timer: ReturnType<typeof setTimeout> | null = null;
+
+  readonly triggers: Trigger[] = [/* ... */];
+
+  async execute(context: TriggerContext): Promise<void> {
+    if (context.type !== "mqtt") return;
+    const payload = context.payload as unknown as SomePayload;
+    // ...
+  }
+
+  async onStop(): Promise<void> {
+    if (this.timer) { clearTimeout(this.timer); this.timer = null; }
+  }
+}
+```
+
+## Error Handling
+
+- **Structured logging:** `this.logger.error({ err, topic, device: name }, "message")`
+- **Never re-throw** non-critical errors — log and continue
+- **Throw `Error`** for programmer mistakes (e.g., unregistered device)
+- **No custom error classes** — use plain `Error`
+- **Zod `safeParse`** at config boundary with `process.exit(1)` on failure
+- **Timer cleanup:** Always clear + null in `onStop()`
+- **Expected FS errors:** Check `(err as NodeJS.ErrnoException).code === "ENOENT"`
+- Timer types: `ReturnType<typeof setTimeout>` (not `NodeJS.Timeout`)
+
+## Type Organization
+
+Types in `src/types/` follow a three-layer hierarchy:
+1. **Common primitives** — `DeviceState`, `ColorXY`, `PowerOnBehavior`
+2. **Generic payloads** — Brand-agnostic: `DimmableLightPayload`, `OccupancyPayload`
+3. **Brand-specific** — `PhilipsColorLightSetCommand`, `IkeaStyrbarPayload`
+
+Naming: `{Capability}Payload` for state, `{Capability}SetCommand` for commands.
+
+## Test Patterns
+
+```ts
+import { describe, it, expect, beforeEach, mock } from "bun:test";
+import pino from "pino";
+
+const logger = pino({ level: "silent" });
+
+describe("ClassName", () => {
+  let instance: MyClass;
+  beforeEach(() => { instance = new MyClass(logger); });
+
+  describe("method group", () => {
+    it("does something specific", () => { /* ... */ });
+  });
+});
+```
+
+- Tests in `tests/*.test.ts` (flat, not colocated)
+- Silent pino logger at module level
+- Mock factory functions: `function createMockHttp(): HttpClient`
+- Cast mocks: `{ method: mock(() => ...) } as unknown as ServiceType`
+- Access mock calls: `(mock as ReturnType<typeof mock>).mock.calls[0]`
+- Config objects use `satisfies Config` for type safety
+- Max 2 levels of `describe` nesting
+- Test names start with a verb: `"sets and gets a boolean"`
+
+## Dependency Injection
+
+- **Constructor injection** for services (via `private readonly` params)
+- **`_inject()` method** for automations (framework-internal, underscore-prefixed)
+- **`T | null`** for optional services, check before use
+- **Child loggers** scoped per service: `logger.child({ service: "mqtt" })`
+- **Factory function overload** for notifications: accepts instance or `(http, logger) => Service`
+
+## Exports (`src/index.ts`)
+
+- Barrel file with explicit named re-exports (no `export *`)
+- Grouped by category with section comments
+- `export type { ... }` for type-only exports
+- Alphabetical ordering within each group
