@@ -27,6 +27,8 @@ const configSchema = z.object({
   httpServer: z.object({
     /** Port for the HTTP server (health probes + webhooks). Set to 0 to disable. */
     port: z.coerce.number().int().min(0).default(8080),
+    /** Bearer token for debug and webhook endpoints. Empty = no auth. */
+    token: z.string().default(""),
   }),
 });
 
@@ -52,6 +54,7 @@ export function loadConfig(): Config {
     },
     httpServer: {
       port: process.env.HTTP_PORT,
+      token: process.env.HTTP_TOKEN,
     },
   });
 

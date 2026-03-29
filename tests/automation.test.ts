@@ -55,7 +55,7 @@ function createMocks() {
     logLevel: "info" as const,
     state: { persist: false, filePath: "./state.json" },
     automations: { recursive: false },
-    httpServer: { port: 0 },
+    httpServer: { port: 0, token: "" },
   } satisfies Config;
 
   return { mqtt, shelly, http, state, config };
