@@ -16,7 +16,7 @@ const config: Config = {
   zigbee2mqttPrefix: "zigbee2mqtt",
   logLevel: "info",
   state: { persist: false, filePath: "./state.json" },
-  health: { port: 0 },
+  httpServer: { port: 0 },
 };
 
 /** Concrete test automation with configurable triggers. */
@@ -88,7 +88,8 @@ describe("AutomationManager", () => {
       mocks.http,
       mocks.shelly,
       mocks.state,
-      null,
+      null, // httpServer
+      null, // notifications
       config,
       logger,
     );

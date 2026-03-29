@@ -16,8 +16,12 @@ import type { StateManager } from "./state-manager.js";
  *
  * - cron:  Fires on a cron schedule (e.g. "0 7 * * *" = daily at 7 AM).
  *
- * - state: Fires when a state key changes value. Use this to react to state
- *          changes made by other automations.
+ * - state:   Fires when a state key changes value. Use this to react to state
+ *            changes made by other automations.
+ *
+ * - webhook: Fires when an HTTP request is received on the configured path.
+ *            The endpoint is `POST /webhook/<path>` on the health server port.
+ *            Supports optional method restriction (default: POST only).
  */
 export type Trigger =
   | {
@@ -35,6 +39,17 @@ export type Trigger =
       key: string;
       /** Optional filter — return true to trigger, false to ignore. */
       filter?: (newValue: unknown, oldValue: unknown) => boolean;
+    }
+  | {
+      type: "webhook";
+      /**
+       * URL path for the webhook (without leading slash).
+       * The full endpoint will be `POST /webhook/<path>`.
+       * Example: "deploy" → POST /webhook/deploy
+       */
+      path: string;
+      /** HTTP methods to accept (default: ["POST"]). */
+      methods?: ("GET" | "POST" | "PUT" | "DELETE")[];
     };
 
 /**
@@ -43,6 +58,7 @@ export type Trigger =
  * For MQTT triggers, contains the topic that fired and the parsed payload.
  * For cron triggers, contains the cron expression and the time it fired.
  * For state triggers, contains the key, new value, and old value.
+ * For webhook triggers, contains the path, HTTP method, headers, query, and body.
  */
 export type TriggerContext =
   | {
@@ -60,6 +76,19 @@ export type TriggerContext =
       key: string;
       newValue: unknown;
       oldValue: unknown;
+    }
+  | {
+      type: "webhook";
+      /** The webhook path that was called. */
+      path: string;
+      /** The HTTP method used. */
+      method: string;
+      /** Request headers. */
+      headers: Record<string, string>;
+      /** URL query parameters. */
+      query: Record<string, string>;
+      /** Parsed request body (JSON object, or raw string). */
+      body: unknown;
     };
 
 /**

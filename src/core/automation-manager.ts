@@ -5,6 +5,7 @@ import type { Config } from "../config.js";
 import { Automation } from "./automation.js";
 import type { CronScheduler } from "./cron-scheduler.js";
 import type { HttpClient } from "./http-client.js";
+import type { HttpServer } from "./http-server.js";
 import type { MqttMessageHandler, MqttService } from "./mqtt-service.js";
 import type { NotificationService } from "./notification-service.js";
 import type { ShellyService } from "./shelly-service.js";
@@ -14,8 +15,8 @@ import type { StateChangeHandler, StateManager } from "./state-manager.js";
  * Discovers, registers, and manages the lifecycle of all automations.
  *
  * On startup it scans the automations directory, dynamically imports each file,
- * and wires up the declared triggers (MQTT subscriptions, cron jobs, and
- * state change listeners).
+ * and wires up the declared triggers (MQTT subscriptions, cron jobs,
+ * state change listeners, and webhook endpoints).
  */
 export class AutomationManager {
   private automations: Automation[] = [];
@@ -25,6 +26,8 @@ export class AutomationManager {
   /** Track state handlers so we can cleanly unsubscribe on shutdown. */
   private stateHandlers: Map<Automation, { key: string; handler: StateChangeHandler }[]> =
     new Map();
+  /** Track webhook paths so we can cleanly remove on shutdown. */
+  private webhookPaths: Map<Automation, string[]> = new Map();
 
   constructor(
     private readonly mqtt: MqttService,
@@ -32,6 +35,7 @@ export class AutomationManager {
     private readonly http: HttpClient,
     private readonly shelly: ShellyService,
     private readonly stateManager: StateManager,
+    private readonly httpServer: HttpServer | null,
     private readonly notifications: NotificationService | null,
     private readonly config: Config,
     private readonly logger: Logger,
@@ -105,6 +109,7 @@ export class AutomationManager {
 
     const mqttHandlers: { topic: string; handler: MqttMessageHandler }[] = [];
     const stateHandlers: { key: string; handler: StateChangeHandler }[] = [];
+    const webhookPaths: string[] = [];
 
     for (let i = 0; i < automation.triggers.length; i++) {
       const trigger = automation.triggers[i];
@@ -157,11 +162,40 @@ export class AutomationManager {
         this.stateManager.onChange(trigger.key, handler);
         stateHandlers.push({ key: trigger.key, handler });
         childLogger.debug({ key: trigger.key }, "Registered state trigger");
+      } else if (trigger.type === "webhook") {
+        if (!this.httpServer) {
+          childLogger.warn(
+            { path: trigger.path },
+            "Webhook trigger ignored — HTTP server disabled (set HTTP_PORT to enable)",
+          );
+          continue;
+        }
+
+        const methods = trigger.methods ?? ["POST"];
+        this.httpServer.registerWebhook(trigger.path, methods, async (ctx) => {
+          childLogger.info({ path: trigger.path, method: ctx.method }, "Webhook trigger fired");
+          await automation
+            .execute({
+              type: "webhook",
+              path: trigger.path,
+              method: ctx.method,
+              headers: ctx.headers,
+              query: ctx.query,
+              body: ctx.body,
+            })
+            .catch((err) => {
+              childLogger.error({ err, path: trigger.path }, "Automation execution failed");
+            });
+        });
+
+        webhookPaths.push(trigger.path);
+        childLogger.debug({ path: trigger.path, methods }, "Registered webhook trigger");
       }
     }
 
     this.mqttHandlers.set(automation, mqttHandlers);
     this.stateHandlers.set(automation, stateHandlers);
+    this.webhookPaths.set(automation, webhookPaths);
     this.automations.push(automation);
 
     try {
@@ -175,7 +209,7 @@ export class AutomationManager {
 
   /**
    * Gracefully stop all automations.
-   * Unsubscribes MQTT handlers, state handlers, stops cron jobs, and calls onStop.
+   * Unsubscribes MQTT handlers, state handlers, webhook routes, stops cron jobs, and calls onStop.
    */
   async stopAll(): Promise<void> {
     this.logger.info("Stopping all automations");
@@ -193,6 +227,12 @@ export class AutomationManager {
         this.stateManager.offChange(key, handler);
       }
 
+      // Remove webhook routes
+      const webhookP = this.webhookPaths.get(automation) ?? [];
+      for (const path of webhookP) {
+        this.httpServer?.removeWebhook(path);
+      }
+
       // Stop cron jobs for this automation
       this.cron.removeByPrefix(`${automation.name}:`);
 
@@ -207,6 +247,7 @@ export class AutomationManager {
     this.automations = [];
     this.mqttHandlers.clear();
     this.stateHandlers.clear();
+    this.webhookPaths.clear();
     this.logger.info("All automations stopped");
   }
 }
