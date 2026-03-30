@@ -13,9 +13,14 @@ export class CronScheduler {
 
   constructor(private readonly logger: Logger) {
     this.timeZone = process.env.TZ || undefined;
-    if (this.timeZone) {
-      this.logger.info({ timeZone: this.timeZone }, "Cron scheduler using timezone");
-    }
+    this.logger.info(
+      {
+        timeZone: this.timeZone ?? "system default",
+        systemTime: new Date().toISOString(),
+        localHour: new Date().getHours(),
+      },
+      "Cron scheduler initialized",
+    );
   }
 
   /**
