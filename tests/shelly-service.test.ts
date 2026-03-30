@@ -57,6 +57,42 @@ describe("ShellyService", () => {
       expect(shelly.getDeviceInfo("plug2")).resolves.toBeDefined();
     });
 
+    it("strips http:// scheme from host", async () => {
+      shelly.register("plug", "http://192.168.1.50");
+      await shelly.turnOn("plug");
+      const url = (http.get as ReturnType<typeof mock>).mock.calls[0][0] as string;
+      expect(url).toStartWith("http://192.168.1.50/rpc/");
+      expect(url).not.toContain("http://http://");
+    });
+
+    it("strips https:// scheme from host", async () => {
+      shelly.register("plug", "https://shelly-plug.local");
+      await shelly.turnOn("plug");
+      const url = (http.get as ReturnType<typeof mock>).mock.calls[0][0] as string;
+      expect(url).toBe("http://shelly-plug.local/rpc/Switch.Set?id=0&on=true");
+    });
+
+    it("strips trailing slashes from host", async () => {
+      shelly.register("plug", "192.168.1.50/");
+      await shelly.turnOn("plug");
+      const url = (http.get as ReturnType<typeof mock>).mock.calls[0][0] as string;
+      expect(url).toStartWith("http://192.168.1.50/rpc/");
+    });
+
+    it("accepts hostname with port", async () => {
+      shelly.register("plug", "shelly-plug.local:8080");
+      await shelly.turnOn("plug");
+      const url = (http.get as ReturnType<typeof mock>).mock.calls[0][0] as string;
+      expect(url).toStartWith("http://shelly-plug.local:8080/rpc/");
+    });
+
+    it("accepts mDNS .local hostnames", async () => {
+      shelly.register("plug", "shellyplusplugs-aabbcc.local");
+      await shelly.turnOn("plug");
+      const url = (http.get as ReturnType<typeof mock>).mock.calls[0][0] as string;
+      expect(url).toStartWith("http://shellyplusplugs-aabbcc.local/rpc/");
+    });
+
     it("throws for unregistered devices", () => {
       expect(shelly.turnOn("unknown")).rejects.toThrow('Shelly device "unknown" is not registered');
     });
