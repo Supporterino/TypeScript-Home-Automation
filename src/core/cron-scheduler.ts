@@ -9,8 +9,14 @@ interface ScheduledJob {
 
 export class CronScheduler {
   private jobs: ScheduledJob[] = [];
+  private readonly timeZone: string | undefined;
 
-  constructor(private readonly logger: Logger) {}
+  constructor(private readonly logger: Logger) {
+    this.timeZone = process.env.TZ || undefined;
+    if (this.timeZone) {
+      this.logger.info({ timeZone: this.timeZone }, "Cron scheduler using timezone");
+    }
+  }
 
   /**
    * Schedule a cron job.
@@ -31,6 +37,7 @@ export class CronScheduler {
         }
       },
       start: true,
+      timeZone: this.timeZone,
     });
 
     this.jobs.push({ id, expression, job });
