@@ -9,6 +9,7 @@ services:
       - ZIGBEE2MQTT_PREFIX=zigbee2mqtt
       - LOG_LEVEL=info
       - NODE_ENV=production
+      - TZ=Europe/Berlin
       - HTTP_PORT=8080
     healthcheck:
       test: ["CMD", "bun", "-e", "const r = await fetch('http://localhost:8080/readyz'); process.exit(r.ok ? 0 : 1)"]
