@@ -264,4 +264,132 @@ describe("AutomationManager", () => {
       await manager.stopAll();
     });
   });
+
+  describe("listAutomations", () => {
+    it("returns empty array when no automations registered", () => {
+      expect(manager.listAutomations()).toEqual([]);
+    });
+
+    it("lists automations with trigger summaries", async () => {
+      const auto = new TestAutomation("test", [
+        { type: "mqtt", topic: "zigbee2mqtt/sensor" },
+        { type: "cron", expression: "0 7 * * *" },
+      ]);
+      await manager.register(auto);
+
+      const list = manager.listAutomations();
+      expect(list).toHaveLength(1);
+      expect(list[0].name).toBe("test");
+      expect(list[0].triggers).toHaveLength(2);
+      expect(list[0].triggers[0]).toEqual({
+        type: "mqtt",
+        topic: "zigbee2mqtt/sensor",
+        hasFilter: false,
+        filterSource: undefined,
+      });
+      expect(list[0].triggers[1]).toEqual({
+        type: "cron",
+        expression: "0 7 * * *",
+      });
+    });
+
+    it("serializes mqtt filter source", async () => {
+      const myFilter = (p: Record<string, unknown>) => p.occupancy === true;
+      const auto = new TestAutomation("test", [
+        { type: "mqtt", topic: "zigbee2mqtt/sensor", filter: myFilter },
+      ]);
+      await manager.register(auto);
+
+      const list = manager.listAutomations();
+      const trigger = list[0].triggers[0];
+      expect(trigger.hasFilter).toBe(true);
+      expect(trigger.filterSource).toContain("occupancy");
+    });
+
+    it("serializes state filter source", async () => {
+      const myFilter = (newVal: unknown) => newVal === true;
+      const auto = new TestAutomation("test", [
+        { type: "state", key: "night_mode", filter: myFilter },
+      ]);
+      await manager.register(auto);
+
+      const list = manager.listAutomations();
+      const trigger = list[0].triggers[0];
+      expect(trigger.hasFilter).toBe(true);
+      expect(typeof trigger.filterSource).toBe("string");
+      expect((trigger.filterSource as string).length).toBeGreaterThan(0);
+    });
+
+    it("includes webhook trigger details", async () => {
+      const auto = new TestAutomation("test", [
+        { type: "webhook", path: "deploy", methods: ["POST", "PUT"] },
+      ]);
+      await manager.register(auto);
+
+      const list = manager.listAutomations();
+      expect(list[0].triggers[0]).toEqual({
+        type: "webhook",
+        path: "deploy",
+        methods: ["POST", "PUT"],
+      });
+    });
+  });
+
+  describe("getAutomation", () => {
+    it("returns null for unknown automation", () => {
+      expect(manager.getAutomation("nonexistent")).toBeNull();
+    });
+
+    it("returns details for registered automation", async () => {
+      const auto = new TestAutomation("my-auto", [{ type: "mqtt", topic: "zigbee2mqtt/light" }]);
+      await manager.register(auto);
+
+      const result = manager.getAutomation("my-auto");
+      expect(result).not.toBeNull();
+      expect(result?.name).toBe("my-auto");
+      expect(result?.triggers).toHaveLength(1);
+    });
+  });
+
+  describe("triggerAutomation", () => {
+    it("returns false for unknown automation", async () => {
+      const result = await manager.triggerAutomation("nonexistent", {
+        type: "cron",
+        expression: "manual",
+        firedAt: new Date(),
+      });
+      expect(result).toBe(false);
+    });
+
+    it("calls execute on the automation with the given context", async () => {
+      const auto = new TestAutomation("test");
+      await manager.register(auto);
+
+      const context = {
+        type: "mqtt" as const,
+        topic: "manual/test",
+        payload: { occupancy: true },
+      };
+      const result = await manager.triggerAutomation("test", context);
+
+      expect(result).toBe(true);
+      expect(auto.executeFn).toHaveBeenCalledTimes(1);
+      expect(auto.executeFn.mock.calls[0][0]).toEqual(context);
+    });
+
+    it("returns true even when execute throws", async () => {
+      const auto = new TestAutomation("test");
+      auto.executeFn.mockImplementation(() => Promise.reject(new Error("boom")));
+      await manager.register(auto);
+
+      // triggerAutomation awaits execute, so the error propagates
+      expect(
+        manager.triggerAutomation("test", {
+          type: "cron",
+          expression: "manual",
+          firedAt: new Date(),
+        }),
+      ).rejects.toThrow("boom");
+    });
+  });
 });
