@@ -2,7 +2,7 @@ import { readdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import type { Logger } from "pino";
 import type { Config } from "../config.js";
-import { Automation } from "./automation.js";
+import { Automation, type TriggerContext } from "./automation.js";
 import type { CronScheduler } from "./cron-scheduler.js";
 import type { HttpClient } from "./http-client.js";
 import type { HttpServer } from "./http-server.js";
@@ -266,13 +266,23 @@ export class AutomationManager {
       name: auto.name,
       triggers: auto.triggers.map((t) => {
         if (t.type === "mqtt") {
-          return { type: "mqtt", topic: t.topic, hasFilter: !!t.filter };
+          return {
+            type: "mqtt",
+            topic: t.topic,
+            hasFilter: !!t.filter,
+            filterSource: t.filter?.toString(),
+          };
         }
         if (t.type === "cron") {
           return { type: "cron", expression: t.expression };
         }
         if (t.type === "state") {
-          return { type: "state", key: t.key, hasFilter: !!t.filter };
+          return {
+            type: "state",
+            key: t.key,
+            hasFilter: !!t.filter,
+            filterSource: t.filter?.toString(),
+          };
         }
         if (t.type === "webhook") {
           return { type: "webhook", path: t.path, methods: t.methods ?? ["POST"] };
@@ -291,5 +301,22 @@ export class AutomationManager {
   ): { name: string; triggers: { type: string; [key: string]: unknown }[] } | null {
     const list = this.listAutomations();
     return list.find((a) => a.name === name) ?? null;
+  }
+
+  /**
+   * Manually trigger an automation with a synthetic context.
+   * Used by the debug API for testing automations without real device events.
+   *
+   * @param name Automation name
+   * @param context The trigger context to pass to execute()
+   * @returns true if the automation was found and triggered
+   */
+  async triggerAutomation(name: string, context: TriggerContext): Promise<boolean> {
+    const automation = this.automations.find((a) => a.name === name);
+    if (!automation) return false;
+
+    this.logger.info({ automation: name, type: context.type }, "Manual trigger via debug API");
+    await automation.execute(context);
+    return true;
   }
 }

@@ -1,9 +1,10 @@
-import pino, { type Logger } from "pino";
+import pino, { type Logger, multistream } from "pino";
 import { type Config, loadConfig } from "../config.js";
 import { AutomationManager } from "./automation-manager.js";
 import { CronScheduler } from "./cron-scheduler.js";
 import { HttpClient } from "./http-client.js";
 import { HttpServer } from "./http-server.js";
+import { LogBuffer } from "./log-buffer.js";
 import { MqttService } from "./mqtt-service.js";
 import type { NotificationService } from "./notification-service.js";
 import { ShellyService } from "./shelly-service.js";
@@ -148,16 +149,20 @@ export function createEngine(options: EngineOptions): Engine {
     },
   };
 
-  // Create logger
+  // Create log buffer for debug API
+  const logBuffer = new LogBuffer(2500);
+
+  // Create logger with multistream (stdout + log buffer)
   const logger =
     options.logger ??
-    pino({
-      level: config.logLevel,
-      transport:
-        process.env.NODE_ENV !== "production"
-          ? { target: "pino-pretty", options: { colorize: true } }
-          : undefined,
-    });
+    (() => {
+      const isProd = process.env.NODE_ENV === "production";
+      const prettyStream = isProd
+        ? process.stdout
+        : pino.transport({ target: "pino-pretty", options: { colorize: true } });
+      const streams = multistream([{ stream: prettyStream }, { stream: logBuffer }]);
+      return pino({ level: config.logLevel }, streams);
+    })();
 
   // Initialize core services
   const mqtt = new MqttService(config, logger.child({ service: "mqtt" }));
@@ -227,7 +232,7 @@ export function createEngine(options: EngineOptions): Engine {
       }
 
       logger.info("Starting Home Automation Engine");
-      httpServer?.setManagers(stateManager, manager);
+      httpServer?.setManagers(stateManager, manager, logBuffer);
       httpServer?.start();
       await stateManager.load();
       await mqtt.connect();

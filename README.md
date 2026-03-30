@@ -66,7 +66,7 @@ my-home/
 │   ├── index.ts
 │   └── automations/
 │       ├── motion-light.ts
-│       └── night-mode.ts
+│       └── alarm.ts
 ```
 
 ### Entry point (`src/index.ts`)
@@ -188,15 +188,24 @@ src/
 │   ├── http-client.ts                # HTTP client with logging
 │   ├── shelly-service.ts             # Shelly Gen 2 device control
 │   ├── state-manager.ts              # Shared state with persistence
+│   ├── aqara-h1-automation.ts         # Aqara H1 remote base class
+│   ├── ikea-styrbar-automation.ts    # IKEA STYRBAR remote base class
+│   ├── ikea-rodret-automation.ts     # IKEA RODRET dimmer base class
 │   ├── notification-service.ts       # NotificationService interface
 │   ├── ntfy-notification-service.ts  # ntfy.sh notification implementation
-│   └── http-server.ts                # HTTP server (health probes + webhooks)
+│   ├── http-server.ts                # HTTP server (health, webhooks, debug API)
+│   └── log-buffer.ts                # In-memory ring buffer for log queries
 ├── automations/                      # Your automations go here (auto-discovered)
-│   ├── motion-light.ts               # Example: simple motion → light on
+│   ├── aqara-h1-remote.ts            # Example: H1 remote → lamp + Shelly plug
+│   ├── contact-sensor-alarm.ts       # Example: door sensor → alarm notification
+│   ├── motion-light-disableable.ts   # Example: motion light with enable/disable state
 │   ├── motion-light-schedule.ts      # Example: multi-sensor motion with time windows
-│   ├── aqara-h1-remote.ts            # Example: remote → lamp + Shelly plug
-│   ├── temperature-alert.ts          # Example: temp/humidity → ntfy notification
-│   └── scheduled-report.ts           # Example: daily cron → HTTP fetch
+│   ├── motion-light-state.ts         # Example: state-driven lamp profile selection
+│   ├── scheduled-report.ts           # Example: daily cron → HTTP fetch
+│   ├── shortcut-button-flash.ts      # Example: button → colored light flash
+│   ├── shortcut-button-timer.ts      # Example: button → timed state toggle
+│   ├── temperature-alert.ts          # Example: temp/humidity → notification
+│   └── water-leak-alert.ts           # Example: water leak → urgent notification
 └── types/
     ├── zigbee.ts                     # Zigbee2MQTT payload type definitions
     └── shelly.ts                     # Shelly Gen 2 API type definitions
@@ -725,8 +734,57 @@ shortcut-button-timer       mqtt(1)
 ```
 Name:     motion-light-schedule
 Triggers:
-  mqtt     zigbee2mqtt/hallway_entry_sensor  (filtered)
-  mqtt     zigbee2mqtt/hallway_middle_sensor  (filtered)
+  mqtt     zigbee2mqtt/hallway_entry_sensor
+           filter: (payload) => payload.occupancy === true
+  mqtt     zigbee2mqtt/hallway_middle_sensor
+           filter: (payload) => payload.occupancy === true
+```
+
+### Trigger Command
+
+Manually fire an automation with a synthetic context for testing:
+
+```bash
+# MQTT trigger with payload
+ts-ha a trigger motion-light '{"type":"mqtt","topic":"zigbee2mqtt/sensor","payload":{"occupancy":true}}'
+
+# Cron trigger (defaults filled in automatically)
+ts-ha a trigger scheduled-report '{"type":"cron"}'
+
+# State trigger
+ts-ha a trigger night-reaction '{"type":"state","key":"night_mode","newValue":true,"oldValue":false}'
+
+# Webhook trigger
+ts-ha a trigger deploy-hook '{"type":"webhook","method":"POST","body":{"service":"api"}}'
+```
+
+### Logs
+
+Query the in-memory log buffer (last 1000 entries):
+
+```bash
+# Last 50 entries
+ts-ha logs
+
+# Filter by automation name
+ts-ha logs --automation motion-light-schedule
+
+# Filter by minimum log level
+ts-ha logs --level error
+
+# Combine filters
+ts-ha logs --automation contact-sensor-alarm --level warn --limit 20
+
+# JSON output for scripting
+ts-ha --json logs | jq '.entries[] | select(.msg | contains("ALARM"))'
+```
+
+Example output:
+
+```
+07:04:17.033 INFO  [motion-light-schedule] Motion detected
+07:04:17.035 INFO  [motion-light-schedule] Turning on lamps
+07:09:17.040 INFO  [motion-light-schedule] No recent motion, turning off lamps
 ```
 
 ### State Management

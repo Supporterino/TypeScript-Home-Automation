@@ -1,6 +1,8 @@
 /// <reference types="bun" />
 import type { Logger } from "pino";
+import type { TriggerContext } from "./automation.js";
 import type { AutomationManager } from "./automation-manager.js";
+import type { LogBuffer, LogQuery } from "./log-buffer.js";
 import type { MqttService } from "./mqtt-service.js";
 import type { StateManager } from "./state-manager.js";
 
@@ -42,6 +44,7 @@ export class HttpServer {
   private webhookRoutes: Map<string, WebhookRoute> = new Map();
   private stateManager: StateManager | null = null;
   private automationManager: AutomationManager | null = null;
+  private logBuffer: LogBuffer | null = null;
 
   constructor(
     private readonly port: number,
@@ -54,9 +57,10 @@ export class HttpServer {
    * Set references to managers for the debug API.
    * Called by the engine after construction.
    */
-  setManagers(state: StateManager, automations: AutomationManager): void {
+  setManagers(state: StateManager, automations: AutomationManager, logs: LogBuffer): void {
     this.stateManager = state;
     this.automationManager = automations;
+    this.logBuffer = logs;
   }
 
   /**
@@ -233,10 +237,25 @@ export class HttpServer {
       return this.debugListAutomations();
     }
 
+    // POST /debug/automations/:name/trigger
+    if (
+      path.startsWith("/debug/automations/") &&
+      path.endsWith("/trigger") &&
+      req.method === "POST"
+    ) {
+      const name = decodeURIComponent(path.slice("/debug/automations/".length, -"/trigger".length));
+      return this.debugTriggerAutomation(name, req);
+    }
+
     // GET /debug/automations/:name
     if (path.startsWith("/debug/automations/") && req.method === "GET") {
       const name = decodeURIComponent(path.slice("/debug/automations/".length));
       return this.debugGetAutomation(name);
+    }
+
+    // GET /debug/logs
+    if (path === "/debug/logs" && req.method === "GET") {
+      return this.debugGetLogs(url);
     }
 
     // GET /debug/state
@@ -333,5 +352,126 @@ export class HttpServer {
     }
 
     return Response.json({ key, deleted: existed });
+  }
+
+  // -------------------------------------------------------------------------
+  // Debug API — Logs
+  // -------------------------------------------------------------------------
+
+  private debugGetLogs(url: URL): Response {
+    if (!this.logBuffer) {
+      return Response.json({ error: "Not available" }, { status: 503 });
+    }
+
+    const query: LogQuery = {};
+    const automation = url.searchParams.get("automation");
+    if (automation) query.automation = automation;
+
+    const level = url.searchParams.get("level");
+    if (level) query.level = levelNameToNumber(level);
+
+    const limit = url.searchParams.get("limit");
+    if (limit) query.limit = Number.parseInt(limit, 10);
+
+    const entries = this.logBuffer.query(query);
+    return Response.json({ entries, count: entries.length });
+  }
+
+  // -------------------------------------------------------------------------
+  // Debug API — Trigger
+  // -------------------------------------------------------------------------
+
+  private async debugTriggerAutomation(name: string, req: Request): Promise<Response> {
+    if (!this.automationManager) {
+      return Response.json({ error: "Not available" }, { status: 503 });
+    }
+
+    let body: { type: string; [key: string]: unknown };
+    try {
+      body = (await req.json()) as { type: string; [key: string]: unknown };
+    } catch {
+      return Response.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
+
+    if (!body.type) {
+      return Response.json(
+        { error: "Missing 'type' field. Must be one of: mqtt, cron, state, webhook" },
+        { status: 400 },
+      );
+    }
+
+    let context: TriggerContext;
+
+    switch (body.type) {
+      case "mqtt":
+        context = {
+          type: "mqtt",
+          topic: (body.topic as string) ?? `manual/${name}`,
+          payload: (body.payload as Record<string, unknown>) ?? {},
+        };
+        break;
+      case "cron":
+        context = {
+          type: "cron",
+          expression: (body.expression as string) ?? "manual",
+          firedAt: new Date(),
+        };
+        break;
+      case "state":
+        context = {
+          type: "state",
+          key: (body.key as string) ?? "manual",
+          newValue: body.newValue,
+          oldValue: body.oldValue,
+        };
+        break;
+      case "webhook":
+        context = {
+          type: "webhook",
+          path: (body.path as string) ?? "manual",
+          method: (body.method as string) ?? "POST",
+          headers: (body.headers as Record<string, string>) ?? {},
+          query: (body.query as Record<string, string>) ?? {},
+          body: body.body ?? null,
+        };
+        break;
+      default:
+        return Response.json({ error: `Unknown trigger type: ${body.type}` }, { status: 400 });
+    }
+
+    this.logger.info({ automation: name, type: body.type }, "Manual trigger via debug API");
+
+    try {
+      const found = await this.automationManager.triggerAutomation(name, context);
+      if (!found) {
+        return Response.json({ error: "Automation not found", name }, { status: 404 });
+      }
+      return Response.json({ status: "triggered", automation: name, type: body.type });
+    } catch (err) {
+      this.logger.error({ err, automation: name }, "Manual trigger failed");
+      return Response.json({ error: "Execution failed" }, { status: 500 });
+    }
+  }
+}
+
+/**
+ * Map pino level name to numeric value.
+ */
+function levelNameToNumber(level: string): number {
+  switch (level.toLowerCase()) {
+    case "trace":
+      return 10;
+    case "debug":
+      return 20;
+    case "info":
+      return 30;
+    case "warn":
+      return 40;
+    case "error":
+      return 50;
+    case "fatal":
+      return 60;
+    default:
+      return 30;
   }
 }
