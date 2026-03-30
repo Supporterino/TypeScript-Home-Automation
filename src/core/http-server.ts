@@ -41,6 +41,7 @@ interface WebhookRoute {
 export class HttpServer {
   private server: ReturnType<typeof Bun.serve> | null = null;
   private engineStarted = false;
+  private startedAt: number | null = null;
   private webhookRoutes: Map<string, WebhookRoute> = new Map();
   private stateManager: StateManager | null = null;
   private automationManager: AutomationManager | null = null;
@@ -68,6 +69,7 @@ export class HttpServer {
    */
   setEngineStarted(started: boolean): void {
     this.engineStarted = started;
+    this.startedAt = started ? Date.now() : null;
   }
 
   /**
@@ -170,7 +172,12 @@ export class HttpServer {
     };
     const ready = checks.mqtt && checks.engine;
     return Response.json(
-      { status: ready ? "ready" : "not ready", checks },
+      {
+        status: ready ? "ready" : "not ready",
+        checks,
+        startedAt: this.startedAt,
+        tz: process.env.TZ ?? null,
+      },
       { status: ready ? 200 : 503 },
     );
   }
