@@ -841,6 +841,43 @@ ts-ha --host 192.168.1.200:8080 --token secret s ls
 ts-ha --json state list | jq '.state.night_mode'
 ```
 
+### Dashboard
+
+Live-updating terminal dashboard showing engine status, automations, state, and recent logs:
+
+```bash
+ts-ha dashboard              # Live dashboard, 5s refresh
+ts-ha d                      # Short alias
+ts-ha d --interval 2         # Refresh every 2 seconds
+```
+
+```
+ ts-ha dashboard                               localhost:8080
+ ─────────────────────────────────────────────────────────────
+
+ Engine: running    MQTT: connected    Uptime: 2d 14h 23m
+ TZ: Europe/Berlin
+
+ ── Automations (5) ──────────────────────────────────────────
+ motion-light-schedule          mqtt(2)
+ contact-sensor-alarm           mqtt(3)
+ shortcut-button-timer          mqtt(1)
+
+ ── State (3) ────────────────────────────────────────────────
+ night_mode                          false
+ alarm_mode                          true
+ motion-light-schedule:lights_on     false
+
+ ── Recent Logs ──────────────────────────────────────────────
+ 09:04:17.033 INFO  [motion-light-schedule] Motion detected
+ 09:04:17.035 INFO  [motion-light-schedule] Turning on lamps
+ 09:09:17.040 INFO  [motion-light-schedule] No recent motion, turning off
+
+ Press q to quit | Refreshing every 5s
+```
+
+Press `q`, `Esc`, or `Ctrl+C` to exit.
+
 ### Authentication
 
 Set `HTTP_TOKEN` on the engine to require a bearer token for debug and webhook endpoints. Health probes (`/healthz`, `/readyz`) remain unauthenticated for Kubernetes compatibility.

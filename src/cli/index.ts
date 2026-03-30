@@ -3,6 +3,7 @@
 import { DebugClient } from "./client.js";
 import { getAutomation, listAutomations, triggerAutomation } from "./commands/automations.js";
 import { addConfig, listConfig, removeConfig, useConfig } from "./commands/config.js";
+import { runDashboard } from "./commands/dashboard.js";
 import { getLogs } from "./commands/logs.js";
 import { deleteState, getState, listState, setState } from "./commands/state.js";
 import { getActiveTarget } from "./config.js";
@@ -28,6 +29,9 @@ Commands:
     --level <level>                   Filter by min level (trace/debug/info/warn/error/fatal)
     --limit <n>                       Number of entries (default: 50)
 
+  dashboard                            Live status dashboard
+    --interval <seconds>              Refresh interval (default: 5)
+
   config list                         List saved targets
   config add <name> <host> [token]    Add or update a target
   config use <name>                   Set the active target
@@ -40,7 +44,7 @@ Options:
   --help                              Show this help message
 
 Short aliases:
-  a = automations, s = state, l = logs, c = config
+  a = automations, s = state, l = logs, d = dashboard, c = config
   ls = list, rm/del = delete
 
 Trigger examples:
@@ -67,6 +71,7 @@ interface ParsedArgs {
   logAutomation: string | undefined;
   logLevel: string | undefined;
   logLimit: number | undefined;
+  interval: number;
 }
 
 function parseArgs(argv: string[]): ParsedArgs {
@@ -76,6 +81,7 @@ function parseArgs(argv: string[]): ParsedArgs {
   let logAutomation: string | undefined;
   let logLevel: string | undefined;
   let logLimit: number | undefined;
+  let interval = 5;
   const positional: string[] = [];
 
   let i = 0;
@@ -94,6 +100,8 @@ function parseArgs(argv: string[]): ParsedArgs {
       logLevel = argv[++i];
     } else if (arg === "--limit") {
       logLimit = Number.parseInt(argv[++i], 10);
+    } else if (arg === "--interval") {
+      interval = Number.parseInt(argv[++i], 10);
     } else if (arg === "--help" || arg === "-h") {
       console.log(USAGE);
       process.exit(0);
@@ -108,7 +116,18 @@ function parseArgs(argv: string[]): ParsedArgs {
   }
 
   const [command = "", subcommand = "", ...args] = positional;
-  return { host, token, json, command, subcommand, args, logAutomation, logLevel, logLimit };
+  return {
+    host,
+    token,
+    json,
+    command,
+    subcommand,
+    args,
+    logAutomation,
+    logLevel,
+    logLimit,
+    interval,
+  };
 }
 
 async function resolveClient(
@@ -243,9 +262,12 @@ async function main(): Promise<void> {
         },
         json,
       );
+    } else if (command === "dashboard" || command === "d") {
+      const resolvedHost = host ?? (await getActiveTarget()).host;
+      await runDashboard(client, resolvedHost, parsed.interval);
     } else {
       console.error(`Unknown command: ${command}`);
-      console.error("Available: automations (a), state (s), logs (l), config (c)");
+      console.error("Available: automations (a), state (s), logs (l), dashboard (d), config (c)");
       process.exit(1);
     }
   } catch (err) {

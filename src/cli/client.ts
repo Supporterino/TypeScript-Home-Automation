@@ -14,6 +14,30 @@ export class DebugClient {
   // Automations
   // -------------------------------------------------------------------------
 
+  async getReadiness(): Promise<{
+    status: string;
+    checks: { mqtt: boolean; engine: boolean };
+    startedAt: number | null;
+    tz: string | null;
+  }> {
+    // Readiness endpoint is unauthenticated, use raw fetch
+    const url = `${this.baseUrl}/readyz`;
+    let response: Response;
+    try {
+      response = await fetch(url);
+    } catch (err) {
+      throw new Error(
+        `Failed to connect to ${this.baseUrl}. Is the engine running?\n${(err as Error).message}`,
+      );
+    }
+    return (await response.json()) as {
+      status: string;
+      checks: { mqtt: boolean; engine: boolean };
+      startedAt: number | null;
+      tz: string | null;
+    };
+  }
+
   async listAutomations(): Promise<{
     automations: { name: string; triggers: { type: string; [key: string]: unknown }[] }[];
     count: number;
