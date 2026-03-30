@@ -48,12 +48,20 @@ export class ShellyService {
   /**
    * Register a Shelly device for use in automations.
    *
+   * Accepts IP addresses, hostnames, or full URLs. The scheme is stripped
+   * automatically if provided:
+   * - `"192.168.1.50"` → OK
+   * - `"shelly-plug.local"` → OK
+   * - `"shelly-plug.local:8080"` → OK (custom port)
+   * - `"http://shelly-plug.local"` → normalized to `"shelly-plug.local"`
+   *
    * @param name Friendly name for the device (used in all other methods)
-   * @param host IP address or hostname of the Shelly device
+   * @param host IP address, hostname, or URL of the Shelly device
    */
   register(name: string, host: string): void {
-    this.devices.set(name, { name, host });
-    this.logger.info({ name, host }, "Shelly device registered");
+    const normalized = this.normalizeHost(host);
+    this.devices.set(name, { name, host: normalized });
+    this.logger.info({ name, host: normalized }, "Shelly device registered");
   }
 
   /**
@@ -314,6 +322,18 @@ export class ShellyService {
   // -------------------------------------------------------------------------
   // Internal helpers
   // -------------------------------------------------------------------------
+
+  /**
+   * Normalize a host string by stripping scheme and trailing slashes.
+   */
+  private normalizeHost(host: string): string {
+    let normalized = host.trim();
+    // Strip scheme (http:// or https://)
+    normalized = normalized.replace(/^https?:\/\//, "");
+    // Strip trailing slashes
+    normalized = normalized.replace(/\/+$/, "");
+    return normalized;
+  }
 
   /**
    * Look up a registered device by name.
