@@ -31,6 +31,7 @@ export {
 export { HttpServer, type WebhookHandler } from "./core/http-server.js";
 export { IkeaRodretAutomation } from "./core/ikea-rodret-automation.js";
 export { IkeaStyrbarAutomation } from "./core/ikea-styrbar-automation.js";
+export { LogBuffer, type LogEntry, type LogQuery } from "./core/log-buffer.js";
 // Core services (exposed for advanced usage)
 export { type MqttMessageHandler, MqttService } from "./core/mqtt-service.js";
 // Notification services

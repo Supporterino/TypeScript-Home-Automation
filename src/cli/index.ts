@@ -1,8 +1,9 @@
 #!/usr/bin/env bun
 
 import { DebugClient } from "./client.js";
-import { getAutomation, listAutomations } from "./commands/automations.js";
+import { getAutomation, listAutomations, triggerAutomation } from "./commands/automations.js";
 import { addConfig, listConfig, removeConfig, useConfig } from "./commands/config.js";
+import { getLogs } from "./commands/logs.js";
 import { deleteState, getState, listState, setState } from "./commands/state.js";
 import { getActiveTarget } from "./config.js";
 
@@ -15,11 +16,17 @@ Usage:
 Commands:
   automations list                    List all registered automations
   automations get <name>              Get details for a specific automation
+  automations trigger <name> <ctx>    Manually trigger an automation
 
   state list                          List all state keys and values
   state get <key>                     Get a single state value
   state set <key> <value>             Set a state value (JSON-parsed)
   state delete <key>                  Delete a state key
+
+  logs [options]                      View recent log entries
+    --automation <name>               Filter by automation name
+    --level <level>                   Filter by min level (trace/debug/info/warn/error/fatal)
+    --limit <n>                       Number of entries (default: 50)
 
   config list                         List saved targets
   config add <name> <host> [token]    Add or update a target
@@ -33,16 +40,20 @@ Options:
   --help                              Show this help message
 
 Short aliases:
-  a = automations, s = state, c = config
+  a = automations, s = state, l = logs, c = config
   ls = list, rm/del = delete
+
+Trigger examples:
+  ts-ha a trigger my-auto '{"type":"mqtt","topic":"z2m/sensor","payload":{"occupancy":true}}'
+  ts-ha a trigger my-auto '{"type":"cron"}'
+  ts-ha a trigger my-auto '{"type":"state","key":"night_mode","newValue":true}'
 
 Examples:
   ts-ha state list
   ts-ha state set night_mode true
   ts-ha automations get motion-light-schedule
+  ts-ha logs --automation contact-sensor-alarm --level warn
   ts-ha config add prod 192.168.1.100:8080 my-secret-token
-  ts-ha config use prod
-  ts-ha --host 192.168.1.100:8080 --token secret s ls
   ts-ha --json a ls
 `.trim();
 
@@ -53,12 +64,18 @@ interface ParsedArgs {
   command: string;
   subcommand: string;
   args: string[];
+  logAutomation: string | undefined;
+  logLevel: string | undefined;
+  logLimit: number | undefined;
 }
 
 function parseArgs(argv: string[]): ParsedArgs {
   let host: string | undefined;
   let token: string | undefined;
   let json = false;
+  let logAutomation: string | undefined;
+  let logLevel: string | undefined;
+  let logLimit: number | undefined;
   const positional: string[] = [];
 
   let i = 0;
@@ -71,6 +88,12 @@ function parseArgs(argv: string[]): ParsedArgs {
       token = argv[++i];
     } else if (arg === "--json") {
       json = true;
+    } else if (arg === "--automation") {
+      logAutomation = argv[++i];
+    } else if (arg === "--level") {
+      logLevel = argv[++i];
+    } else if (arg === "--limit") {
+      logLimit = Number.parseInt(argv[++i], 10);
     } else if (arg === "--help" || arg === "-h") {
       console.log(USAGE);
       process.exit(0);
@@ -85,25 +108,24 @@ function parseArgs(argv: string[]): ParsedArgs {
   }
 
   const [command = "", subcommand = "", ...args] = positional;
-  return { host, token, json, command, subcommand, args };
+  return { host, token, json, command, subcommand, args, logAutomation, logLevel, logLimit };
 }
 
 async function resolveClient(
   hostOverride: string | undefined,
   tokenOverride: string | undefined,
 ): Promise<DebugClient> {
-  // CLI flags take priority over saved config
   if (hostOverride) {
     return new DebugClient(hostOverride, tokenOverride);
   }
 
-  // Fall back to the active saved target
   const target = await getActiveTarget();
   return new DebugClient(target.host, tokenOverride ?? (target.token || undefined));
 }
 
 async function main(): Promise<void> {
-  const { host, token, json, command, subcommand, args } = parseArgs(process.argv.slice(2));
+  const parsed = parseArgs(process.argv.slice(2));
+  const { host, token, json, command, subcommand, args } = parsed;
 
   if (!command) {
     console.log(USAGE);
@@ -159,9 +181,26 @@ async function main(): Promise<void> {
           process.exit(1);
         }
         await getAutomation(client, name, json);
+      } else if (subcommand === "trigger" || subcommand === "t") {
+        const name = args[0];
+        const contextJson = args[1];
+        if (!name || !contextJson) {
+          console.error("Usage: ts-ha automations trigger <name> '<json context>'");
+          console.error("");
+          console.error("Examples:");
+          console.error(
+            '  ts-ha a trigger my-auto \'{"type":"mqtt","topic":"zigbee2mqtt/sensor","payload":{"occupancy":true}}\'',
+          );
+          console.error('  ts-ha a trigger my-auto \'{"type":"cron"}\'');
+          console.error(
+            '  ts-ha a trigger my-auto \'{"type":"state","key":"night_mode","newValue":true}\'',
+          );
+          process.exit(1);
+        }
+        await triggerAutomation(client, name, contextJson, json);
       } else {
         console.error(`Unknown subcommand: automations ${subcommand}`);
-        console.error("Available: list, get");
+        console.error("Available: list, get, trigger");
         process.exit(1);
       }
     } else if (command === "state" || command === "s") {
@@ -194,9 +233,19 @@ async function main(): Promise<void> {
         console.error("Available: list, get, set, delete");
         process.exit(1);
       }
+    } else if (command === "logs" || command === "l") {
+      await getLogs(
+        client,
+        {
+          automation: parsed.logAutomation,
+          level: parsed.logLevel,
+          limit: parsed.logLimit,
+        },
+        json,
+      );
     } else {
       console.error(`Unknown command: ${command}`);
-      console.error("Available: automations (a), state (s), config (c)");
+      console.error("Available: automations (a), state (s), logs (l), config (c)");
       process.exit(1);
     }
   } catch (err) {

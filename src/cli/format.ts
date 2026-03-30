@@ -42,22 +42,59 @@ export function summarizeTriggers(triggers: { type: string; [key: string]: unkno
  * Format trigger details for the automation detail view.
  */
 export function formatTrigger(trigger: { type: string; [key: string]: unknown }): string {
+  let line: string;
+
   switch (trigger.type) {
-    case "mqtt": {
-      const suffix = trigger.hasFilter ? "  (filtered)" : "";
-      return `mqtt     ${trigger.topic}${suffix}`;
-    }
+    case "mqtt":
+      line = `mqtt     ${trigger.topic}`;
+      break;
     case "cron":
-      return `cron     ${trigger.expression}`;
-    case "state": {
-      const suffix = trigger.hasFilter ? "  (filtered)" : "";
-      return `state    ${trigger.key}${suffix}`;
-    }
+      line = `cron     ${trigger.expression}`;
+      break;
+    case "state":
+      line = `state    ${trigger.key}`;
+      break;
     case "webhook": {
       const methods = (trigger.methods as string[]) ?? ["POST"];
-      return `webhook  /${trigger.path}  [${methods.join(", ")}]`;
+      line = `webhook  /${trigger.path}  [${methods.join(", ")}]`;
+      break;
     }
     default:
       return `${trigger.type}`;
   }
+
+  // Append filter source on a new indented line if present
+  if (trigger.filterSource) {
+    line += `\n           filter: ${trigger.filterSource}`;
+  }
+
+  return line;
+}
+
+/**
+ * Format a log entry for terminal display.
+ */
+export function formatLogEntry(entry: {
+  level: number;
+  time: number;
+  msg: string;
+  [key: string]: unknown;
+}): string {
+  const time = new Date(entry.time).toISOString().slice(11, 23);
+  const level = levelToName(entry.level).padEnd(5);
+  const automation = entry.automation ? ` [${entry.automation}]` : "";
+  const service = entry.service ? ` (${entry.service})` : "";
+  return `${time} ${level}${automation}${service} ${entry.msg}`;
+}
+
+/**
+ * Map pino numeric level to name.
+ */
+function levelToName(level: number): string {
+  if (level <= 10) return "TRACE";
+  if (level <= 20) return "DEBUG";
+  if (level <= 30) return "INFO";
+  if (level <= 40) return "WARN";
+  if (level <= 50) return "ERROR";
+  return "FATAL";
 }

@@ -57,6 +57,38 @@ export class DebugClient {
   }
 
   // -------------------------------------------------------------------------
+  // Logs
+  // -------------------------------------------------------------------------
+
+  async getLogs(options?: { automation?: string; level?: string; limit?: number }): Promise<{
+    entries: { level: number; time: number; msg: string; [key: string]: unknown }[];
+    count: number;
+  }> {
+    const params = new URLSearchParams();
+    if (options?.automation) params.set("automation", options.automation);
+    if (options?.level) params.set("level", options.level);
+    if (options?.limit) params.set("limit", String(options.limit));
+
+    const query = params.toString();
+    return this.get(`/debug/logs${query ? `?${query}` : ""}`);
+  }
+
+  // -------------------------------------------------------------------------
+  // Trigger
+  // -------------------------------------------------------------------------
+
+  async triggerAutomation(
+    name: string,
+    context: { type: string; [key: string]: unknown },
+  ): Promise<{ status: string; automation: string; type: string }> {
+    return this.request(`/debug/automations/${encodeURIComponent(name)}/trigger`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...this.authHeaders() },
+      body: JSON.stringify(context),
+    });
+  }
+
+  // -------------------------------------------------------------------------
   // Internal
   // -------------------------------------------------------------------------
 
