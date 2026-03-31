@@ -22,10 +22,12 @@ Always run `bun run typecheck && bun run check && bun test` before committing.
 
 ## Project Structure
 
-- `src/core/` — Framework core (engine, services, base classes)
+- `src/core/` — Framework core (engine, services, base classes, device-specific abstracts)
 - `src/automations/` — Example automations (excluded from npm package build)
 - `src/types/` — Zigbee2MQTT and Shelly device type definitions
 - `src/cli/` — CLI tool (`ts-ha`) for managing running instances
+  - `src/cli/commands/` — CLI command implementations (`.ts` and `.tsx`)
+  - `src/cli/components/` — OpenTUI React components for the interactive dashboard
 - `tests/` — Unit tests (flat directory, `*.test.ts`)
 
 ## Runtime & Module System
@@ -35,6 +37,19 @@ Always run `bun run typecheck && bun run check && bun test` before committing.
 - **TypeScript target:** ESNext with `"moduleResolution": "bundler"`
 - **Always use `.js` extensions** in relative imports: `from "./automation.js"`
 - **Use `node:` prefix** for Node built-ins: `from "node:fs/promises"`
+
+## CLI Dashboard (OpenTUI / React)
+
+The interactive dashboard (`ts-ha dashboard`) uses `@opentui/core` and `@opentui/react` for a terminal UI. Key conventions:
+
+- **JSX files** use `.tsx` extension — located in `src/cli/commands/` and `src/cli/components/`
+- **`jsxImportSource`** is `@opentui/react` (set in `tsconfig.json`) — JSX elements are OpenTUI intrinsics (`<box>`, `<text>`, `<scrollbox>`), not HTML
+- **Never call `process.exit()`** — use `renderer.destroy()` for cleanup
+- **Text styling** uses nested modifier tags: `<strong>`, `<em>`, `<span fg="red">` inside `<text>`
+- **Hooks**: `useKeyboard`, `useRenderer`, `useTerminalDimensions`, `useTimeline` from `@opentui/react`
+- **Tab components** are separate files in `src/cli/components/` (one per tab)
+- **Shared theme** in `src/cli/components/theme.ts` (Dracula color palette)
+- **Shared types** in `src/cli/components/types.ts` (dashboard data interfaces)
 
 ## Formatting (Biome)
 
@@ -78,7 +93,7 @@ import { type StateManagerOptions, StateManager } from "./state-manager.js";
 
 **Service classes:** Constructor DI with `private readonly` parameters. No interfaces for services themselves. Internal helpers under `// Internal` section separator.
 
-**Device-specific abstracts** (e.g., `AqaraH1Automation`): Extend `Automation`, use `get triggers()` getter (not field) because abstract properties aren't available during super construction. Dispatcher pattern in `execute()` routing to `protected async` handler methods with no-op defaults.
+**Device-specific abstracts** (e.g., `AqaraH1Automation`, `IkeaStyrbarAutomation`, `IkeaRodretAutomation`): Extend `Automation`, use `get triggers()` getter (not field) because abstract properties aren't available during super construction. Dispatcher pattern in `execute()` routing to `protected async` handler methods with no-op defaults.
 
 **Factory functions:** `createEngine()` returns an object literal with closures, not a class instance.
 

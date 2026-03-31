@@ -193,8 +193,29 @@ src/
 │   ├── ikea-rodret-automation.ts     # IKEA RODRET dimmer base class
 │   ├── notification-service.ts       # NotificationService interface
 │   ├── ntfy-notification-service.ts  # ntfy.sh notification implementation
+│   ├── mqtt-utils.ts                 # MQTT topic wildcard matching utility
 │   ├── http-server.ts                # HTTP server (health, webhooks, debug API)
-│   └── log-buffer.ts                # In-memory ring buffer for log queries
+│   └── log-buffer.ts                 # In-memory ring buffer for log queries
+├── cli/
+│   ├── index.ts                      # CLI entry point (arg parsing, command dispatch)
+│   ├── client.ts                     # Debug API HTTP client
+│   ├── config.ts                     # Saved targets (~/.config/ts-ha/config.json)
+│   ├── format.ts                     # Output formatting utilities
+│   ├── commands/
+│   │   ├── automations.ts            # automations list/get/trigger commands
+│   │   ├── config.ts                 # config list/add/use/remove commands
+│   │   ├── dashboard.tsx             # Interactive OpenTUI dashboard
+│   │   ├── logs.ts                   # logs command
+│   │   └── state.ts                  # state list/get/set/delete commands
+│   └── components/                   # OpenTUI React components for dashboard
+│       ├── automations-tab.tsx       # Automations tab (expand, trigger)
+│       ├── help-modal.tsx            # Keyboard shortcuts overlay
+│       ├── logs-tab.tsx              # Scrollable log viewer
+│       ├── overview-tab.tsx          # Overview tab (status summary)
+│       ├── state-tab.tsx             # State tab (inline editing)
+│       ├── status-footer.tsx         # Animated status bar
+│       ├── theme.ts                  # Dracula color palette
+│       └── types.ts                  # Shared dashboard data types
 ├── automations/                      # Your automations go here (auto-discovered)
 │   ├── aqara-h1-remote.ts            # Example: H1 remote → lamp + Shelly plug
 │   ├── contact-sensor-alarm.ts       # Example: door sensor → alarm notification
@@ -227,6 +248,7 @@ Set these environment variables (or use a `.env` file):
 
 | Variable | Default | Description |
 |---|---|---|
+| `TZ` | system default | Timezone for cron schedules (e.g. `Europe/Berlin`) |
 | `MQTT_HOST` | `localhost` | Mosquitto broker hostname |
 | `MQTT_PORT` | `1883` | Mosquitto broker port |
 | `ZIGBEE2MQTT_PREFIX` | `zigbee2mqtt` | Zigbee2MQTT MQTT topic prefix |
@@ -354,6 +376,37 @@ async onStop(): Promise<void> {
 }
 ```
 
+## Device-Specific Base Classes
+
+For common Zigbee remotes/buttons, the framework provides abstract base classes with a dispatcher pattern — override only the handlers you need:
+
+### Aqara H1 Remote (`AqaraH1Automation`)
+
+12 handlers: `onSingleLeft`, `onDoubleLeft`, `onTripleLeft`, `onHoldLeft`, `onSingleRight`, `onDoubleRight`, `onTripleRight`, `onHoldRight`, `onSingleBoth`, `onDoubleBoth`, `onTripleBoth`, `onHoldBoth`
+
+```ts
+import { AqaraH1Automation } from "ts-home-automation";
+
+export default class MyRemote extends AqaraH1Automation {
+  readonly name = "my-remote";
+  protected readonly remoteName = "living_room_remote";
+
+  protected async onSingleLeft(): Promise<void> {
+    this.mqtt.publishToDevice("lamp", { state: "TOGGLE" });
+  }
+}
+```
+
+### IKEA STYRBAR Remote (`IkeaStyrbarAutomation`)
+
+11 handlers: `onOn`, `onOff`, `onBrightnessMoveUp`, `onBrightnessMoveDown`, `onBrightnessStop`, `onArrowLeftClick`, `onArrowLeftHold`, `onArrowLeftRelease`, `onArrowRightClick`, `onArrowRightHold`, `onArrowRightRelease`
+
+### IKEA RODRET Dimmer (`IkeaRodretAutomation`)
+
+5 handlers: `onOn`, `onOff`, `onBrightnessMoveUp`, `onBrightnessMoveDown`, `onBrightnessStop`
+
+All three follow the same pattern: set `remoteName`, override handlers. The trigger and action dispatching is handled automatically.
+
 ## Shelly Devices
 
 The framework includes a built-in `ShellyService` for controlling Shelly Gen 2 devices (like the Plus Plug S) over their local HTTP RPC API. No cloud required.
@@ -367,8 +420,9 @@ Register Shelly devices in your automation's `onStart` hook or in your entry poi
 const engine = createEngine({ automationsDir: "..." });
 engine.shelly.registerMany({
   "living_room_plug": "192.168.1.50",
-  "tv_plug": "192.168.1.51",
-  "desk_lamp": "192.168.1.52",
+  "tv_plug": "shelly-plug.local",            // mDNS hostnames work
+  "desk_lamp": "http://192.168.1.52",         // URLs are normalized automatically
+  "bedroom_shutter": "shelly-2pm.local:8080", // custom ports work
 });
 await engine.start();
 ```
@@ -843,7 +897,7 @@ ts-ha --json state list | jq '.state.night_mode'
 
 ### Dashboard
 
-Live-updating terminal dashboard showing engine status, automations, state, and recent logs:
+Interactive terminal dashboard built with OpenTUI, showing engine status, automations, state, and logs in a tabbed interface:
 
 ```bash
 ts-ha dashboard              # Live dashboard, 5s refresh
@@ -851,32 +905,28 @@ ts-ha d                      # Short alias
 ts-ha d --interval 2         # Refresh every 2 seconds
 ```
 
-```
- ts-ha dashboard                               localhost:8080
- ─────────────────────────────────────────────────────────────
+The dashboard has four tabs switchable via number keys:
 
- Engine: running    MQTT: connected    Uptime: 2d 14h 23m
- TZ: Europe/Berlin
+| Tab | Key | Features |
+|---|---|---|
+| Overview | `1` | Engine/MQTT status, uptime, automation summary, state summary, recent logs |
+| Automations | `2` | Scrollable list, Enter to expand trigger details, `t` to manually trigger |
+| State | `3` | Scrollable list with color-coded values, Enter to edit, `n` to add, `d` to delete |
+| Logs | `4` | Scrollable log viewer, auto-sized to terminal height |
 
- ── Automations (5) ──────────────────────────────────────────
- motion-light-schedule          mqtt(2)
- contact-sensor-alarm           mqtt(3)
- shortcut-button-timer          mqtt(1)
+Keyboard shortcuts:
 
- ── State (3) ────────────────────────────────────────────────
- night_mode                          false
- alarm_mode                          true
- motion-light-schedule:lights_on     false
+| Key | Action |
+|---|---|
+| `1`-`4` | Switch tabs |
+| `q` / `Esc` | Quit |
+| `r` | Force refresh |
+| `?` | Toggle help modal |
+| `Enter` | Expand automation / edit state value |
+| `t` | Trigger selected automation |
+| `n` / `d` | New / delete state key |
 
- ── Recent Logs ──────────────────────────────────────────────
- 09:04:17.033 INFO  [motion-light-schedule] Motion detected
- 09:04:17.035 INFO  [motion-light-schedule] Turning on lamps
- 09:09:17.040 INFO  [motion-light-schedule] No recent motion, turning off
-
- Press q to quit | Refreshing every 5s
-```
-
-Press `q`, `Esc`, or `Ctrl+C` to exit.
+Features: ASCII art header, animated connection indicator, responsive layout (adapts to terminal size), Dracula color theme, color-coded state values (boolean green/red, number cyan, string yellow).
 
 ### Authentication
 
