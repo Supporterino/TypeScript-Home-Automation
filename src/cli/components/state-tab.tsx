@@ -65,7 +65,7 @@ export function StateTab({
     if (editMode.type !== "none") {
       if (key.name === "escape") {
         setEditMode({ type: "none" });
-      } else if (key.name === "enter") {
+      } else if (key.name === "enter" || key.name === "return") {
         submitEdit(editMode.key, editMode.value);
       } else if (key.name === "backspace") {
         setEditMode((m) => (m.type !== "none" ? { ...m, value: m.value.slice(0, -1) } : m));
@@ -79,7 +79,7 @@ export function StateTab({
       setSelectedIdx((i) => Math.max(0, i - 1));
     } else if (key.name === "down" || key.name === "j") {
       setSelectedIdx((i) => Math.min(entries.length - 1, i + 1));
-    } else if (key.name === "enter" && selectedEntry) {
+    } else if ((key.name === "enter" || key.name === "return") && selectedEntry) {
       setEditMode({
         type: "edit",
         key: selectedEntry[0],

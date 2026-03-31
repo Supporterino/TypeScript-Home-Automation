@@ -64,7 +64,7 @@ export function AutomationsTab({
         setTriggerTypeIdx((i) => (i - 1 + TRIGGER_TYPES.length) % TRIGGER_TYPES.length);
       } else if (key.name === "down" || key.name === "right") {
         setTriggerTypeIdx((i) => (i + 1) % TRIGGER_TYPES.length);
-      } else if (key.name === "enter") {
+      } else if (key.name === "enter" || key.name === "return") {
         doTrigger();
       }
       return;
@@ -74,7 +74,7 @@ export function AutomationsTab({
       setSelectedIdx((i) => Math.max(0, i - 1));
     } else if (key.name === "down" || key.name === "j") {
       setSelectedIdx((i) => Math.min(data.count - 1, i + 1));
-    } else if (key.name === "enter") {
+    } else if (key.name === "enter" || key.name === "return") {
       if (selectedAuto) {
         setExpandedName((n) => (n === selectedAuto.name ? null : selectedAuto.name));
       }
