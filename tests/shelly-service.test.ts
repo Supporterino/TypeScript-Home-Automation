@@ -211,6 +211,96 @@ describe("ShellyService", () => {
     });
   });
 
+  describe("cover control", () => {
+    beforeEach(() => {
+      http = createMockHttp({ state: "open", current_pos: 75, apower: 0 });
+      shelly = new ShellyService(http, logger);
+      shelly.register("shutter", "192.168.1.60");
+    });
+
+    it("coverOpen sends Cover.Open RPC", async () => {
+      await shelly.coverOpen("shutter");
+      const url = (http.get as ReturnType<typeof mock>).mock.calls[0][0] as string;
+      expect(url).toContain("/rpc/Cover.Open");
+      expect(url).toContain("id=0");
+    });
+
+    it("coverOpen sends duration param when provided", async () => {
+      await shelly.coverOpen("shutter", 5);
+      const url = (http.get as ReturnType<typeof mock>).mock.calls[0][0] as string;
+      expect(url).toContain("duration=5");
+    });
+
+    it("coverClose sends Cover.Close RPC", async () => {
+      await shelly.coverClose("shutter");
+      const url = (http.get as ReturnType<typeof mock>).mock.calls[0][0] as string;
+      expect(url).toContain("/rpc/Cover.Close");
+    });
+
+    it("coverClose sends duration param when provided", async () => {
+      await shelly.coverClose("shutter", 3);
+      const url = (http.get as ReturnType<typeof mock>).mock.calls[0][0] as string;
+      expect(url).toContain("duration=3");
+    });
+
+    it("coverStop sends Cover.Stop RPC", async () => {
+      await shelly.coverStop("shutter");
+      const url = (http.get as ReturnType<typeof mock>).mock.calls[0][0] as string;
+      expect(url).toContain("/rpc/Cover.Stop");
+    });
+
+    it("coverGoToPosition sends pos param", async () => {
+      await shelly.coverGoToPosition("shutter", 50);
+      const url = (http.get as ReturnType<typeof mock>).mock.calls[0][0] as string;
+      expect(url).toContain("/rpc/Cover.GoToPosition");
+      expect(url).toContain("pos=50");
+    });
+
+    it("coverMoveRelative sends rel param", async () => {
+      await shelly.coverMoveRelative("shutter", -20);
+      const url = (http.get as ReturnType<typeof mock>).mock.calls[0][0] as string;
+      expect(url).toContain("/rpc/Cover.GoToPosition");
+      expect(url).toContain("rel=-20");
+    });
+
+    it("getCoverStatus calls Cover.GetStatus", async () => {
+      const status = await shelly.getCoverStatus("shutter");
+      const url = (http.get as ReturnType<typeof mock>).mock.calls[0][0] as string;
+      expect(url).toContain("/rpc/Cover.GetStatus");
+      expect(status.state).toBe("open");
+    });
+
+    it("getCoverConfig calls Cover.GetConfig", async () => {
+      await shelly.getCoverConfig("shutter");
+      const url = (http.get as ReturnType<typeof mock>).mock.calls[0][0] as string;
+      expect(url).toContain("/rpc/Cover.GetConfig");
+    });
+
+    it("coverCalibrate calls Cover.Calibrate", async () => {
+      await shelly.coverCalibrate("shutter");
+      const url = (http.get as ReturnType<typeof mock>).mock.calls[0][0] as string;
+      expect(url).toContain("/rpc/Cover.Calibrate");
+    });
+
+    it("getCoverPosition returns current_pos from status", async () => {
+      const pos = await shelly.getCoverPosition("shutter");
+      expect(pos).toBe(75);
+    });
+
+    it("getCoverPosition returns null when uncalibrated", async () => {
+      http = createMockHttp({ state: "stopped", current_pos: null });
+      shelly = new ShellyService(http, logger);
+      shelly.register("shutter", "192.168.1.60");
+      const pos = await shelly.getCoverPosition("shutter");
+      expect(pos).toBeNull();
+    });
+
+    it("getCoverState returns state from status", async () => {
+      const state = await shelly.getCoverState("shutter");
+      expect(state).toBe("open");
+    });
+  });
+
   describe("error handling", () => {
     it("throws on non-OK HTTP response", async () => {
       const errorHttp = {
