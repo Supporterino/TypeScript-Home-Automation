@@ -33,7 +33,7 @@ export async function removeConfig(name: string): Promise<void> {
   }
 }
 
-export async function useConfig(name: string): Promise<void> {
+export async function switchConfig(name: string): Promise<void> {
   await setActiveTarget(name);
   console.log(`Active target set to "${name}"`);
 }

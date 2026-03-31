@@ -2,7 +2,7 @@
 
 import { DebugClient } from "./client.js";
 import { getAutomation, listAutomations, triggerAutomation } from "./commands/automations.js";
-import { addConfig, listConfig, removeConfig, useConfig } from "./commands/config.js";
+import { addConfig, listConfig, removeConfig, switchConfig } from "./commands/config.js";
 import { runDashboard } from "./commands/dashboard.js";
 import { getLogs } from "./commands/logs.js";
 import { deleteState, getState, listState, setState } from "./commands/state.js";
@@ -171,7 +171,7 @@ async function main(): Promise<void> {
           console.error("Usage: ts-ha config use <name>");
           process.exit(1);
         }
-        await useConfig(name);
+        await switchConfig(name);
       } else if (subcommand === "remove" || subcommand === "rm" || subcommand === "del") {
         const name = args[0];
         if (!name) {
