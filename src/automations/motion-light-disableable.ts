@@ -128,7 +128,7 @@ export default class MotionLightDisableable extends Automation {
 
   private turnOffTimer: ReturnType<typeof setTimeout> | null = null;
   /** Map sensor topics to their configuration for quick lookup. */
-  private sensorByTopic: Map<string, MotionSensor> = new Map();
+  private readonly sensorByTopic: Map<string, MotionSensor> = new Map();
 
   readonly triggers: Trigger[] = [
     // MQTT triggers for each motion sensor

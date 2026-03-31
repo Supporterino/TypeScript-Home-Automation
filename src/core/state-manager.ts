@@ -55,10 +55,10 @@ export interface StateManagerOptions {
  * ```
  */
 export class StateManager {
-  private store: Map<string, unknown> = new Map();
-  private listeners: Map<string, Set<StateChangeHandler>> = new Map();
+  private readonly store: Map<string, unknown> = new Map();
+  private readonly listeners: Map<string, Set<StateChangeHandler>> = new Map();
   /** Wildcard listeners that fire on any key change. */
-  private globalListeners: Set<StateChangeHandler> = new Set();
+  private readonly globalListeners: Set<StateChangeHandler> = new Set();
   private readonly persist: boolean;
   private readonly filePath: string;
 
@@ -282,6 +282,7 @@ export class StateManager {
       try {
         return JSON.stringify(a) === JSON.stringify(b);
       } catch {
+        this.logger.debug("Failed to compare state values via JSON.stringify");
         return false;
       }
     }

@@ -63,7 +63,7 @@ export abstract class IkeaRodretAutomation extends Automation {
   get triggers(): Trigger[] {
     return [
       {
-        type: "mqtt" as const,
+        type: "mqtt",
         topic: `zigbee2mqtt/${this.remoteName}`,
         filter: (payload: Record<string, unknown>) => payload.action !== undefined,
       },

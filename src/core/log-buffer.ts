@@ -28,7 +28,7 @@ export interface LogQuery {
  * filtered queries by automation name and log level.
  */
 export class LogBuffer {
-  private buffer: LogEntry[];
+  private readonly buffer: LogEntry[];
   private writeIndex = 0;
   private count = 0;
   private readonly capacity: number;

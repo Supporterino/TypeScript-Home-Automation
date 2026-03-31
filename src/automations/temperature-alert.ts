@@ -92,10 +92,10 @@ export default class TemperatureAlert extends Automation {
    * Track the last notification time per sensor+metric+level to enforce
    * cooldown. Key format: "sensorName:metric:level"
    */
-  private lastNotified: Map<string, number> = new Map();
+  private readonly lastNotified: Map<string, number> = new Map();
 
   /** Map sensor topics to their config for O(1) lookup. */
-  private sensorByTopic: Map<string, SensorConfig> = new Map();
+  private readonly sensorByTopic: Map<string, SensorConfig> = new Map();
 
   readonly triggers: Trigger[] = this.SENSORS.map((sensor) => ({
     type: "mqtt" as const,
@@ -138,7 +138,7 @@ export default class TemperatureAlert extends Automation {
    */
   private async checkThreshold(
     sensor: SensorConfig,
-    metric: string,
+    metric: "temperature" | "humidity",
     value: number,
     unit: string,
     threshold: Threshold,
@@ -159,7 +159,7 @@ export default class TemperatureAlert extends Automation {
    */
   private async sendAlert(
     sensor: SensorConfig,
-    metric: string,
+    metric: "temperature" | "humidity",
     value: number,
     unit: string,
     level: "warning" | "critical",

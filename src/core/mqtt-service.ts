@@ -39,20 +39,19 @@ export class MqttService {
     return new Promise((resolve, reject) => {
       this.client = mqtt.connect(url, options);
 
-      this.client.on("connect", () => {
+      // Resolve the promise only on the initial connection
+      this.client.once("connect", () => {
         this.connected = true;
         this.logger.info("Connected to MQTT broker");
-
-        // Re-subscribe to all registered topics on reconnect
-        for (const sub of this.subscriptions) {
-          this.client?.subscribe(sub.topic, (err) => {
-            if (err) {
-              this.logger.error({ topic: sub.topic, err }, "Failed to subscribe");
-            }
-          });
-        }
-
+        this.resubscribeAll();
         resolve();
+      });
+
+      // Re-subscribe on subsequent reconnections
+      this.client.on("connect", () => {
+        this.connected = true;
+        this.logger.info("Reconnected to MQTT broker");
+        this.resubscribeAll();
       });
 
       this.client.on("reconnect", () => {
@@ -155,6 +154,19 @@ export class MqttService {
    */
   deviceTopic(friendlyName: string): string {
     return `${this.config.zigbee2mqttPrefix}/${friendlyName}`;
+  }
+
+  /**
+   * Re-subscribe to all registered topics after a (re)connection.
+   */
+  private resubscribeAll(): void {
+    for (const sub of this.subscriptions) {
+      this.client?.subscribe(sub.topic, (err) => {
+        if (err) {
+          this.logger.error({ topic: sub.topic, err }, "Failed to subscribe");
+        }
+      });
+    }
   }
 
   async disconnect(): Promise<void> {

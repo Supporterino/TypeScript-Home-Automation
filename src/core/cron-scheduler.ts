@@ -12,6 +12,7 @@ export class CronScheduler {
   private readonly timeZone: string | undefined;
 
   constructor(private readonly logger: Logger) {
+    // Empty TZ string is treated as unset (use system default)
     this.timeZone = process.env.TZ || undefined;
     this.logger.info(
       {
