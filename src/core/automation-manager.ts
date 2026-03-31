@@ -175,9 +175,9 @@ export class AutomationManager {
         }
 
         const methods = trigger.methods ?? ["POST"];
-        this.httpServer.registerWebhook(trigger.path, methods, async (ctx) => {
+        this.httpServer.registerWebhook(trigger.path, methods, (ctx) => {
           childLogger.info({ path: trigger.path, method: ctx.method }, "Webhook trigger fired");
-          await automation
+          return automation
             .execute({
               type: "webhook",
               path: trigger.path,
@@ -262,7 +262,29 @@ export class AutomationManager {
    * List all registered automations with their trigger summaries.
    */
   listAutomations(): { name: string; triggers: { type: string; [key: string]: unknown }[] }[] {
-    return this.automations.map((auto) => ({
+    return this.automations.map((auto) => this.serializeAutomation(auto));
+  }
+
+  /**
+   * Get details for a single automation by name.
+   * Returns null if not found.
+   */
+  getAutomation(
+    name: string,
+  ): { name: string; triggers: { type: string; [key: string]: unknown }[] } | null {
+    const automation = this.automations.find((a) => a.name === name);
+    if (!automation) return null;
+    return this.serializeAutomation(automation);
+  }
+
+  /**
+   * Serialize an automation's triggers for the debug API.
+   */
+  private serializeAutomation(auto: Automation): {
+    name: string;
+    triggers: { type: string; [key: string]: unknown }[];
+  } {
+    return {
       name: auto.name,
       triggers: auto.triggers.map((t) => {
         if (t.type === "mqtt") {
@@ -289,18 +311,7 @@ export class AutomationManager {
         }
         return { type: (t as { type: string }).type };
       }),
-    }));
-  }
-
-  /**
-   * Get details for a single automation by name.
-   * Returns null if not found.
-   */
-  getAutomation(
-    name: string,
-  ): { name: string; triggers: { type: string; [key: string]: unknown }[] } | null {
-    const list = this.listAutomations();
-    return list.find((a) => a.name === name) ?? null;
+    };
   }
 
   /**

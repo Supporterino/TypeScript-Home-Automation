@@ -42,7 +42,7 @@ export class HttpServer {
   private server: ReturnType<typeof Bun.serve> | null = null;
   private engineStarted = false;
   private startedAt: number | null = null;
-  private webhookRoutes: Map<string, WebhookRoute> = new Map();
+  private readonly webhookRoutes: Map<string, WebhookRoute> = new Map();
   private stateManager: StateManager | null = null;
   private automationManager: AutomationManager | null = null;
   private logBuffer: LogBuffer | null = null;
@@ -207,19 +207,20 @@ export class HttpServer {
       try {
         body = contentType.includes("application/json") ? await req.json() : await req.text();
       } catch {
+        this.logger.warn({ path: webhookPath }, "Failed to parse webhook request body");
         body = null;
       }
     }
 
     const headers: Record<string, string> = {};
-    req.headers.forEach((value, key) => {
+    for (const [key, value] of req.headers) {
       headers[key] = value;
-    });
+    }
 
     const query: Record<string, string> = {};
-    url.searchParams.forEach((value, key) => {
+    for (const [key, value] of url.searchParams) {
       query[key] = value;
-    });
+    }
 
     this.logger.info({ path: webhookPath, method: req.method }, "Webhook triggered");
 

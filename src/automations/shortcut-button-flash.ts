@@ -79,8 +79,12 @@ export default class ShortcutButtonFlash extends Automation {
       if (!this.isFlashing) {
         this.previousState = {
           on: context.payload.state === "ON",
-          brightness: context.payload.brightness as number | undefined,
-          color: context.payload.color as ColorXY | undefined,
+          brightness:
+            typeof context.payload.brightness === "number" ? context.payload.brightness : undefined,
+          color:
+            context.payload.color && typeof context.payload.color === "object"
+              ? (context.payload.color as ColorXY)
+              : undefined,
         };
       }
       return;
@@ -135,6 +139,7 @@ export default class ShortcutButtonFlash extends Automation {
   }
 
   async onStop(): Promise<void> {
+    this.isFlashing = false;
     if (this.restoreTimer) {
       clearTimeout(this.restoreTimer);
       this.restoreTimer = null;

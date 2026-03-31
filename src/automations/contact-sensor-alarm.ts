@@ -73,8 +73,8 @@ export default class ContactSensorAlarm extends Automation {
 
   // ---- Internal state ----
 
-  private sensorByTopic: Map<string, ContactSensorConfig> = new Map();
-  private pendingTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
+  private readonly sensorByTopic: Map<string, ContactSensorConfig> = new Map();
+  private readonly pendingTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
 
   readonly triggers: Trigger[] = this.SENSORS.map((sensor) => ({
     type: "mqtt" as const,
@@ -117,26 +117,30 @@ export default class ContactSensorAlarm extends Automation {
     const timer = setTimeout(async () => {
       this.pendingTimers.delete(sensor.name);
 
-      const stillArmed = this.state.get<boolean>(this.ALARM_STATE_KEY, false);
-      if (!stillArmed) {
-        this.logger.info(
-          { sensor: sensor.name },
-          "Alarm mode disabled during grace period, no alert",
+      try {
+        const stillArmed = this.state.get<boolean>(this.ALARM_STATE_KEY, false);
+        if (!stillArmed) {
+          this.logger.info(
+            { sensor: sensor.name },
+            "Alarm mode disabled during grace period, no alert",
+          );
+          return;
+        }
+
+        this.logger.warn(
+          { sensor: sensor.name, label: sensor.label },
+          "ALARM: contact opened while armed!",
         );
-        return;
+
+        await this.notify({
+          title: `ALARM: ${sensor.label}`,
+          message: `${sensor.label} (${sensor.name}) was opened while alarm mode is active!`,
+          priority: "urgent",
+          tags: ["rotating_light", "door"],
+        });
+      } catch (err) {
+        this.logger.error({ err, sensor: sensor.name }, "Failed to send alarm notification");
       }
-
-      this.logger.warn(
-        { sensor: sensor.name, label: sensor.label },
-        "ALARM: contact opened while armed!",
-      );
-
-      await this.notify({
-        title: `ALARM: ${sensor.label}`,
-        message: `${sensor.label} (${sensor.name}) was opened while alarm mode is active!`,
-        priority: "urgent",
-        tags: ["rotating_light", "door"],
-      });
     }, this.GRACE_PERIOD_MS);
 
     this.pendingTimers.set(sensor.name, timer);

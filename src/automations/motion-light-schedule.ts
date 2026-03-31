@@ -169,7 +169,7 @@ export default class MotionLightSchedule extends Automation {
 
   private turnOffTimer: ReturnType<typeof setTimeout> | null = null;
   /** Map sensor topics to their configuration for quick lookup. */
-  private sensorByTopic: Map<string, MotionSensor> = new Map();
+  private readonly sensorByTopic: Map<string, MotionSensor> = new Map();
 
   readonly triggers: Trigger[] = this.SENSORS.map((sensor) => ({
     type: "mqtt" as const,
@@ -192,9 +192,9 @@ export default class MotionLightSchedule extends Automation {
     // turn them off and reset state. The timer didn't survive the restart, so
     // we can't know how long they've been on — safest to turn them off.
     const wasOn = this.state.get<boolean>(this.LIGHTS_ON_KEY, false);
-    const previousLamps = this.state.get<string[]>(this.ACTIVE_LAMPS_KEY, []);
+    const previousLamps = this.state.get<string[]>(this.ACTIVE_LAMPS_KEY) ?? [];
 
-    if (wasOn && previousLamps && previousLamps.length > 0) {
+    if (wasOn && previousLamps.length > 0) {
       this.logger.info(
         { lamps: previousLamps },
         "Recovering from restart: turning off previously active lamps",

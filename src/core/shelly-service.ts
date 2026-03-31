@@ -38,7 +38,7 @@ export interface ShellyDevice {
  * ```
  */
 export class ShellyService {
-  private devices: Map<string, ShellyDevice> = new Map();
+  private readonly devices: Map<string, ShellyDevice> = new Map();
 
   constructor(
     private readonly http: HttpClient,

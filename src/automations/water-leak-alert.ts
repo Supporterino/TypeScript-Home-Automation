@@ -58,9 +58,9 @@ export default class WaterLeakAlert extends Automation {
   // ---- Internal state ----
 
   /** Track last leak notification time per sensor to enforce cooldown. */
-  private lastNotified: Map<string, number> = new Map();
+  private readonly lastNotified: Map<string, number> = new Map();
   /** Map sensor topics to their config for O(1) lookup. */
-  private sensorByTopic: Map<string, LeakSensor> = new Map();
+  private readonly sensorByTopic: Map<string, LeakSensor> = new Map();
 
   readonly triggers: Trigger[] = this.SENSORS.map((sensor) => ({
     type: "mqtt" as const,
