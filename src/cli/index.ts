@@ -28,6 +28,7 @@ Commands:
     --automation <name>               Filter by automation name
     --level <level>                   Filter by min level (trace/debug/info/warn/error/fatal)
     --limit <n>                       Number of entries (default: 50)
+    -f, --follow                      Stream new log entries continuously
 
   dashboard                            Live status dashboard
     --interval <seconds>              Refresh interval (default: 5)
@@ -71,6 +72,7 @@ interface ParsedArgs {
   logAutomation: string | undefined;
   logLevel: string | undefined;
   logLimit: number | undefined;
+  logFollow: boolean;
   interval: number;
 }
 
@@ -81,6 +83,7 @@ function parseArgs(argv: string[]): ParsedArgs {
   let logAutomation: string | undefined;
   let logLevel: string | undefined;
   let logLimit: number | undefined;
+  let logFollow = false;
   let interval = 5;
   const positional: string[] = [];
 
@@ -100,6 +103,8 @@ function parseArgs(argv: string[]): ParsedArgs {
       logLevel = argv[++i];
     } else if (arg === "--limit") {
       logLimit = Number.parseInt(argv[++i], 10);
+    } else if (arg === "--follow" || arg === "-f") {
+      logFollow = true;
     } else if (arg === "--interval") {
       interval = Number.parseInt(argv[++i], 10);
     } else if (arg === "--help" || arg === "-h") {
@@ -126,6 +131,7 @@ function parseArgs(argv: string[]): ParsedArgs {
     logAutomation,
     logLevel,
     logLimit,
+    logFollow,
     interval,
   };
 }
@@ -259,6 +265,8 @@ async function main(): Promise<void> {
           automation: parsed.logAutomation,
           level: parsed.logLevel,
           limit: parsed.logLimit,
+          follow: parsed.logFollow,
+          interval: parsed.interval,
         },
         json,
       );
