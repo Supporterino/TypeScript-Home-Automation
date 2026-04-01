@@ -6,7 +6,6 @@ import { addConfig, listConfig, removeConfig, switchConfig } from "./commands/co
 import { runDashboard } from "./commands/dashboard.js";
 import { getLogs } from "./commands/logs.js";
 import { pairNanoleaf } from "./commands/nanoleaf.js";
-import { runNew } from "./commands/new.js";
 import { deleteState, getState, listState, setState } from "./commands/state.js";
 import { getActiveTarget } from "./config.js";
 
@@ -76,18 +75,6 @@ interface ParsedArgs {
   logLimit: number | undefined;
   logFollow: boolean;
   interval: number;
-  // Scaffold flags
-  trigger: string | undefined;
-  topic: string | undefined;
-  expression: string | undefined;
-  stateKey: string | undefined;
-  webhookPath: string | undefined;
-  filter: string | undefined;
-  remote: string | undefined;
-  sensor: string | undefined;
-  light: string | undefined;
-  lux: string | undefined;
-  force: boolean;
 }
 
 function parseArgs(argv: string[]): ParsedArgs {
@@ -99,17 +86,6 @@ function parseArgs(argv: string[]): ParsedArgs {
   let logLimit: number | undefined;
   let logFollow = false;
   let interval = 5;
-  let trigger: string | undefined;
-  let topic: string | undefined;
-  let expression: string | undefined;
-  let stateKey: string | undefined;
-  let webhookPath: string | undefined;
-  let filter: string | undefined;
-  let remote: string | undefined;
-  let sensor: string | undefined;
-  let light: string | undefined;
-  let lux: string | undefined;
-  let force = false;
   const positional: string[] = [];
 
   let i = 0;
@@ -132,28 +108,6 @@ function parseArgs(argv: string[]): ParsedArgs {
       logFollow = true;
     } else if (arg === "--interval") {
       interval = Number.parseInt(argv[++i], 10);
-    } else if (arg === "--trigger") {
-      trigger = argv[++i];
-    } else if (arg === "--topic") {
-      topic = argv[++i];
-    } else if (arg === "--expression") {
-      expression = argv[++i];
-    } else if (arg === "--key") {
-      stateKey = argv[++i];
-    } else if (arg === "--path") {
-      webhookPath = argv[++i];
-    } else if (arg === "--filter") {
-      filter = argv[++i];
-    } else if (arg === "--remote") {
-      remote = argv[++i];
-    } else if (arg === "--sensor") {
-      sensor = argv[++i];
-    } else if (arg === "--light") {
-      light = argv[++i];
-    } else if (arg === "--lux") {
-      lux = argv[++i];
-    } else if (arg === "--force") {
-      force = true;
     } else if (arg === "--help" || arg === "-h") {
       console.log(USAGE);
       process.exit(0);
@@ -180,17 +134,6 @@ function parseArgs(argv: string[]): ParsedArgs {
     logLimit,
     logFollow,
     interval,
-    trigger,
-    topic,
-    expression,
-    stateKey,
-    webhookPath,
-    filter,
-    remote,
-    sensor,
-    light,
-    lux,
-    force,
   };
 }
 
@@ -248,31 +191,6 @@ async function main(): Promise<void> {
         console.error("Available: list, add, use, remove");
         process.exit(1);
       }
-      return;
-    }
-
-    // Scaffold command doesn't need a client
-    if (command === "new" || command === "n") {
-      const scaffoldType = subcommand;
-      const scaffoldName = args[0];
-      if (!scaffoldType || !scaffoldName) {
-        console.error("Usage: ts-ha new <type> <name>");
-        console.error("Types: automation, aqara-h1, styrbar, rodret, motion-light");
-        process.exit(1);
-      }
-      await runNew(scaffoldType, scaffoldName, {
-        trigger: parsed.trigger,
-        topic: parsed.topic,
-        expression: parsed.expression,
-        key: parsed.stateKey,
-        path: parsed.webhookPath,
-        filter: parsed.filter,
-        remote: parsed.remote,
-        sensor: parsed.sensor,
-        light: parsed.light,
-        lux: parsed.lux,
-        force: parsed.force,
-      });
       return;
     }
 
@@ -376,7 +294,7 @@ async function main(): Promise<void> {
     } else {
       console.error(`Unknown command: ${command}`);
       console.error(
-        "Available: automations (a), state (s), logs (l), dashboard (d), new (n), nanoleaf, config (c)",
+        "Available: automations (a), state (s), logs (l), dashboard (d), nanoleaf, config (c)",
       );
       process.exit(1);
     }
