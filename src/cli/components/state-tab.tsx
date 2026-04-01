@@ -1,4 +1,4 @@
-import { useKeyboard } from "@opentui/react";
+import { useKeyboard, useTerminalDimensions } from "@opentui/react";
 import { useCallback, useState } from "react";
 import type { DebugClient } from "../client.js";
 import { COLORS, formatValue, valueColor } from "./theme.js";
@@ -19,6 +19,8 @@ export function StateTab({
   onRefresh: () => void;
 }) {
   const entries = Object.entries(data.state);
+  const { width } = useTerminalDimensions();
+  const keyWidth = Math.max(20, Math.floor(width * 0.35));
   const [selectedIdx, setSelectedIdx] = useState(0);
   const [editMode, setEditMode] = useState<EditMode>({ type: "none" });
   const [message, setMessage] = useState<string | null>(null);
@@ -110,7 +112,7 @@ export function StateTab({
                 <text fg={COLORS.purple} width={2}>
                   {isSelected ? ">" : " "}
                 </text>
-                <text width={34}>{key}</text>
+                <text width={keyWidth}>{key}</text>
                 <text fg={valueColor(value)}>{formatValue(value)}</text>
               </box>
             );

@@ -1,4 +1,4 @@
-import { useKeyboard } from "@opentui/react";
+import { useKeyboard, useTerminalDimensions } from "@opentui/react";
 import { useCallback, useState } from "react";
 import type { DebugClient } from "../client.js";
 import { formatTrigger, summarizeTriggers } from "../format.js";
@@ -16,6 +16,8 @@ export function AutomationsTab({
   client: DebugClient;
   onRefresh: () => void;
 }) {
+  const { width } = useTerminalDimensions();
+  const nameWidth = Math.max(20, Math.floor(width * 0.35));
   const [selectedIdx, setSelectedIdx] = useState(0);
   const [expandedName, setExpandedName] = useState<string | null>(null);
   const [triggerMode, setTriggerMode] = useState(false);
@@ -97,7 +99,7 @@ export function AutomationsTab({
                 <text fg={COLORS.purple} width={2}>
                   {isSelected ? ">" : " "}
                 </text>
-                <text fg={COLORS.cyan} width={30}>
+                <text fg={COLORS.cyan} width={nameWidth}>
                   {auto.name}
                 </text>
                 <text fg={COLORS.comment}>{summarizeTriggers(auto.triggers)}</text>
