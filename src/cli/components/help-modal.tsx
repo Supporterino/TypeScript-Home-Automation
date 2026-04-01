@@ -28,7 +28,16 @@ const SHORTCUTS = [
       { key: "Esc", desc: "Cancel editing" },
     ],
   },
-  { section: "Logs Tab", items: [{ key: "↑/↓", desc: "Scroll through log entries" }] },
+  {
+    section: "Logs Tab",
+    items: [
+      { key: "↑/↓", desc: "Scroll through log entries" },
+      { key: "l", desc: "Cycle log level filter (ALL → TRACE → ... → ERROR)" },
+      { key: "a", desc: "Cycle through automation name filter" },
+      { key: "f", desc: "Type custom automation filter" },
+      { key: "c", desc: "Clear all filters" },
+    ],
+  },
 ];
 
 export function HelpModal({ onClose }: { onClose: () => void }) {
