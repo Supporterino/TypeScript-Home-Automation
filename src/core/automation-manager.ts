@@ -2,6 +2,7 @@ import { readdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import type { Logger } from "pino";
 import type { Config } from "../config.js";
+import type { WeatherService } from "../types/weather.js";
 import { Automation, type TriggerContext } from "./automation.js";
 import type { CronScheduler } from "./cron-scheduler.js";
 import type { HttpClient } from "./http-client.js";
@@ -39,6 +40,7 @@ export class AutomationManager {
     private readonly stateManager: StateManager,
     private readonly httpServer: HttpServer | null,
     private readonly notifications: NotificationService | null,
+    private readonly weather: WeatherService | null,
     private readonly config: Config,
     private readonly logger: Logger,
   ) {}
@@ -111,6 +113,7 @@ export class AutomationManager {
       childLogger,
       this.config,
       this.notifications,
+      this.weather,
     );
 
     const mqttHandlers: { topic: string; handler: MqttMessageHandler }[] = [];

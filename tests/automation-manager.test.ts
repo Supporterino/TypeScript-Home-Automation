@@ -92,6 +92,7 @@ describe("AutomationManager", () => {
       mocks.state,
       null, // httpServer
       null, // notifications
+      null, // weather
       config,
       logger,
     );

@@ -1,5 +1,6 @@
 import type { Logger } from "pino";
 import type { Config } from "../config.js";
+import type { WeatherService } from "../types/weather.js";
 import type { HttpClient } from "./http-client.js";
 import type { MqttService } from "./mqtt-service.js";
 import type { NanoleafService } from "./nanoleaf-service.js";
@@ -104,6 +105,7 @@ export type TriggerContext =
  * - `this.mqtt`   - Publish messages and interact with Zigbee2MQTT devices
  * - `this.shelly` - Control Shelly Gen 2 devices (plugs, switches)
  * - `this.nanoleaf` - Control Nanoleaf light panels
+ * - `this.weather` - Fetch weather data (if a WeatherService is configured)
  * - `this.notify` - Send push notifications (if a NotificationService is configured)
  * - `this.state`  - Shared state manager (get/set/delete, persisted across restarts)
  * - `this.http`   - Make outbound HTTP requests
@@ -148,6 +150,7 @@ export abstract class Automation {
   protected logger!: Logger;
   protected config!: Config;
   private notificationService: NotificationService | null = null;
+  private weatherService: WeatherService | null = null;
 
   /**
    * Called by the AutomationManager to inject dependencies.
@@ -162,6 +165,7 @@ export abstract class Automation {
     logger: Logger,
     config: Config,
     notifications: NotificationService | null,
+    weather: WeatherService | null,
   ): void {
     this.mqtt = mqtt;
     this.shelly = shelly;
@@ -171,6 +175,7 @@ export abstract class Automation {
     this.logger = logger;
     this.config = config;
     this.notificationService = notifications;
+    this.weatherService = weather;
   }
 
   /**
@@ -195,6 +200,23 @@ export abstract class Automation {
       return;
     }
     await this.notificationService.send(options);
+  }
+
+  /**
+   * Get the weather service. Returns the configured WeatherService or throws
+   * if none is configured.
+   *
+   * @example
+   * ```ts
+   * const current = await this.weather.getCurrent();
+   * const forecast = await this.weather.getForecast(3);
+   * ```
+   */
+  protected get weather(): WeatherService {
+    if (!this.weatherService) {
+      throw new Error("weather accessed but no WeatherService is configured on the engine");
+    }
+    return this.weatherService;
   }
 
   /**

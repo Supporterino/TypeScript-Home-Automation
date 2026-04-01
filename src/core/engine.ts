@@ -1,5 +1,6 @@
 import pino, { type Logger, multistream } from "pino";
 import { type Config, loadConfig } from "../config.js";
+import type { WeatherService } from "../types/weather.js";
 import { AutomationManager } from "./automation-manager.js";
 import { CronScheduler } from "./cron-scheduler.js";
 import { HttpClient } from "./http-client.js";
@@ -85,6 +86,12 @@ export interface EngineOptions {
    * ```
    */
   state?: StateManagerOptions;
+
+  /**
+   * Optional weather service for fetching weather data.
+   * Accepts a `WeatherService` instance or a factory function.
+   */
+  weather?: WeatherService | ((http: HttpClient, logger: Logger) => WeatherService);
 }
 
 /**
@@ -189,6 +196,15 @@ export function createEngine(options: EngineOptions): Engine {
         : options.notifications;
   }
 
+  // Initialize optional weather service
+  let weather: WeatherService | null = null;
+  if (options.weather) {
+    weather =
+      typeof options.weather === "function"
+        ? options.weather(http, logger.child({ service: "weather" }))
+        : options.weather;
+  }
+
   // Initialize HTTP server (health probes + webhooks)
   const httpServerPort = config.httpServer.port;
   const httpServer =
@@ -216,6 +232,7 @@ export function createEngine(options: EngineOptions): Engine {
     stateManager,
     httpServer,
     notifications,
+    weather,
     config,
     logger.child({ service: "manager" }),
   );
