@@ -553,6 +553,66 @@ await this.nanoleaf.setEffect("panels", "Northern Lights");
 | `nanoleaf.getPanelLayout(name)` | Get panel positions and IDs |
 | `nanoleaf.getDeviceInfo(name)` | Get device info (model, firmware, etc.) |
 
+## Weather
+
+The engine supports an optional weather service for fetching current conditions and forecasts. The `WeatherService` interface is abstract — two built-in implementations are provided.
+
+### Built-in: Open-Meteo (free, no API key)
+
+```ts
+import { createEngine, OpenMeteoService } from "ts-home-automation";
+
+const engine = createEngine({
+  automationsDir: "...",
+  weather: (http, logger) =>
+    new OpenMeteoService({
+      location: { latitude: 49.4, longitude: 8.7 },
+    }, http, logger),
+});
+```
+
+### Built-in: OpenWeatherMap (free tier, API key required)
+
+```ts
+import { createEngine, OpenWeatherMapService } from "ts-home-automation";
+
+const engine = createEngine({
+  automationsDir: "...",
+  weather: (http, logger) =>
+    new OpenWeatherMapService({
+      apiKey: process.env.OWM_API_KEY!,
+      location: { latitude: 49.4, longitude: 8.7 },
+    }, http, logger),
+});
+```
+
+### Using in automations
+
+```ts
+const current = await this.weather.getCurrent();
+this.logger.info({ temp: current.temperature, condition: current.condition }, "Current weather");
+
+const forecast = await this.weather.getForecast(3);
+if (forecast[0].precipitationChance > 0.5) {
+  await this.notify({ title: "Rain expected", message: "Bring an umbrella tomorrow" });
+}
+```
+
+### Weather data
+
+| Field | Type | Description |
+|---|---|---|
+| `temperature` | number | Temperature in Celsius |
+| `feelsLike` | number | Feels-like temperature in Celsius |
+| `humidity` | number | Relative humidity % |
+| `condition` | string | Category: clear, clouds, rain, snow, thunderstorm, fog, etc. |
+| `description` | string | Human-readable (e.g. "light rain") |
+| `wind.speed` | number | Wind speed in m/s |
+| `cloudCover` | number | Cloud cover % |
+| `uvIndex` | number | UV index (if available) |
+
+Forecast includes `tempHigh`, `tempLow`, `precipitationChance` (0-1), `sunrise`, `sunset` per day.
+
 ## Notifications
 
 The engine supports an optional notification service for sending push notifications from automations. The `NotificationService` interface is abstract — implement it for any provider.

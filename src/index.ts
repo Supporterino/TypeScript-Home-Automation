@@ -45,6 +45,11 @@ export {
   type NtfyConfig,
   NtfyNotificationService,
 } from "./core/ntfy-notification-service.js";
+export { type OpenMeteoConfig, OpenMeteoService } from "./core/open-meteo-service.js";
+export {
+  type OpenWeatherMapConfig,
+  OpenWeatherMapService,
+} from "./core/openweathermap-service.js";
 export { type ShellyDevice, ShellyService } from "./core/shelly-service.js";
 // State management
 export {
@@ -84,6 +89,15 @@ export type {
   ShellySysStatus,
   ShellyTemperature,
 } from "./types/shelly.js";
+// Weather types and services
+export type {
+  CurrentWeather,
+  DailyForecast,
+  WeatherCondition,
+  WeatherLocation,
+  WeatherService,
+  WindData,
+} from "./types/weather.js";
 // Zigbee2MQTT types — common primitives
 // Zigbee2MQTT types — generic payloads (work across brands)
 // Zigbee2MQTT types — Philips Hue specific

@@ -68,7 +68,7 @@ describe("Automation base class", () => {
     const auto = new TestAutomation();
     const { mqtt, shelly, nanoleaf, http, state, config } = createMocks();
 
-    auto._inject(mqtt, shelly, nanoleaf, http, state, logger, config, null);
+    auto._inject(mqtt, shelly, nanoleaf, http, state, logger, config, null, null);
 
     expect(auto.getMqtt()).toBe(mqtt);
     expect(auto.getShelly()).toBe(shelly);
@@ -84,7 +84,7 @@ describe("Automation base class", () => {
     const sendMock = mock(() => Promise.resolve());
     const notifications: NotificationService = { send: sendMock };
 
-    auto._inject(mqtt, shelly, nanoleaf, http, state, logger, config, notifications);
+    auto._inject(mqtt, shelly, nanoleaf, http, state, logger, config, notifications, null);
 
     const options = { title: "Test", message: "Hello" };
     await auto.callNotify(options);
@@ -97,7 +97,7 @@ describe("Automation base class", () => {
     const auto = new TestAutomation();
     const { mqtt, shelly, nanoleaf, http, state, config } = createMocks();
 
-    auto._inject(mqtt, shelly, nanoleaf, http, state, logger, config, null);
+    auto._inject(mqtt, shelly, nanoleaf, http, state, logger, config, null, null);
 
     // Should not throw
     await auto.callNotify({ title: "Test", message: "Hello" });

@@ -31,6 +31,7 @@ function injectMocks(auto: { _inject: AqaraH1Automation["_inject"] }) {
     logger,
     config,
     null,
+    null,
   );
 }
 
