@@ -9,6 +9,35 @@ Can be used in two ways:
 1. **As a package** — install `ts-home-automation` in your own project and write automations there
 2. **Standalone** — clone this repo, write automations in `src/automations/`, and run directly
 
+## Table of Contents
+
+- [Architecture](#architecture)
+- [Prerequisites](#prerequisites)
+- [Usage as a Package](#usage-as-a-package)
+- [Standalone Usage](#standalone-usage)
+- [Configuration](#configuration)
+- [Writing an Automation](#writing-an-automation)
+- [Device-Specific Base Classes](#device-specific-base-classes)
+- [Shelly Devices](#shelly-devices)
+- [Nanoleaf Devices](#nanoleaf-devices)
+- [Weather](#weather)
+- [Notifications](#notifications)
+- [State Management](#state-management)
+- [Device Types](#device-types)
+- [Health Probes](#health-probes)
+- [CLI Tool](#cli-tool)
+  - [Automations](#automations)
+  - [Trigger Command](#trigger-command)
+  - [Logs](#logs)
+  - [State Management (CLI)](#state-management-1)
+  - [Dashboard](#dashboard)
+  - [Saved Targets](#saved-targets)
+  - [Authentication](#authentication)
+- [Building the Package](#building-the-package)
+- [Docker](#docker-standalone)
+- [Scripts](#scripts)
+- [License](#license)
+
 ## Architecture
 
 ```
@@ -24,9 +53,9 @@ Can be used in two ways:
 │  │                AutomationManager                     │    │
 │  └──┬─────────┬──────────┬──────────┬─────────┬─────┬───┘    │
 │     │         │          │          │         │     │        │
-│  ┌──▼───┐  ┌──▼────┐ ┌───▼──┐ ┌─────▼───┐  ┌──▼──┐ ┌▼─────┐  │
-│  │ MQTT │  │ Cron  │ │ HTTP │ │ Shelly  │  │State│ │Notify│  │
-│  └──┬───┘  └───────┘ └──────┘ └─────────┘  └─────┘ └──────┘  │
+│  ┌──▼──┐ ┌──▼──┐ ┌──▼──┐ ┌──▼───┐ ┌───▼───┐ ┌──▼──┐ ┌▼────┐ ┌▼──────┐ │
+│  │MQTT │ │Cron │ │HTTP │ │Shelly│ │Nanolef│ │State│ │Notfy│ │Weather│ │
+│  └──┬──┘ └─────┘ └─────┘ └──────┘ └───────┘ └─────┘ └─────┘ └───────┘ │
 │     │                                                        │
 │  ┌──▼─────────────┐                                          │
 │  │ HTTP Server    │  (/healthz, /readyz, /webhook/*)         │
@@ -192,7 +221,11 @@ src/
 │   ├── ikea-styrbar-automation.ts    # IKEA STYRBAR remote base class
 │   ├── ikea-rodret-automation.ts     # IKEA RODRET dimmer base class
 │   ├── notification-service.ts       # NotificationService interface
+│   ├── nanoleaf-service.ts            # Nanoleaf light panel control
+│   ├── notification-service.ts       # NotificationService interface
 │   ├── ntfy-notification-service.ts  # ntfy.sh notification implementation
+│   ├── open-meteo-service.ts         # Open-Meteo weather service
+│   ├── openweathermap-service.ts     # OpenWeatherMap weather service
 │   ├── mqtt-utils.ts                 # MQTT topic wildcard matching utility
 │   ├── http-server.ts                # HTTP server (health, webhooks, debug API)
 │   └── log-buffer.ts                 # In-memory ring buffer for log queries
@@ -205,7 +238,8 @@ src/
 │   │   ├── automations.ts            # automations list/get/trigger commands
 │   │   ├── config.ts                 # config list/add/use/remove commands
 │   │   ├── dashboard.tsx             # Interactive OpenTUI dashboard
-│   │   ├── logs.ts                   # logs command
+│   │   ├── logs.ts                   # logs command (with --follow)
+│   │   ├── nanoleaf.ts               # nanoleaf pair command
 │   │   └── state.ts                  # state list/get/set/delete commands
 │   └── components/                   # OpenTUI React components for dashboard
 │       ├── automations-tab.tsx       # Automations tab (expand, trigger)
@@ -229,7 +263,9 @@ src/
 │   └── water-leak-alert.ts           # Example: water leak → urgent notification
 └── types/
     ├── zigbee.ts                     # Zigbee2MQTT payload type definitions
-    └── shelly.ts                     # Shelly Gen 2 API type definitions
+    ├── shelly.ts                     # Shelly Gen 2 API type definitions
+    ├── nanoleaf.ts                   # Nanoleaf API type definitions
+    └── weather.ts                    # Generic weather service types
 ```
 
 ### Docker (standalone)
@@ -949,6 +985,19 @@ Example output:
 07:04:17.035 INFO  [motion-light-schedule] Turning on lamps
 07:09:17.040 INFO  [motion-light-schedule] No recent motion, turning off lamps
 ```
+
+#### Follow mode
+
+Stream new log entries continuously (like `tail -f`):
+
+```bash
+ts-ha logs -f                                        # Stream all logs
+ts-ha logs --follow --automation contact-sensor-alarm # Stream filtered
+ts-ha logs -f --level error --interval 1             # Poll every 1s
+ts-ha --json logs -f | jq .msg                       # JSON per line
+```
+
+Press `Ctrl+C` to stop following.
 
 ### State Management
 
