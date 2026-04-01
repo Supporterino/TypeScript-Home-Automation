@@ -6,6 +6,7 @@ import { HttpClient } from "./http-client.js";
 import { HttpServer } from "./http-server.js";
 import { LogBuffer } from "./log-buffer.js";
 import { MqttService } from "./mqtt-service.js";
+import { NanoleafService } from "./nanoleaf-service.js";
 import type { NotificationService } from "./notification-service.js";
 import { ShellyService } from "./shelly-service.js";
 import { StateManager, type StateManagerOptions } from "./state-manager.js";
@@ -108,6 +109,9 @@ export interface Engine {
   /** The Shelly service for controlling Shelly Gen 2 devices. */
   readonly shelly: ShellyService;
 
+  /** The Nanoleaf service for controlling Nanoleaf light panels. */
+  readonly nanoleaf: NanoleafService;
+
   /** The HTTP client (for advanced usage). */
   readonly http: HttpClient;
 
@@ -174,6 +178,8 @@ export function createEngine(options: EngineOptions): Engine {
     filePath: options.state?.filePath ?? config.state.filePath,
   });
 
+  const nanoleaf = new NanoleafService(http, logger.child({ service: "nanoleaf" }));
+
   // Initialize optional notification service
   let notifications: NotificationService | null = null;
   if (options.notifications) {
@@ -206,6 +212,7 @@ export function createEngine(options: EngineOptions): Engine {
     cron,
     http,
     shelly,
+    nanoleaf,
     stateManager,
     httpServer,
     notifications,
@@ -220,6 +227,7 @@ export function createEngine(options: EngineOptions): Engine {
     logger,
     mqtt,
     shelly,
+    nanoleaf,
     http,
     state: stateManager,
     notifications,

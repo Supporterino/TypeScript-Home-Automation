@@ -6,6 +6,7 @@ import type { HttpClient } from "../src/core/http-client.js";
 import { IkeaRodretAutomation } from "../src/core/ikea-rodret-automation.js";
 import { IkeaStyrbarAutomation } from "../src/core/ikea-styrbar-automation.js";
 import type { MqttService } from "../src/core/mqtt-service.js";
+import type { NanoleafService } from "../src/core/nanoleaf-service.js";
 import type { ShellyService } from "../src/core/shelly-service.js";
 import type { StateManager } from "../src/core/state-manager.js";
 
@@ -24,6 +25,7 @@ function injectMocks(auto: { _inject: AqaraH1Automation["_inject"] }) {
   auto._inject(
     {} as MqttService,
     {} as ShellyService,
+    {} as NanoleafService,
     {} as HttpClient,
     {} as StateManager,
     logger,

@@ -2,6 +2,7 @@ import type { Logger } from "pino";
 import type { Config } from "../config.js";
 import type { HttpClient } from "./http-client.js";
 import type { MqttService } from "./mqtt-service.js";
+import type { NanoleafService } from "./nanoleaf-service.js";
 import type { NotificationOptions, NotificationService } from "./notification-service.js";
 import type { ShellyService } from "./shelly-service.js";
 import type { StateManager } from "./state-manager.js";
@@ -102,6 +103,7 @@ export type TriggerContext =
  * The base class provides access to:
  * - `this.mqtt`   - Publish messages and interact with Zigbee2MQTT devices
  * - `this.shelly` - Control Shelly Gen 2 devices (plugs, switches)
+ * - `this.nanoleaf` - Control Nanoleaf light panels
  * - `this.notify` - Send push notifications (if a NotificationService is configured)
  * - `this.state`  - Shared state manager (get/set/delete, persisted across restarts)
  * - `this.http`   - Make outbound HTTP requests
@@ -140,6 +142,7 @@ export abstract class Automation {
   /** Injected services - set by AutomationManager before start. */
   protected mqtt!: MqttService;
   protected shelly!: ShellyService;
+  protected nanoleaf!: NanoleafService;
   protected http!: HttpClient;
   protected state!: StateManager;
   protected logger!: Logger;
@@ -153,6 +156,7 @@ export abstract class Automation {
   _inject(
     mqtt: MqttService,
     shelly: ShellyService,
+    nanoleaf: NanoleafService,
     http: HttpClient,
     state: StateManager,
     logger: Logger,
@@ -161,6 +165,7 @@ export abstract class Automation {
   ): void {
     this.mqtt = mqtt;
     this.shelly = shelly;
+    this.nanoleaf = nanoleaf;
     this.http = http;
     this.state = state;
     this.logger = logger;

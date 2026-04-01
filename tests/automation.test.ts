@@ -4,6 +4,7 @@ import type { Config } from "../src/config.js";
 import { Automation, type Trigger, type TriggerContext } from "../src/core/automation.js";
 import type { HttpClient } from "../src/core/http-client.js";
 import type { MqttService } from "../src/core/mqtt-service.js";
+import type { NanoleafService } from "../src/core/nanoleaf-service.js";
 import type { NotificationService } from "../src/core/notification-service.js";
 import type { ShellyService } from "../src/core/shelly-service.js";
 import type { StateManager } from "../src/core/state-manager.js";
@@ -47,6 +48,7 @@ class TestAutomation extends Automation {
 function createMocks() {
   const mqtt = {} as MqttService;
   const shelly = {} as ShellyService;
+  const nanoleaf = {} as NanoleafService;
   const http = {} as HttpClient;
   const state = {} as StateManager;
   const config = {
@@ -58,15 +60,15 @@ function createMocks() {
     httpServer: { port: 0, token: "" },
   } satisfies Config;
 
-  return { mqtt, shelly, http, state, config };
+  return { mqtt, shelly, nanoleaf, http, state, config };
 }
 
 describe("Automation base class", () => {
   it("_inject sets all protected properties", () => {
     const auto = new TestAutomation();
-    const { mqtt, shelly, http, state, config } = createMocks();
+    const { mqtt, shelly, nanoleaf, http, state, config } = createMocks();
 
-    auto._inject(mqtt, shelly, http, state, logger, config, null);
+    auto._inject(mqtt, shelly, nanoleaf, http, state, logger, config, null);
 
     expect(auto.getMqtt()).toBe(mqtt);
     expect(auto.getShelly()).toBe(shelly);
@@ -78,11 +80,11 @@ describe("Automation base class", () => {
 
   it("notify delegates to notification service when configured", async () => {
     const auto = new TestAutomation();
-    const { mqtt, shelly, http, state, config } = createMocks();
+    const { mqtt, shelly, nanoleaf, http, state, config } = createMocks();
     const sendMock = mock(() => Promise.resolve());
     const notifications: NotificationService = { send: sendMock };
 
-    auto._inject(mqtt, shelly, http, state, logger, config, notifications);
+    auto._inject(mqtt, shelly, nanoleaf, http, state, logger, config, notifications);
 
     const options = { title: "Test", message: "Hello" };
     await auto.callNotify(options);
@@ -93,9 +95,9 @@ describe("Automation base class", () => {
 
   it("notify does not throw when no notification service is configured", async () => {
     const auto = new TestAutomation();
-    const { mqtt, shelly, http, state, config } = createMocks();
+    const { mqtt, shelly, nanoleaf, http, state, config } = createMocks();
 
-    auto._inject(mqtt, shelly, http, state, logger, config, null);
+    auto._inject(mqtt, shelly, nanoleaf, http, state, logger, config, null);
 
     // Should not throw
     await auto.callNotify({ title: "Test", message: "Hello" });
