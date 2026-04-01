@@ -504,6 +504,55 @@ const status = await this.shelly.getCoverStatus("bedroom_shutter");
 // status.pos_control — true if calibrated
 ```
 
+## Nanoleaf Devices
+
+Control Nanoleaf light panels (Light Panels, Canvas, Shapes, Elements, Lines) over the local HTTP API.
+
+### Pairing
+
+Generate an auth token using the CLI:
+
+```bash
+ts-ha nanoleaf pair 192.168.1.60          # IP address
+ts-ha nanoleaf pair nanoleaf-panels.local  # mDNS hostname
+```
+
+Hold the power button on the device until the LED flashes, then press Enter.
+
+### Registering devices
+
+```ts
+engine.nanoleaf.register("panels", {
+  host: "192.168.1.60",              // IP, hostname, or .local name
+  token: "xxxxxxxxxxxxxxxxxxx",       // from pairing
+});
+```
+
+### Using in automations
+
+```ts
+await this.nanoleaf.turnOn("panels");
+await this.nanoleaf.setBrightness("panels", 80, 2);  // 80%, 2s transition
+await this.nanoleaf.setColor("panels", 120, 100);     // green, full saturation
+await this.nanoleaf.setEffect("panels", "Northern Lights");
+```
+
+### Available methods
+
+| Method | Description |
+|---|---|
+| `nanoleaf.turnOn/turnOff/toggle(name)` | Power control |
+| `nanoleaf.setBrightness(name, value, duration?)` | Brightness 0-100 with optional transition |
+| `nanoleaf.setColor(name, hue, sat)` | HSB color (hue 0-360, sat 0-100) |
+| `nanoleaf.setColorTemp(name, value)` | Color temperature 1200-6500K |
+| `nanoleaf.setState(name, state)` | Set multiple properties at once |
+| `nanoleaf.getState(name)` | Get full device state |
+| `nanoleaf.getEffects(name)` | List available effects |
+| `nanoleaf.setEffect(name, effectName)` | Activate an effect |
+| `nanoleaf.identify(name)` | Flash panels for identification |
+| `nanoleaf.getPanelLayout(name)` | Get panel positions and IDs |
+| `nanoleaf.getDeviceInfo(name)` | Get device info (model, firmware, etc.) |
+
 ## Notifications
 
 The engine supports an optional notification service for sending push notifications from automations. The `NotificationService` interface is abstract — implement it for any provider.

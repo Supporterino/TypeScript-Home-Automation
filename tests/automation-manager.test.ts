@@ -88,6 +88,7 @@ describe("AutomationManager", () => {
       mocks.cron,
       mocks.http,
       mocks.shelly,
+      {} as never, // nanoleaf
       mocks.state,
       null, // httpServer
       null, // notifications

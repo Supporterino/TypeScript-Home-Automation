@@ -7,6 +7,7 @@ import type { CronScheduler } from "./cron-scheduler.js";
 import type { HttpClient } from "./http-client.js";
 import type { HttpServer } from "./http-server.js";
 import type { MqttMessageHandler, MqttService } from "./mqtt-service.js";
+import type { NanoleafService } from "./nanoleaf-service.js";
 import type { NotificationService } from "./notification-service.js";
 import type { ShellyService } from "./shelly-service.js";
 import type { StateChangeHandler, StateManager } from "./state-manager.js";
@@ -34,6 +35,7 @@ export class AutomationManager {
     private readonly cron: CronScheduler,
     private readonly http: HttpClient,
     private readonly shelly: ShellyService,
+    private readonly nanoleaf: NanoleafService,
     private readonly stateManager: StateManager,
     private readonly httpServer: HttpServer | null,
     private readonly notifications: NotificationService | null,
@@ -103,6 +105,7 @@ export class AutomationManager {
     automation._inject(
       this.mqtt,
       this.shelly,
+      this.nanoleaf,
       this.http,
       this.stateManager,
       childLogger,

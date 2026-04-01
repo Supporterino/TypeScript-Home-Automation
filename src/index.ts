@@ -34,6 +34,7 @@ export { IkeaStyrbarAutomation } from "./core/ikea-styrbar-automation.js";
 export { LogBuffer, type LogEntry, type LogQuery } from "./core/log-buffer.js";
 // Core services (exposed for advanced usage)
 export { type MqttMessageHandler, MqttService } from "./core/mqtt-service.js";
+export { type NanoleafDeviceConfig, NanoleafService } from "./core/nanoleaf-service.js";
 // Notification services
 export type {
   NotificationOptions,
@@ -51,6 +52,23 @@ export {
   StateManager,
   type StateManagerOptions,
 } from "./core/state-manager.js";
+// Nanoleaf types
+export type {
+  NanoleafAnimType,
+  NanoleafAuthResponse,
+  NanoleafBoolValue,
+  NanoleafColorMode,
+  NanoleafDeviceInfo,
+  NanoleafEffect,
+  NanoleafPaletteColor,
+  NanoleafPanelLayout,
+  NanoleafPanelPosition,
+  NanoleafRange,
+  NanoleafRangeValue,
+  NanoleafShapeType,
+  NanoleafState,
+  NanoleafStateSet,
+} from "./types/nanoleaf.js";
 // Shelly Gen 2 types
 export type {
   ShellyCoverConfig,
