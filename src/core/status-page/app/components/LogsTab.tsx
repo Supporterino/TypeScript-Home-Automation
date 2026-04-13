@@ -54,6 +54,11 @@ function formatFieldValue(value: unknown): string {
   return JSON.stringify(value, null, 2);
 }
 
+/** Stable identity key for a log entry — used as expansion map key. */
+function entryKey(entry: LogEntry): string {
+  return `${entry.time}-${entry.level}-${entry.msg}`;
+}
+
 const LEVEL_OPTIONS = [
   { value: "0", label: "All levels" },
   { value: "10", label: "TRACE+" },
@@ -75,28 +80,17 @@ export function LogsTab({ data }: Props) {
   const [levelFilter, setLevelFilter] = useState("0");
   const [autoFilter, setAutoFilter] = useState("");
   const [textFilter, setTextFilter] = useState("");
-  // Track which rows (by index in the filtered array) are expanded
-  const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
+
+  // Expansion is keyed by stable entry identity (time+level+msg), NOT by
+  // array index. This means expanded rows survive data refreshes — a new
+  // entry arriving at the top doesn't close whatever was already open.
+  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
 
   function clearFilters() {
     setLevelFilter("0");
     setAutoFilter("");
     setTextFilter("");
-    setExpandedRows(new Set());
-  }
-
-  // Reset expanded rows when filters change so indices stay valid
-  function handleLevelChange(v: string | null) {
-    setLevelFilter(v ?? "0");
-    setExpandedRows(new Set());
-  }
-  function handleAutoChange(v: string) {
-    setAutoFilter(v);
-    setExpandedRows(new Set());
-  }
-  function handleTextChange(v: string) {
-    setTextFilter(v);
-    setExpandedRows(new Set());
+    // Don't reset expandedKeys — user may still want to see what they opened
   }
 
   const minLevel = Number.parseInt(levelFilter, 10);
@@ -116,13 +110,13 @@ export function LogsTab({ data }: Props) {
     .reverse()
     .slice(0, 200);
 
-  function toggleRow(idx: number) {
-    setExpandedRows((prev) => {
+  function toggleRow(key: string) {
+    setExpandedKeys((prev) => {
       const next = new Set(prev);
-      if (next.has(idx)) {
-        next.delete(idx);
+      if (next.has(key)) {
+        next.delete(key);
       } else {
-        next.add(idx);
+        next.add(key);
       }
       return next;
     });
@@ -137,21 +131,21 @@ export function LogsTab({ data }: Props) {
           placeholder="Level"
           data={LEVEL_OPTIONS}
           value={levelFilter}
-          onChange={handleLevelChange}
+          onChange={(v) => setLevelFilter(v ?? "0")}
           w={130}
           size="sm"
         />
         <TextInput
           placeholder="Filter by automation…"
           value={autoFilter}
-          onChange={(e) => handleAutoChange(e.currentTarget.value)}
+          onChange={(e) => setAutoFilter(e.currentTarget.value)}
           w={200}
           size="sm"
         />
         <TextInput
           placeholder="Search text…"
           value={textFilter}
-          onChange={(e) => handleTextChange(e.currentTarget.value)}
+          onChange={(e) => setTextFilter(e.currentTarget.value)}
           w={200}
           size="sm"
         />
@@ -169,7 +163,7 @@ export function LogsTab({ data }: Props) {
             No log entries match the current filters
           </Text>
         ) : (
-          <Table fz="xs" ff="monospace" withRowBorders={false} striped>
+          <Table fz="xs" ff="monospace" withRowBorders={false} striped={false}>
             <Table.Thead>
               <Table.Tr>
                 <Table.Th w={90}>Time</Table.Th>
@@ -180,15 +174,18 @@ export function LogsTab({ data }: Props) {
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
-              {filtered.map((entry, i) => (
-                <LogRow
-                  key={`${entry.time}-${entry.level}-${entry.msg}`}
-                  entry={entry}
-                  index={i}
-                  isExpanded={expandedRows.has(i)}
-                  onToggle={toggleRow}
-                />
-              ))}
+              {filtered.map((entry) => {
+                const key = entryKey(entry);
+                return (
+                  <LogRow
+                    key={key}
+                    entry={entry}
+                    rowKey={key}
+                    isExpanded={expandedKeys.has(key)}
+                    onToggle={toggleRow}
+                  />
+                );
+              })}
             </Table.Tbody>
           </Table>
         )}
@@ -201,12 +198,12 @@ export function LogsTab({ data }: Props) {
 
 interface LogRowProps {
   entry: LogEntry;
-  index: number;
+  rowKey: string;
   isExpanded: boolean;
-  onToggle: (idx: number) => void;
+  onToggle: (key: string) => void;
 }
 
-function LogRow({ entry, index, isExpanded, onToggle }: LogRowProps) {
+function LogRow({ entry, rowKey, isExpanded, onToggle }: LogRowProps) {
   const levelName = LEVEL_NAMES[entry.level] ?? String(entry.level);
   const color = levelColor(entry.level);
   const extras = extraFields(entry);
@@ -216,7 +213,7 @@ function LogRow({ entry, index, isExpanded, onToggle }: LogRowProps) {
     <>
       <Table.Tr
         style={hasExtras ? { cursor: "pointer" } : undefined}
-        onClick={hasExtras ? () => onToggle(index) : undefined}
+        onClick={hasExtras ? () => onToggle(rowKey) : undefined}
         bg={isExpanded ? "var(--mantine-color-default-hover)" : undefined}
       >
         <Table.Td c="dimmed" style={{ whiteSpace: "nowrap" }}>
@@ -234,7 +231,7 @@ function LogRow({ entry, index, isExpanded, onToggle }: LogRowProps) {
           {entry.automation ?? entry.service ?? ""}
         </Table.Td>
         <Table.Td style={{ wordBreak: "break-all" }}>{entry.msg}</Table.Td>
-        <Table.Td>
+        <Table.Td style={{ textAlign: "center" }}>
           {hasExtras && (
             <Text
               c="dimmed"
@@ -242,7 +239,7 @@ function LogRow({ entry, index, isExpanded, onToggle }: LogRowProps) {
               style={{
                 userSelect: "none",
                 display: "inline-block",
-                transform: isExpanded ? "rotate(90deg)" : undefined,
+                transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)",
                 transition: "transform 150ms ease",
                 lineHeight: 1,
               }}
@@ -254,9 +251,9 @@ function LogRow({ entry, index, isExpanded, onToggle }: LogRowProps) {
         </Table.Td>
       </Table.Tr>
 
-      {/* Extra fields expansion */}
+      {/* Always render the collapse row — Collapse handles visibility via animation */}
       {hasExtras && (
-        <Table.Tr>
+        <Table.Tr style={{ background: "none" }}>
           <Table.Td colSpan={5} p={0} style={{ borderBottom: "none" }}>
             <Collapse in={isExpanded}>
               <ExtraFieldsBlock extras={extras} />
@@ -279,7 +276,7 @@ function ExtraFieldsBlock({ extras }: { extras: [string, unknown][] }) {
             const formatted = formatFieldValue(value);
             const isMultiline = formatted.includes("\n");
             return (
-              <Table.Tr key={key}>
+              <Table.Tr key={key} style={{ background: "none" }}>
                 <Table.Td
                   c="violet"
                   fw={600}
