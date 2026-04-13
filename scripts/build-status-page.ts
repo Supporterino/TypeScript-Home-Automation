@@ -7,8 +7,7 @@
  * constants into the asset modules that html-shell.ts imports.
  *
  * Run automatically via:
- *   - postinstall  (bun install)
- *   - prebuild     (bun run build)
+ *   - prebuild          (bun run build)
  *   - build:status-page (bun run build:status-page)
  */
 
@@ -68,6 +67,20 @@ if (!js) {
   console.error("[build-status-page] No JS output produced.");
   process.exit(1);
 }
+
+// Escape </script> so the bundle is safe to inline inside an HTML <script> tag.
+//
+// The HTML parser closes a <script> block at the first </script> it encounters,
+// regardless of whether it is inside a JS string literal. React's DOM internals
+// contain the literal sequence `</script>` (used as an innerHTML shortcut), which
+// causes the browser to terminate the script block mid-bundle — rendering the rest
+// of the 600+ KB bundle as visible text on the page.
+//
+// The fix: replace every </script> with <\/script>. The backslash before `/` is a
+// no-op in JavaScript string context (it evaluates to the same `/` character), so
+// the runtime value is identical. The HTML parser, however, will not treat
+// <\/script> as a closing tag and will leave the script block intact.
+js = js.replaceAll("</script>", "<\\/script>");
 
 // Write JS constant — biome noTemplateCurlyInString suppressed via biome.json override
 await Bun.write(
