@@ -1,0 +1,27 @@
+site_name: TypeScript Home Automation
+site_url: https://Supporterino.github.io/TypeScript-Home-Automation/
+site_description: A lightweight, fully typed home automation framework built on MQTT for Bun.
+repo_url: https://github.com/Supporterino/TypeScript-Home-Automation
+repo_name: Supporterino/TypeScript-Home-Automation
+edit_uri: edit/main/docs/
+
+nav:
+  - Home: index.md
+  - Getting Started: getting-started.md
+  - Configuration: configuration.md
+  - Writing Automations: writing-automations.md
+  - Device Base Classes: device-classes.md
+  - Services:
+      - Shelly: services/shelly.md
+      - Nanoleaf: services/nanoleaf.md
+      - Weather: services/weather.md
+      - Notifications: services/notifications.md
+  - State Management: state.md
+  - Device Types: device-types.md
+  - HTTP:
+      - Health Probes: http/health-probes.md
+      - Web Status Page: http/status-page.md
+  - CLI Reference: cli.md
+  - Architecture: architecture.md
+  - Contributing: contributing.md
+  - Changelog: changelog.md
