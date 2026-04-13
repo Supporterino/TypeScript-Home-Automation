@@ -1,7 +1,7 @@
 import { useKeyboard, useTerminalDimensions } from "@opentui/react";
 import { useMemo, useState } from "react";
-import { COLORS, levelColor, levelName } from "./theme.js";
-import type { LogsData } from "./types.js";
+import { COLORS, formatValue, levelColor, levelName, valueColor } from "./theme.js";
+import type { LogEntry, LogsData } from "./types.js";
 
 const LEVEL_FILTERS = [
   { name: "ALL", value: 0 },
@@ -12,17 +12,29 @@ const LEVEL_FILTERS = [
   { name: "ERROR", value: 50 },
 ] as const;
 
+/**
+ * Fields shown in the primary log row — excluded from the extra-fields expansion.
+ */
+const HIDDEN_FIELDS = new Set(["level", "time", "msg", "pid", "hostname", "automation", "service"]);
+
+function extraFields(entry: LogEntry): [string, unknown][] {
+  return Object.entries(entry).filter(([k]) => !HIDDEN_FIELDS.has(k));
+}
+
 export function LogsTab({ data }: { data: LogsData }) {
   const { height } = useTerminalDimensions();
-  const scrollHeight = Math.max(5, height - 12);
 
   const [automationFilter, setAutomationFilter] = useState("");
   const [levelFilterIdx, setLevelFilterIdx] = useState(0);
   const [editingFilter, setEditingFilter] = useState(false);
+  // selectedIndex tracks the highlighted row in the filtered list (0-based).
+  // expandedIndex is the currently expanded row; resets on each render cycle
+  // (data refreshes re-render the component, naturally collapsing expansions).
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
 
   const minLevel = LEVEL_FILTERS[levelFilterIdx].value;
 
-  // Extract unique automation names for display
   const automationNames = useMemo(() => {
     const names = new Set<string>();
     for (const entry of data.entries) {
@@ -31,7 +43,6 @@ export function LogsTab({ data }: { data: LogsData }) {
     return [...names].sort();
   }, [data.entries]);
 
-  // Apply filters client-side
   const filtered = useMemo(() => {
     return data.entries.filter((entry) => {
       if (minLevel > 0 && entry.level < minLevel) return false;
@@ -40,7 +51,11 @@ export function LogsTab({ data }: { data: LogsData }) {
     });
   }, [data.entries, minLevel, automationFilter]);
 
+  // Reserve enough height: header (1) + filter bar (1) + margin (1) + footer (2) + padding (2)
+  const scrollHeight = Math.max(5, height - 13);
+
   useKeyboard((key) => {
+    // ── Free-text filter editing mode ─────────────────────────────────────
     if (editingFilter) {
       if (key.name === "escape") {
         setEditingFilter(false);
@@ -54,24 +69,58 @@ export function LogsTab({ data }: { data: LogsData }) {
       return;
     }
 
-    // Cycle log level filter
+    // ── Navigation ─────────────────────────────────────────────────────────
+    if (key.name === "up") {
+      setSelectedIndex((i) => {
+        if (i === null) return filtered.length - 1;
+        return Math.max(0, i - 1);
+      });
+      setExpandedIndex(null);
+      return;
+    }
+    if (key.name === "down") {
+      setSelectedIndex((i) => {
+        if (i === null) return 0;
+        return Math.min(filtered.length - 1, i + 1);
+      });
+      setExpandedIndex(null);
+      return;
+    }
+
+    // ── Expand / collapse selected row ─────────────────────────────────────
+    if (key.name === "return" || key.name === "enter" || key.name === "space") {
+      if (selectedIndex !== null) {
+        const entry = filtered[selectedIndex];
+        if (entry && extraFields(entry).length > 0) {
+          setExpandedIndex((prev) => (prev === selectedIndex ? null : selectedIndex));
+        }
+      }
+      return;
+    }
+
+    // ── Escape — collapse and deselect ─────────────────────────────────────
+    if (key.name === "escape") {
+      setExpandedIndex(null);
+      setSelectedIndex(null);
+      return;
+    }
+
+    // ── Filter controls ────────────────────────────────────────────────────
     if (key.name === "l") {
       setLevelFilterIdx((i) => (i + 1) % LEVEL_FILTERS.length);
     }
-    // Toggle automation filter input
     if (key.name === "f") {
       setEditingFilter(true);
     }
-    // Clear all filters
     if (key.name === "c") {
       setAutomationFilter("");
       setLevelFilterIdx(0);
+      setSelectedIndex(null);
+      setExpandedIndex(null);
     }
-    // Cycle through known automation names
     if (key.name === "a" && automationNames.length > 0) {
       const currentIdx = automationNames.indexOf(automationFilter);
       if (currentIdx === automationNames.length - 1 || currentIdx === -1) {
-        // After last or no filter → clear
         if (automationFilter && currentIdx === automationNames.length - 1) {
           setAutomationFilter("");
         } else {
@@ -114,30 +163,108 @@ export function LogsTab({ data }: { data: LogsData }) {
             {data.count === 0 ? "(no log entries)" : "(no entries match filters)"}
           </text>
         ) : (
-          filtered.map((entry) => {
-            const time = new Date(entry.time).toISOString().slice(11, 23);
-            const lvl = levelName(entry.level).padEnd(5);
-            const auto = entry.automation ? ` [${entry.automation}]` : "";
-            const svc = entry.service && !entry.automation ? ` (${entry.service})` : "";
-            return (
-              <text key={`${entry.time}-${entry.msg}`}>
-                <span fg={COLORS.comment}>{time}</span>{" "}
-                <span fg={levelColor(entry.level)}>{lvl}</span>
-                <span fg={COLORS.cyan}>{auto}</span>
-                <span fg={COLORS.comment}>{svc}</span> {entry.msg}
-              </text>
-            );
-          })
+          filtered.map((entry, idx) => (
+            <LogRow
+              key={`${entry.time}-${entry.level}-${entry.msg}`}
+              entry={entry}
+              isSelected={selectedIndex === idx}
+              isExpanded={expandedIndex === idx}
+            />
+          ))
         )}
       </scrollbox>
 
       {/* Footer with hints */}
       <box marginTop={1} paddingLeft={1}>
         <text fg={COLORS.comment}>
-          ↑↓ scroll · l level · a cycle automation · f filter text · c clear · {filtered.length}/
+          ↑↓ select · Enter expand · Esc close · l level · a/f filter · c clear · {filtered.length}/
           {data.count} entries
         </text>
       </box>
+    </box>
+  );
+}
+
+// ── Log row ───────────────────────────────────────────────────────────────
+
+interface LogRowProps {
+  entry: LogEntry;
+  isSelected: boolean;
+  isExpanded: boolean;
+}
+
+function LogRow({ entry, isSelected, isExpanded }: LogRowProps) {
+  const time = new Date(entry.time).toISOString().slice(11, 23);
+  const lvl = levelName(entry.level).padEnd(5);
+  const auto = entry.automation ? ` [${entry.automation}]` : "";
+  const svc = entry.service && !entry.automation ? ` (${entry.service})` : "";
+  const extras = extraFields(entry);
+  const hasExtras = extras.length > 0;
+
+  // Indicator: a subtle middle-dot when the row has extra fields
+  const indicator = hasExtras ? (
+    <span fg={isExpanded ? COLORS.cyan : COLORS.comment}>{isExpanded ? " ▾" : " ·"}</span>
+  ) : null;
+
+  const bg = isSelected ? COLORS.bgLight : undefined;
+
+  return (
+    <box flexDirection="column">
+      {/* Primary row */}
+      <text bg={bg}>
+        <span fg={COLORS.comment}>{time}</span> <span fg={levelColor(entry.level)}>{lvl}</span>
+        <span fg={COLORS.cyan}>{auto}</span>
+        <span fg={COLORS.comment}>{svc}</span> {entry.msg}
+        {indicator}
+      </text>
+
+      {/* Expanded extra fields — only rendered when isExpanded */}
+      {isExpanded && hasExtras && <ExtraFieldsBlock extras={extras} />}
+    </box>
+  );
+}
+
+// ── Extra fields expansion block ─────────────────────────────────────────
+
+function ExtraFieldsBlock({ extras }: { extras: [string, unknown][] }) {
+  const keyWidth = Math.min(20, Math.max(...extras.map(([k]) => k.length)) + 1);
+
+  return (
+    <box flexDirection="column" paddingLeft={2}>
+      {extras.map(([key, value], i) => {
+        const isLast = i === extras.length - 1;
+        const prefix = isLast ? "└─ " : "├─ ";
+        const paddedKey = key.padEnd(keyWidth);
+
+        // Multi-line values (objects/arrays)
+        if (value !== null && typeof value === "object") {
+          const lines = JSON.stringify(value, null, 2).split("\n");
+          return (
+            <box key={key} flexDirection="column">
+              <text>
+                <span fg={COLORS.comment}>{prefix}</span>
+                <span fg={COLORS.purple}>{paddedKey}</span>
+                <span fg={COLORS.fg}>{lines[0]}</span>
+              </text>
+              {lines.slice(1).map((line) => (
+                <text key={`${key}:${line}`}>
+                  <span fg={COLORS.comment}>{"    ".padEnd(3 + keyWidth + 1)}</span>
+                  <span fg={COLORS.fg}>{line}</span>
+                </text>
+              ))}
+            </box>
+          );
+        }
+
+        // Scalar values
+        return (
+          <text key={key}>
+            <span fg={COLORS.comment}>{prefix}</span>
+            <span fg={COLORS.purple}>{paddedKey}</span>
+            <span fg={valueColor(value)}>{formatValue(value)}</span>
+          </text>
+        );
+      })}
     </box>
   );
 }
