@@ -119,22 +119,18 @@ describe("createStatusPageApp — no auth", () => {
       expect(html).toContain('data-base-path="/status"');
     });
 
-    it("HTML includes tab navigation buttons", async () => {
+    it("HTML includes the React app mount point", async () => {
       const app = makeApp();
       const res = await req(app, "/status");
       const html = await res.text();
-      expect(html).toContain('data-tab="overview"');
-      expect(html).toContain('data-tab="automations"');
-      expect(html).toContain('data-tab="state"');
-      expect(html).toContain('data-tab="logs"');
+      expect(html).toContain('<div id="app">');
     });
 
-    it("HTML includes inlined JavaScript", async () => {
+    it("HTML includes inlined JavaScript module", async () => {
       const app = makeApp();
       const res = await req(app, "/status");
       const html = await res.text();
-      expect(html).toContain("<script>");
-      expect(html).toContain("fetchAll");
+      expect(html).toContain('<script type="module">');
     });
 
     it("HTML includes inlined CSS", async () => {
@@ -142,7 +138,6 @@ describe("createStatusPageApp — no auth", () => {
       const res = await req(app, "/status");
       const html = await res.text();
       expect(html).toContain("<style>");
-      expect(html).toContain("--bg:");
     });
   });
 

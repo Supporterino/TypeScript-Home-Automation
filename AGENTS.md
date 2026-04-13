@@ -5,14 +5,15 @@ Coding conventions and instructions for AI agents working in this repository.
 ## Build / Lint / Test Commands
 
 ```bash
-bun install                  # Install dependencies
+bun install                  # Install dependencies (also runs the status page build)
 bun run dev                  # Run with hot-reload (standalone mode)
 bun run start                # Production run
 bun run typecheck            # TypeScript type checking (tsc --noEmit)
 bun run check                # Biome format + lint + import organize (auto-fix)
 bun run format               # Format only
 bun run lint                 # Lint only
-bun run build                # Build package to dist/ (tsconfig.build.json)
+bun run build                # Build package to dist/ (runs status page build first)
+bun run build:status-page    # Build only the React status page frontend
 bun test                     # Run all tests
 bun test tests/state-manager.test.ts           # Run a single test file
 bun test --filter "topicMatches"               # Run tests matching a name pattern
@@ -20,14 +21,23 @@ bun test --filter "topicMatches"               # Run tests matching a name patte
 
 Always run `bun run typecheck && bun run check && bun test` before committing.
 
+> **Note on `typecheck`**: `tsc --noEmit` does not trigger the `prebuild` hook and does not
+> compile `src/core/status-page/app/**` (excluded from `tsconfig.json`). That subtree has its
+> own `src/core/status-page/app/tsconfig.json` for IDE support and is compiled exclusively by
+> `scripts/build-status-page.ts` via `Bun.build`.
+
 ## Project Structure
 
 - `src/core/` — Framework core (engine, services, base classes, device-specific abstracts)
+  - `src/core/status-page/` — Web dashboard served by Hono
+    - `src/core/status-page/app/` — React + Mantine frontend source (compiled by `Bun.build`, **not** `tsc`)
+    - `src/core/status-page/assets/` — Generated JS/CSS string constants (git-ignored, rebuilt by `build:status-page`)
 - `src/automations/` — Example automations (excluded from npm package build)
 - `src/types/` — Zigbee2MQTT and Shelly device type definitions
 - `src/cli/` — CLI tool (`ts-ha`) for managing running instances
   - `src/cli/commands/` — CLI command implementations (`.ts` and `.tsx`)
   - `src/cli/components/` — OpenTUI React components for the interactive dashboard
+- `scripts/` — Build scripts (e.g. `build-status-page.ts`)
 - `tests/` — Unit tests (flat directory, `*.test.ts`)
 
 ## Runtime & Module System

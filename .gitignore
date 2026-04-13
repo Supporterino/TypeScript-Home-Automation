@@ -21,6 +21,10 @@ state.json
 # OpenCode
 opencode.json
 
+# Generated status-page frontend assets (rebuilt by scripts/build-status-page.ts)
+src/core/status-page/assets/app-js.ts
+src/core/status-page/assets/style-css.ts
+
 # Editor
 .vscode/
 .idea/

@@ -36,6 +36,12 @@
           }
         }
       }
+    },
+    {
+      "includes": ["src/core/status-page/app/**"],
+      "linter": {
+        "enabled": false
+      }
     }
   ]
 }
