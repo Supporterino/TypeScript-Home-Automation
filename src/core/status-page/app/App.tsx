@@ -3,10 +3,11 @@ import {
   AppShell,
   Burger,
   Group,
-  Indicator,
   NavLink,
   Text,
   Tooltip,
+  useComputedColorScheme,
+  useMantineColorScheme,
 } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import { useState } from "react";
@@ -17,19 +18,41 @@ import { StateTab } from "./components/StateTab";
 import { useApiPoller } from "./hooks/useApiPoller";
 import { useAuth } from "./hooks/useAuth";
 
-// Read configuration injected by the server into the <html> element's data attributes
+// Configuration injected by the server into the <html> element's data attributes
 const basePath =
   (document.documentElement as HTMLElement & { dataset: DOMStringMap }).dataset.basePath ??
   "/status";
 
 type TabId = "overview" | "automations" | "state" | "logs";
 
-const NAV_ITEMS: { id: TabId; label: string; icon: string }[] = [
-  { id: "overview", label: "Overview", icon: "⬡" },
-  { id: "automations", label: "Automations", icon: "⚡" },
-  { id: "state", label: "State", icon: "◈" },
-  { id: "logs", label: "Logs", icon: "≡" },
+const NAV_ITEMS: { id: TabId; label: string }[] = [
+  { id: "overview", label: "Overview" },
+  { id: "automations", label: "Automations" },
+  { id: "state", label: "State" },
+  { id: "logs", label: "Logs" },
 ];
+
+// ── Color scheme toggle ───────────────────────────────────────────────────
+
+function ColorSchemeToggle() {
+  const { setColorScheme } = useMantineColorScheme();
+  const computed = useComputedColorScheme("light", { getInitialValueInEffect: true });
+
+  return (
+    <Tooltip label={computed === "dark" ? "Switch to light mode" : "Switch to dark mode"}>
+      <ActionIcon
+        variant="default"
+        size="sm"
+        onClick={() => setColorScheme(computed === "dark" ? "light" : "dark")}
+        aria-label="Toggle color scheme"
+      >
+        {computed === "dark" ? "☀" : "☾"}
+      </ActionIcon>
+    </Tooltip>
+  );
+}
+
+// ── App ───────────────────────────────────────────────────────────────────
 
 export function App() {
   const [activeTab, setActiveTab] = useState<TabId>("overview");
@@ -44,27 +67,33 @@ export function App() {
 
   const lastRefreshStr = lastRefresh ? lastRefresh.toLocaleTimeString() : "—";
 
-  // Dot is green when live, amber when paused, red when disconnected
-  const indicatorColor = paused ? "yellow" : connected ? "green" : "red";
-
   function handleTabChange(tab: TabId) {
     setActiveTab(tab);
     if (mobileNavOpen) toggleMobileNav();
   }
 
+  // Status indicator label
+  const statusLabel = paused
+    ? "Paused"
+    : connected
+      ? `Live · ${lastRefreshStr}`
+      : (error ?? "Disconnected");
+
+  const statusColor = paused ? "yellow" : connected ? "green" : "red";
+
   return (
     <AppShell
       navbar={{
-        width: 180,
+        width: 200,
         breakpoint: "sm",
         collapsed: { mobile: !mobileNavOpen },
       }}
       padding="md"
     >
       {/* ── Navbar ─────────────────────────────────────────────────────── */}
-      <AppShell.Navbar p="sm">
+      <AppShell.Navbar p="md">
         <AppShell.Section>
-          <Text fw={700} size="sm" c="dimmed" tt="uppercase" mb="md" px="xs">
+          <Text fw={700} size="sm" c="dimmed" tt="uppercase" mb="md">
             ts-ha
           </Text>
         </AppShell.Section>
@@ -74,58 +103,58 @@ export function App() {
             <NavLink
               key={item.id}
               label={item.label}
-              leftSection={<span style={{ fontSize: 14 }}>{item.icon}</span>}
               active={activeTab === item.id}
               onClick={() => handleTabChange(item.id)}
               mb={2}
+              variant="filled"
             />
           ))}
         </AppShell.Section>
 
         <AppShell.Section>
-          <Group px="xs" gap={4} align="center">
-            <Indicator color={indicatorColor} size={8} processing={connected && !paused}>
-              <Tooltip
-                label={
-                  paused
-                    ? "Paused — click ▶ to resume"
-                    : connected
-                      ? `Live · ${lastRefreshStr}`
-                      : (error ?? "Disconnected")
-                }
-              >
-                <Text size="xs" c="dimmed">
-                  {paused ? "paused" : connected ? lastRefreshStr : "offline"}
-                </Text>
-              </Tooltip>
-            </Indicator>
+          <Group gap="xs" align="center" wrap="nowrap">
+            {/* Live/paused/offline indicator dot */}
+            <Text
+              size="xs"
+              c={statusColor}
+              style={{
+                flex: 1,
+                minWidth: 0,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {statusLabel}
+            </Text>
 
-            {/* Pause / resume toggle */}
-            <Tooltip label={paused ? "Resume auto-refresh" : "Pause auto-refresh"}>
+            {/* Pause / resume */}
+            <Tooltip label={paused ? "Resume" : "Pause"}>
               <ActionIcon
-                variant="subtle"
+                variant="default"
                 size="sm"
                 onClick={togglePause}
-                color={paused ? "yellow" : "gray"}
-                aria-label={paused ? "Resume" : "Pause"}
+                aria-label={paused ? "Resume auto-refresh" : "Pause auto-refresh"}
               >
                 {paused ? "▶" : "⏸"}
               </ActionIcon>
             </Tooltip>
 
-            {/* Manual refresh — always available */}
+            {/* Manual refresh */}
             <Tooltip label="Refresh now">
-              <ActionIcon variant="subtle" size="sm" onClick={refresh} aria-label="Refresh">
+              <ActionIcon variant="default" size="sm" onClick={refresh} aria-label="Refresh">
                 ↻
               </ActionIcon>
             </Tooltip>
+
+            {/* Color scheme toggle */}
+            <ColorSchemeToggle />
           </Group>
         </AppShell.Section>
       </AppShell.Navbar>
 
       {/* ── Main ───────────────────────────────────────────────────────── */}
       <AppShell.Main>
-        {/* Mobile burger — only visible on small screens */}
         <Burger
           opened={mobileNavOpen}
           onClick={toggleMobileNav}

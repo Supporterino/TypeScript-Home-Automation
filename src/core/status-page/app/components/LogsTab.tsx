@@ -224,10 +224,7 @@ function LogRow({ entry, rowKey, isExpanded, onToggle }: LogRowProps) {
             {levelName}
           </Badge>
         </Table.Td>
-        <Table.Td
-          c="violet"
-          style={{ overflow: "hidden", textOverflow: "ellipsis", maxWidth: 140 }}
-        >
+        <Table.Td c="blue" style={{ overflow: "hidden", textOverflow: "ellipsis", maxWidth: 140 }}>
           {entry.automation ?? entry.service ?? ""}
         </Table.Td>
         <Table.Td style={{ wordBreak: "break-all" }}>{entry.msg}</Table.Td>
@@ -278,7 +275,7 @@ function ExtraFieldsBlock({ extras }: { extras: [string, unknown][] }) {
             return (
               <Table.Tr key={key} style={{ background: "none" }}>
                 <Table.Td
-                  c="violet"
+                  c="blue"
                   fw={600}
                   style={{ whiteSpace: "nowrap", verticalAlign: "top", width: 160 }}
                 >

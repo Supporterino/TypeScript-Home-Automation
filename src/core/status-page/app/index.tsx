@@ -1,19 +1,17 @@
 import "@mantine/core/styles.css";
-import { createTheme, MantineProvider } from "@mantine/core";
+import { MantineProvider } from "@mantine/core";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
 
-const theme = createTheme({
-  primaryColor: "violet",
-  fontFamily: "JetBrains Mono, Fira Code, Cascadia Code, ui-monospace, monospace",
-  fontFamilyMonospace: "JetBrains Mono, Fira Code, Cascadia Code, ui-monospace, monospace",
-});
+// No theme overrides — use Mantine defaults throughout.
+// Color scheme is controlled by MantineProvider defaultColorScheme="auto"
+// and persisted in localStorage by Mantine's built-in color scheme manager.
 
 const root = document.getElementById("app");
 if (!root) throw new Error("No #app element found in the document.");
 
 createRoot(root).render(
-  <MantineProvider theme={theme} defaultColorScheme="auto">
+  <MantineProvider defaultColorScheme="auto">
     <App />
   </MantineProvider>,
 );

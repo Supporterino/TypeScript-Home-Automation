@@ -108,19 +108,19 @@ export function OverviewTab({ data }: Props) {
         </StatCard>
 
         <StatCard label="Timezone">
-          <Text fw={700} size="lg" c="violet">
+          <Text fw={700} size="lg" c="blue">
             {status?.tz ?? "—"}
           </Text>
         </StatCard>
 
         <StatCard label="Automations">
-          <Text fw={700} size="lg" c="violet">
+          <Text fw={700} size="lg" c="blue">
             {automations.length}
           </Text>
         </StatCard>
 
         <StatCard label="State Keys">
-          <Text fw={700} size="lg" c="cyan">
+          <Text fw={700} size="lg" c="teal">
             {Object.keys(state).length}
           </Text>
         </StatCard>
@@ -163,7 +163,7 @@ function LogRow({ entry }: { entry: LogEntry }) {
           {levelName}
         </Badge>
       </Table.Td>
-      <Table.Td w={120} c="violet" style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
+      <Table.Td w={120} c="blue" style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
         {entry.automation ?? ""}
       </Table.Td>
       <Table.Td>{entry.msg}</Table.Td>
