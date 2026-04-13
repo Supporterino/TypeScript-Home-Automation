@@ -5,7 +5,7 @@ Coding conventions and instructions for AI agents working in this repository.
 ## Build / Lint / Test Commands
 
 ```bash
-bun install                  # Install dependencies (also runs the status page build)
+bun install                  # Install dependencies
 bun run dev                  # Run with hot-reload (standalone mode)
 bun run start                # Production run
 bun run typecheck            # TypeScript type checking (tsc --noEmit)

@@ -40,7 +40,6 @@
     "build:status-page": "bun run scripts/build-status-page.ts",
     "prebuild": "bun run scripts/build-status-page.ts",
     "build": "tsc -p tsconfig.build.json",
-    "postinstall": "bun run scripts/build-status-page.ts",
     "prepublishOnly": "bun run build",
     "docker:build": "docker build -t home-automation .",
     "docker:up": "docker compose up -d",
