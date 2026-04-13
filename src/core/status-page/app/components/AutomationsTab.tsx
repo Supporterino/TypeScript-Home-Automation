@@ -13,7 +13,7 @@ import {
   Title,
 } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { triggerAutomation } from "../api";
 import type { Automation, DashboardData, TriggerDef } from "../types";
 
@@ -55,13 +55,14 @@ function TriggerModal({ automation, opened, onClose }: TriggerModalProps) {
     setPayload(TRIGGER_TEMPLATES[type]?.(automation.name) ?? "{}");
   }
 
-  // Reset when the automation changes
-  function handleOpen() {
-    if (!automation) return;
-    setTriggerType("mqtt");
-    setPayload(TRIGGER_TEMPLATES.mqtt(automation.name));
-    setError(null);
-  }
+  // Reset form state whenever the modal opens or the target automation changes
+  useEffect(() => {
+    if (opened && automation) {
+      setTriggerType("mqtt");
+      setPayload(TRIGGER_TEMPLATES.mqtt(automation.name));
+      setError(null);
+    }
+  }, [opened, automation]);
 
   async function handleFire() {
     if (!automation) return;
@@ -85,12 +86,7 @@ function TriggerModal({ automation, opened, onClose }: TriggerModalProps) {
   }
 
   return (
-    <Modal
-      opened={opened}
-      onClose={onClose}
-      title={`Trigger: ${automation?.name ?? ""}`}
-      onOpen={handleOpen}
-    >
+    <Modal opened={opened} onClose={onClose} title={`Trigger: ${automation?.name ?? ""}`}>
       <Stack>
         <Select
           label="Trigger type"
@@ -168,22 +164,21 @@ function AutomationRow({ automation, onTrigger }: AutomationRowProps) {
           </Button>
         </Table.Td>
       </Table.Tr>
-      {expanded && (
-        <Table.Tr>
-          <Table.Td colSpan={3} p={0}>
-            <Collapse in={expanded}>
-              <Stack p="md" gap="xs">
-                <Text size="xs" tt="uppercase" fw={600} c="dimmed">
-                  Trigger definitions
-                </Text>
-                <Code block fz="xs">
-                  {JSON.stringify(automation.triggers, null, 2)}
-                </Code>
-              </Stack>
-            </Collapse>
-          </Table.Td>
-        </Table.Tr>
-      )}
+      {/* Always render — let Collapse handle visibility so animation works correctly */}
+      <Table.Tr style={{ background: "none" }}>
+        <Table.Td colSpan={3} p={0} style={{ borderBottom: "none" }}>
+          <Collapse in={expanded}>
+            <Stack p="md" gap="xs">
+              <Text size="xs" tt="uppercase" fw={600} c="dimmed">
+                Trigger definitions
+              </Text>
+              <Code block fz="xs">
+                {JSON.stringify(automation.triggers, null, 2)}
+              </Code>
+            </Stack>
+          </Collapse>
+        </Table.Td>
+      </Table.Tr>
     </>
   );
 }

@@ -36,13 +36,19 @@ export function App() {
   const [mobileNavOpen, { toggle: toggleMobileNav }] = useDisclosure(false);
 
   const { token } = useAuth(basePath);
-  const { data, connected, lastRefresh, error, refresh } = useApiPoller(basePath, token, 5000);
+  const { data, connected, lastRefresh, error, paused, refresh, togglePause } = useApiPoller(
+    basePath,
+    token,
+    5000,
+  );
 
   const lastRefreshStr = lastRefresh ? lastRefresh.toLocaleTimeString() : "—";
 
+  // Dot is green when live, amber when paused, red when disconnected
+  const indicatorColor = paused ? "yellow" : connected ? "green" : "red";
+
   function handleTabChange(tab: TabId) {
     setActiveTab(tab);
-    // Close mobile nav after selection
     if (mobileNavOpen) toggleMobileNav();
   }
 
@@ -77,24 +83,39 @@ export function App() {
         </AppShell.Section>
 
         <AppShell.Section>
-          <Group px="xs" gap="xs" align="center">
-            <Indicator color={connected ? "green" : "red"} size={8} processing={connected}>
+          <Group px="xs" gap={4} align="center">
+            <Indicator color={indicatorColor} size={8} processing={connected && !paused}>
               <Tooltip
-                label={connected ? `Last refresh: ${lastRefreshStr}` : (error ?? "Disconnected")}
+                label={
+                  paused
+                    ? "Paused — click ▶ to resume"
+                    : connected
+                      ? `Live · ${lastRefreshStr}`
+                      : (error ?? "Disconnected")
+                }
               >
                 <Text size="xs" c="dimmed">
-                  {connected ? lastRefreshStr : "offline"}
+                  {paused ? "paused" : connected ? lastRefreshStr : "offline"}
                 </Text>
               </Tooltip>
             </Indicator>
-            <Tooltip label="Refresh now">
+
+            {/* Pause / resume toggle */}
+            <Tooltip label={paused ? "Resume auto-refresh" : "Pause auto-refresh"}>
               <ActionIcon
                 variant="subtle"
                 size="sm"
-                onClick={refresh}
-                style={{ marginLeft: "auto" }}
-                aria-label="Refresh"
+                onClick={togglePause}
+                color={paused ? "yellow" : "gray"}
+                aria-label={paused ? "Resume" : "Pause"}
               >
+                {paused ? "▶" : "⏸"}
+              </ActionIcon>
+            </Tooltip>
+
+            {/* Manual refresh — always available */}
+            <Tooltip label="Refresh now">
+              <ActionIcon variant="subtle" size="sm" onClick={refresh} aria-label="Refresh">
                 ↻
               </ActionIcon>
             </Tooltip>
