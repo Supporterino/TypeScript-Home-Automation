@@ -25,6 +25,7 @@ Can be used in two ways:
 - [State Management](#state-management)
 - [Device Types](#device-types)
 - [Health Probes](#health-probes)
+- [Web Status Page](#web-status-page)
 - [CLI Tool](#cli-tool)
   - [Automations](#automations)
   - [Trigger Command](#trigger-command)
@@ -294,6 +295,8 @@ Set these environment variables (or use a `.env` file):
 | `AUTOMATIONS_RECURSIVE` | `false` | Scan subdirectories recursively for automation files |
 | `HTTP_PORT` | `8080` | Port for HTTP server (health probes + webhooks). Set to `0` to disable. |
 | `HTTP_TOKEN` | | Bearer token for debug/webhook endpoints. Empty = no auth. |
+| `STATUS_PAGE_ENABLED` | `false` | Enable the web status page (served on the same port as `HTTP_PORT`). |
+| `STATUS_PAGE_PATH` | `/status` | URL path prefix for the web status page. |
 
 ## Writing an Automation
 
@@ -886,6 +889,72 @@ readinessProbe:
 ### Docker Compose
 
 The included `docker-compose.yml` configures a healthcheck automatically.
+
+## Web Status Page
+
+The engine includes an optional browser-based dashboard that mirrors all four tabs of the terminal dashboard. It is disabled by default and served on the same port as the existing HTTP server — no extra port or process required.
+
+### Enabling
+
+```bash
+STATUS_PAGE_ENABLED=true
+STATUS_PAGE_PATH=/status   # optional, this is the default
+```
+
+Navigate to `http://your-host:8080/status` (or wherever the engine is running).
+
+### Features
+
+The dashboard auto-refreshes every 5 seconds and has four tabs:
+
+| Tab | Features |
+|---|---|
+| **Overview** | Engine and MQTT status badges, uptime counter, timezone, automation count, state key count, last 10 log lines |
+| **Automations** | Table of all registered automations with trigger-type chips; click a row to expand the full trigger definition; **Trigger** button opens a modal to fire any automation with a custom JSON context payload |
+| **State** | Table of all state key/value pairs; click a value to edit it inline; **New Key** button; per-row **Delete** button |
+| **Logs** | Full scrollable log list with client-side filters for level, automation name, and free text |
+
+Styling uses the same Dracula colour palette as the terminal dashboard (`--bg: #282a36`, `--purple: #bd93f9`, etc.) and is fully responsive down to narrow mobile screens.
+
+### Authentication
+
+When `HTTP_TOKEN` is set the status page is protected by a login form. On first visit the browser is redirected to `/status/login`:
+
+```
+http://your-host:8080/status/login
+```
+
+Enter the same token configured as `HTTP_TOKEN`. A session cookie (`ts-ha-session`, `HttpOnly`, `SameSite=Strict`) is set for the duration of the browser session. To log out, navigate to `/status/logout`.
+
+API calls made by the page JavaScript send the token as an `Authorization: Bearer <token>` header, so the page also works from clients that inject the header directly (e.g. a reverse proxy that adds it).
+
+When `HTTP_TOKEN` is empty the login page is skipped entirely and the dashboard is publicly accessible.
+
+### Status page API
+
+The status page exposes its own `/api` sub-group at the configured path. These endpoints are independent of the `/debug/*` debug API but provide equivalent data:
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/status/api/status` | Engine + MQTT readiness (same data as `/readyz`) |
+| `GET` | `/status/api/automations` | List all automations |
+| `GET` | `/status/api/automations/:name` | Get single automation details |
+| `POST` | `/status/api/automations/:name/trigger` | Manually trigger an automation |
+| `GET` | `/status/api/state` | List all state keys and values |
+| `GET` | `/status/api/state/:key` | Get a single state value |
+| `PUT` | `/status/api/state/:key` | Set a state value (JSON body) |
+| `DELETE` | `/status/api/state/:key` | Delete a state key |
+| `GET` | `/status/api/logs` | Query logs (`?level=&automation=&limit=`) |
+
+All `/api` endpoints return JSON and require the bearer token when `HTTP_TOKEN` is set.
+
+### Implementation notes
+
+- Served by a [Hono](https://hono.dev/) sub-app mounted inside the existing `Bun.serve()` server — no extra port or process.
+- The HTML shell, CSS, and JavaScript are all inlined into a single response so the page loads with one HTTP request and no external dependencies.
+- The status page module is imported lazily at engine startup; it is completely tree-shakeable and adds zero overhead when `STATUS_PAGE_ENABLED=false`.
+
+---
 
 ## CLI Tool
 
