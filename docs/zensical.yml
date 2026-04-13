@@ -1,4 +1,5 @@
 site_name: TypeScript Home Automation
+docs_dir: .
 site_url: https://Supporterino.github.io/TypeScript-Home-Automation/
 site_description: A lightweight, fully typed home automation framework built on MQTT for Bun.
 repo_url: https://github.com/Supporterino/TypeScript-Home-Automation
