@@ -37,7 +37,10 @@
     "lint:fix": "biome lint --write .",
     "check": "biome check --write .",
     "typecheck": "tsc --noEmit",
+    "build:status-page": "bun run scripts/build-status-page.ts",
+    "prebuild": "bun run scripts/build-status-page.ts",
     "build": "tsc -p tsconfig.build.json",
+    "postinstall": "bun run scripts/build-status-page.ts",
     "prepublishOnly": "bun run build",
     "docker:build": "docker build -t home-automation .",
     "docker:up": "docker compose up -d",
@@ -59,6 +62,8 @@
   },
   "license": "GPL-3.0-only",
   "dependencies": {
+    "@mantine/core": "^9.0.2",
+    "@mantine/hooks": "^9.0.2",
     "@opentui/core": "^0.1.93",
     "@opentui/react": "^0.1.93",
     "cron": "^4.3.0",
@@ -72,6 +77,7 @@
     "@biomejs/biome": "^2.4.9",
     "@types/bun": "^1.2.0",
     "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
     "pino-pretty": "^13.0.0",
     "typescript": "^5.7.0"
   },
