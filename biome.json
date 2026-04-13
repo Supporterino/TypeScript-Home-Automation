@@ -25,5 +25,17 @@
   },
   "files": {
     "includes": ["src/**", "tests/**", "*.json"]
-  }
+  },
+  "overrides": [
+    {
+      "includes": ["src/core/status-page/assets/app-js.ts"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noTemplateCurlyInString": "off"
+          }
+        }
+      }
+    }
+  ]
 }

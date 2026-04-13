@@ -1,10 +1,5 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-
-// Read assets once at module load — they are inlined into every HTML response.
-const ASSETS_DIR = join(import.meta.dirname, "../assets");
-const CSS = readFileSync(join(ASSETS_DIR, "style.css"), "utf8");
-const JS = readFileSync(join(ASSETS_DIR, "app.js"), "utf8");
+import { JS } from "../assets/app-js.js";
+import { CSS } from "../assets/style-css.js";
 
 export interface HtmlShellOptions {
   /** URL path prefix where the status page is mounted, e.g. "/status". */
