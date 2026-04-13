@@ -23,12 +23,18 @@ export interface HtmlShellOptions {
  * calls with the correct path (e.g. /status/api/status).
  */
 export function htmlShell({ basePath, hasAuth: _hasAuth }: HtmlShellOptions): string {
+  // Inline equivalent of Mantine's <ColorSchemeScript defaultColorScheme="auto" />.
+  // Sets data-mantine-color-scheme on <html> before the React bundle loads,
+  // preventing a flash of the wrong color scheme on first paint.
+  const colorSchemeScript = `(function(){try{var s=localStorage.getItem("mantine-color-scheme");if(s==="light"||s==="dark"){document.documentElement.setAttribute("data-mantine-color-scheme",s);}else{var m=window.matchMedia("(prefers-color-scheme: dark)").matches;document.documentElement.setAttribute("data-mantine-color-scheme",m?"dark":"light");}}catch(e){}})();`;
+
   return `<!DOCTYPE html>
 <html lang="en" data-base-path="${esc(basePath)}">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Home Automation — Status</title>
+  <script>${colorSchemeScript}</script>
   <style>${CSS}</style>
 </head>
 <body>
@@ -91,7 +97,7 @@ export function loginShell({ basePath, error }: { basePath: string; error?: stri
       gap: 20px;
       box-shadow: 0 4px 24px rgba(0,0,0,.1);
     }
-    h1 { font-size: 20px; font-weight: 700; color: #7950f2; text-align: center; }
+    h1 { font-size: 20px; font-weight: 700; color: #228be6; text-align: center; }
     p { font-size: 12px; color: light-dark(#868e96, #909296); text-align: center; margin-top: -12px; }
     label { font-size: 12px; font-weight: 600; display: block; margin-bottom: 5px; }
     input[type=password] {
@@ -103,15 +109,15 @@ export function loginShell({ basePath, error }: { basePath: string; error?: stri
       font-size: 14px;
       outline: none;
     }
-    input[type=password]:focus { border-color: #7950f2; }
+    input[type=password]:focus { border-color: #228be6; }
     button {
       width: 100%; padding: 10px;
-      background: #7950f2; color: #fff;
+      background: #228be6; color: #fff;
       border: none; border-radius: 4px;
       font-size: 14px; font-weight: 600;
       cursor: pointer;
     }
-    button:hover { background: #6741d9; }
+    button:hover { background: #1c7ed6; }
   </style>
 </head>
 <body>
