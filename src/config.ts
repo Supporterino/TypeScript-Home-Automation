@@ -29,6 +29,13 @@ const configSchema = z.object({
     port: z.coerce.number().int().min(0).default(8080),
     /** Bearer token for debug and webhook endpoints. Empty = no auth. */
     token: z.string().default(""),
+    /** Optional web-based status/dashboard page. */
+    statusPage: z.object({
+      /** Whether to enable the web status page. */
+      enabled: z.boolean().default(false),
+      /** URL path prefix for the status page. Must start with /. */
+      path: z.string().default("/status"),
+    }),
   }),
 });
 
@@ -37,6 +44,7 @@ export type Config = z.infer<typeof configSchema>;
 export function loadConfig(): Config {
   const parsedPersist = booleanString.parse(process.env.STATE_PERSIST);
   const parsedRecursive = booleanString.parse(process.env.AUTOMATIONS_RECURSIVE);
+  const parsedStatusPageEnabled = booleanString.parse(process.env.STATUS_PAGE_ENABLED);
 
   const result = configSchema.safeParse({
     mqtt: {
@@ -55,6 +63,10 @@ export function loadConfig(): Config {
     httpServer: {
       port: process.env.HTTP_PORT,
       token: process.env.HTTP_TOKEN,
+      statusPage: {
+        enabled: parsedStatusPageEnabled,
+        path: process.env.STATUS_PAGE_PATH,
+      },
     },
   });
 

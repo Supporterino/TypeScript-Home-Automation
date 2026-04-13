@@ -1,4 +1,5 @@
 /// <reference types="bun" />
+import type { Hono } from "hono";
 import type { Logger } from "pino";
 import type { TriggerContext } from "./automation.js";
 import type { AutomationManager } from "./automation-manager.js";
@@ -41,11 +42,13 @@ interface WebhookRoute {
 export class HttpServer {
   private server: ReturnType<typeof Bun.serve> | null = null;
   private engineStarted = false;
-  private startedAt: number | null = null;
+  startedAt: number | null = null;
   private readonly webhookRoutes: Map<string, WebhookRoute> = new Map();
   private stateManager: StateManager | null = null;
   private automationManager: AutomationManager | null = null;
   private logBuffer: LogBuffer | null = null;
+  private statusPageApp: Hono | null = null;
+  private statusPagePath = "";
 
   constructor(
     private readonly port: number,
@@ -70,6 +73,16 @@ export class HttpServer {
   setEngineStarted(started: boolean): void {
     this.engineStarted = started;
     this.startedAt = started ? Date.now() : null;
+  }
+
+  /**
+   * Mount a Hono app at a given path prefix for the status page.
+   * All requests whose path starts with the given prefix are delegated to the app.
+   */
+  mountStatusPage(app: Hono, path: string): void {
+    this.statusPageApp = app;
+    this.statusPagePath = path;
+    this.logger.info({ path }, "Status page mounted");
   }
 
   /**
@@ -153,6 +166,11 @@ export class HttpServer {
 
     // Debug API — authenticated
     if (path.startsWith("/debug/")) return this.handleDebug(req, url);
+
+    // Status page — delegated to Hono sub-app
+    if (this.statusPageApp && this.statusPagePath && path.startsWith(this.statusPagePath)) {
+      return this.statusPageApp.fetch(req);
+    }
 
     return new Response("Not Found", { status: 404 });
   }
