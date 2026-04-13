@@ -258,6 +258,24 @@ export function createEngine(options: EngineOptions): Engine {
 
       logger.info("Starting Home Automation Engine");
       httpServer?.setManagers(stateManager, manager, logBuffer);
+
+      // Mount status page if enabled (imported lazily to keep it tree-shakeable)
+      if (httpServer && config.httpServer.statusPage.enabled) {
+        const { createStatusPageApp } = await import("./status-page/index.js");
+        const statusPagePath = config.httpServer.statusPage.path;
+        const statusPageApp = createStatusPageApp({
+          stateManager,
+          automationManager: manager,
+          logBuffer,
+          mqtt,
+          token: config.httpServer.token,
+          path: statusPagePath,
+          getStartedAt: () => httpServer.startedAt,
+        });
+        httpServer.mountStatusPage(statusPageApp, statusPagePath);
+        logger.info({ path: statusPagePath }, "Web status page enabled");
+      }
+
       httpServer?.start();
       await stateManager.load();
       await mqtt.connect();
