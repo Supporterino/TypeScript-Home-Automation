@@ -252,7 +252,7 @@ function LogRow({ entry, rowKey, isExpanded, onToggle }: LogRowProps) {
       {hasExtras && (
         <Table.Tr style={{ background: "none" }}>
           <Table.Td colSpan={5} p={0} style={{ borderBottom: "none" }}>
-            <Collapse in={isExpanded}>
+            <Collapse expanded={isExpanded}>
               <ExtraFieldsBlock extras={extras} />
             </Collapse>
           </Table.Td>
