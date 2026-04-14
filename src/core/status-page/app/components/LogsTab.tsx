@@ -163,7 +163,7 @@ export function LogsTab({ data }: Props) {
             No log entries match the current filters
           </Text>
         ) : (
-          <Table fz="xs" ff="monospace" withRowBorders={false} striped={false}>
+          <Table fz="xs" ff="monospace" withRowBorders={false} striped>
             <Table.Thead>
               <Table.Tr>
                 <Table.Th w={90}>Time</Table.Th>
@@ -214,7 +214,6 @@ function LogRow({ entry, rowKey, isExpanded, onToggle }: LogRowProps) {
       <Table.Tr
         style={hasExtras ? { cursor: "pointer" } : undefined}
         onClick={hasExtras ? () => onToggle(rowKey) : undefined}
-        bg={isExpanded ? "var(--mantine-color-default-hover)" : undefined}
       >
         <Table.Td c="dimmed" style={{ whiteSpace: "nowrap" }}>
           {formatTime(entry.time)}
@@ -266,8 +265,8 @@ function LogRow({ entry, rowKey, isExpanded, onToggle }: LogRowProps) {
 
 function ExtraFieldsBlock({ extras }: { extras: [string, unknown][] }) {
   return (
-    <Box px="md" py="xs" bg="var(--mantine-color-default-hover)">
-      <Table fz="xs" ff="monospace" withRowBorders={false} withTableBorder={false}>
+    <Box px="md" py="xs">
+      <Table fz="xs" ff="monospace" withRowBorders={false} withTableBorder={false} striped>
         <Table.Tbody>
           {extras.map(([key, value]) => {
             const formatted = formatFieldValue(value);
