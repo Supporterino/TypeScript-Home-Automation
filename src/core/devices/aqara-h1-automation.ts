@@ -1,5 +1,5 @@
-import type { AqaraRemoteSwitchH1Action } from "../types/zigbee.js";
-import { Automation, type Trigger, type TriggerContext } from "./automation.js";
+import type { AqaraRemoteSwitchH1Action } from "../../types/zigbee.js";
+import { Automation, type Trigger, type TriggerContext } from "../automation.js";
 
 /**
  * Abstract base class for automations driven by an Aqara Wireless Remote
@@ -28,7 +28,7 @@ import { Automation, type Trigger, type TriggerContext } from "./automation.js";
  *
  * @example
  * ```ts
- * import { AqaraH1Automation } from "../core/aqara-h1-automation.js";
+ * import { AqaraH1Automation } from "ts-home-automation";
  *
  * export default class MyRemote extends AqaraH1Automation {
  *   readonly name = "my-remote";

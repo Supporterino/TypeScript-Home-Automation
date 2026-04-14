@@ -1,4 +1,4 @@
-# Web Status Page
+# Web UI
 
 The engine includes an optional browser-based dashboard served on the same port as the HTTP server. It provides a real-time view of the engine state, automations, logs, and state store — with full read-write capabilities.
 
@@ -7,13 +7,13 @@ The engine includes an optional browser-based dashboard served on the same port 
 ## Enabling
 
 ```bash
-STATUS_PAGE_ENABLED=true
-STATUS_PAGE_PATH=/status   # optional, this is the default
+WEB_UI_ENABLED=true
+WEB_UI_PATH=/status   # optional, this is the default
 ```
 
 Navigate to `http://your-host:8080/status`.
 
-The status page is disabled by default and adds zero overhead when disabled — the module is imported lazily at startup.
+The web UI is disabled by default and adds zero overhead when disabled — the module is imported lazily at startup.
 
 ---
 
@@ -51,7 +51,7 @@ The dashboard auto-refreshes every 5 seconds and has four tabs:
 
 ## Authentication
 
-When `HTTP_TOKEN` is set the status page requires authentication. On first visit the browser redirects to `/status/login`:
+When `HTTP_TOKEN` is set the web UI requires authentication. On first visit the browser redirects to `/status/login`:
 
 1. Enter the same token as `HTTP_TOKEN`
 2. A session cookie (`ts-ha-session`, `HttpOnly`, `SameSite=Strict`) is set for the duration of the browser session
@@ -69,7 +69,7 @@ The dashboard follows the browser/OS light or dark mode preference automatically
 
 ---
 
-## Status page API
+## Web UI API
 
 The page is backed by a Hono sub-app that exposes its own `/api` group. All endpoints return JSON and require the bearer token when `HTTP_TOKEN` is set.
 
@@ -103,4 +103,4 @@ Supported types: `"mqtt"`, `"cron"`, `"state"`, `"webhook"`.
 
 - Served by a [Hono](https://hono.dev/) sub-app mounted inside the existing `Bun.serve()` instance — no extra port or process
 - The entire frontend (React + Mantine) is compiled by `Bun.build` and inlined into the HTML response — no external network requests required to load the page
-- The page works in air-gapped environments
+- Works in air-gapped environments

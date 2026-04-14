@@ -1,6 +1,6 @@
 import mqtt, { type IClientOptions, type MqttClient } from "mqtt";
 import type { Logger } from "pino";
-import type { Config } from "../config.js";
+import type { Config } from "../../config.js";
 import { hasWildcard, splitPattern, topicMatchesParts } from "./mqtt-utils.js";
 
 export type MqttMessageHandler = (topic: string, payload: Record<string, unknown>) => void;

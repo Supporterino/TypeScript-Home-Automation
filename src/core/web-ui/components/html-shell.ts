@@ -2,7 +2,7 @@ import { JS } from "../assets/app-js.js";
 import { CSS } from "../assets/style-css.js";
 
 export interface HtmlShellOptions {
-  /** URL path prefix where the status page is mounted, e.g. "/status". */
+  /** URL path prefix where the web UI is mounted, e.g. "/status". */
   basePath: string;
   /**
    * Whether the engine has a token configured.
@@ -12,7 +12,7 @@ export interface HtmlShellOptions {
 }
 
 /**
- * Returns the full HTML document for the status page dashboard.
+ * Returns the full HTML document for the web UI dashboard.
  *
  * The page is a minimal shell — a single <div id="app"> mount point for the
  * React + Mantine frontend. Both the CSS (Mantine styles) and the compiled JS
@@ -123,7 +123,7 @@ export function loginShell({ basePath, error }: { basePath: string; error?: stri
 <body>
   <div class="card">
     <h1>ts-ha</h1>
-    <p>Home Automation Status Page</p>
+    <p>Home Automation Web UI</p>
     ${errorHtml}
     <form method="POST" action="${esc(basePath)}/login">
       <div style="display:flex;flex-direction:column;gap:5px;margin-bottom:16px">

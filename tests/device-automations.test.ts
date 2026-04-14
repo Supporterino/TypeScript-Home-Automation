@@ -1,14 +1,14 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
 import pino from "pino";
 import type { Config } from "../src/config.js";
-import { AqaraH1Automation } from "../src/core/aqara-h1-automation.js";
-import type { HttpClient } from "../src/core/http-client.js";
-import { IkeaRodretAutomation } from "../src/core/ikea-rodret-automation.js";
-import { IkeaStyrbarAutomation } from "../src/core/ikea-styrbar-automation.js";
-import type { MqttService } from "../src/core/mqtt-service.js";
-import type { NanoleafService } from "../src/core/nanoleaf-service.js";
-import type { ShellyService } from "../src/core/shelly-service.js";
-import type { StateManager } from "../src/core/state-manager.js";
+import { AqaraH1Automation } from "../src/core/devices/aqara-h1-automation.js";
+import { IkeaRodretAutomation } from "../src/core/devices/ikea-rodret-automation.js";
+import { IkeaStyrbarAutomation } from "../src/core/devices/ikea-styrbar-automation.js";
+import type { HttpClient } from "../src/core/http/http-client.js";
+import type { MqttService } from "../src/core/mqtt/mqtt-service.js";
+import type { NanoleafService } from "../src/core/services/nanoleaf-service.js";
+import type { ShellyService } from "../src/core/services/shelly-service.js";
+import type { StateManager } from "../src/core/state/state-manager.js";
 
 const logger = pino({ level: "silent" });
 

@@ -65,7 +65,7 @@ export default class MotionLight extends Automation {
 | `MQTT_HOST` | `localhost` | MQTT broker hostname |
 | `LOG_LEVEL` | `info` | `trace` · `debug` · `info` · `warn` · `error` |
 | `HTTP_PORT` | `8080` | HTTP server port (`0` = disabled) |
-| `STATUS_PAGE_ENABLED` | `false` | Enable the web status dashboard |
+| `WEB_UI_ENABLED` | `false` | Enable the web UI dashboard |
 
 See [Configuration](https://Supporterino.github.io/TypeScript-Home-Automation/configuration/) for all variables.
 

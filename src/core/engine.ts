@@ -2,15 +2,15 @@ import pino, { type Logger, multistream } from "pino";
 import { type Config, loadConfig } from "../config.js";
 import type { WeatherService } from "../types/weather.js";
 import { AutomationManager } from "./automation-manager.js";
-import { CronScheduler } from "./cron-scheduler.js";
-import { HttpClient } from "./http-client.js";
-import { HttpServer } from "./http-server.js";
-import { LogBuffer } from "./log-buffer.js";
-import { MqttService } from "./mqtt-service.js";
-import { NanoleafService } from "./nanoleaf-service.js";
-import type { NotificationService } from "./notification-service.js";
-import { ShellyService } from "./shelly-service.js";
-import { StateManager, type StateManagerOptions } from "./state-manager.js";
+import { HttpClient } from "./http/http-client.js";
+import { HttpServer } from "./http/http-server.js";
+import { LogBuffer } from "./logging/log-buffer.js";
+import { MqttService } from "./mqtt/mqtt-service.js";
+import { CronScheduler } from "./scheduling/cron-scheduler.js";
+import { NanoleafService } from "./services/nanoleaf-service.js";
+import type { NotificationService } from "./services/notification-service.js";
+import { ShellyService } from "./services/shelly-service.js";
+import { StateManager, type StateManagerOptions } from "./state/state-manager.js";
 
 /**
  * Options for creating an automation engine.
@@ -259,21 +259,21 @@ export function createEngine(options: EngineOptions): Engine {
       logger.info("Starting Home Automation Engine");
       httpServer?.setManagers(stateManager, manager, logBuffer);
 
-      // Mount status page if enabled (imported lazily to keep it tree-shakeable)
-      if (httpServer && config.httpServer.statusPage.enabled) {
-        const { createStatusPageApp } = await import("./status-page/index.js");
-        const statusPagePath = config.httpServer.statusPage.path;
-        const statusPageApp = createStatusPageApp({
+      // Mount web UI if enabled (imported lazily to keep it tree-shakeable)
+      if (httpServer && config.httpServer.webUi.enabled) {
+        const { createWebUiApp } = await import("./web-ui/index.js");
+        const webUiPath = config.httpServer.webUi.path;
+        const webUiApp = createWebUiApp({
           stateManager,
           automationManager: manager,
           logBuffer,
           mqtt,
           token: config.httpServer.token,
-          path: statusPagePath,
+          path: webUiPath,
           getStartedAt: () => httpServer.startedAt,
         });
-        httpServer.mountStatusPage(statusPageApp, statusPagePath);
-        logger.info({ path: statusPagePath }, "Web status page enabled");
+        httpServer.mountWebUi(webUiApp, webUiPath);
+        logger.info({ path: webUiPath }, "Web UI enabled");
       }
 
       httpServer?.start();

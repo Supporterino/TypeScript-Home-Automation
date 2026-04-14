@@ -4,7 +4,7 @@ import {
   splitPattern,
   topicMatches,
   topicMatchesParts,
-} from "../src/core/mqtt-utils.js";
+} from "../src/core/mqtt/mqtt-utils.js";
 
 /**
  * Performance comparison tests for MQTT message dispatch.

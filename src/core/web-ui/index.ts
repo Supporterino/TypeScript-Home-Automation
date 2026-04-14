@@ -2,16 +2,16 @@ import { type Context, Hono } from "hono";
 import { getCookie } from "hono/cookie";
 import type { TriggerContext } from "../automation.js";
 import type { AutomationManager } from "../automation-manager.js";
-import type { LogBuffer, LogQuery } from "../log-buffer.js";
-import type { MqttService } from "../mqtt-service.js";
-import type { StateManager } from "../state-manager.js";
+import type { LogBuffer, LogQuery } from "../logging/log-buffer.js";
+import type { MqttService } from "../mqtt/mqtt-service.js";
+import type { StateManager } from "../state/state-manager.js";
 import { htmlShell, loginShell } from "./components/html-shell.js";
 
 /** Cookie name used to store the session token in the browser. */
 const SESSION_COOKIE = "ts-ha-session";
 
-/** Dependencies required by the status page Hono app. */
-export interface StatusPageDeps {
+/** Dependencies required by the web UI Hono app. */
+export interface WebUiDeps {
   stateManager: StateManager;
   automationManager: AutomationManager;
   logBuffer: LogBuffer;
@@ -25,7 +25,7 @@ export interface StatusPageDeps {
 }
 
 /**
- * Create the Hono app that powers the web status page.
+ * Create the Hono app that powers the web UI.
  *
  * The returned app is mounted inside the existing HttpServer at the
  * configured path prefix. It handles:
@@ -33,7 +33,7 @@ export interface StatusPageDeps {
  *   - Login / logout flow when a token is configured
  *   - A /api sub-group that mirrors the debug API endpoints
  */
-export function createStatusPageApp(deps: StatusPageDeps): Hono {
+export function createWebUiApp(deps: WebUiDeps): Hono {
   const { stateManager, automationManager, logBuffer, mqtt, token, path, getStartedAt } = deps;
   const hasAuth = token.length > 0;
 

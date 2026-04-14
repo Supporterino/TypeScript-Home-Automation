@@ -4,14 +4,14 @@ import type { Logger } from "pino";
 import type { Config } from "../config.js";
 import type { WeatherService } from "../types/weather.js";
 import { Automation, type TriggerContext } from "./automation.js";
-import type { CronScheduler } from "./cron-scheduler.js";
-import type { HttpClient } from "./http-client.js";
-import type { HttpServer } from "./http-server.js";
-import type { MqttMessageHandler, MqttService } from "./mqtt-service.js";
-import type { NanoleafService } from "./nanoleaf-service.js";
-import type { NotificationService } from "./notification-service.js";
-import type { ShellyService } from "./shelly-service.js";
-import type { StateChangeHandler, StateManager } from "./state-manager.js";
+import type { HttpClient } from "./http/http-client.js";
+import type { HttpServer } from "./http/http-server.js";
+import type { MqttMessageHandler, MqttService } from "./mqtt/mqtt-service.js";
+import type { CronScheduler } from "./scheduling/cron-scheduler.js";
+import type { NanoleafService } from "./services/nanoleaf-service.js";
+import type { NotificationService } from "./services/notification-service.js";
+import type { ShellyService } from "./services/shelly-service.js";
+import type { StateChangeHandler, StateManager } from "./state/state-manager.js";
 
 /**
  * Discovers, registers, and manages the lifecycle of all automations.

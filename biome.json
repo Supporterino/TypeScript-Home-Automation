@@ -28,7 +28,7 @@
   },
   "overrides": [
     {
-      "includes": ["src/core/status-page/assets/app-js.ts"],
+      "includes": ["src/core/web-ui/assets/app-js.ts"],
       "linter": {
         "rules": {
           "suspicious": {
@@ -38,7 +38,7 @@
       }
     },
     {
-      "includes": ["src/core/status-page/app/**"],
+      "includes": ["src/core/web-ui/app/**"],
       "linter": {
         "enabled": false
       }

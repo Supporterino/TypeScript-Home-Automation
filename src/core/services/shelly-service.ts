@@ -8,8 +8,8 @@ import type {
   ShellySwitchSetResult,
   ShellySwitchStatus,
   ShellySysStatus,
-} from "../types/shelly.js";
-import type { HttpClient } from "./http-client.js";
+} from "../../types/shelly.js";
+import type { HttpClient } from "../http/http-client.js";
 
 /**
  * A registered Shelly device with its name and IP/hostname.

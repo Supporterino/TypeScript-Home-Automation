@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { topicMatches } from "../src/core/mqtt-utils.js";
+import { topicMatches } from "../src/core/mqtt/mqtt-utils.js";
 
 describe("topicMatches", () => {
   describe("exact matches", () => {

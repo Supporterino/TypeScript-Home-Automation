@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "bun:test";
-import { LogBuffer } from "../src/core/log-buffer.js";
+import { LogBuffer } from "../src/core/logging/log-buffer.js";
 
 function entry(overrides: Record<string, unknown> = {}): string {
   return JSON.stringify({

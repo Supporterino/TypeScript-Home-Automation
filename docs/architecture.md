@@ -25,9 +25,9 @@ TypeScript Home Automation is a single-process engine that bridges MQTT messages
 │  │   HTTP Server   │        │   Log Buffer (ring)     │        │
 │  │ /healthz        │        │   2500 entries          │        │
 │  │ /readyz         │        └─────────────────────────┘        │
-│  │ /webhook/*      │                                           │
-│  │ /debug/*        │                                           │
-│  │ /status (Hono)  │                                           │
+  │  │ /webhook/*      │                                           │
+  │  │ /debug/*        │                                           │
+  │  │ /ui (Hono)      │                                           │
 │  └─────────────────┘                                           │
 └──────┬────────────────────────────────────────────────────────┘
        │
@@ -36,6 +36,24 @@ TypeScript Home Automation is a single-process engine that bridges MQTT messages
   │  Broker   │      └───────────────┘
   └───────────┘
 ```
+
+---
+
+## Core structure
+
+The `src/core/` directory is organised into subfolders by responsibility:
+
+| Folder | Contents |
+|---|---|
+| `core/` (flat) | `engine.ts`, `automation.ts`, `automation-manager.ts` — the glue layer |
+| `core/mqtt/` | `mqtt-service.ts`, `mqtt-utils.ts` |
+| `core/http/` | `http-server.ts`, `http-client.ts` |
+| `core/scheduling/` | `cron-scheduler.ts` |
+| `core/state/` | `state-manager.ts` |
+| `core/logging/` | `log-buffer.ts` |
+| `core/services/` | `shelly-service.ts`, `nanoleaf-service.ts`, `notification-service.ts`, `ntfy-notification-service.ts`, `open-meteo-service.ts`, `openweathermap-service.ts` |
+| `core/devices/` | `aqara-h1-automation.ts`, `ikea-styrbar-automation.ts`, `ikea-rodret-automation.ts` |
+| `core/web-ui/` | Hono app, HTML shell, React + Mantine frontend, compiled asset constants |
 
 ---
 
@@ -78,8 +96,8 @@ A `Bun.serve()`-based HTTP server handling:
 
 - `/healthz`, `/readyz` — health probes (always unauthenticated)
 - `/webhook/*` — webhook trigger dispatch (optionally authenticated)
-- `/debug/*` — debug API (automations, state, logs) — authenticated when `HTTP_TOKEN` is set
-- `/status/*` — Hono sub-app for the web status page (mounted lazily when `STATUS_PAGE_ENABLED=true`)
+ - `/debug/*` — debug API (automations, state, logs) — authenticated when `HTTP_TOKEN` is set
+ - `/ui/*` (default: `/status/*`) — Hono sub-app for the web UI (mounted lazily when `WEB_UI_ENABLED=true`)
 
 ### `ShellyService`
 
@@ -142,4 +160,4 @@ The framework is split into three categories:
 | Standalone runner | `src/standalone.ts` | No |
 | Example automations | `src/automations/` | No |
 | CLI tool | `src/cli/` | Yes (as `ts-ha` binary) |
-| Web status page source | `src/core/status-page/app/` | No (compiled to assets) |
+| Web UI source | `src/core/web-ui/app/` | No (compiled to assets) |

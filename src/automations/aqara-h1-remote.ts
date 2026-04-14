@@ -1,4 +1,4 @@
-import { AqaraH1Automation } from "../core/aqara-h1-automation.js";
+import { AqaraH1Automation } from "../core/devices/aqara-h1-automation.js";
 
 /**
  * Aqara Wireless Remote Switch H1 (WXKG15LM) automation.

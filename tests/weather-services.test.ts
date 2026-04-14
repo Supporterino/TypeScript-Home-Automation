@@ -1,8 +1,8 @@
 import { describe, expect, it, mock } from "bun:test";
 import pino from "pino";
-import type { HttpClient, HttpResponse } from "../src/core/http-client.js";
-import { OpenMeteoService } from "../src/core/open-meteo-service.js";
-import { OpenWeatherMapService } from "../src/core/openweathermap-service.js";
+import type { HttpClient, HttpResponse } from "../src/core/http/http-client.js";
+import { OpenMeteoService } from "../src/core/services/open-meteo-service.js";
+import { OpenWeatherMapService } from "../src/core/services/openweathermap-service.js";
 import type { WeatherCondition } from "../src/types/weather.js";
 
 const logger = pino({ level: "silent" });

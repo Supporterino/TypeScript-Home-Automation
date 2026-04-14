@@ -4,8 +4,8 @@ import type {
   NanoleafPanelLayout,
   NanoleafState,
   NanoleafStateSet,
-} from "../types/nanoleaf.js";
-import type { HttpClient } from "./http-client.js";
+} from "../../types/nanoleaf.js";
+import type { HttpClient } from "../http/http-client.js";
 
 /**
  * Configuration for registering a Nanoleaf device.

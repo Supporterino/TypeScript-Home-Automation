@@ -28,7 +28,7 @@ bun run dev             # Hot-reload development mode
 bun run typecheck       # TypeScript type checking (tsc --noEmit)
 bun run check           # Biome format + lint + import organise (auto-fix)
 bun run build           # Build package to dist/
-bun run build:status-page # Rebuild the web status page React frontend
+bun run build:web-ui    # Rebuild the web UI React frontend
 bun test                # Run all tests
 bun test --filter "name" # Run tests matching a pattern
 ```
@@ -83,7 +83,7 @@ test: ✅ Add state trigger filter tests
 
 ## Adding a new service
 
-1. Create `src/core/<name>-service.ts` implementing the service class
+1. Create `src/core/services/<name>-service.ts` implementing the service class
 2. Inject it via `createEngine()` options following the existing pattern (see `ShellyService` or `NanoleafService`)
 3. Expose it on `this.<name>` inside automations via `_inject()`
 4. Add a service documentation page under `docs/services/`

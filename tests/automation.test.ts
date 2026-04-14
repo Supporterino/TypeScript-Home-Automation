@@ -2,12 +2,12 @@ import { describe, expect, it, mock } from "bun:test";
 import pino from "pino";
 import type { Config } from "../src/config.js";
 import { Automation, type Trigger, type TriggerContext } from "../src/core/automation.js";
-import type { HttpClient } from "../src/core/http-client.js";
-import type { MqttService } from "../src/core/mqtt-service.js";
-import type { NanoleafService } from "../src/core/nanoleaf-service.js";
-import type { NotificationService } from "../src/core/notification-service.js";
-import type { ShellyService } from "../src/core/shelly-service.js";
-import type { StateManager } from "../src/core/state-manager.js";
+import type { HttpClient } from "../src/core/http/http-client.js";
+import type { MqttService } from "../src/core/mqtt/mqtt-service.js";
+import type { NanoleafService } from "../src/core/services/nanoleaf-service.js";
+import type { NotificationService } from "../src/core/services/notification-service.js";
+import type { ShellyService } from "../src/core/services/shelly-service.js";
+import type { StateManager } from "../src/core/state/state-manager.js";
 
 const logger = pino({ level: "silent" });
 

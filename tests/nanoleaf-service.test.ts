@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
 import pino from "pino";
-import type { HttpClient, HttpResponse } from "../src/core/http-client.js";
-import { NanoleafService } from "../src/core/nanoleaf-service.js";
+import type { HttpClient, HttpResponse } from "../src/core/http/http-client.js";
+import { NanoleafService } from "../src/core/services/nanoleaf-service.js";
 
 const logger = pino({ level: "silent" });
 

@@ -47,6 +47,6 @@ bun install && bun run dev
 | [Configuration](configuration.md) | All environment variables |
 | [Writing Automations](writing-automations.md) | Triggers, services, lifecycle hooks |
 | [CLI Reference](cli.md) | `ts-ha` command reference |
-| [Web Status Page](http/status-page.md) | Browser dashboard |
+| [Web UI](http/web-ui.md) | Browser dashboard |
 | [Architecture](architecture.md) | How the engine works internally |
 | [npm package](https://www.npmjs.com/package/ts-home-automation) | `ts-home-automation` on npm |

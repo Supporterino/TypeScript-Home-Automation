@@ -1,11 +1,11 @@
 /// <reference types="bun" />
 import type { Hono } from "hono";
 import type { Logger } from "pino";
-import type { TriggerContext } from "./automation.js";
-import type { AutomationManager } from "./automation-manager.js";
-import type { LogBuffer, LogQuery } from "./log-buffer.js";
-import type { MqttService } from "./mqtt-service.js";
-import type { StateManager } from "./state-manager.js";
+import type { TriggerContext } from "../automation.js";
+import type { AutomationManager } from "../automation-manager.js";
+import type { LogBuffer, LogQuery } from "../logging/log-buffer.js";
+import type { MqttService } from "../mqtt/mqtt-service.js";
+import type { StateManager } from "../state/state-manager.js";
 
 /** Handler function for a registered webhook. */
 export type WebhookHandler = (context: {
@@ -47,8 +47,8 @@ export class HttpServer {
   private stateManager: StateManager | null = null;
   private automationManager: AutomationManager | null = null;
   private logBuffer: LogBuffer | null = null;
-  private statusPageApp: Hono | null = null;
-  private statusPagePath = "";
+  private webUiApp: Hono | null = null;
+  private webUiPath = "";
 
   constructor(
     private readonly port: number,
@@ -76,13 +76,13 @@ export class HttpServer {
   }
 
   /**
-   * Mount a Hono app at a given path prefix for the status page.
+   * Mount a Hono app at a given path prefix for the web UI.
    * All requests whose path starts with the given prefix are delegated to the app.
    */
-  mountStatusPage(app: Hono, path: string): void {
-    this.statusPageApp = app;
-    this.statusPagePath = path;
-    this.logger.info({ path }, "Status page mounted");
+  mountWebUi(app: Hono, path: string): void {
+    this.webUiApp = app;
+    this.webUiPath = path;
+    this.logger.info({ path }, "Web UI mounted");
   }
 
   /**
@@ -167,9 +167,9 @@ export class HttpServer {
     // Debug API — authenticated
     if (path.startsWith("/debug/")) return this.handleDebug(req, url);
 
-    // Status page — delegated to Hono sub-app
-    if (this.statusPageApp && this.statusPagePath && path.startsWith(this.statusPagePath)) {
-      return this.statusPageApp.fetch(req);
+    // Web UI — delegated to Hono sub-app
+    if (this.webUiApp && this.webUiPath && path.startsWith(this.webUiPath)) {
+      return this.webUiApp.fetch(req);
     }
 
     return new Response("Not Found", { status: 404 });
