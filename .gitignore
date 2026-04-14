@@ -4,6 +4,7 @@ node_modules/
 # Build output
 dist/
 docs/site/
+docs/.cache
 
 # Logs
 *.log
