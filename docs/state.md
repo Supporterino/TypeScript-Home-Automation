@@ -39,12 +39,27 @@ this.state.set("last_motion", { room: "hallway", time: Date.now() });
 const isNight = this.state.get<boolean>("night_mode", false);
 const count   = this.state.get<number>("motion_count", 0);
 
-// Check existence
+// Check existence and enumerate keys
 if (this.state.has("night_mode")) { /* ... */ }
+const allKeys = this.state.keys();  // string[]
 
 // Delete
 this.state.delete("temporary_flag");
 ```
+
+### Listening for any change
+
+Use `onAnyChange` to register a global listener that fires on every state mutation — useful for audit logging or debugging:
+
+```ts
+this.state.onAnyChange((key, newValue, oldValue) => {
+  this.logger.debug({ key, newValue, oldValue }, "State changed");
+});
+```
+
+Remove a global listener with `offAnyChange(handler)`. Per-key listeners can be registered with `onChange(key, handler)` and removed with `offChange(key, handler)`.
+
+> **Note on object equality:** `StateManager` uses `JSON.stringify` to compare old and new values before firing listeners. This means that two objects with identical properties but different key-insertion order will be treated as different values and will trigger a change event spuriously. Use primitive values or consistently constructed objects for state keys that should avoid duplicate events.
 
 ---
 
@@ -60,7 +75,8 @@ export default class NightModeReaction extends Automation {
     {
       type: "state",
       key: "night_mode",
-      filter: (newValue) => newValue === true,
+      // Both newValue and oldValue are available in the filter
+      filter: (newValue, oldValue) => newValue === true && oldValue !== true,
     },
   ];
 
@@ -111,4 +127,4 @@ See [CLI Reference](cli.md) for full details.
 
 ## Web dashboard
 
-The [Web Status Page](http/status-page.md) provides a live table view of all state keys with inline editing and add/delete support.
+The [Web UI](http/web-ui.md) provides a live table view of all state keys with inline editing and add/delete support.

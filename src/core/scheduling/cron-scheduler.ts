@@ -7,6 +7,7 @@ interface ScheduledJob {
   job: CronJob;
 }
 
+/** @internal */
 export class CronScheduler {
   private jobs: ScheduledJob[] = [];
   private readonly timeZone: string | undefined;

@@ -7,7 +7,10 @@ import type { LogBuffer, LogQuery } from "../logging/log-buffer.js";
 import type { MqttService } from "../mqtt/mqtt-service.js";
 import type { StateManager } from "../state/state-manager.js";
 
-/** Handler function for a registered webhook. */
+/**
+ * Handler function for a registered webhook.
+ * @internal
+ */
 export type WebhookHandler = (context: {
   method: string;
   headers: Record<string, string>;
@@ -27,17 +30,21 @@ interface WebhookRoute {
  * and the debug API.
  *
  * Endpoints:
- * - `GET  /healthz`                   — Liveness probe
- * - `GET  /readyz`                    — Readiness probe
- * - `POST /webhook/<path>`            — Webhook triggers
- * - `GET  /debug/automations`         — List all automations
- * - `GET  /debug/automations/:name`   — Get automation details
- * - `GET  /debug/state`               — List all state keys and values
- * - `GET  /debug/state/:key`          — Get a single state value
- * - `PUT  /debug/state/:key`          — Set a state value
- * - `DELETE /debug/state/:key`        — Delete a state key
+ * - `GET  /healthz`                         — Liveness probe
+ * - `GET  /readyz`                          — Readiness probe
+ * - `POST /webhook/<path>`                  — Webhook triggers
+ * - `GET  /debug/automations`               — List all automations
+ * - `GET  /debug/automations/:name`         — Get automation details
+ * - `POST /debug/automations/:name/trigger` — Manually trigger an automation
+ * - `GET  /debug/state`                     — List all state keys and values
+ * - `GET  /debug/state/:key`                — Get a single state value
+ * - `PUT  /debug/state/:key`                — Set a state value
+ * - `DELETE /debug/state/:key`              — Delete a state key
+ * - `GET  /debug/logs`                      — Query log buffer
  *
  * Uses `Bun.serve()` for minimal overhead.
+ *
+ * @internal
  */
 export class HttpServer {
   private server: ReturnType<typeof Bun.serve> | null = null;

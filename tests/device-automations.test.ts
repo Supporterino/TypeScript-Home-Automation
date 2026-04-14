@@ -18,21 +18,21 @@ const config: Config = {
   logLevel: "info",
   automations: { recursive: false },
   state: { persist: false, filePath: "./state.json" },
-  httpServer: { port: 0, token: "" },
+  httpServer: { port: 0, token: "", webUi: { enabled: false, path: "/status" } },
 };
 
 function injectMocks(auto: { _inject: AqaraH1Automation["_inject"] }) {
-  auto._inject(
-    {} as MqttService,
-    {} as ShellyService,
-    {} as NanoleafService,
-    {} as HttpClient,
-    {} as StateManager,
+  auto._inject({
+    mqtt: {} as MqttService,
+    shelly: {} as ShellyService,
+    nanoleaf: {} as NanoleafService,
+    http: {} as HttpClient,
+    state: {} as StateManager,
     logger,
     config,
-    null,
-    null,
-  );
+    notifications: null,
+    weather: null,
+  });
 }
 
 // ---------------------------------------------------------------------------

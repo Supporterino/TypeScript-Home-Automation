@@ -1,4 +1,4 @@
-import type { IkeaRodretAction } from "../../types/zigbee.js";
+import type { IkeaRodretAction } from "../../types/zigbee/ikea.js";
 import { Automation, type Trigger, type TriggerContext } from "../automation.js";
 
 /**

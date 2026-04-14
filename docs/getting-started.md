@@ -140,6 +140,13 @@ bun run docker:up      # Start engine + Mosquitto
 bun run docker:down    # Stop
 ```
 
+> **Port access:** The default `docker-compose.yml` does not expose the engine's port 8080 to the host. To access the debug API, web UI, or health probes from your browser or the CLI, add a `ports` mapping to the engine service:
+>
+> ```yaml
+> ports:
+>   - "8080:8080"
+> ```
+
 ### Consumer Docker image
 
 In your own project:

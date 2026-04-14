@@ -132,7 +132,9 @@ export default class HallwayDimmer extends IkeaRodretAutomation {
 
 All three base classes follow the same pattern internally:
 
-1. A single MQTT trigger subscribes to `zigbee2mqtt/<remoteName>` (or the configured prefix)
+1. A single MQTT trigger subscribes to `zigbee2mqtt/<remoteName>`
 2. `execute()` reads `context.payload.action` and dispatches to the matching handler method
 3. Handler methods have empty default implementations — override only what you need
 4. The `triggers` getter is used (not a field) because abstract properties are not available during `super()` construction
+
+> **Note on topic prefix:** The device base classes always use the `zigbee2mqtt/` prefix — they do not read the `ZIGBEE2MQTT_PREFIX` environment variable. If your Zigbee2MQTT uses a non-standard prefix, override `get triggers()` in your subclass to supply the correct topic.

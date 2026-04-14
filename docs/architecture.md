@@ -27,7 +27,7 @@ TypeScript Home Automation is a single-process engine that bridges MQTT messages
 │  │ /readyz         │        └─────────────────────────┘        │
   │  │ /webhook/*      │                                           │
   │  │ /debug/*        │                                           │
-  │  │ /ui (Hono)      │                                           │
+  │  │ /status (Hono)  │  ← path is configurable via WEB_UI_PATH    │
 │  └─────────────────┘                                           │
 └──────┬────────────────────────────────────────────────────────┘
        │
@@ -61,7 +61,13 @@ The `src/core/` directory is organised into subfolders by responsibility:
 
 ### `createEngine()`
 
-A factory function (not a class) that wires all services together and returns `{ start(), stop(), mqtt, shelly, nanoleaf, weather, notifications }`. The `start()` call loads automation files, registers triggers, connects to MQTT, and starts the HTTP server.
+A factory function (not a class) that wires all services together and returns an `Engine` object with:
+
+- **Lifecycle:** `start()`, `stop()`
+- **Services:** `mqtt`, `shelly`, `nanoleaf`, `state`, `http`, `notifications`, `weather`
+- **Internals (advanced):** `config`, `logger`, `manager`
+
+The `start()` call loads automation files, registers triggers, connects to MQTT, and starts the HTTP server.
 
 ### `AutomationManager`
 
@@ -80,7 +86,7 @@ A thin wrapper around the `mqtt` package. Maintains a single connection to the b
 
 ### `CronScheduler`
 
-Wraps `node-cron`. Each `{ type: "cron" }` trigger registers a job that fires `execute()` on schedule. All jobs are stopped on engine shutdown.
+Wraps the [`cron`](https://www.npmjs.com/package/cron) package. Each `{ type: "cron" }` trigger registers a job that fires `execute()` on schedule. All jobs are stopped on engine shutdown.
 
 ### `StateManager`
 

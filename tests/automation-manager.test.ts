@@ -17,7 +17,7 @@ const config: Config = {
   logLevel: "info",
   state: { persist: false, filePath: "./state.json" },
   automations: { recursive: false },
-  httpServer: { port: 0, token: "" },
+  httpServer: { port: 0, token: "", webUi: { enabled: false, path: "/status" } },
 };
 
 /** Concrete test automation with configurable triggers. */

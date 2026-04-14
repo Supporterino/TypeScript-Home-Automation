@@ -1,5 +1,6 @@
 /**
  * A log entry stored in the ring buffer.
+ * @internal
  */
 export interface LogEntry {
   level: number;
@@ -10,6 +11,7 @@ export interface LogEntry {
 
 /**
  * Query options for filtering log entries.
+ * @internal
  */
 export interface LogQuery {
   /** Filter by automation name. */
@@ -26,6 +28,8 @@ export interface LogQuery {
  * Implements a writable stream interface compatible with pino's
  * multistream destination. Stores the last N log entries and supports
  * filtered queries by automation name and log level.
+ *
+ * @internal
  */
 export class LogBuffer {
   private readonly buffer: LogEntry[];

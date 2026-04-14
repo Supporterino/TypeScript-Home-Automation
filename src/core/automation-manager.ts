@@ -2,14 +2,14 @@ import { readdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import type { Logger } from "pino";
 import type { Config } from "../config.js";
+import type { NotificationService } from "../types/notification.js";
 import type { WeatherService } from "../types/weather.js";
-import { Automation, type TriggerContext } from "./automation.js";
+import { Automation, type AutomationContext, type TriggerContext } from "./automation.js";
 import type { HttpClient } from "./http/http-client.js";
 import type { HttpServer } from "./http/http-server.js";
 import type { MqttMessageHandler, MqttService } from "./mqtt/mqtt-service.js";
 import type { CronScheduler } from "./scheduling/cron-scheduler.js";
 import type { NanoleafService } from "./services/nanoleaf-service.js";
-import type { NotificationService } from "./services/notification-service.js";
 import type { ShellyService } from "./services/shelly-service.js";
 import type { StateChangeHandler, StateManager } from "./state/state-manager.js";
 
@@ -104,17 +104,18 @@ export class AutomationManager {
   async register(automation: Automation): Promise<void> {
     const childLogger = this.logger.child({ automation: automation.name });
 
-    automation._inject(
-      this.mqtt,
-      this.shelly,
-      this.nanoleaf,
-      this.http,
-      this.stateManager,
-      childLogger,
-      this.config,
-      this.notifications,
-      this.weather,
-    );
+    const context: AutomationContext = {
+      mqtt: this.mqtt,
+      shelly: this.shelly,
+      nanoleaf: this.nanoleaf,
+      http: this.http,
+      state: this.stateManager,
+      logger: childLogger,
+      config: this.config,
+      notifications: this.notifications,
+      weather: this.weather,
+    };
+    automation._inject(context);
 
     const mqttHandlers: { topic: string; handler: MqttMessageHandler }[] = [];
     const stateHandlers: { key: string; handler: StateChangeHandler }[] = [];

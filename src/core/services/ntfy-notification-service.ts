@@ -1,6 +1,6 @@
 import type { Logger } from "pino";
+import type { NotificationOptions, NotificationService } from "../../types/notification.js";
 import type { HttpClient } from "../http/http-client.js";
-import type { NotificationOptions, NotificationService } from "./notification-service.js";
 
 /**
  * Configuration for the ntfy.sh notification service.

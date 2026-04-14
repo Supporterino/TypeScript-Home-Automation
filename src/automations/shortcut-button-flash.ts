@@ -1,5 +1,5 @@
 import { Automation, type Trigger, type TriggerContext } from "../core/automation.js";
-import type { ColorXY, IkeaShortcutButtonAction } from "../types/zigbee.js";
+import type { ColorXY, IkeaShortcutButtonAction } from "../types/zigbee/index.js";
 
 /**
  * Color presets in CIE xy for common flash colors.
