@@ -93,9 +93,13 @@ export function App() {
       {/* ── Navbar ─────────────────────────────────────────────────────── */}
       <AppShell.Navbar p="md">
         <AppShell.Section>
-          <Text fw={700} size="sm" c="dimmed" tt="uppercase" mb="md">
-            ts-ha
-          </Text>
+          <Group gap={'xs'} wrap="nowrap" mb="md">
+            <Text fw={700} size="sm" c="dimmed" tt="uppercase">
+              ts-ha
+            </Text>
+            {/* Color scheme toggle */}
+            <ColorSchemeToggle />
+          </Group>
         </AppShell.Section>
 
         <AppShell.Section grow>
@@ -106,7 +110,7 @@ export function App() {
               active={activeTab === item.id}
               onClick={() => handleTabChange(item.id)}
               mb={2}
-              variant="filled"
+              variant="light"
             />
           ))}
         </AppShell.Section>
@@ -146,9 +150,6 @@ export function App() {
                 ↻
               </ActionIcon>
             </Tooltip>
-
-            {/* Color scheme toggle */}
-            <ColorSchemeToggle />
           </Group>
         </AppShell.Section>
       </AppShell.Navbar>
