@@ -41,7 +41,7 @@ Initial public release of the `ts-home-automation` package. All features below a
 - `/readyz` — readiness probe (MQTT + engine checks)
 - `/webhook/*` — webhook endpoint with optional bearer auth
 - `/debug/*` — debug API (automations, state, logs, trigger)
-- Web status page — React + Mantine browser dashboard served by Hono (optional, `STATUS_PAGE_ENABLED=true`)
+- Web UI — React + Mantine browser dashboard served by Hono (optional, `WEB_UI_ENABLED=true`)
 
 ### CLI (`ts-ha`)
 

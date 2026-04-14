@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
 import { unlink } from "node:fs/promises";
 import pino from "pino";
-import { StateManager } from "../src/core/state-manager.js";
+import { StateManager } from "../src/core/state/state-manager.js";
 
 const logger = pino({ level: "silent" });
 const TEST_STATE_FILE = "./test-state.json";

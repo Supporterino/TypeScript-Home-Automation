@@ -138,10 +138,7 @@ function AutomationRow({ automation, onTrigger }: AutomationRowProps) {
 
   return (
     <>
-      <Table.Tr
-        style={{ cursor: "pointer" }}
-        onClick={toggle}
-      >
+      <Table.Tr style={{ cursor: "pointer" }} onClick={toggle}>
         <Table.Td>
           <Text fw={600} ff="monospace" size="sm">
             {automation.name}

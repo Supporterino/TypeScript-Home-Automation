@@ -3,11 +3,11 @@ import pino from "pino";
 import type { Config } from "../src/config.js";
 import { Automation, type Trigger, type TriggerContext } from "../src/core/automation.js";
 import { AutomationManager } from "../src/core/automation-manager.js";
-import type { CronScheduler } from "../src/core/cron-scheduler.js";
-import type { HttpClient } from "../src/core/http-client.js";
-import type { MqttMessageHandler, MqttService } from "../src/core/mqtt-service.js";
-import type { ShellyService } from "../src/core/shelly-service.js";
-import type { StateChangeHandler, StateManager } from "../src/core/state-manager.js";
+import type { HttpClient } from "../src/core/http/http-client.js";
+import type { MqttMessageHandler, MqttService } from "../src/core/mqtt/mqtt-service.js";
+import type { CronScheduler } from "../src/core/scheduling/cron-scheduler.js";
+import type { ShellyService } from "../src/core/services/shelly-service.js";
+import type { StateChangeHandler, StateManager } from "../src/core/state/state-manager.js";
 
 const logger = pino({ level: "silent" });
 

@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
 import pino from "pino";
 import { loadConfig } from "../src/config.js";
-import { LogBuffer } from "../src/core/log-buffer.js";
-import { StateManager } from "../src/core/state-manager.js";
-import { createStatusPageApp } from "../src/core/status-page/index.js";
+import { LogBuffer } from "../src/core/logging/log-buffer.js";
+import { StateManager } from "../src/core/state/state-manager.js";
+import { createWebUiApp } from "../src/core/web-ui/index.js";
 
 const logger = pino({ level: "silent" });
 
@@ -32,7 +32,7 @@ function makeApp({
   const mqtt = createMockMqtt(true);
   const automationManager = createMockAutomationManager(automations);
 
-  return createStatusPageApp({
+  return createWebUiApp({
     stateManager,
     automationManager,
     logBuffer,
@@ -53,12 +53,12 @@ async function req(
 
 // ── Config tests ─────────────────────────────────────────────────────────
 
-describe("statusPage config", () => {
+describe("webUi config", () => {
   const originalEnv = { ...process.env };
 
   beforeEach(() => {
-    delete process.env.STATUS_PAGE_ENABLED;
-    delete process.env.STATUS_PAGE_PATH;
+    delete process.env.WEB_UI_ENABLED;
+    delete process.env.WEB_UI_PATH;
     delete process.env.HTTP_PORT;
     delete process.env.HTTP_TOKEN;
     delete process.env.MQTT_HOST;
@@ -77,8 +77,8 @@ describe("statusPage config", () => {
 
   it("defaults to disabled with path /status", () => {
     const config = loadConfig();
-    expect(config.httpServer.statusPage.enabled).toBe(false);
-    expect(config.httpServer.statusPage.path).toBe("/status");
+    expect(config.httpServer.webUi.enabled).toBe(false);
+    expect(config.httpServer.webUi.path).toBe("/status");
   });
 
   it.each([
@@ -88,22 +88,22 @@ describe("statusPage config", () => {
     ["false", false],
     ["0", false],
     ["no", false],
-  ] as const)("STATUS_PAGE_ENABLED='%s' parses to %s", (envValue, expected) => {
-    process.env.STATUS_PAGE_ENABLED = envValue;
+  ] as const)("WEB_UI_ENABLED='%s' parses to %s", (envValue, expected) => {
+    process.env.WEB_UI_ENABLED = envValue;
     const config = loadConfig();
-    expect(config.httpServer.statusPage.enabled).toBe(expected);
+    expect(config.httpServer.webUi.enabled).toBe(expected);
   });
 
-  it("reads STATUS_PAGE_PATH from env", () => {
-    process.env.STATUS_PAGE_PATH = "/dashboard";
+  it("reads WEB_UI_PATH from env", () => {
+    process.env.WEB_UI_PATH = "/dashboard";
     const config = loadConfig();
-    expect(config.httpServer.statusPage.path).toBe("/dashboard");
+    expect(config.httpServer.webUi.path).toBe("/dashboard");
   });
 });
 
 // ── Status page app — no auth ─────────────────────────────────────────────
 
-describe("createStatusPageApp — no auth", () => {
+describe("createWebUiApp — no auth", () => {
   describe("GET /status", () => {
     it("returns 200 with HTML content-type", async () => {
       const app = makeApp();
@@ -294,7 +294,7 @@ describe("createStatusPageApp — no auth", () => {
       stateManager.set("night_mode", true);
       stateManager.set("count", 42);
 
-      const app = createStatusPageApp({
+      const app = createWebUiApp({
         stateManager,
         automationManager: createMockAutomationManager(),
         logBuffer: new LogBuffer(100),
@@ -315,7 +315,7 @@ describe("createStatusPageApp — no auth", () => {
   describe("PUT /status/api/state/:key", () => {
     it("sets a state value", async () => {
       const stateManager = new StateManager(logger);
-      const app = createStatusPageApp({
+      const app = createWebUiApp({
         stateManager,
         automationManager: createMockAutomationManager(),
         logBuffer: new LogBuffer(100),
@@ -353,7 +353,7 @@ describe("createStatusPageApp — no auth", () => {
       const stateManager = new StateManager(logger);
       stateManager.set("to-delete", "value");
 
-      const app = createStatusPageApp({
+      const app = createWebUiApp({
         stateManager,
         automationManager: createMockAutomationManager(),
         logBuffer: new LogBuffer(100),
@@ -393,7 +393,7 @@ describe("createStatusPageApp — no auth", () => {
       const logBuffer = new LogBuffer(100);
       logBuffer.write(JSON.stringify({ level: 30, time: Date.now(), msg: "hello" }));
 
-      const app = createStatusPageApp({
+      const app = createWebUiApp({
         stateManager: new StateManager(logger),
         automationManager: createMockAutomationManager(),
         logBuffer,
@@ -413,7 +413,7 @@ describe("createStatusPageApp — no auth", () => {
 
 // ── Status page app — with auth ───────────────────────────────────────────
 
-describe("createStatusPageApp — with auth", () => {
+describe("createWebUiApp — with auth", () => {
   const SECRET = "my-secret-token";
 
   function authedReq(

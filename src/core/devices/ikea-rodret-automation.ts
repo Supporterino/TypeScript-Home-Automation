@@ -1,5 +1,5 @@
-import type { IkeaRodretAction } from "../types/zigbee.js";
-import { Automation, type Trigger, type TriggerContext } from "./automation.js";
+import type { IkeaRodretAction } from "../../types/zigbee.js";
+import { Automation, type Trigger, type TriggerContext } from "../automation.js";
 
 /**
  * Abstract base class for automations driven by an IKEA RODRET dimmer
@@ -21,7 +21,7 @@ import { Automation, type Trigger, type TriggerContext } from "./automation.js";
  *
  * @example
  * ```ts
- * import { IkeaRodretAutomation } from "../core/ikea-rodret-automation.js";
+ * import { IkeaRodretAutomation } from "ts-home-automation";
  *
  * export default class BedroomDimmer extends IkeaRodretAutomation {
  *   readonly name = "bedroom-dimmer";

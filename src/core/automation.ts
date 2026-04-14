@@ -1,12 +1,12 @@
 import type { Logger } from "pino";
 import type { Config } from "../config.js";
 import type { WeatherService } from "../types/weather.js";
-import type { HttpClient } from "./http-client.js";
-import type { MqttService } from "./mqtt-service.js";
-import type { NanoleafService } from "./nanoleaf-service.js";
-import type { NotificationOptions, NotificationService } from "./notification-service.js";
-import type { ShellyService } from "./shelly-service.js";
-import type { StateManager } from "./state-manager.js";
+import type { HttpClient } from "./http/http-client.js";
+import type { MqttService } from "./mqtt/mqtt-service.js";
+import type { NanoleafService } from "./services/nanoleaf-service.js";
+import type { NotificationOptions, NotificationService } from "./services/notification-service.js";
+import type { ShellyService } from "./services/shelly-service.js";
+import type { StateManager } from "./state/state-manager.js";
 
 /**
  * Trigger types for automations.

@@ -21,7 +21,7 @@ nav:
   - Device Types: device-types.md
   - HTTP:
       - Health Probes: http/health-probes.md
-      - Web Status Page: http/status-page.md
+      - Web UI: http/web-ui.md
   - CLI Reference: cli.md
   - Architecture: architecture.md
   - Contributing: contributing.md

@@ -44,7 +44,7 @@ An annotated `.env.example` is included in the repository.
 
 ## HTTP server
 
-The HTTP server serves health probes, the debug API, webhook endpoints, and optionally the web status page. Set `HTTP_PORT=0` to disable it entirely (also disables webhooks and the status page).
+The HTTP server serves health probes, the debug API, webhook endpoints, and optionally the web UI. Set `HTTP_PORT=0` to disable it entirely (also disables webhooks and the web UI).
 
 | Variable | Default | Description |
 |---|---|---|
@@ -53,14 +53,14 @@ The HTTP server serves health probes, the debug API, webhook endpoints, and opti
 
 ---
 
-## Web status page
+## Web UI
 
 | Variable | Default | Description |
 |---|---|---|
-| `STATUS_PAGE_ENABLED` | `false` | Enable the browser-based status dashboard |
-| `STATUS_PAGE_PATH` | `/status` | URL path prefix for the status page |
+| `WEB_UI_ENABLED` | `false` | Enable the browser-based web UI dashboard |
+| `WEB_UI_PATH` | `/status` | URL path prefix for the web UI |
 
-See [Web Status Page](http/status-page.md) for full details.
+See [Web UI](http/web-ui.md) for full details.
 
 ---
 
@@ -80,6 +80,6 @@ STATE_FILE_PATH=./data/state.json
 HTTP_PORT=8080
 HTTP_TOKEN=my-secret-token
 
-STATUS_PAGE_ENABLED=true
-STATUS_PAGE_PATH=/status
+WEB_UI_ENABLED=true
+WEB_UI_PATH=/status
 ```

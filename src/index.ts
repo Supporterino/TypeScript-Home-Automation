@@ -10,53 +10,52 @@
 
 // Configuration
 export { type Config, loadConfig } from "./config.js";
-
-// Automation base classes and trigger types
-export { AqaraH1Automation } from "./core/aqara-h1-automation.js";
 export {
   Automation,
   type Trigger,
   type TriggerContext,
 } from "./core/automation.js";
 export { AutomationManager } from "./core/automation-manager.js";
-export { CronScheduler } from "./core/cron-scheduler.js";
+// Automation base classes and trigger types
+export { AqaraH1Automation } from "./core/devices/aqara-h1-automation.js";
+export { IkeaRodretAutomation } from "./core/devices/ikea-rodret-automation.js";
+export { IkeaStyrbarAutomation } from "./core/devices/ikea-styrbar-automation.js";
 // Engine factory
 export { createEngine, type Engine, type EngineOptions } from "./core/engine.js";
 export {
   HttpClient,
   type HttpRequestOptions,
   type HttpResponse,
-} from "./core/http-client.js";
+} from "./core/http/http-client.js";
 // Health server
-export { HttpServer, type WebhookHandler } from "./core/http-server.js";
-export { IkeaRodretAutomation } from "./core/ikea-rodret-automation.js";
-export { IkeaStyrbarAutomation } from "./core/ikea-styrbar-automation.js";
-export { LogBuffer, type LogEntry, type LogQuery } from "./core/log-buffer.js";
+export { HttpServer, type WebhookHandler } from "./core/http/http-server.js";
+export { LogBuffer, type LogEntry, type LogQuery } from "./core/logging/log-buffer.js";
 // Core services (exposed for advanced usage)
-export { type MqttMessageHandler, MqttService } from "./core/mqtt-service.js";
-export { type NanoleafDeviceConfig, NanoleafService } from "./core/nanoleaf-service.js";
+export { type MqttMessageHandler, MqttService } from "./core/mqtt/mqtt-service.js";
+export { CronScheduler } from "./core/scheduling/cron-scheduler.js";
+export { type NanoleafDeviceConfig, NanoleafService } from "./core/services/nanoleaf-service.js";
 // Notification services
 export type {
   NotificationOptions,
   NotificationPriority,
   NotificationService,
-} from "./core/notification-service.js";
+} from "./core/services/notification-service.js";
 export {
   type NtfyConfig,
   NtfyNotificationService,
-} from "./core/ntfy-notification-service.js";
-export { type OpenMeteoConfig, OpenMeteoService } from "./core/open-meteo-service.js";
+} from "./core/services/ntfy-notification-service.js";
+export { type OpenMeteoConfig, OpenMeteoService } from "./core/services/open-meteo-service.js";
 export {
   type OpenWeatherMapConfig,
   OpenWeatherMapService,
-} from "./core/openweathermap-service.js";
-export { type ShellyDevice, ShellyService } from "./core/shelly-service.js";
+} from "./core/services/openweathermap-service.js";
+export { type ShellyDevice, ShellyService } from "./core/services/shelly-service.js";
 // State management
 export {
   type StateChangeHandler,
   StateManager,
   type StateManagerOptions,
-} from "./core/state-manager.js";
+} from "./core/state/state-manager.js";
 // Nanoleaf types
 export type {
   NanoleafAnimType,

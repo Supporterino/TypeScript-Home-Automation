@@ -1,5 +1,5 @@
-import type { IkeaStyrbarAction } from "../types/zigbee.js";
-import { Automation, type Trigger, type TriggerContext } from "./automation.js";
+import type { IkeaStyrbarAction } from "../../types/zigbee.js";
+import { Automation, type Trigger, type TriggerContext } from "../automation.js";
 
 /**
  * Abstract base class for automations driven by an IKEA STYRBAR remote
@@ -27,7 +27,7 @@ import { Automation, type Trigger, type TriggerContext } from "./automation.js";
  *
  * @example
  * ```ts
- * import { IkeaStyrbarAutomation } from "../core/ikea-styrbar-automation.js";
+ * import { IkeaStyrbarAutomation } from "ts-home-automation";
  *
  * export default class LivingRoomRemote extends IkeaStyrbarAutomation {
  *   readonly name = "living-room-remote";

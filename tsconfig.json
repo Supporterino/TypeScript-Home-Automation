@@ -17,5 +17,5 @@
     "rootDir": "./src"
   },
   "include": ["src/**/*.ts", "src/**/*.tsx"],
-  "exclude": ["node_modules", "dist", "src/core/status-page/app/**"]
+  "exclude": ["node_modules", "dist", "src/core/web-ui/app/**"]
 }

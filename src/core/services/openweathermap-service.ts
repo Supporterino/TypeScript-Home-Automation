@@ -5,8 +5,8 @@ import type {
   WeatherCondition,
   WeatherLocation,
   WeatherService,
-} from "../types/weather.js";
-import type { HttpClient } from "./http-client.js";
+} from "../../types/weather.js";
+import type { HttpClient } from "../http/http-client.js";
 
 /**
  * Configuration for the OpenWeatherMap service.

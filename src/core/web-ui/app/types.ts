@@ -1,4 +1,4 @@
-/** Shared TypeScript types for the status page React app. */
+/** Shared TypeScript types for the web UI React app. */
 
 export interface StatusChecks {
   mqtt: boolean;

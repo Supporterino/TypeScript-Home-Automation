@@ -1,4 +1,4 @@
-/** Typed fetch wrappers for the status page API. */
+/** Typed fetch wrappers for the web UI API. */
 
 import type { Automation, DashboardData, LogEntry, StateMap, StatusData } from "./types";
 

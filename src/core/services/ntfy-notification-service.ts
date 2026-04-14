@@ -1,5 +1,5 @@
 import type { Logger } from "pino";
-import type { HttpClient } from "./http-client.js";
+import type { HttpClient } from "../http/http-client.js";
 import type { NotificationOptions, NotificationService } from "./notification-service.js";
 
 /**

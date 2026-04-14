@@ -93,7 +93,7 @@ export function App() {
       {/* ── Navbar ─────────────────────────────────────────────────────── */}
       <AppShell.Navbar p="md">
         <AppShell.Section>
-          <Group gap={'xs'} wrap="nowrap" mb="md">
+          <Group gap={"xs"} wrap="nowrap" mb="md">
             <Text fw={700} size="sm" c="dimmed" tt="uppercase">
               ts-ha
             </Text>
