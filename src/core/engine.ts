@@ -1,5 +1,6 @@
 import pino, { type Logger, multistream } from "pino";
 import { type Config, loadConfig } from "../config.js";
+import type { NotificationService } from "../types/notification.js";
 import type { WeatherService } from "../types/weather.js";
 import { AutomationManager } from "./automation-manager.js";
 import { HttpClient } from "./http/http-client.js";
@@ -8,7 +9,6 @@ import { LogBuffer } from "./logging/log-buffer.js";
 import { MqttService } from "./mqtt/mqtt-service.js";
 import { CronScheduler } from "./scheduling/cron-scheduler.js";
 import { NanoleafService } from "./services/nanoleaf-service.js";
-import type { NotificationService } from "./services/notification-service.js";
 import { ShellyService } from "./services/shelly-service.js";
 import { StateManager, type StateManagerOptions } from "./state/state-manager.js";
 

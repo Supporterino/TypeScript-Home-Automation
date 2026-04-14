@@ -11,12 +11,24 @@
       "import": "./dist/index.js"
     },
     "./types": {
-      "types": "./dist/types/zigbee.d.ts",
-      "import": "./dist/types/zigbee.js"
+      "types": "./dist/types/zigbee/index.d.ts",
+      "import": "./dist/types/zigbee/index.js"
     },
     "./types/shelly": {
       "types": "./dist/types/shelly.d.ts",
       "import": "./dist/types/shelly.js"
+    },
+    "./types/nanoleaf": {
+      "types": "./dist/types/nanoleaf.d.ts",
+      "import": "./dist/types/nanoleaf.js"
+    },
+    "./types/weather": {
+      "types": "./dist/types/weather.d.ts",
+      "import": "./dist/types/weather.js"
+    },
+    "./types/notification": {
+      "types": "./dist/types/notification.d.ts",
+      "import": "./dist/types/notification.js"
     }
   },
   "bin": {

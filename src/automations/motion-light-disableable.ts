@@ -1,5 +1,5 @@
 import { Automation, type Trigger, type TriggerContext } from "../core/automation.js";
-import type { PhilipsHueMotionSensorPayload } from "../types/zigbee.js";
+import type { PhilipsHueMotionSensorPayload } from "../types/zigbee/index.js";
 
 /**
  * A single lamp target with its friendly name and brightness (0–254).

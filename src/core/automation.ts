@@ -1,10 +1,10 @@
 import type { Logger } from "pino";
 import type { Config } from "../config.js";
+import type { NotificationOptions, NotificationService } from "../types/notification.js";
 import type { WeatherService } from "../types/weather.js";
 import type { HttpClient } from "./http/http-client.js";
 import type { MqttService } from "./mqtt/mqtt-service.js";
 import type { NanoleafService } from "./services/nanoleaf-service.js";
-import type { NotificationOptions, NotificationService } from "./services/notification-service.js";
 import type { ShellyService } from "./services/shelly-service.js";
 import type { StateManager } from "./state/state-manager.js";
 
@@ -94,6 +94,26 @@ export type TriggerContext =
     };
 
 /**
+ * Dependencies injected into every automation by the AutomationManager.
+ *
+ * Passed as a single context object to `_inject()` so that adding new
+ * optional services in the future is a non-breaking extension.
+ */
+export interface AutomationContext {
+  mqtt: MqttService;
+  shelly: ShellyService;
+  nanoleaf: NanoleafService;
+  http: HttpClient;
+  state: StateManager;
+  logger: Logger;
+  config: Config;
+  /** `null` when no notification service is configured on the engine. */
+  notifications: NotificationService | null;
+  /** `null` when no weather service is configured on the engine. */
+  weather: WeatherService | null;
+}
+
+/**
  * Abstract base class for all automations.
  *
  * To create a new automation:
@@ -115,7 +135,7 @@ export type TriggerContext =
  * @example
  * ```ts
  * import { Automation, type Trigger, type TriggerContext } from "../core/automation.js";
- * import type { OccupancyPayload } from "../types/zigbee.js";
+ * import type { OccupancyPayload } from "../types/zigbee/index.js";
  *
  * export default class MotionLight extends Automation {
  *   name = "motion-light";
@@ -156,26 +176,16 @@ export abstract class Automation {
    * Called by the AutomationManager to inject dependencies.
    * Do not call this yourself.
    */
-  _inject(
-    mqtt: MqttService,
-    shelly: ShellyService,
-    nanoleaf: NanoleafService,
-    http: HttpClient,
-    state: StateManager,
-    logger: Logger,
-    config: Config,
-    notifications: NotificationService | null,
-    weather: WeatherService | null,
-  ): void {
-    this.mqtt = mqtt;
-    this.shelly = shelly;
-    this.nanoleaf = nanoleaf;
-    this.http = http;
-    this.state = state;
-    this.logger = logger;
-    this.config = config;
-    this.notificationService = notifications;
-    this.weatherService = weather;
+  _inject(context: AutomationContext): void {
+    this.mqtt = context.mqtt;
+    this.shelly = context.shelly;
+    this.nanoleaf = context.nanoleaf;
+    this.http = context.http;
+    this.state = context.state;
+    this.logger = context.logger;
+    this.config = context.config;
+    this.notificationService = context.notifications;
+    this.weatherService = context.weather;
   }
 
   /**
@@ -203,19 +213,19 @@ export abstract class Automation {
   }
 
   /**
-   * Get the weather service. Returns the configured WeatherService or throws
-   * if none is configured.
+   * The configured weather service, or `null` if none was provided to the engine.
+   *
+   * Always null-check before use:
    *
    * @example
    * ```ts
-   * const current = await this.weather.getCurrent();
-   * const forecast = await this.weather.getForecast(3);
+   * const weather = this.weather;
+   * if (!weather) return;
+   * const current = await weather.getCurrent();
+   * const forecast = await weather.getForecast(3);
    * ```
    */
-  protected get weather(): WeatherService {
-    if (!this.weatherService) {
-      throw new Error("weather accessed but no WeatherService is configured on the engine");
-    }
+  protected get weather(): WeatherService | null {
     return this.weatherService;
   }
 

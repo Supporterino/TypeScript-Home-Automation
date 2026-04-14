@@ -10,6 +10,7 @@ An annotated `.env.example` is included in the repository.
 
 | Variable | Default | Description |
 |---|---|---|
+| `NODE_ENV` | _(unset)_ | Set to `production` to use raw JSON logging; otherwise logs are pretty-printed |
 | `TZ` | system default | Timezone for cron schedules, e.g. `Europe/Berlin` |
 | `LOG_LEVEL` | `info` | Minimum log level: `trace`, `debug`, `info`, `warn`, `error`, `fatal` |
 

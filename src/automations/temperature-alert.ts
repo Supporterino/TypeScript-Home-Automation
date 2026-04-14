@@ -1,5 +1,5 @@
 import { Automation, type Trigger, type TriggerContext } from "../core/automation.js";
-import type { AqaraTemperatureHumidityPayload } from "../types/zigbee.js";
+import type { AqaraTemperatureHumidityPayload } from "../types/zigbee/index.js";
 
 /**
  * Threshold configuration for a specific measurement.

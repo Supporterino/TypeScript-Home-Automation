@@ -12,8 +12,8 @@ bun run typecheck            # TypeScript type checking (tsc --noEmit)
 bun run check                # Biome format + lint + import organize (auto-fix)
 bun run format               # Format only
 bun run lint                 # Lint only
-bun run build                # Build package to dist/ (runs status page build first)
-bun run build:status-page    # Build only the React status page frontend
+bun run build                # Build package to dist/ (runs web UI build first)
+bun run build:web-ui         # Build only the React web UI frontend
 bun test                     # Run all tests
 bun test tests/state-manager.test.ts           # Run a single test file
 bun test --filter "topicMatches"               # Run tests matching a name pattern
@@ -21,23 +21,33 @@ bun test --filter "topicMatches"               # Run tests matching a name patte
 
 Always run `bun run typecheck && bun run check && bun test` before committing.
 
+Other available scripts: `bun run format:check` (format check without write), `bun run lint:fix` (lint with auto-fix), `bun run docker:build/up/down` (Docker Compose wrappers), `bun run prepublishOnly` (full build before npm publish).
+
 > **Note on `typecheck`**: `tsc --noEmit` does not trigger the `prebuild` hook and does not
-> compile `src/core/status-page/app/**` (excluded from `tsconfig.json`). That subtree has its
-> own `src/core/status-page/app/tsconfig.json` for IDE support and is compiled exclusively by
-> `scripts/build-status-page.ts` via `Bun.build`.
+> compile `src/core/web-ui/app/**` (excluded from `tsconfig.json`). That subtree has its
+> own `src/core/web-ui/app/tsconfig.json` for IDE support and is compiled exclusively by
+> `scripts/build-web-ui.ts` via `Bun.build`.
 
 ## Project Structure
 
-- `src/core/` — Framework core (engine, services, base classes, device-specific abstracts)
-  - `src/core/status-page/` — Web dashboard served by Hono
-    - `src/core/status-page/app/` — React + Mantine frontend source (compiled by `Bun.build`, **not** `tsc`)
-    - `src/core/status-page/assets/` — Generated JS/CSS string constants (git-ignored, rebuilt by `build:status-page`)
+- `src/core/` — Framework core, organised into subfolders by responsibility:
+  - `src/core/engine.ts`, `automation.ts`, `automation-manager.ts` — glue layer (flat)
+  - `src/core/mqtt/` — `mqtt-service.ts`, `mqtt-utils.ts`
+  - `src/core/http/` — `http-server.ts`, `http-client.ts`
+  - `src/core/scheduling/` — `cron-scheduler.ts`
+  - `src/core/state/` — `state-manager.ts`
+  - `src/core/logging/` — `log-buffer.ts`
+  - `src/core/services/` — `shelly-service.ts`, `nanoleaf-service.ts`, `ntfy-notification-service.ts`, `open-meteo-service.ts`, `openweathermap-service.ts`
+  - `src/core/devices/` — `aqara-h1-automation.ts`, `ikea-styrbar-automation.ts`, `ikea-rodret-automation.ts`
+  - `src/core/web-ui/` — Web dashboard served by Hono
+    - `src/core/web-ui/app/` — React + Mantine frontend source (compiled by `Bun.build`, **not** `tsc`)
+    - `src/core/web-ui/assets/` — Generated JS/CSS string constants (git-ignored, rebuilt by `build:web-ui`)
 - `src/automations/` — Example automations (excluded from npm package build)
-- `src/types/` — Zigbee2MQTT and Shelly device type definitions
+- `src/types/` — Device and service type definitions (Zigbee2MQTT brands, Shelly, Nanoleaf, Weather, Notifications)
 - `src/cli/` — CLI tool (`ts-ha`) for managing running instances
   - `src/cli/commands/` — CLI command implementations (`.ts` and `.tsx`)
   - `src/cli/components/` — OpenTUI React components for the interactive dashboard
-- `scripts/` — Build scripts (e.g. `build-status-page.ts`)
+- `scripts/` — Build scripts (e.g. `build-web-ui.ts`)
 - `tests/` — Unit tests (flat directory, `*.test.ts`)
 
 ## Runtime & Module System
@@ -111,7 +121,7 @@ import { type StateManagerOptions, StateManager } from "./state-manager.js";
 
 ```ts
 import { Automation, type Trigger, type TriggerContext } from "../core/automation.js";
-import type { SomePayload } from "../types/zigbee.js";
+import type { SomePayload } from "../types/zigbee/index.js";
 
 interface LocalConfig { /* file-scoped, not exported */ }
 
@@ -151,12 +161,19 @@ export default class MyAutomation extends Automation {
 
 ## Type Organization
 
-Types in `src/types/` follow a three-layer hierarchy:
-1. **Common primitives** — `DeviceState`, `ColorXY`, `PowerOnBehavior`
-2. **Generic payloads** — Brand-agnostic: `DimmableLightPayload`, `OccupancyPayload`
-3. **Brand-specific** — `PhilipsColorLightSetCommand`, `IkeaStyrbarPayload`
+`src/types/` contains:
+- `zigbee/` — Zigbee2MQTT types split by brand:
+  - `common.ts` — primitives and generic payloads (`DeviceState`, `ColorXY`, `OccupancyPayload`, …)
+  - `philips.ts` — Philips Hue specific types
+  - `ikea.ts` — IKEA specific types
+  - `aqara.ts` — Aqara specific types
+  - `index.ts` — barrel re-exporting all of the above
+- `shelly.ts` — Shelly Gen 2 RPC types
+- `nanoleaf.ts` — Nanoleaf OpenAPI types
+- `weather.ts` — `WeatherService` interface and data types
+- `notification.ts` — `NotificationService` interface and option types
 
-Naming: `{Capability}Payload` for state, `{Capability}SetCommand` for commands.
+Zigbee type naming: `{Capability}Payload` for device state, `{Capability}SetCommand` for commands.
 
 ## Test Patterns
 
@@ -188,10 +205,10 @@ describe("ClassName", () => {
 ## Dependency Injection
 
 - **Constructor injection** for services (via `private readonly` params)
-- **`_inject()` method** for automations (framework-internal, underscore-prefixed)
-- **`T | null`** for optional services, check before use
+- **`_inject(context: AutomationContext)` method** for automations (framework-internal, underscore-prefixed) — takes a single context object, not positional parameters
+- **`T | null`** for optional services (`notifications`, `weather`), check before use
 - **Child loggers** scoped per service: `logger.child({ service: "mqtt" })`
-- **Factory function overload** for notifications: accepts instance or `(http, logger) => Service`
+- **Factory function overload** for notifications/weather: accepts instance or `(http, logger) => Service`
 
 ## Exports (`src/index.ts`)
 

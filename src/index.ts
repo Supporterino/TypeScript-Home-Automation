@@ -12,6 +12,7 @@
 export { type Config, loadConfig } from "./config.js";
 export {
   Automation,
+  type AutomationContext,
   type Trigger,
   type TriggerContext,
 } from "./core/automation.js";
@@ -34,12 +35,7 @@ export { LogBuffer, type LogEntry, type LogQuery } from "./core/logging/log-buff
 export { type MqttMessageHandler, MqttService } from "./core/mqtt/mqtt-service.js";
 export { CronScheduler } from "./core/scheduling/cron-scheduler.js";
 export { type NanoleafDeviceConfig, NanoleafService } from "./core/services/nanoleaf-service.js";
-// Notification services
-export type {
-  NotificationOptions,
-  NotificationPriority,
-  NotificationService,
-} from "./core/services/notification-service.js";
+// Notification implementations
 export {
   type NtfyConfig,
   NtfyNotificationService,
@@ -73,6 +69,13 @@ export type {
   NanoleafState,
   NanoleafStateSet,
 } from "./types/nanoleaf.js";
+// Notification services
+// Notification service interface + types
+export type {
+  NotificationOptions,
+  NotificationPriority,
+  NotificationService,
+} from "./types/notification.js";
 // Shelly Gen 2 types
 export type {
   ShellyCoverConfig,
@@ -159,4 +162,4 @@ export type {
   WaterLeakPayload,
   WhiteSpectrumLightPayload,
   WhiteSpectrumLightSetCommand,
-} from "./types/zigbee.js";
+} from "./types/zigbee/index.js";

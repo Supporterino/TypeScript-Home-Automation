@@ -43,6 +43,7 @@ engine.nanoleaf.register("panels", {
 | `setState(name, state)` | Set multiple properties at once (on, brightness, hue, sat, ct, effect) |
 | `getState(name)` | Get the full device state |
 | `getEffects(name)` | List all available effects by name |
+| `getCurrentEffect(name)` | Get the name of the currently active effect |
 | `setEffect(name, effectName)` | Activate a named effect |
 | `identify(name)` | Flash the panels for physical identification |
 | `getPanelLayout(name)` | Get panel positions and IDs |

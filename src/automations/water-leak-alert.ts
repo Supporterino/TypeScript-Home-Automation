@@ -1,5 +1,5 @@
 import { Automation, type Trigger, type TriggerContext } from "../core/automation.js";
-import type { AqaraWaterLeakPayload } from "../types/zigbee.js";
+import type { AqaraWaterLeakPayload } from "../types/zigbee/index.js";
 
 /**
  * Configuration for a single water leak sensor.

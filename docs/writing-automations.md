@@ -70,8 +70,8 @@ Fires when a state key changes. Any automation can set state with `this.state.se
 {
   type: "state",
   key: "night_mode",
-  // optional filter
-  filter: (newValue) => newValue === true,
+  // optional filter — both newValue and oldValue are available
+  filter: (newValue, oldValue) => newValue === true && oldValue !== true,
 }
 ```
 
@@ -145,15 +145,22 @@ this.mqtt.publish(topic, payload)
 ### Shelly devices
 
 ```ts
+// Switch control
 this.shelly.turnOn(name)
 this.shelly.turnOff(name)
 this.shelly.toggle(name)
 this.shelly.isOn(name)           // → Promise<boolean>
 this.shelly.getPower(name)       // → Promise<number> (Watts)
 this.shelly.getStatus(name)      // → full switch status
+
+// Cover / shutter control
+this.shelly.coverOpen(name)
+this.shelly.coverClose(name)
+this.shelly.coverStop(name)
+this.shelly.coverGoToPosition(name, 50)  // 0–100%
 ```
 
-Devices must be registered first — see [Shelly](services/shelly.md).
+Devices must be registered first. See [Shelly](services/shelly.md) for the full method list including cover status and relative movement.
 
 ### Nanoleaf
 
@@ -168,11 +175,19 @@ See [Nanoleaf](services/nanoleaf.md) for pairing and full method list.
 
 ### Weather
 
+> **Requires configuration.** `this.weather` returns `null` when no `WeatherService` is configured. Always null-check before use:
+
 ```ts
-const current = await this.weather.getCurrent();
+const weather = this.weather;
+if (!weather) {
+  this.logger.warn("Weather service not configured");
+  return;
+}
+
+const current = await weather.getCurrent();
 // current.temperature, current.condition, current.wind.speed, ...
 
-const forecast = await this.weather.getForecast(3);
+const forecast = await weather.getForecast(3);
 // forecast[0].tempHigh, forecast[0].precipitationChance, ...
 ```
 

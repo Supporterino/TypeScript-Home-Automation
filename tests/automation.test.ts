@@ -1,15 +1,20 @@
 import { describe, expect, it, mock } from "bun:test";
 import pino from "pino";
 import type { Config } from "../src/config.js";
-import { Automation, type Trigger, type TriggerContext } from "../src/core/automation.js";
+import {
+  Automation,
+  type AutomationContext,
+  type Trigger,
+  type TriggerContext,
+} from "../src/core/automation.js";
 import type { HttpClient } from "../src/core/http/http-client.js";
 import type { MqttService } from "../src/core/mqtt/mqtt-service.js";
 import type { NanoleafService } from "../src/core/services/nanoleaf-service.js";
-import type { NotificationService } from "../src/core/services/notification-service.js";
 import type { ShellyService } from "../src/core/services/shelly-service.js";
 import type { StateManager } from "../src/core/state/state-manager.js";
+import type { NotificationService } from "../src/types/notification.js";
 
-const logger = pino({ level: "silent" });
+const _logger = pino({ level: "silent" });
 
 /** Concrete test subclass to access protected members. */
 class TestAutomation extends Automation {
@@ -45,46 +50,50 @@ class TestAutomation extends Automation {
   }
 }
 
-function createMocks() {
-  const mqtt = {} as MqttService;
-  const shelly = {} as ShellyService;
-  const nanoleaf = {} as NanoleafService;
-  const http = {} as HttpClient;
-  const state = {} as StateManager;
-  const config = {
+function createMockContext(overrides: Partial<AutomationContext> = {}): AutomationContext {
+  const config: Config = {
     mqtt: { host: "localhost", port: 1883 },
     zigbee2mqttPrefix: "zigbee2mqtt",
-    logLevel: "info" as const,
+    logLevel: "info",
     state: { persist: false, filePath: "./state.json" },
     automations: { recursive: false },
-    httpServer: { port: 0, token: "" },
-  } satisfies Config;
-
-  return { mqtt, shelly, nanoleaf, http, state, config };
+    httpServer: { port: 0, token: "", webUi: { enabled: false, path: "/status" } },
+  };
+  return {
+    mqtt: {} as MqttService,
+    shelly: {} as ShellyService,
+    nanoleaf: {} as NanoleafService,
+    http: {} as HttpClient,
+    state: {} as StateManager,
+    logger: pino({ level: "silent" }),
+    config,
+    notifications: null,
+    weather: null,
+    ...overrides,
+  };
 }
 
 describe("Automation base class", () => {
   it("_inject sets all protected properties", () => {
     const auto = new TestAutomation();
-    const { mqtt, shelly, nanoleaf, http, state, config } = createMocks();
+    const ctx = createMockContext();
 
-    auto._inject(mqtt, shelly, nanoleaf, http, state, logger, config, null, null);
+    auto._inject(ctx);
 
-    expect(auto.getMqtt()).toBe(mqtt);
-    expect(auto.getShelly()).toBe(shelly);
-    expect(auto.getHttp()).toBe(http);
-    expect(auto.getState()).toBe(state);
+    expect(auto.getMqtt()).toBe(ctx.mqtt);
+    expect(auto.getShelly()).toBe(ctx.shelly);
+    expect(auto.getHttp()).toBe(ctx.http);
+    expect(auto.getState()).toBe(ctx.state);
     expect(auto.getLogger()).toBeDefined();
-    expect(auto.getConfig()).toBe(config);
+    expect(auto.getConfig()).toBe(ctx.config);
   });
 
   it("notify delegates to notification service when configured", async () => {
     const auto = new TestAutomation();
-    const { mqtt, shelly, nanoleaf, http, state, config } = createMocks();
     const sendMock = mock(() => Promise.resolve());
     const notifications: NotificationService = { send: sendMock };
 
-    auto._inject(mqtt, shelly, nanoleaf, http, state, logger, config, notifications, null);
+    auto._inject(createMockContext({ notifications }));
 
     const options = { title: "Test", message: "Hello" };
     await auto.callNotify(options);
@@ -95,9 +104,8 @@ describe("Automation base class", () => {
 
   it("notify does not throw when no notification service is configured", async () => {
     const auto = new TestAutomation();
-    const { mqtt, shelly, nanoleaf, http, state, config } = createMocks();
 
-    auto._inject(mqtt, shelly, nanoleaf, http, state, logger, config, null, null);
+    auto._inject(createMockContext({ notifications: null }));
 
     // Should not throw
     await auto.callNotify({ title: "Test", message: "Hello" });

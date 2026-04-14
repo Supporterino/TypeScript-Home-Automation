@@ -1,4 +1,4 @@
-import type { AqaraRemoteSwitchH1Action } from "../../types/zigbee.js";
+import type { AqaraRemoteSwitchH1Action } from "../../types/zigbee/aqara.js";
 import { Automation, type Trigger, type TriggerContext } from "../automation.js";
 
 /**

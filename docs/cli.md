@@ -26,6 +26,7 @@ Target configurations (host + token pairs) are stored in `~/.config/ts-ha/config
 ```bash
 # List all saved targets (* = active)
 ts-ha config list
+ts-ha c list                        # short alias
 
 # Add a remote target
 ts-ha config add prod 192.168.1.100:8080 my-secret-token
@@ -35,6 +36,7 @@ ts-ha config use prod
 
 # Remove a target
 ts-ha config remove prod
+ts-ha config rm prod                # rm / del also accepted
 ```
 
 ### Override for a single command
@@ -74,8 +76,9 @@ shortcut-button-timer       mqtt(1)
 Manually fire an automation with a synthetic context — useful for testing:
 
 ```bash
-# MQTT trigger
+# MQTT trigger (trigger / t both accepted)
 ts-ha a trigger motion-light '{"type":"mqtt","topic":"zigbee2mqtt/sensor","payload":{"occupancy":true}}'
+ts-ha a t motion-light '{"type":"mqtt","topic":"zigbee2mqtt/sensor","payload":{"occupancy":true}}'
 
 # Cron trigger (defaults filled automatically)
 ts-ha a trigger scheduled-report '{"type":"cron"}'
@@ -189,6 +192,30 @@ ts-ha d --interval 2         # refresh every 2s
 | `l` | Cycle log level filter |
 | `f` | Free-text filter |
 | `c` | Clear log filters |
+
+---
+
+## Nanoleaf
+
+Pair a Nanoleaf device to generate an auth token for use in `engine.nanoleaf.register()`:
+
+```bash
+ts-ha nanoleaf pair 192.168.1.60          # by IP address
+ts-ha nanoleaf pair nanoleaf-panels.local  # by mDNS hostname
+```
+
+1. Run the command — it will prompt you to press and hold the power button on the Nanoleaf device until the LEDs start flashing, then press Enter
+2. The command retries up to 5 times with a 2-second delay between attempts
+3. On success it prints the auth token and a ready-to-use registration snippet:
+
+```ts
+engine.nanoleaf.register("panels", {
+  host: "192.168.1.60",
+  token: "<printed-token>",
+});
+```
+
+Save the token in your `.env` or config file — it does not expire.
 
 ---
 

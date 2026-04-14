@@ -76,13 +76,17 @@ readinessProbe:
 
 ## Docker Compose
 
-The included `docker-compose.yml` configures a healthcheck automatically using `/readyz`:
+The included `docker-compose.yml` configures a healthcheck automatically using `/readyz`. Because the `oven/bun` base image does not include `curl`, the check uses an inline Bun script:
 
 ```yaml
 healthcheck:
-  test: ["CMD", "curl", "-f", "http://localhost:8080/readyz"]
-  interval: 30s
+  test:
+    - "CMD"
+    - "bun"
+    - "-e"
+    - "const r = await fetch('http://localhost:8080/readyz'); process.exit(r.ok ? 0 : 1)"
+  interval: 10s
   timeout: 5s
   retries: 3
-  start_period: 10s
+  start_period: 15s
 ```

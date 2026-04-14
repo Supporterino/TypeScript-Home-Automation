@@ -10,7 +10,9 @@ const logger = pino({ level: "silent" });
 // ── Helpers ───────────────────────────────────────────────────────────────
 
 function createMockMqtt(connected = true) {
-  return { isConnected: connected } as unknown as import("../src/core/mqtt-service.js").MqttService;
+  return {
+    isConnected: connected,
+  } as unknown as import("../src/core/mqtt/mqtt-service.js").MqttService;
 }
 
 function createMockAutomationManager(automations: Array<{ name: string }> = []) {

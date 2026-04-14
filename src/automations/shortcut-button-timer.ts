@@ -1,5 +1,5 @@
 import { Automation, type Trigger, type TriggerContext } from "../core/automation.js";
-import type { IkeaShortcutButtonAction } from "../types/zigbee.js";
+import type { IkeaShortcutButtonAction } from "../types/zigbee/index.js";
 
 /**
  * Example: IKEA shortcut button sets a state flag with auto-reset timer.
