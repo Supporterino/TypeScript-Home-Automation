@@ -34,7 +34,7 @@ jobs:
         run: zensical build --clean -f zensical.yml
         working-directory: docs
 
-      - uses: actions/upload-pages-artifact@v4
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: docs/site
 
