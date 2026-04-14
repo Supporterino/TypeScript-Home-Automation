@@ -141,7 +141,6 @@ function AutomationRow({ automation, onTrigger }: AutomationRowProps) {
       <Table.Tr
         style={{ cursor: "pointer" }}
         onClick={toggle}
-        bg={expanded ? "var(--mantine-color-default-hover)" : undefined}
       >
         <Table.Td>
           <Text fw={600} ff="monospace" size="sm">
