@@ -1,21 +1,20 @@
 import {
+  Accordion,
   Badge,
   Button,
   Code,
-  Collapse,
   Group,
   JsonInput,
   Modal,
   Select,
   Stack,
-  Table,
   Text,
   Title,
 } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import { useEffect, useState } from "react";
-import { triggerAutomation } from "../api";
-import type { Automation, DashboardData, TriggerDef } from "../types";
+import { triggerAutomation } from "../api.js";
+import type { Automation, DashboardData } from "../types.js";
 
 const TRIGGER_TYPE_COLORS: Record<string, string> = {
   mqtt: "violet",
@@ -37,6 +36,8 @@ const TRIGGER_TEMPLATES: Record<string, (name: string) => string> = {
     ),
 };
 
+// ── Trigger modal ─────────────────────────────────────────────────────────
+
 interface TriggerModalProps {
   automation: Automation | null;
   opened: boolean;
@@ -55,7 +56,7 @@ function TriggerModal({ automation, opened, onClose }: TriggerModalProps) {
     setPayload(TRIGGER_TEMPLATES[type]?.(automation.name) ?? "{}");
   }
 
-  // Reset form state whenever the modal opens or the target automation changes
+  // Reset form whenever the modal opens or the target automation changes.
   useEffect(() => {
     if (opened && automation) {
       setTriggerType("mqtt");
@@ -123,15 +124,14 @@ function TriggerModal({ automation, opened, onClose }: TriggerModalProps) {
   );
 }
 
-interface AutomationRowProps {
+// ── Automation accordion control label ────────────────────────────────────
+
+interface AutomationControlLabelProps {
   automation: Automation;
   onTrigger: (automation: Automation) => void;
-  index: number;
 }
 
-function AutomationRow({ automation, onTrigger, index }: AutomationRowProps) {
-  const [expanded, { toggle }] = useDisclosure(false);
-
+function AutomationControlLabel({ automation, onTrigger }: AutomationControlLabelProps) {
   const triggerChips = automation.triggers.map((t, i) => (
     <Badge
       key={`${t.type}-${i}`}
@@ -144,53 +144,37 @@ function AutomationRow({ automation, onTrigger, index }: AutomationRowProps) {
   ));
 
   return (
-    <>
-      <Table.Tr
-        style={{
-          cursor: "pointer",
-          background: index % 2 !== 0 ? "var(--table-striped-color)" : undefined,
+    <Group gap="sm" wrap="nowrap" justify="space-between">
+      <Group gap="sm" wrap="nowrap" style={{ flex: 1, minWidth: 0 }}>
+        <Text fw={600} ff="monospace" size="sm" style={{ flexShrink: 0 }}>
+          {automation.name}
+        </Text>
+        <Group gap={4} wrap="wrap">
+          {triggerChips.length ? (
+            triggerChips
+          ) : (
+            <Text c="dimmed" size="xs">
+              —
+            </Text>
+          )}
+        </Group>
+      </Group>
+      <Button
+        size="xs"
+        variant="light"
+        style={{ flexShrink: 0 }}
+        onClick={(e) => {
+          e.stopPropagation();
+          onTrigger(automation);
         }}
-        onClick={toggle}
       >
-        <Table.Td>
-          <Text fw={600} ff="monospace" size="sm">
-            {automation.name}
-          </Text>
-        </Table.Td>
-        <Table.Td>
-          <Group gap={4}>{triggerChips.length ? triggerChips : <Text c="dimmed">—</Text>}</Group>
-        </Table.Td>
-        <Table.Td>
-          <Button
-            size="xs"
-            variant="light"
-            onClick={(e) => {
-              e.stopPropagation();
-              onTrigger(automation);
-            }}
-          >
-            Trigger
-          </Button>
-        </Table.Td>
-      </Table.Tr>
-      {/* Always render — let Collapse handle visibility so animation works correctly */}
-      <Table.Tr style={{ background: "none" }}>
-        <Table.Td colSpan={3} p={0} style={{ borderBottom: "none" }}>
-          <Collapse expanded={expanded}>
-            <Stack p="md" gap="xs">
-              <Text size="xs" tt="uppercase" fw={600} c="dimmed">
-                Trigger definitions
-              </Text>
-              <Code block fz="xs">
-                {JSON.stringify(automation.triggers, null, 2)}
-              </Code>
-            </Stack>
-          </Collapse>
-        </Table.Td>
-      </Table.Tr>
-    </>
+        Trigger
+      </Button>
+    </Group>
   );
 }
+
+// ── AutomationsTab ────────────────────────────────────────────────────────
 
 interface Props {
   data: DashboardData | null;
@@ -206,41 +190,47 @@ export function AutomationsTab({ data }: Props) {
     openModal();
   }
 
+  if (automations.length === 0) {
+    return (
+      <Stack gap="md">
+        <Title order={2}>Automations</Title>
+        <Text c="dimmed" ta="center" py="xl">
+          No automations registered
+        </Text>
+      </Stack>
+    );
+  }
+
   return (
     <Stack gap="md">
-      <Title order={2}>Automations</Title>
+      <Group justify="space-between" align="baseline">
+        <Title order={2}>Automations</Title>
+        <Text size="sm" c="dimmed">
+          {automations.length} {automations.length === 1 ? "automation" : "automations"}
+        </Text>
+      </Group>
 
-      <Table.ScrollContainer minWidth={500}>
-        <Table highlightOnHover withTableBorder withColumnBorders={false}>
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th>Name</Table.Th>
-              <Table.Th>Triggers</Table.Th>
-              <Table.Th w={100}>Actions</Table.Th>
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
-            {automations.length === 0 ? (
-              <Table.Tr>
-                <Table.Td colSpan={3}>
-                  <Text c="dimmed" ta="center" py="xl">
-                    No automations registered
-                  </Text>
-                </Table.Td>
-              </Table.Tr>
-            ) : (
-              automations.map((a, index) => (
-                <AutomationRow
-                  key={a.name}
-                  automation={a}
-                  onTrigger={handleTrigger}
-                  index={index}
-                />
-              ))
-            )}
-          </Table.Tbody>
-        </Table>
-      </Table.ScrollContainer>
+      <Accordion variant="separated" radius="md" chevronPosition="right">
+        {automations.map((automation) => (
+          <Accordion.Item key={automation.name} value={automation.name}>
+            <Accordion.Control
+              aria-label={`${automation.name} — ${automation.triggers.length} triggers`}
+            >
+              <AutomationControlLabel automation={automation} onTrigger={handleTrigger} />
+            </Accordion.Control>
+            <Accordion.Panel>
+              <Stack gap="xs">
+                <Text size="xs" tt="uppercase" fw={600} c="dimmed">
+                  Trigger definitions
+                </Text>
+                <Code block fz="xs" ff="monospace">
+                  {JSON.stringify(automation.triggers, null, 2)}
+                </Code>
+              </Stack>
+            </Accordion.Panel>
+          </Accordion.Item>
+        ))}
+      </Accordion>
 
       <TriggerModal automation={selectedAutomation} opened={modalOpened} onClose={closeModal} />
     </Stack>

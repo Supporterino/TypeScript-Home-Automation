@@ -11,14 +11,29 @@ import {
   useMantineColorScheme,
 } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
+import {
+  IconBolt,
+  IconDatabase,
+  IconDevices,
+  IconFileText,
+  IconLayoutDashboard,
+  IconMoon,
+  IconPlayerPause,
+  IconPlayerPlay,
+  IconRefresh,
+  IconRobot,
+  IconSun,
+  IconWifi,
+  IconWifiOff,
+} from "@tabler/icons-react";
 import { useState } from "react";
-import { AutomationsTab } from "./components/AutomationsTab";
-import { DevicesTab } from "./components/DevicesTab";
-import { LogsTab } from "./components/LogsTab";
-import { OverviewTab } from "./components/OverviewTab";
-import { StateTab } from "./components/StateTab";
-import { useApiPoller } from "./hooks/useApiPoller";
-import { useAuth } from "./hooks/useAuth";
+import { AutomationsTab } from "./components/AutomationsTab.js";
+import { DevicesTab } from "./components/DevicesTab.js";
+import { LogsTab } from "./components/LogsTab.js";
+import { OverviewTab } from "./components/OverviewTab.js";
+import { StateTab } from "./components/StateTab.js";
+import { useApiPoller } from "./hooks/useApiPoller.js";
+import { useAuth } from "./hooks/useAuth.js";
 
 // Configuration injected by the server into the <html> element's data attributes
 const basePath =
@@ -27,13 +42,15 @@ const basePath =
 
 type TabId = "overview" | "automations" | "devices" | "state" | "logs";
 
-const NAV_ITEMS: { id: TabId; label: string }[] = [
-  { id: "overview", label: "Overview" },
-  { id: "automations", label: "Automations" },
-  { id: "devices", label: "Devices" },
-  { id: "state", label: "State" },
-  { id: "logs", label: "Logs" },
+const NAV_ITEMS: { id: TabId; label: string; icon: React.ReactNode }[] = [
+  { id: "overview", label: "Overview", icon: <IconLayoutDashboard size={16} /> },
+  { id: "automations", label: "Automations", icon: <IconRobot size={16} /> },
+  { id: "devices", label: "Devices", icon: <IconDevices size={16} /> },
+  { id: "state", label: "State", icon: <IconDatabase size={16} /> },
+  { id: "logs", label: "Logs", icon: <IconFileText size={16} /> },
 ];
+
+const HEADER_HEIGHT = 52;
 
 // ── Color scheme toggle ───────────────────────────────────────────────────
 
@@ -49,7 +66,7 @@ function ColorSchemeToggle() {
         onClick={() => setColorScheme(computed === "dark" ? "light" : "dark")}
         aria-label="Toggle color scheme"
       >
-        {computed === "dark" ? "☀" : "☾"}
+        {computed === "dark" ? <IconSun size={14} /> : <IconMoon size={14} />}
       </ActionIcon>
     </Tooltip>
   );
@@ -75,7 +92,6 @@ export function App() {
     if (mobileNavOpen) toggleMobileNav();
   }
 
-  // Status indicator label
   const statusLabel = paused
     ? "Paused"
     : connected
@@ -86,6 +102,7 @@ export function App() {
 
   return (
     <AppShell
+      header={{ height: HEADER_HEIGHT }}
       navbar={{
         width: 200,
         breakpoint: "sm",
@@ -93,23 +110,81 @@ export function App() {
       }}
       padding="md"
     >
-      {/* ── Navbar ─────────────────────────────────────────────────────── */}
-      <AppShell.Navbar p="md">
-        <AppShell.Section>
-          <Group gap={"xs"} wrap="nowrap" mb="md">
-            <Text fw={700} size="sm" c="dimmed" tt="uppercase">
+      {/* ── Header ─────────────────────────────────────────────────────── */}
+      <AppShell.Header>
+        <Group h="100%" px="md" justify="space-between" wrap="nowrap">
+          {/* Left: burger (mobile) + app title */}
+          <Group gap="xs" wrap="nowrap">
+            <Burger
+              opened={mobileNavOpen}
+              onClick={toggleMobileNav}
+              hiddenFrom="sm"
+              size="sm"
+              aria-label="Toggle navigation"
+            />
+            <Group gap={6} wrap="nowrap" visibleFrom="sm">
+              <IconBolt size={18} />
+              <Text fw={700} size="sm">
+                ts-ha
+              </Text>
+            </Group>
+            <Text fw={700} size="sm" hiddenFrom="sm">
               ts-ha
             </Text>
-            {/* Color scheme toggle */}
+          </Group>
+
+          {/* Right: status + controls */}
+          <Group gap="xs" wrap="nowrap">
+            <Group gap={4} wrap="nowrap">
+              {connected && !paused ? (
+                <IconWifi size={13} color={`var(--mantine-color-${statusColor}-5)`} />
+              ) : (
+                <IconWifiOff size={13} color={`var(--mantine-color-${statusColor}-5)`} />
+              )}
+              <Text
+                size="xs"
+                c={statusColor}
+                style={{
+                  whiteSpace: "nowrap",
+                  maxWidth: 140,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}
+              >
+                {statusLabel}
+              </Text>
+            </Group>
+
+            <Tooltip label={paused ? "Resume" : "Pause"}>
+              <ActionIcon
+                variant="default"
+                size="sm"
+                onClick={togglePause}
+                aria-label={paused ? "Resume auto-refresh" : "Pause auto-refresh"}
+              >
+                {paused ? <IconPlayerPlay size={13} /> : <IconPlayerPause size={13} />}
+              </ActionIcon>
+            </Tooltip>
+
+            <Tooltip label="Refresh now">
+              <ActionIcon variant="default" size="sm" onClick={refresh} aria-label="Refresh">
+                <IconRefresh size={13} />
+              </ActionIcon>
+            </Tooltip>
+
             <ColorSchemeToggle />
           </Group>
-        </AppShell.Section>
+        </Group>
+      </AppShell.Header>
 
+      {/* ── Navbar ─────────────────────────────────────────────────────── */}
+      <AppShell.Navbar p="sm">
         <AppShell.Section grow component={ScrollArea}>
           {NAV_ITEMS.map((item) => (
             <NavLink
               key={item.id}
               label={item.label}
+              leftSection={item.icon}
               active={activeTab === item.id}
               onClick={() => handleTabChange(item.id)}
               component="button"
@@ -118,56 +193,10 @@ export function App() {
             />
           ))}
         </AppShell.Section>
-
-        <AppShell.Section>
-          <Group gap="xs" align="center" wrap="nowrap">
-            {/* Live/paused/offline indicator dot */}
-            <Text
-              size="xs"
-              c={statusColor}
-              style={{
-                flex: 1,
-                minWidth: 0,
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {statusLabel}
-            </Text>
-
-            {/* Pause / resume */}
-            <Tooltip label={paused ? "Resume" : "Pause"}>
-              <ActionIcon
-                variant="default"
-                size="sm"
-                onClick={togglePause}
-                aria-label={paused ? "Resume auto-refresh" : "Pause auto-refresh"}
-              >
-                {paused ? "▶" : "⏸"}
-              </ActionIcon>
-            </Tooltip>
-
-            {/* Manual refresh */}
-            <Tooltip label="Refresh now">
-              <ActionIcon variant="default" size="sm" onClick={refresh} aria-label="Refresh">
-                ↻
-              </ActionIcon>
-            </Tooltip>
-          </Group>
-        </AppShell.Section>
       </AppShell.Navbar>
 
       {/* ── Main ───────────────────────────────────────────────────────── */}
       <AppShell.Main>
-        <Burger
-          opened={mobileNavOpen}
-          onClick={toggleMobileNav}
-          hiddenFrom="sm"
-          size="sm"
-          mb="sm"
-        />
-
         {activeTab === "overview" && <OverviewTab data={data} />}
         {activeTab === "automations" && <AutomationsTab data={data} />}
         {activeTab === "devices" && <DevicesTab data={data} />}

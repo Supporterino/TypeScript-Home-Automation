@@ -77,6 +77,7 @@
     "@mantine/hooks": "^9.0.2",
     "@opentui/core": "^0.1.93",
     "@opentui/react": "^0.1.93",
+    "@tabler/icons-react": "^3.41.1",
     "cron": "^4.3.0",
     "hono": "^4.12.12",
     "mqtt": "^5.10.0",

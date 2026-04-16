@@ -1,4 +1,5 @@
 import {
+  ActionIcon,
   Badge,
   Box,
   Button,
@@ -6,67 +7,27 @@ import {
   Collapse,
   Group,
   ScrollArea,
-  Select,
+  SegmentedControl,
   Stack,
-  Table,
   Text,
   TextInput,
   Title,
+  Tooltip,
 } from "@mantine/core";
-import { useState } from "react";
-import type { DashboardData, LogEntry } from "../types";
-
-// ── Constants ─────────────────────────────────────────────────────────────
-
-const LEVEL_NAMES: Record<number, string> = {
-  10: "TRACE",
-  20: "DEBUG",
-  30: "INFO",
-  40: "WARN",
-  50: "ERROR",
-  60: "FATAL",
-};
-
-/**
- * Fields shown in the primary row — excluded from the extra-fields expansion.
- */
-const HIDDEN_FIELDS = new Set(["level", "time", "msg", "pid", "hostname", "automation", "service"]);
-
-function levelColor(level: number): string {
-  if (level <= 20) return "cyan";
-  if (level === 30) return "green";
-  if (level === 40) return "yellow";
-  return "red";
-}
-
-function formatTime(ts: number): string {
-  return new Date(ts).toLocaleTimeString();
-}
-
-function extraFields(entry: LogEntry): [string, unknown][] {
-  return Object.entries(entry).filter(([k]) => !HIDDEN_FIELDS.has(k));
-}
-
-function formatFieldValue(value: unknown): string {
-  if (value === null || value === undefined) return "null";
-  if (typeof value === "string") return value;
-  if (typeof value === "boolean" || typeof value === "number") return String(value);
-  return JSON.stringify(value, null, 2);
-}
-
-/** Stable identity key for a log entry — used as expansion map key. */
-function entryKey(entry: LogEntry): string {
-  return `${entry.time}-${entry.level}-${entry.msg}`;
-}
-
-const LEVEL_OPTIONS = [
-  { value: "0", label: "All levels" },
-  { value: "10", label: "TRACE+" },
-  { value: "20", label: "DEBUG+" },
-  { value: "30", label: "INFO+" },
-  { value: "40", label: "WARN+" },
-  { value: "50", label: "ERROR+" },
-];
+import { IconArrowDown, IconChevronRight, IconX } from "@tabler/icons-react";
+import { useEffect, useRef, useState } from "react";
+import type { DashboardData, LogEntry } from "../types.js";
+import {
+  entryKey,
+  extraFields,
+  formatDateTime,
+  formatFieldValue,
+  formatTime,
+  LEVEL_NAMES,
+  LEVEL_OPTIONS,
+  levelColor,
+  levelCssColor,
+} from "../utils/logUtils.js";
 
 // ── Component ─────────────────────────────────────────────────────────────
 
@@ -80,17 +41,28 @@ export function LogsTab({ data }: Props) {
   const [levelFilter, setLevelFilter] = useState("0");
   const [autoFilter, setAutoFilter] = useState("");
   const [textFilter, setTextFilter] = useState("");
+  const [tailMode, setTailMode] = useState(false);
 
-  // Expansion is keyed by stable entry identity (time+level+msg), NOT by
-  // array index. This means expanded rows survive data refreshes — a new
-  // entry arriving at the top doesn't close whatever was already open.
+  // Expansion keyed by stable entry identity so expansions survive data refreshes.
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
+
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const prevLogCount = useRef(allLogs.length);
+
+  // Auto-scroll to bottom when new entries arrive and tail mode is on.
+  useEffect(() => {
+    if (tailMode && allLogs.length !== prevLogCount.current && scrollRef.current) {
+      scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+    }
+    prevLogCount.current = allLogs.length;
+  }, [allLogs.length, tailMode]);
+
+  const hasActiveFilters = levelFilter !== "0" || autoFilter !== "" || textFilter !== "";
 
   function clearFilters() {
     setLevelFilter("0");
     setAutoFilter("");
     setTextFilter("");
-    // Don't reset expandedKeys — user may still want to see what they opened
   }
 
   const minLevel = Number.parseInt(levelFilter, 10);
@@ -107,8 +79,7 @@ export function LogsTab({ data }: Props) {
         : true,
     )
     .slice()
-    .reverse()
-    .slice(0, 200);
+    .reverse();
 
   function toggleRow(key: string) {
     setExpandedKeys((prev) => {
@@ -126,143 +97,196 @@ export function LogsTab({ data }: Props) {
     <Stack gap="md">
       <Title order={2}>Logs</Title>
 
-      <Group gap="sm" wrap="wrap">
-        <Select
-          placeholder="Level"
+      {/* ── Filter bar ─────────────────────────────────────────────────── */}
+      <Stack gap="xs">
+        <SegmentedControl
           data={LEVEL_OPTIONS}
           value={levelFilter}
-          onChange={(v) => setLevelFilter(v ?? "0")}
-          w={130}
-          size="sm"
+          onChange={setLevelFilter}
+          size="xs"
         />
-        <TextInput
-          placeholder="Filter by automation…"
-          value={autoFilter}
-          onChange={(e) => setAutoFilter(e.currentTarget.value)}
-          w={200}
-          size="sm"
-        />
-        <TextInput
-          placeholder="Search text…"
-          value={textFilter}
-          onChange={(e) => setTextFilter(e.currentTarget.value)}
-          w={200}
-          size="sm"
-        />
-        <Button variant="subtle" size="sm" onClick={clearFilters}>
-          Clear
-        </Button>
-        <Text size="xs" c="dimmed" style={{ alignSelf: "center", marginLeft: "auto" }}>
-          {filtered.length} entries
-        </Text>
-      </Group>
+        <Group gap="sm" wrap="wrap">
+          <TextInput
+            placeholder="Filter by automation…"
+            value={autoFilter}
+            onChange={(e) => setAutoFilter(e.currentTarget.value)}
+            size="xs"
+            w={200}
+            rightSection={
+              autoFilter ? (
+                <ActionIcon size="xs" variant="subtle" onClick={() => setAutoFilter("")}>
+                  <IconX size={10} />
+                </ActionIcon>
+              ) : null
+            }
+          />
+          <TextInput
+            placeholder="Search text…"
+            value={textFilter}
+            onChange={(e) => setTextFilter(e.currentTarget.value)}
+            size="xs"
+            w={220}
+            rightSection={
+              textFilter ? (
+                <ActionIcon size="xs" variant="subtle" onClick={() => setTextFilter("")}>
+                  <IconX size={10} />
+                </ActionIcon>
+              ) : null
+            }
+          />
+          {hasActiveFilters && (
+            <Button variant="subtle" size="xs" color="dimmed" onClick={clearFilters}>
+              Clear all
+            </Button>
+          )}
+          <Group gap="xs" ml="auto" align="center">
+            <Tooltip label={tailMode ? "Auto-scroll on (click to disable)" : "Auto-scroll off"}>
+              <ActionIcon
+                variant={tailMode ? "filled" : "default"}
+                color={tailMode ? "blue" : undefined}
+                size="sm"
+                onClick={() => setTailMode((v) => !v)}
+                aria-label="Toggle tail mode"
+              >
+                <IconArrowDown size={14} />
+              </ActionIcon>
+            </Tooltip>
+            <Text size="xs" c="dimmed">
+              {filtered.length} {filtered.length === 1 ? "entry" : "entries"}
+            </Text>
+          </Group>
+        </Group>
+      </Stack>
 
-      <ScrollArea.Autosize mah="calc(100vh - 260px)" type="auto" scrollbars="y">
+      {/* ── Log feed ───────────────────────────────────────────────────── */}
+      <ScrollArea.Autosize
+        mah="calc(100vh - 310px)"
+        type="auto"
+        scrollbars="y"
+        viewportRef={scrollRef}
+      >
         {filtered.length === 0 ? (
-          <Text c="dimmed" ta="center" py="xl">
+          <Text c="dimmed" ta="center" py="xl" size="sm">
             No log entries match the current filters
           </Text>
         ) : (
-          <Table fz="xs" ff="monospace" withRowBorders={false} striped>
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th w={90}>Time</Table.Th>
-                <Table.Th w={70}>Level</Table.Th>
-                <Table.Th w={140}>Automation</Table.Th>
-                <Table.Th>Message</Table.Th>
-                <Table.Th w={24} />
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {filtered.map((entry, index) => {
-                const key = entryKey(entry);
-                return (
-                  <LogRow
-                    key={key}
-                    entry={entry}
-                    rowKey={key}
-                    isExpanded={expandedKeys.has(key)}
-                    onToggle={toggleRow}
-                    index={index}
-                  />
-                );
-              })}
-            </Table.Tbody>
-          </Table>
+          <Stack gap={2}>
+            {filtered.map((entry) => {
+              const key = entryKey(entry);
+              return (
+                <LogEntry
+                  key={key}
+                  entry={entry}
+                  entryKey={key}
+                  isExpanded={expandedKeys.has(key)}
+                  onToggle={toggleRow}
+                />
+              );
+            })}
+          </Stack>
         )}
       </ScrollArea.Autosize>
     </Stack>
   );
 }
 
-// ── Log row ───────────────────────────────────────────────────────────────
+// ── Log entry row ─────────────────────────────────────────────────────────
 
-interface LogRowProps {
+interface LogEntryProps {
   entry: LogEntry;
-  rowKey: string;
+  entryKey: string;
   isExpanded: boolean;
   onToggle: (key: string) => void;
-  index: number;
 }
 
-function LogRow({ entry, rowKey, isExpanded, onToggle, index }: LogRowProps) {
+function LogEntry({ entry, entryKey: key, isExpanded, onToggle }: LogEntryProps) {
   const levelName = LEVEL_NAMES[entry.level] ?? String(entry.level);
   const color = levelColor(entry.level);
+  const borderColor = levelCssColor(entry.level);
   const extras = extraFields(entry);
   const hasExtras = extras.length > 0;
+  const source = entry.automation ?? (entry as { service?: string }).service ?? "";
 
   return (
-    <>
-      <Table.Tr
-        style={{
-          cursor: hasExtras ? "pointer" : undefined,
-          background: index % 2 !== 0 ? "var(--table-striped-color)" : undefined,
-        }}
-        onClick={hasExtras ? () => onToggle(rowKey) : undefined}
-      >
-        <Table.Td c="dimmed" style={{ whiteSpace: "nowrap" }}>
-          {formatTime(entry.time)}
-        </Table.Td>
-        <Table.Td>
-          <Badge color={color} size="xs" variant="light">
-            {levelName}
-          </Badge>
-        </Table.Td>
-        <Table.Td c="blue" style={{ overflow: "hidden", textOverflow: "ellipsis", maxWidth: 140 }}>
-          {entry.automation ?? entry.service ?? ""}
-        </Table.Td>
-        <Table.Td style={{ wordBreak: "break-all" }}>{entry.msg}</Table.Td>
-        <Table.Td style={{ textAlign: "center" }}>
-          {hasExtras && (
-            <Text
-              c="dimmed"
-              size="xs"
+    <Box
+      style={{
+        borderLeft: `3px solid ${borderColor}`,
+        borderRadius: "0 4px 4px 0",
+        cursor: hasExtras ? "pointer" : undefined,
+      }}
+      bg="var(--mantine-color-default-hover)"
+      px="sm"
+      py={4}
+      onClick={hasExtras ? () => onToggle(key) : undefined}
+    >
+      {/* Primary row */}
+      <Group gap="xs" wrap="nowrap" align="flex-start">
+        <Tooltip label={formatDateTime(entry.time)} openDelay={400}>
+          <Text
+            size="xs"
+            c="dimmed"
+            ff="monospace"
+            style={{ whiteSpace: "nowrap", flexShrink: 0, minWidth: 72 }}
+          >
+            {formatTime(entry.time)}
+          </Text>
+        </Tooltip>
+
+        <Badge color={color} size="xs" variant="light" style={{ flexShrink: 0, minWidth: 52 }}>
+          {levelName}
+        </Badge>
+
+        {source && (
+          <Text
+            size="xs"
+            c="blue"
+            ff="monospace"
+            style={{
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              flexShrink: 0,
+              maxWidth: 160,
+            }}
+          >
+            {source}
+          </Text>
+        )}
+
+        <Text size="xs" ff="monospace" style={{ flex: 1, minWidth: 0, wordBreak: "break-word" }}>
+          {entry.msg}
+        </Text>
+
+        {hasExtras && (
+          <ActionIcon
+            size="xs"
+            variant="transparent"
+            c="dimmed"
+            style={{ flexShrink: 0 }}
+            aria-label={isExpanded ? "Collapse details" : "Expand details"}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggle(key);
+            }}
+          >
+            <IconChevronRight
+              size={12}
               style={{
-                userSelect: "none",
-                display: "inline-block",
                 transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)",
                 transition: "transform 150ms ease",
-                lineHeight: 1,
               }}
-              aria-label={isExpanded ? "Collapse details" : "Expand details"}
-            >
-              ▶
-            </Text>
-          )}
-        </Table.Td>
-      </Table.Tr>
+            />
+          </ActionIcon>
+        )}
+      </Group>
 
-      {/* Always render the collapse row — Collapse handles visibility via animation */}
+      {/* Expandable extra fields */}
       {hasExtras && (
-        <Table.Tr style={{ background: "none" }}>
-          <Table.Td colSpan={5} p={0} style={{ borderBottom: "none" }}>
-            <Collapse expanded={isExpanded}>
-              <ExtraFieldsBlock extras={extras} />
-            </Collapse>
-          </Table.Td>
-        </Table.Tr>
+        <Collapse in={isExpanded}>
+          <ExtraFieldsBlock extras={extras} />
+        </Collapse>
       )}
-    </>
+    </Box>
   );
 }
 
@@ -270,37 +294,49 @@ function LogRow({ entry, rowKey, isExpanded, onToggle, index }: LogRowProps) {
 
 function ExtraFieldsBlock({ extras }: { extras: [string, unknown][] }) {
   return (
-    <Box px="md" py="xs">
-      <Table fz="xs" ff="monospace" withRowBorders={false} withTableBorder={false} striped>
-        <Table.Tbody>
-          {extras.map(([key, value]) => {
-            const formatted = formatFieldValue(value);
-            const isMultiline = formatted.includes("\n");
-            return (
-              <Table.Tr key={key} style={{ background: "none" }}>
-                <Table.Td
-                  c="blue"
-                  fw={600}
-                  style={{ whiteSpace: "nowrap", verticalAlign: "top", width: 160 }}
+    <Box
+      mt="xs"
+      px="sm"
+      py="xs"
+      style={(theme) => ({
+        borderRadius: theme.radius.sm,
+        background: "var(--mantine-color-default)",
+        borderTop: "1px solid var(--mantine-color-default-border)",
+      })}
+    >
+      <Stack gap={4}>
+        {extras.map(([key, value]) => {
+          const formatted = formatFieldValue(value);
+          const isMultiline = formatted.includes("\n");
+          return (
+            <Group key={key} gap="md" align="flex-start" wrap="nowrap">
+              <Text
+                size="xs"
+                c="blue"
+                fw={600}
+                ff="monospace"
+                style={{ whiteSpace: "nowrap", minWidth: 120, flexShrink: 0 }}
+              >
+                {key}
+              </Text>
+              {isMultiline ? (
+                <Code block fz="xs" ff="monospace" style={{ flex: 1 }}>
+                  {formatted}
+                </Code>
+              ) : (
+                <Text
+                  size="xs"
+                  ff="monospace"
+                  c="dimmed"
+                  style={{ flex: 1, wordBreak: "break-all" }}
                 >
-                  {key}
-                </Table.Td>
-                <Table.Td style={{ wordBreak: "break-all" }}>
-                  {isMultiline ? (
-                    <Code block fz="xs" ff="monospace">
-                      {formatted}
-                    </Code>
-                  ) : (
-                    <Text size="xs" ff="monospace" c="dimmed">
-                      {formatted}
-                    </Text>
-                  )}
-                </Table.Td>
-              </Table.Tr>
-            );
-          })}
-        </Table.Tbody>
-      </Table>
+                  {formatted}
+                </Text>
+              )}
+            </Group>
+          );
+        })}
+      </Stack>
     </Box>
   );
 }
