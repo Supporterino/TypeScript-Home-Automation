@@ -27,6 +27,10 @@ const configSchema = z.object({
   deviceRegistry: z.object({
     /** Whether to enable automatic Zigbee2MQTT device discovery and state tracking. */
     enabled: z.boolean().default(false),
+    /** Whether to persist the device list and state to disk on shutdown. */
+    persist: z.boolean().default(false),
+    /** Path to the device registry persistence JSON file. */
+    filePath: z.string().default("./device-registry.json"),
   }),
   httpServer: z.object({
     /** Port for the HTTP server (health probes + webhooks). Set to 0 to disable. */
@@ -50,6 +54,7 @@ export function loadConfig(): Config {
   const parsedRecursive = booleanString.parse(process.env.AUTOMATIONS_RECURSIVE);
   const parsedWebUiEnabled = booleanString.parse(process.env.WEB_UI_ENABLED);
   const parsedDeviceRegistryEnabled = booleanString.parse(process.env.DEVICE_REGISTRY_ENABLED);
+  const parsedDeviceRegistryPersist = booleanString.parse(process.env.DEVICE_REGISTRY_PERSIST);
 
   const result = configSchema.safeParse({
     mqtt: {
@@ -67,6 +72,8 @@ export function loadConfig(): Config {
     },
     deviceRegistry: {
       enabled: parsedDeviceRegistryEnabled,
+      persist: parsedDeviceRegistryPersist,
+      filePath: process.env.DEVICE_REGISTRY_FILE_PATH,
     },
     httpServer: {
       port: process.env.HTTP_PORT,

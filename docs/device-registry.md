@@ -32,6 +32,71 @@ The registry is accessible as `engine.deviceRegistry` (type `DeviceRegistry | nu
 
 ---
 
+## Persistence
+
+By default the registry is purely in-memory — it rebuilds from Zigbee2MQTT on every engine startup. Enable persistence to save both the device list and last-known device states to a JSON file on shutdown and restore them on startup.
+
+This is useful when:
+- Automations query `getDeviceState()` immediately on startup before any MQTT messages arrive
+- You want `getDevice()` to return results in the millisecond window before `bridge/devices` is received
+
+Live MQTT data **always wins** — persisted values are a cold-start seed, not a source of truth. Incoming `bridge/devices` overwrites device metadata, and incoming state payloads are merged on top of restored state.
+
+### Enabling
+
+```bash
+DEVICE_REGISTRY_PERSIST=true
+DEVICE_REGISTRY_FILE_PATH=./data/device-registry.json  # optional, default: ./device-registry.json
+```
+
+### Programmatic configuration
+
+```ts
+const engine = createEngine({
+  automationsDir: "./src/automations",
+  deviceRegistry: {
+    persist: true,
+    filePath: "./data/device-registry.json",
+    names: {
+      // nice names can be combined with persistence
+      transform: (name) => name.replace(/_/g, " "),
+    },
+  },
+});
+```
+
+`EngineOptions.deviceRegistry.persist` / `filePath` take precedence over the env vars, identical to how `EngineOptions.state` overrides `STATE_PERSIST` / `STATE_FILE_PATH`.
+
+### File format
+
+```json
+{
+  "devices": {
+    "living_room_bulb": {
+      "ieee_address": "0x00158d0001ab1234",
+      "friendly_name": "living_room_bulb",
+      "type": "Router",
+      "supported": true,
+      "disabled": false,
+      "interview_state": "SUCCESSFUL",
+      "power_source": "Mains",
+      "definition": { "model": "LCA001", "vendor": "Philips", "description": "...", "source": "native", "exposes": [], "options": [] }
+    }
+  },
+  "states": {
+    "living_room_bulb": {
+      "state": "ON",
+      "brightness": 200,
+      "color_temp": 4000
+    }
+  }
+}
+```
+
+The file is written atomically on engine shutdown. Parent directories are created automatically. If the file does not exist on startup, the registry starts fresh without error.
+
+---
+
 ## Device nice names
 
 The `friendly_name` set in Zigbee2MQTT (e.g. `kitchen_motion_0x1a2b`) is often hard to read. The registry supports a human-readable name mapping via the `DeviceNiceNames` option on `createEngine()`.

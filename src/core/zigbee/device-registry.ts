@@ -1,7 +1,35 @@
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { dirname } from "node:path";
 import type { Logger } from "pino";
 import type { Config } from "../../config.js";
 import type { BridgeEventPayload, ZigbeeDevice } from "../../types/zigbee/bridge.js";
 import type { MqttMessageHandler, MqttService } from "../mqtt/mqtt-service.js";
+
+/**
+ * Persistence options for the `DeviceRegistry`.
+ *
+ * When `persist` is `true`, both the device list and last-known device states
+ * are saved to a JSON file on shutdown and restored on startup. Incoming MQTT
+ * data always overwrites restored values on arrival, so persisted data is
+ * never a source of truth — it is only a cold-start seed.
+ */
+export interface DeviceRegistryPersistenceOptions {
+  /**
+   * Whether to persist the device list and state to disk on shutdown
+   * and restore them on startup.
+   *
+   * @default false
+   */
+  persist?: boolean;
+
+  /**
+   * Path to the JSON file for device registry persistence.
+   * Only used when `persist` is `true`.
+   *
+   * @default "./device-registry.json"
+   */
+  filePath?: string;
+}
 
 export type DeviceStateChangeHandler = (
   state: Record<string, unknown>,
@@ -88,16 +116,109 @@ export class DeviceRegistry {
   /** Handler for the `bridge/event` topic — stored for unsubscribe. */
   private bridgeEventHandler: MqttMessageHandler | null = null;
 
+  private readonly persist: boolean;
+  private readonly filePath: string;
+
   constructor(
     private readonly mqtt: MqttService,
     private readonly config: Config,
     private readonly logger: Logger,
     private readonly niceNames: DeviceNiceNames = {},
-  ) {}
+    persistenceOptions: DeviceRegistryPersistenceOptions = {},
+  ) {
+    this.persist = persistenceOptions.persist ?? false;
+    this.filePath = persistenceOptions.filePath ?? "./device-registry.json";
+  }
 
   // ---------------------------------------------------------------------------
   // Lifecycle
   // ---------------------------------------------------------------------------
+
+  /**
+   * Restore persisted device list and state from disk (if persistence is enabled).
+   * Must be called before `start()` so that the registry is seeded before MQTT
+   * subscriptions fire. Incoming MQTT data always wins over persisted data.
+   */
+  async load(): Promise<void> {
+    if (!this.persist) return;
+
+    try {
+      const data = await readFile(this.filePath, "utf-8");
+      const parsed = JSON.parse(data) as {
+        devices?: Record<string, ZigbeeDevice>;
+        states?: Record<string, Record<string, unknown>>;
+      };
+
+      // Restore last-known device states
+      for (const [name, state] of Object.entries(parsed.states ?? {})) {
+        this.deviceStates.set(name, state);
+      }
+
+      // Restore device metadata and register per-device MQTT subscriptions.
+      // Coordinator is never persisted, but guard anyway.
+      // We do this after states so that if a state handler fires immediately
+      // on subscription it already has the restored state to merge into.
+      const prefix = this.config.zigbee2mqttPrefix;
+      for (const device of Object.values(parsed.devices ?? {})) {
+        if (device.type === "Coordinator") continue;
+        this.devices.set(device.friendly_name, device);
+        const { friendly_name } = device;
+        const handler: MqttMessageHandler = (_topic, payload) => {
+          this.handleDeviceState(friendly_name, payload);
+        };
+        this.mqttDeviceHandlers.set(friendly_name, handler);
+        this.mqtt.subscribe(`${prefix}/${friendly_name}`, handler);
+      }
+
+      this.logger.info(
+        { devices: this.devices.size, states: this.deviceStates.size, file: this.filePath },
+        "Device registry restored from disk",
+      );
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+        this.logger.debug(
+          { file: this.filePath },
+          "No persisted device registry found, starting fresh",
+        );
+      } else {
+        this.logger.error({ err, file: this.filePath }, "Failed to load persisted device registry");
+      }
+    }
+  }
+
+  /**
+   * Persist the current device list and state to disk (if persistence is enabled).
+   * Called by the engine before `stop()` on shutdown.
+   */
+  async save(): Promise<void> {
+    if (!this.persist) return;
+
+    try {
+      const devicesObj: Record<string, ZigbeeDevice> = {};
+      for (const [name, device] of this.devices) {
+        devicesObj[name] = device;
+      }
+
+      const statesObj: Record<string, Record<string, unknown>> = {};
+      for (const [name, state] of this.deviceStates) {
+        statesObj[name] = state;
+      }
+
+      await mkdir(dirname(this.filePath), { recursive: true });
+      await writeFile(
+        this.filePath,
+        JSON.stringify({ devices: devicesObj, states: statesObj }, null, 2),
+        "utf-8",
+      );
+
+      this.logger.info(
+        { devices: this.devices.size, states: this.deviceStates.size, file: this.filePath },
+        "Device registry persisted to disk",
+      );
+    } catch (err) {
+      this.logger.error({ err, file: this.filePath }, "Failed to persist device registry");
+    }
+  }
 
   /**
    * Subscribe to bridge topics and begin tracking devices.

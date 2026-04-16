@@ -11,7 +11,11 @@ import { CronScheduler } from "./scheduling/cron-scheduler.js";
 import { NanoleafService } from "./services/nanoleaf-service.js";
 import { ShellyService } from "./services/shelly-service.js";
 import { StateManager, type StateManagerOptions } from "./state/state-manager.js";
-import { type DeviceNiceNames, DeviceRegistry } from "./zigbee/device-registry.js";
+import {
+  type DeviceNiceNames,
+  DeviceRegistry,
+  type DeviceRegistryPersistenceOptions,
+} from "./zigbee/device-registry.js";
 
 /**
  * Options for creating an automation engine.
@@ -116,6 +120,19 @@ export interface EngineOptions {
   deviceRegistry?: {
     /** Human-readable name mappings. Used by `registry.getNiceName()`. */
     names?: DeviceNiceNames;
+    /**
+     * Whether to persist the device list and state to disk on shutdown
+     * and restore them on startup.
+     *
+     * @default false
+     */
+    persist?: boolean;
+    /**
+     * Path to the device registry JSON persistence file.
+     *
+     * @default "./device-registry.json"
+     */
+    filePath?: string;
   };
 }
 
@@ -237,12 +254,18 @@ export function createEngine(options: EngineOptions): Engine {
   }
 
   // Initialize device registry (optional — disabled by default)
+  const deviceRegistryPersistence: DeviceRegistryPersistenceOptions = {
+    persist: options.deviceRegistry?.persist ?? config.deviceRegistry.persist,
+    filePath: options.deviceRegistry?.filePath ?? config.deviceRegistry.filePath,
+  };
+
   const deviceRegistry = config.deviceRegistry.enabled
     ? new DeviceRegistry(
         mqtt,
         config,
         logger.child({ service: "device-registry" }),
         options.deviceRegistry?.names,
+        deviceRegistryPersistence,
       )
     : null;
 
@@ -329,6 +352,7 @@ export function createEngine(options: EngineOptions): Engine {
 
       httpServer?.start();
       await stateManager.load();
+      await deviceRegistry?.load();
       await mqtt.connect();
       deviceRegistry?.start();
       const recursive = options.recursive ?? config.automations.recursive;
@@ -347,6 +371,7 @@ export function createEngine(options: EngineOptions): Engine {
       httpServer?.setEngineStarted(false);
       await manager.stopAll();
       cron.stopAll();
+      await deviceRegistry?.save();
       deviceRegistry?.stop();
       await stateManager.save();
       await mqtt.disconnect();

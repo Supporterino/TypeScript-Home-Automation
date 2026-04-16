@@ -72,8 +72,10 @@ Automatically discovers all Zigbee2MQTT devices and tracks their live state. Req
 | Variable | Default | Description |
 |---|---|---|
 | `DEVICE_REGISTRY_ENABLED` | `false` | Enable automatic Zigbee2MQTT device discovery and state tracking |
+| `DEVICE_REGISTRY_PERSIST` | `false` | Persist the device list and last-known device states to disk on shutdown and restore them on startup |
+| `DEVICE_REGISTRY_FILE_PATH` | `./device-registry.json` | Path to the device registry JSON persistence file |
 
-See [Device Registry](../device-registry.md) for full details including nice names and device triggers.
+See [Device Registry](../device-registry.md) for full details including nice names, device triggers, and persistence.
 
 ---
 
@@ -97,4 +99,6 @@ WEB_UI_ENABLED=true
 WEB_UI_PATH=/status
 
 DEVICE_REGISTRY_ENABLED=true
+DEVICE_REGISTRY_PERSIST=true
+DEVICE_REGISTRY_FILE_PATH=./data/device-registry.json
 ```
