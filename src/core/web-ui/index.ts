@@ -15,6 +15,17 @@ import { htmlShell, loginShell } from "./components/html-shell.js";
 export function registerWebUiRoutes(app: Hono, path: string, token: string): void {
   const hasAuth = token.length > 0;
 
+  // ── Path helper ───────────────────────────────────────────────────────────
+
+  /**
+   * Build a sub-path relative to the UI base path, handling the root case.
+   *   subpath("login") when path="/status" → "/status/login"
+   *   subpath("login") when path="/"       → "/login"
+   */
+  function subpath(suffix: string): string {
+    return path === "/" ? `/${suffix}` : `${path}/${suffix}`;
+  }
+
   // ── Auth helper ───────────────────────────────────────────────────────────
 
   /** Returns true when the request carries a valid token (cookie or header). */
@@ -31,28 +42,27 @@ export function registerWebUiRoutes(app: Hono, path: string, token: string): voi
     return cookieVal === token;
   }
 
-  // ── Auth middleware (browser redirect) ───────────────────────────────────
-
-  app.use(`${path}`, async (c, next) => {
-    if (!isAuthorized(c)) {
-      return c.redirect(`${path}/login`);
-    }
-    return next();
-  });
-
   // ── Dashboard shell ───────────────────────────────────────────────────────
 
+  // Auth is checked inline here rather than via app.use() because
+  // app.use("/", ...) would match ALL routes on the server, breaking health
+  // probes, webhooks, and API endpoints when the UI is mounted at "/".
   app.get(path, (c) => {
+    if (!isAuthorized(c)) {
+      return c.redirect(subpath("login"));
+    }
     const html = htmlShell({ basePath: path, hasAuth });
     return c.html(html);
   });
 
-  // Trailing-slash redirect
-  app.get(`${path}/`, (c) => c.redirect(path));
+  // Trailing-slash redirect — omitted when path is "/" to avoid registering "//".
+  if (path !== "/") {
+    app.get(`${path}/`, (c) => c.redirect(path));
+  }
 
   // ── Login ─────────────────────────────────────────────────────────────────
 
-  app.get(`${path}/login`, (c) => {
+  app.get(subpath("login"), (c) => {
     // If no auth configured or already authenticated, redirect to dashboard
     if (!hasAuth || isAuthorized(c)) {
       return c.redirect(path);
@@ -60,7 +70,7 @@ export function registerWebUiRoutes(app: Hono, path: string, token: string): voi
     return c.html(loginShell({ basePath: path }));
   });
 
-  app.post(`${path}/login`, async (c) => {
+  app.post(subpath("login"), async (c) => {
     if (!hasAuth) return c.redirect(path);
 
     let formToken = "";
@@ -88,12 +98,12 @@ export function registerWebUiRoutes(app: Hono, path: string, token: string): voi
     });
   });
 
-  app.get(`${path}/logout`, () => {
+  app.get(subpath("logout"), () => {
     // Clear the session cookie by expiring it and redirect to the login page
     return new Response(null, {
       status: 302,
       headers: {
-        Location: `${path}/login`,
+        Location: subpath("login"),
         "Set-Cookie": `${SESSION_COOKIE}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0`,
       },
     });
