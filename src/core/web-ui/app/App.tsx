@@ -144,6 +144,7 @@ export function App() {
               <Text
                 size="xs"
                 c={statusColor}
+                visibleFrom="xs"
                 style={{
                   whiteSpace: "nowrap",
                   maxWidth: 140,

@@ -104,6 +104,7 @@ export function LogsTab({ data }: Props) {
           value={levelFilter}
           onChange={setLevelFilter}
           size="xs"
+          fullWidth
         />
         <Group gap="sm" wrap="wrap">
           <TextInput
@@ -160,7 +161,7 @@ export function LogsTab({ data }: Props) {
 
       {/* ── Log feed ───────────────────────────────────────────────────── */}
       <ScrollArea.Autosize
-        mah="calc(100vh - 310px)"
+        mah="calc(100dvh - 310px)"
         type="auto"
         scrollbars="y"
         viewportRef={scrollRef}
