@@ -8,7 +8,8 @@ A lightweight, fully typed home automation framework built on MQTT and [Bun](htt
 
 - **Pure TypeScript** — automations are ordinary classes, fully typed end-to-end
 - **MQTT-native** — designed around Zigbee2MQTT with wildcard topic support
-- **Multiple trigger types** — MQTT messages, cron schedules, state changes, webhooks
+- **Multiple trigger types** — MQTT messages, cron schedules, state changes, webhooks, and Zigbee device events
+- **Zigbee device registry** — automatic device discovery and state tracking; react to any device state change, join, or departure with a single trigger
 - **Rich service layer** — Shelly devices, Nanoleaf panels, weather data, push notifications
 - **Observable** — structured logging, in-memory log buffer, web status page, CLI dashboard
 - **Kubernetes-ready** — `/healthz` and `/readyz` probes built in
@@ -46,6 +47,7 @@ bun install && bun run dev
 | [Getting Started](getting-started.md) | Install, configure, write your first automation |
 | [Configuration](configuration.md) | All environment variables |
 | [Writing Automations](writing-automations.md) | Triggers, services, lifecycle hooks |
+| [Device Registry](device-registry.md) | Zigbee device discovery, state tracking, nice names |
 | [CLI Reference](cli.md) | `ts-ha` command reference |
 | [Web UI](http/web-ui.md) | Browser dashboard |
 | [Architecture](architecture.md) | How the engine works internally |

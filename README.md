@@ -66,6 +66,7 @@ export default class MotionLight extends Automation {
 | `LOG_LEVEL` | `info` | `trace` · `debug` · `info` · `warn` · `error` |
 | `HTTP_PORT` | `8080` | HTTP server port (`0` = disabled) |
 | `WEB_UI_ENABLED` | `false` | Enable the web UI dashboard |
+| `DEVICE_REGISTRY_ENABLED` | `false` | Enable Zigbee device discovery and state tracking |
 
 See [Configuration](https://Supporterino.github.io/TypeScript-Home-Automation/configuration/) for all variables.
 
@@ -77,9 +78,10 @@ See [Configuration](https://Supporterino.github.io/TypeScript-Home-Automation/co
 |---|---|
 | [Getting Started](https://Supporterino.github.io/TypeScript-Home-Automation/getting-started/) | Install, configure, first automation |
 | [Writing Automations](https://Supporterino.github.io/TypeScript-Home-Automation/writing-automations/) | Triggers, services, lifecycle hooks |
+| [Device Registry](https://Supporterino.github.io/TypeScript-Home-Automation/device-registry/) | Zigbee device discovery, state tracking, nice names |
 | [Configuration](https://Supporterino.github.io/TypeScript-Home-Automation/configuration/) | All environment variables |
 | [CLI Reference](https://Supporterino.github.io/TypeScript-Home-Automation/cli/) | `ts-ha` commands |
-| [Web Status Page](https://Supporterino.github.io/TypeScript-Home-Automation/http/status-page/) | Browser dashboard |
+| [Web Status Page](https://Supporterino.github.io/TypeScript-Home-Automation/http/web-ui/) | Browser dashboard |
 | [Architecture](https://Supporterino.github.io/TypeScript-Home-Automation/architecture/) | How the engine works |
 | [Contributing](https://Supporterino.github.io/TypeScript-Home-Automation/contributing/) | Dev setup, conventions |
 

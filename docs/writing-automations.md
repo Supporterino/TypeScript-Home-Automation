@@ -107,6 +107,64 @@ context.query    // query string params
 context.body     // parsed request body
 ```
 
+### Device state trigger
+
+Fires when a tracked Zigbee2MQTT device's state changes. Requires `DEVICE_REGISTRY_ENABLED=true`. The trigger receives the full **merged** device state — if a light sends only `brightness`, that value is merged on top of the previously known state so `context.state` always reflects the complete picture.
+
+```ts
+{
+  type: "device_state",
+  friendlyName: "living_room_bulb",
+  // Optional — only fire when this returns true
+  filter: (state, device) => state.state === "ON",
+}
+```
+
+The `context` provides:
+
+```ts
+context.type         // "device_state"
+context.friendlyName // "living_room_bulb"
+context.state        // full merged state: { state: "ON", brightness: 200, ... }
+context.device       // ZigbeeDevice — type, ieee_address, definition, ...
+```
+
+### Device joined trigger
+
+Fires when a new device joins the Zigbee network. Requires `DEVICE_REGISTRY_ENABLED=true`. Optionally scoped to a specific `friendlyName`; omit to fire for any joining device.
+
+```ts
+{ type: "device_joined" }                             // any device
+{ type: "device_joined", friendlyName: "new_sensor" } // specific device only
+```
+
+The `context` provides:
+
+```ts
+context.type   // "device_joined"
+context.device // ZigbeeDevice that joined
+```
+
+### Device left trigger
+
+Fires when a device leaves the Zigbee network. Requires `DEVICE_REGISTRY_ENABLED=true`. Same scoping options as `device_joined`.
+
+```ts
+{ type: "device_left" }
+{ type: "device_left", friendlyName: "old_plug" }
+```
+
+The `context` provides:
+
+```ts
+context.type   // "device_left"
+context.device // ZigbeeDevice that left
+```
+
+> **When the registry is disabled:** `device_state`, `device_joined`, and `device_left` triggers are skipped with a warning at startup. The automation still registers and its other triggers remain active.
+
+See [Device Registry](device-registry.md) for the full feature guide.
+
 ### Multiple triggers
 
 An automation can declare as many triggers as needed. The `context.type` discriminant tells you which one fired:
@@ -225,6 +283,33 @@ await this.http.post("https://api.example.com/action", { key: "value" })
 await this.http.put(url, body)
 await this.http.request(url, { method: "PATCH", body: "..." })
 ```
+
+### Device Registry
+
+> **Requires `DEVICE_REGISTRY_ENABLED=true`.** `this.deviceRegistry` returns `null` when disabled. Always null-check before use.
+
+```ts
+const registry = this.deviceRegistry;
+if (!registry) return;
+
+// Query tracked devices
+registry.getDevices()                          // ZigbeeDevice[]
+registry.getDevice("living_room_bulb")         // ZigbeeDevice | undefined
+registry.hasDevice("living_room_bulb")         // boolean
+
+// Current merged state for a device
+registry.getDeviceState("living_room_bulb")    // Record<string, unknown> | undefined
+
+// Human-readable name (from DeviceNiceNames mapping)
+registry.getNiceName("living_room_bulb")       // string
+
+// Listen for state changes
+registry.onDeviceStateChange("living_room_bulb", (state, prev) => {
+  this.logger.info({ brightness: state.brightness }, "Bulb changed");
+});
+```
+
+See [Device Registry](device-registry.md) for the complete API and nice-name configuration.
 
 ### Logger and config
 
