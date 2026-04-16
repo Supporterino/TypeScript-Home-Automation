@@ -24,6 +24,10 @@ const configSchema = z.object({
     /** Whether to scan subdirectories recursively for automation files. */
     recursive: z.boolean().default(false),
   }),
+  deviceRegistry: z.object({
+    /** Whether to enable automatic Zigbee2MQTT device discovery and state tracking. */
+    enabled: z.boolean().default(false),
+  }),
   httpServer: z.object({
     /** Port for the HTTP server (health probes + webhooks). Set to 0 to disable. */
     port: z.coerce.number().int().min(0).default(8080),
@@ -45,6 +49,7 @@ export function loadConfig(): Config {
   const parsedPersist = booleanString.parse(process.env.STATE_PERSIST);
   const parsedRecursive = booleanString.parse(process.env.AUTOMATIONS_RECURSIVE);
   const parsedWebUiEnabled = booleanString.parse(process.env.WEB_UI_ENABLED);
+  const parsedDeviceRegistryEnabled = booleanString.parse(process.env.DEVICE_REGISTRY_ENABLED);
 
   const result = configSchema.safeParse({
     mqtt: {
@@ -59,6 +64,9 @@ export function loadConfig(): Config {
     },
     automations: {
       recursive: parsedRecursive,
+    },
+    deviceRegistry: {
+      enabled: parsedDeviceRegistryEnabled,
     },
     httpServer: {
       port: process.env.HTTP_PORT,

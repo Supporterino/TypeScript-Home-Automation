@@ -12,6 +12,7 @@ import type { CronScheduler } from "./scheduling/cron-scheduler.js";
 import type { NanoleafService } from "./services/nanoleaf-service.js";
 import type { ShellyService } from "./services/shelly-service.js";
 import type { StateChangeHandler, StateManager } from "./state/state-manager.js";
+import type { DeviceRegistry } from "./zigbee/device-registry.js";
 
 /**
  * Discovers, registers, and manages the lifecycle of all automations.
@@ -43,6 +44,7 @@ export class AutomationManager {
     private readonly weather: WeatherService | null,
     private readonly config: Config,
     private readonly logger: Logger,
+    private readonly deviceRegistry: DeviceRegistry | null,
   ) {}
 
   /**
@@ -114,6 +116,7 @@ export class AutomationManager {
       config: this.config,
       notifications: this.notifications,
       weather: this.weather,
+      deviceRegistry: this.deviceRegistry,
     };
     automation._inject(context);
 

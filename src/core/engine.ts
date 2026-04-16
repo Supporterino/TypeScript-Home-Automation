@@ -11,6 +11,7 @@ import { CronScheduler } from "./scheduling/cron-scheduler.js";
 import { NanoleafService } from "./services/nanoleaf-service.js";
 import { ShellyService } from "./services/shelly-service.js";
 import { StateManager, type StateManagerOptions } from "./state/state-manager.js";
+import { DeviceRegistry } from "./zigbee/device-registry.js";
 
 /**
  * Options for creating an automation engine.
@@ -130,6 +131,12 @@ export interface Engine {
 
   /** The automation manager (for advanced usage, e.g. manual registration). */
   readonly manager: AutomationManager;
+
+  /**
+   * The Zigbee2MQTT device registry.
+   * `null` when `DEVICE_REGISTRY_ENABLED` is `false` (the default).
+   */
+  readonly deviceRegistry: DeviceRegistry | null;
 }
 
 /**
@@ -205,6 +212,17 @@ export function createEngine(options: EngineOptions): Engine {
         : options.weather;
   }
 
+  // Initialize device registry (optional — disabled by default)
+  const deviceRegistry = config.deviceRegistry.enabled
+    ? new DeviceRegistry(mqtt, config, logger.child({ service: "device-registry" }))
+    : null;
+
+  if (!deviceRegistry) {
+    logger.info(
+      "Device registry disabled (DEVICE_REGISTRY_ENABLED=false) — set to true to enable automatic device discovery",
+    );
+  }
+
   // Initialize HTTP server (health probes + webhooks)
   const httpServerPort = config.httpServer.port;
   const httpServer =
@@ -235,6 +253,7 @@ export function createEngine(options: EngineOptions): Engine {
     weather,
     config,
     logger.child({ service: "manager" }),
+    deviceRegistry,
   );
 
   let started = false;
@@ -249,6 +268,7 @@ export function createEngine(options: EngineOptions): Engine {
     state: stateManager,
     notifications,
     manager,
+    deviceRegistry,
 
     async start(): Promise<void> {
       if (started) {
@@ -279,6 +299,7 @@ export function createEngine(options: EngineOptions): Engine {
       httpServer?.start();
       await stateManager.load();
       await mqtt.connect();
+      deviceRegistry?.start();
       const recursive = options.recursive ?? config.automations.recursive;
       await manager.discoverAndRegister(options.automationsDir, recursive);
       started = true;
@@ -295,6 +316,7 @@ export function createEngine(options: EngineOptions): Engine {
       httpServer?.setEngineStarted(false);
       await manager.stopAll();
       cron.stopAll();
+      deviceRegistry?.stop();
       await stateManager.save();
       await mqtt.disconnect();
       httpServer?.stop();
