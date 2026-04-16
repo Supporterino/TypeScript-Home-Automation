@@ -101,13 +101,13 @@ export class HttpServer {
   }
 
   /**
-   * Mount a Hono app at a given path prefix for the web UI.
-   * Requests for the exact path and all subpaths are delegated to the app.
+   * Register web UI routes on the server's Hono app.
+   * Lazily imports `registerWebUiRoutes` to keep the web UI tree-shakeable.
    * Must be called before `start()`.
    */
-  mountWebUi(app: Hono, path: string): void {
-    this.honoApp.all(path, (c) => app.fetch(c.req.raw));
-    this.honoApp.all(`${path}/*`, (c) => app.fetch(c.req.raw));
+  async mountWebUi(path: string, token: string): Promise<void> {
+    const { registerWebUiRoutes } = await import("../web-ui/index.js");
+    registerWebUiRoutes(this.honoApp, path, token);
     this.logger.info({ path }, "Web UI mounted");
   }
 

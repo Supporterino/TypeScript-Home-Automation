@@ -1,19 +1,26 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import pino from "pino";
 import { loadConfig } from "../src/config.js";
-import { createWebUiApp } from "../src/core/web-ui/index.js";
+import { HttpServer } from "../src/core/http/http-server.js";
+import type { MqttService } from "../src/core/mqtt/mqtt-service.js";
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
-function makeApp({ token = "", path = "/status" } = {}) {
-  return createWebUiApp({ token, path });
+const logger = pino({ level: "silent" });
+const mockMqtt = { isConnected: false } as unknown as MqttService;
+
+async function makeServer({ token = "", path = "/status" } = {}): Promise<HttpServer> {
+  const server = new HttpServer(3000, mockMqtt, token, logger);
+  await server.mountWebUi(path, token);
+  return server;
 }
 
 async function req(
-  app: ReturnType<typeof makeApp>,
+  server: HttpServer,
   path: string,
   options: RequestInit & { headers?: Record<string, string> } = {},
 ) {
-  return app.fetch(new Request(`http://localhost${path}`, options));
+  return server.fetch(new Request(`http://localhost${path}`, options));
 }
 
 // ── Config tests ─────────────────────────────────────────────────────────
@@ -68,39 +75,39 @@ describe("webUi config", () => {
 
 // ── Dashboard shell — no auth ─────────────────────────────────────────────
 
-describe("createWebUiApp — no auth", () => {
+describe("registerWebUiRoutes — no auth", () => {
   describe("GET /status", () => {
     it("returns 200 with HTML content-type", async () => {
-      const app = makeApp();
-      const res = await req(app, "/status");
+      const server = await makeServer();
+      const res = await req(server, "/status");
       expect(res.status).toBe(200);
       expect(res.headers.get("content-type")).toContain("text/html");
     });
 
     it("HTML includes the base path as a data attribute", async () => {
-      const app = makeApp({ path: "/status" });
-      const res = await req(app, "/status");
+      const server = await makeServer({ path: "/status" });
+      const res = await req(server, "/status");
       const html = await res.text();
       expect(html).toContain('data-base-path="/status"');
     });
 
     it("HTML includes the React app mount point", async () => {
-      const app = makeApp();
-      const res = await req(app, "/status");
+      const server = await makeServer();
+      const res = await req(server, "/status");
       const html = await res.text();
       expect(html).toContain('<div id="app">');
     });
 
     it("HTML includes inlined JavaScript module", async () => {
-      const app = makeApp();
-      const res = await req(app, "/status");
+      const server = await makeServer();
+      const res = await req(server, "/status");
       const html = await res.text();
       expect(html).toContain('<script type="module">');
     });
 
     it("HTML includes inlined CSS", async () => {
-      const app = makeApp();
-      const res = await req(app, "/status");
+      const server = await makeServer();
+      const res = await req(server, "/status");
       const html = await res.text();
       expect(html).toContain("<style>");
     });
@@ -108,8 +115,8 @@ describe("createWebUiApp — no auth", () => {
 
   describe("GET /status/ (trailing slash)", () => {
     it("redirects to /status", async () => {
-      const app = makeApp();
-      const res = await req(app, "/status/");
+      const server = await makeServer();
+      const res = await req(server, "/status/");
       // Hono issues a 302 for programmatic redirects
       expect(res.status).toBe(302);
       expect(res.headers.get("location")).toBe("/status");
@@ -119,15 +126,15 @@ describe("createWebUiApp — no auth", () => {
 
 // ── Dashboard shell — with auth ───────────────────────────────────────────
 
-describe("createWebUiApp — with auth", () => {
+describe("registerWebUiRoutes — with auth", () => {
   const SECRET = "my-secret-token";
 
   function authedReq(
-    app: ReturnType<typeof makeApp>,
+    server: HttpServer,
     path: string,
     options: RequestInit & { headers?: Record<string, string> } = {},
   ) {
-    return app.fetch(
+    return server.fetch(
       new Request(`http://localhost${path}`, {
         ...options,
         headers: {
@@ -140,15 +147,15 @@ describe("createWebUiApp — with auth", () => {
 
   describe("GET /status — unauthenticated", () => {
     it("redirects to /status/login when no token provided", async () => {
-      const app = makeApp({ token: SECRET });
-      const res = await req(app, "/status");
+      const server = await makeServer({ token: SECRET });
+      const res = await req(server, "/status");
       expect(res.status).toBe(302);
       expect(res.headers.get("location")).toContain("/login");
     });
 
     it("serves dashboard when authenticated via Bearer header", async () => {
-      const app = makeApp({ token: SECRET });
-      const res = await authedReq(app, "/status");
+      const server = await makeServer({ token: SECRET });
+      const res = await authedReq(server, "/status");
       expect(res.status).toBe(200);
       expect(res.headers.get("content-type")).toContain("text/html");
     });
@@ -156,8 +163,8 @@ describe("createWebUiApp — with auth", () => {
 
   describe("GET /status/login", () => {
     it("returns login page HTML when auth is required", async () => {
-      const app = makeApp({ token: SECRET });
-      const res = await req(app, "/status/login");
+      const server = await makeServer({ token: SECRET });
+      const res = await req(server, "/status/login");
       expect(res.status).toBe(200);
       expect(res.headers.get("content-type")).toContain("text/html");
       const html = await res.text();
@@ -165,8 +172,8 @@ describe("createWebUiApp — with auth", () => {
     });
 
     it("redirects to dashboard when already authenticated via cookie", async () => {
-      const app = makeApp({ token: SECRET });
-      const res = await app.fetch(
+      const server = await makeServer({ token: SECRET });
+      const res = await server.fetch(
         new Request("http://localhost/status/login", {
           headers: { Cookie: `ts-ha-session=${SECRET}` },
         }),
@@ -178,8 +185,8 @@ describe("createWebUiApp — with auth", () => {
 
   describe("POST /status/login", () => {
     it("sets session cookie and redirects on correct token", async () => {
-      const app = makeApp({ token: SECRET });
-      const res = await app.fetch(
+      const server = await makeServer({ token: SECRET });
+      const res = await server.fetch(
         new Request("http://localhost/status/login", {
           method: "POST",
           body: new URLSearchParams({ token: SECRET }),
@@ -192,8 +199,8 @@ describe("createWebUiApp — with auth", () => {
     });
 
     it("returns 401 and login page on wrong token", async () => {
-      const app = makeApp({ token: SECRET });
-      const res = await app.fetch(
+      const server = await makeServer({ token: SECRET });
+      const res = await server.fetch(
         new Request("http://localhost/status/login", {
           method: "POST",
           body: new URLSearchParams({ token: "wrong-token" }),
@@ -208,8 +215,8 @@ describe("createWebUiApp — with auth", () => {
 
   describe("GET /status/logout", () => {
     it("clears session cookie and redirects to login", async () => {
-      const app = makeApp({ token: SECRET });
-      const res = await app.fetch(
+      const server = await makeServer({ token: SECRET });
+      const res = await server.fetch(
         new Request("http://localhost/status/logout", {
           headers: { Cookie: `ts-ha-session=${SECRET}` },
         }),
