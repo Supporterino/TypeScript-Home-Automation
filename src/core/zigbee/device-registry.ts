@@ -12,6 +12,44 @@ export type DeviceAddedHandler = (device: ZigbeeDevice) => void;
 export type DeviceRemovedHandler = (device: ZigbeeDevice) => void;
 
 /**
+ * Human-readable name mappings for Zigbee2MQTT devices.
+ *
+ * Resolution order in `DeviceRegistry.getNiceName()`:
+ * 1. Explicit per-device entry in `devices`
+ * 2. Result of `transform(friendlyName)` if provided
+ * 3. Raw `friendly_name` as-is
+ *
+ * @example
+ * ```ts
+ * const engine = createEngine({
+ *   automationsDir: "...",
+ *   deviceRegistry: {
+ *     names: {
+ *       devices: {
+ *         "kitchen_motion_0x1a2b": "Kitchen Motion Sensor",
+ *         "living_room_bulb": "Living Room Lamp",
+ *       },
+ *       transform: (name) => name.replace(/_/g, " "),
+ *     },
+ *   },
+ * });
+ * ```
+ */
+export interface DeviceNiceNames {
+  /**
+   * Per-device overrides. Key is the Zigbee2MQTT `friendly_name`,
+   * value is the human-readable display name.
+   */
+  devices?: Record<string, string>;
+
+  /**
+   * Global fallback transform applied when no per-device entry exists.
+   * Receives the raw `friendly_name` and returns a display name.
+   */
+  transform?: (friendlyName: string) => string;
+}
+
+/**
  * Discovers Zigbee2MQTT devices and tracks their state.
  *
  * When enabled, this service:
@@ -54,6 +92,7 @@ export class DeviceRegistry {
     private readonly mqtt: MqttService,
     private readonly config: Config,
     private readonly logger: Logger,
+    private readonly niceNames: DeviceNiceNames = {},
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -127,6 +166,24 @@ export class DeviceRegistry {
   /** Return `true` if the named device is currently tracked. */
   hasDevice(friendlyName: string): boolean {
     return this.devices.has(friendlyName);
+  }
+
+  /**
+   * Return a human-readable display name for the given `friendly_name`.
+   *
+   * Resolution order:
+   * 1. Explicit per-device entry from `DeviceNiceNames.devices`
+   * 2. Result of `DeviceNiceNames.transform(friendlyName)`
+   * 3. Raw `friendly_name` as-is
+   *
+   * Works even before the device has been seen on the network.
+   */
+  getNiceName(friendlyName: string): string {
+    return (
+      this.niceNames.devices?.[friendlyName] ??
+      this.niceNames.transform?.(friendlyName) ??
+      friendlyName
+    );
   }
 
   // ---------------------------------------------------------------------------

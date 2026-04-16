@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, mock } from "bun:test";
 import pino from "pino";
 import type { Config } from "../src/config.js";
 import type { MqttMessageHandler, MqttService } from "../src/core/mqtt/mqtt-service.js";
-import { DeviceRegistry } from "../src/core/zigbee/device-registry.js";
+import { type DeviceNiceNames, DeviceRegistry } from "../src/core/zigbee/device-registry.js";
 import type { ZigbeeDevice } from "../src/types/zigbee/bridge.js";
 
 const logger = pino({ level: "silent" });
@@ -545,6 +545,91 @@ describe("DeviceRegistry", () => {
       });
 
       expect(mqttMock.publications).toHaveLength(0);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // getNiceName
+  // ---------------------------------------------------------------------------
+
+  describe("getNiceName", () => {
+    /** Helper: create a registry with specific niceNames config. */
+    function makeRegistry(niceNames?: DeviceNiceNames): DeviceRegistry {
+      return new DeviceRegistry(mqttMock.mqtt, config, logger, niceNames);
+    }
+
+    it("returns raw friendly_name when no niceNames are provided", () => {
+      const registry = makeRegistry();
+      expect(registry.getNiceName("kitchen_sensor")).toBe("kitchen_sensor");
+    });
+
+    it("returns raw friendly_name when niceNames is an empty object", () => {
+      const registry = makeRegistry({});
+      expect(registry.getNiceName("kitchen_sensor")).toBe("kitchen_sensor");
+    });
+
+    it("returns raw friendly_name when devices map has no matching entry", () => {
+      const registry = makeRegistry({ devices: { other_device: "Other Device" } });
+      expect(registry.getNiceName("kitchen_sensor")).toBe("kitchen_sensor");
+    });
+
+    it("returns the per-device override when an explicit entry exists", () => {
+      const registry = makeRegistry({
+        devices: { kitchen_motion_0x1a2b: "Kitchen Motion Sensor" },
+      });
+      expect(registry.getNiceName("kitchen_motion_0x1a2b")).toBe("Kitchen Motion Sensor");
+    });
+
+    it("returns the transform result when no per-device entry exists", () => {
+      const registry = makeRegistry({
+        transform: (name) => name.replace(/_/g, " "),
+      });
+      expect(registry.getNiceName("living_room_bulb")).toBe("living room bulb");
+    });
+
+    it("per-device entry takes precedence over transform", () => {
+      const registry = makeRegistry({
+        devices: { living_room_bulb: "Living Room Lamp" },
+        transform: (name) => name.toUpperCase(),
+      });
+      expect(registry.getNiceName("living_room_bulb")).toBe("Living Room Lamp");
+    });
+
+    it("falls back to transform for devices not in the explicit map", () => {
+      const registry = makeRegistry({
+        devices: { living_room_bulb: "Living Room Lamp" },
+        transform: (name) => name.replace(/_/g, " "),
+      });
+      expect(registry.getNiceName("hallway_sensor")).toBe("hallway sensor");
+    });
+
+    it("works for a device not yet in the registry", () => {
+      // getNiceName does not require the device to be tracked
+      const registry = makeRegistry({
+        devices: { future_device: "Future Device" },
+      });
+      expect(registry.getNiceName("future_device")).toBe("Future Device");
+    });
+
+    it("transform receives the exact friendly_name string", () => {
+      const transformFn = mock((name: string) => `[${name}]`);
+      const registry = makeRegistry({ transform: transformFn });
+
+      registry.getNiceName("my_sensor");
+
+      expect(transformFn).toHaveBeenCalledWith("my_sensor");
+    });
+
+    it("transform is not called when a per-device entry matches", () => {
+      const transformFn = mock((name: string) => name.toUpperCase());
+      const registry = makeRegistry({
+        devices: { my_sensor: "My Sensor" },
+        transform: transformFn,
+      });
+
+      registry.getNiceName("my_sensor");
+
+      expect(transformFn).not.toHaveBeenCalled();
     });
   });
 });
