@@ -11,7 +11,7 @@ import { CronScheduler } from "./scheduling/cron-scheduler.js";
 import { NanoleafService } from "./services/nanoleaf-service.js";
 import { ShellyService } from "./services/shelly-service.js";
 import { StateManager, type StateManagerOptions } from "./state/state-manager.js";
-import { DeviceRegistry } from "./zigbee/device-registry.js";
+import { type DeviceNiceNames, DeviceRegistry } from "./zigbee/device-registry.js";
 
 /**
  * Options for creating an automation engine.
@@ -93,6 +93,30 @@ export interface EngineOptions {
    * Accepts a `WeatherService` instance or a factory function.
    */
   weather?: WeatherService | ((http: HttpClient, logger: Logger) => WeatherService);
+
+  /**
+   * Runtime options for the Zigbee2MQTT device registry.
+   * Only relevant when `DEVICE_REGISTRY_ENABLED=true`.
+   *
+   * @example
+   * ```ts
+   * const engine = createEngine({
+   *   automationsDir: "...",
+   *   deviceRegistry: {
+   *     names: {
+   *       devices: {
+   *         "kitchen_motion_0x1a2b": "Kitchen Motion Sensor",
+   *       },
+   *       transform: (name) => name.replace(/_/g, " "),
+   *     },
+   *   },
+   * });
+   * ```
+   */
+  deviceRegistry?: {
+    /** Human-readable name mappings. Used by `registry.getNiceName()`. */
+    names?: DeviceNiceNames;
+  };
 }
 
 /**
@@ -214,7 +238,12 @@ export function createEngine(options: EngineOptions): Engine {
 
   // Initialize device registry (optional — disabled by default)
   const deviceRegistry = config.deviceRegistry.enabled
-    ? new DeviceRegistry(mqtt, config, logger.child({ service: "device-registry" }))
+    ? new DeviceRegistry(
+        mqtt,
+        config,
+        logger.child({ service: "device-registry" }),
+        options.deviceRegistry?.names,
+      )
     : null;
 
   if (!deviceRegistry) {

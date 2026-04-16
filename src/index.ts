@@ -55,6 +55,7 @@ export {
 // Zigbee2MQTT device registry
 export {
   type DeviceAddedHandler,
+  type DeviceNiceNames,
   DeviceRegistry,
   type DeviceRemovedHandler,
   type DeviceStateChangeHandler,
