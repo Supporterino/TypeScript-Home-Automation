@@ -1,6 +1,7 @@
 import type { Context, Hono } from "hono";
 import { getCookie } from "hono/cookie";
 import { SESSION_COOKIE } from "../http/utils.js";
+import { ICON_SVG } from "./assets/icon-svg.js";
 import { htmlShell, loginShell } from "./components/html-shell.js";
 
 /**
@@ -41,6 +42,31 @@ export function registerWebUiRoutes(app: Hono, path: string, token: string): voi
     const cookieVal = getCookie(c, SESSION_COOKIE);
     return cookieVal === token;
   }
+
+  // ── PWA assets ────────────────────────────────────────────────────────────
+
+  app.get(subpath("icon.svg"), (c) => {
+    return c.body(ICON_SVG, 200, { "Content-Type": "image/svg+xml" });
+  });
+
+  app.get(subpath("apple-touch-icon.svg"), (c) => {
+    return c.body(ICON_SVG, 200, { "Content-Type": "image/svg+xml" });
+  });
+
+  app.get(subpath("manifest.json"), (c) => {
+    const iconPath = `${subpath("icon.svg")}`;
+    const manifest = JSON.stringify({
+      name: "ts-ha",
+      short_name: "ts-ha",
+      display: "standalone",
+      start_url: path,
+      scope: path,
+      background_color: "#1a1b1e",
+      theme_color: "#228be6",
+      icons: [{ src: iconPath, sizes: "512x512", type: "image/svg+xml", purpose: "any maskable" }],
+    });
+    return c.body(manifest, 200, { "Content-Type": "application/manifest+json" });
+  });
 
   // ── Dashboard shell ───────────────────────────────────────────────────────
 
