@@ -1,31 +1,35 @@
 import {
   Badge,
+  Box,
   Group,
   Paper,
   ScrollArea,
   SimpleGrid,
   Stack,
-  Table,
   Text,
   Title,
+  Tooltip,
 } from "@mantine/core";
-import type { DashboardData, LogEntry } from "../types";
+import {
+  IconActivity,
+  IconClock,
+  IconDatabase,
+  IconPlugConnected,
+  IconRobot,
+  IconTimezone,
+} from "@tabler/icons-react";
+import type { DashboardData, LogEntry } from "../types.js";
+import {
+  entryKey,
+  extraFields,
+  formatDateTime,
+  formatTime,
+  LEVEL_NAMES,
+  levelColor,
+  levelCssColor,
+} from "../utils/logUtils.js";
 
-const LEVEL_NAMES: Record<number, string> = {
-  10: "TRACE",
-  20: "DEBUG",
-  30: "INFO",
-  40: "WARN",
-  50: "ERROR",
-  60: "FATAL",
-};
-
-function levelColor(level: number): string {
-  if (level <= 20) return "cyan";
-  if (level === 30) return "green";
-  if (level === 40) return "yellow";
-  return "red";
-}
+// ── Helpers ───────────────────────────────────────────────────────────────
 
 function formatUptime(ms: number): string {
   const totalSec = Math.floor(ms / 1000);
@@ -39,26 +43,29 @@ function formatUptime(ms: number): string {
   return `${seconds}s`;
 }
 
-function formatTime(ts: number): string {
-  const d = new Date(ts);
-  return d.toLocaleTimeString();
-}
+// ── Stat card ─────────────────────────────────────────────────────────────
 
 interface StatCardProps {
   label: string;
+  icon: React.ReactNode;
   children: React.ReactNode;
 }
 
-function StatCard({ label, children }: StatCardProps) {
+function StatCard({ label, icon, children }: StatCardProps) {
   return (
     <Paper withBorder p="md" radius="md">
-      <Text size="xs" tt="uppercase" fw={600} c="dimmed" mb={4}>
-        {label}
-      </Text>
+      <Group gap="xs" mb={6} align="center">
+        <Box c="dimmed">{icon}</Box>
+        <Text size="xs" tt="uppercase" fw={600} c="dimmed">
+          {label}
+        </Text>
+      </Group>
       {children}
     </Paper>
   );
 }
+
+// ── Overview tab ──────────────────────────────────────────────────────────
 
 interface Props {
   data: DashboardData | null;
@@ -79,43 +86,44 @@ export function OverviewTab({ data }: Props) {
       <Title order={2}>Overview</Title>
 
       <SimpleGrid cols={{ base: 2, sm: 3, md: 6 }} spacing="md">
-        <StatCard label="Engine">
+        <StatCard label="Engine" icon={<IconActivity size={14} />}>
           <Badge color={engineReady ? "green" : "red"} size="lg" variant="light">
             {engineReady ? "Ready" : "Not Ready"}
           </Badge>
         </StatCard>
 
-        <StatCard label="MQTT">
+        <StatCard label="MQTT" icon={<IconPlugConnected size={14} />}>
           <Badge color={mqttConnected ? "green" : "red"} size="lg" variant="light">
             {mqttConnected ? "Connected" : "Disconnected"}
           </Badge>
         </StatCard>
 
-        <StatCard label="Uptime">
+        <StatCard label="Uptime" icon={<IconClock size={14} />}>
           <Text fw={700} size="lg" ff="monospace">
             {uptime}
           </Text>
         </StatCard>
 
-        <StatCard label="Timezone">
+        <StatCard label="Timezone" icon={<IconTimezone size={14} />}>
           <Text fw={700} size="lg" c="blue">
             {status?.tz ?? "—"}
           </Text>
         </StatCard>
 
-        <StatCard label="Automations">
+        <StatCard label="Automations" icon={<IconRobot size={14} />}>
           <Text fw={700} size="lg" c="blue">
             {automations.length}
           </Text>
         </StatCard>
 
-        <StatCard label="State Keys">
+        <StatCard label="State Keys" icon={<IconDatabase size={14} />}>
           <Text fw={700} size="lg" c="teal">
             {Object.keys(state).length}
           </Text>
         </StatCard>
       </SimpleGrid>
 
+      {/* Recent logs feed */}
       <Paper withBorder p="md" radius="md">
         <Text size="xs" tt="uppercase" fw={600} c="dimmed" mb="sm">
           Recent Logs
@@ -126,13 +134,11 @@ export function OverviewTab({ data }: Props) {
               No log entries yet
             </Text>
           ) : (
-            <Table striped highlightOnHover withRowBorders={false} fz="xs" ff="monospace">
-              <Table.Tbody>
-                {recentLogs.map((entry) => (
-                  <LogRow key={`${entry.time}-${entry.level}-${entry.msg}`} entry={entry} />
-                ))}
-              </Table.Tbody>
-            </Table>
+            <Stack gap={2}>
+              {recentLogs.map((entry) => (
+                <MiniLogEntry key={entryKey(entry)} entry={entry} />
+              ))}
+            </Stack>
           )}
         </ScrollArea>
       </Paper>
@@ -140,23 +146,75 @@ export function OverviewTab({ data }: Props) {
   );
 }
 
-function LogRow({ entry }: { entry: LogEntry }) {
+// ── Mini log entry (compact, non-expandable) ──────────────────────────────
+
+function MiniLogEntry({ entry }: { entry: LogEntry }) {
   const levelName = LEVEL_NAMES[entry.level] ?? String(entry.level);
   const color = levelColor(entry.level);
+  const borderColor = levelCssColor(entry.level);
+  const source = entry.automation ?? (entry as { service?: string }).service ?? "";
+  const hasExtras = extraFields(entry).length > 0;
+
   return (
-    <Table.Tr>
-      <Table.Td w={80} c="dimmed">
-        {formatTime(entry.time)}
-      </Table.Td>
-      <Table.Td w={60}>
-        <Badge color={color} size="xs" variant="light">
+    <Box
+      style={{ borderLeft: `3px solid ${borderColor}`, borderRadius: "0 4px 4px 0" }}
+      bg="var(--mantine-color-default-hover)"
+      px="sm"
+      py={3}
+    >
+      <Group gap="xs" wrap="nowrap" align="center">
+        <Tooltip label={formatDateTime(entry.time)} openDelay={400}>
+          <Text
+            size="xs"
+            c="dimmed"
+            ff="monospace"
+            style={{ whiteSpace: "nowrap", flexShrink: 0, minWidth: 68 }}
+          >
+            {formatTime(entry.time)}
+          </Text>
+        </Tooltip>
+
+        <Badge color={color} size="xs" variant="light" style={{ flexShrink: 0, minWidth: 46 }}>
           {levelName}
         </Badge>
-      </Table.Td>
-      <Table.Td w={120} c="blue" style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
-        {entry.automation ?? ""}
-      </Table.Td>
-      <Table.Td>{entry.msg}</Table.Td>
-    </Table.Tr>
+
+        {source && (
+          <Text
+            size="xs"
+            c="blue"
+            ff="monospace"
+            style={{
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              flexShrink: 0,
+              maxWidth: 120,
+            }}
+          >
+            {source}
+          </Text>
+        )}
+
+        <Text
+          size="xs"
+          ff="monospace"
+          style={{
+            flex: 1,
+            minWidth: 0,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {entry.msg}
+        </Text>
+
+        {hasExtras && (
+          <Text size="xs" c="dimmed" style={{ flexShrink: 0 }}>
+            +
+          </Text>
+        )}
+      </Group>
+    </Box>
   );
 }
