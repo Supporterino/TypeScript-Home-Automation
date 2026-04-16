@@ -1,4 +1,4 @@
-import { Accordion, Alert, Badge, Code, Stack, Table, Text, Title } from "@mantine/core";
+import { Accordion, Alert, Badge, Code, Group, Stack, Table, Text, Title } from "@mantine/core";
 import type { DashboardData, DeviceInfo } from "../types";
 
 // ── Helpers ───────────────────────────────────────────────────────────────
