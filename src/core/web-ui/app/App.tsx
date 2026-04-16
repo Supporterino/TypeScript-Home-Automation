@@ -12,6 +12,7 @@ import {
 import { useDisclosure } from "@mantine/hooks";
 import { useState } from "react";
 import { AutomationsTab } from "./components/AutomationsTab";
+import { DevicesTab } from "./components/DevicesTab";
 import { LogsTab } from "./components/LogsTab";
 import { OverviewTab } from "./components/OverviewTab";
 import { StateTab } from "./components/StateTab";
@@ -23,11 +24,12 @@ const basePath =
   (document.documentElement as HTMLElement & { dataset: DOMStringMap }).dataset.basePath ??
   "/status";
 
-type TabId = "overview" | "automations" | "state" | "logs";
+type TabId = "overview" | "automations" | "devices" | "state" | "logs";
 
 const NAV_ITEMS: { id: TabId; label: string }[] = [
   { id: "overview", label: "Overview" },
   { id: "automations", label: "Automations" },
+  { id: "devices", label: "Devices" },
   { id: "state", label: "State" },
   { id: "logs", label: "Logs" },
 ];
@@ -166,6 +168,7 @@ export function App() {
 
         {activeTab === "overview" && <OverviewTab data={data} />}
         {activeTab === "automations" && <AutomationsTab data={data} />}
+        {activeTab === "devices" && <DevicesTab data={data} />}
         {activeTab === "state" && <StateTab data={data} onMutate={refresh} />}
         {activeTab === "logs" && <LogsTab data={data} />}
       </AppShell.Main>

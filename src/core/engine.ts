@@ -321,6 +321,7 @@ export function createEngine(options: EngineOptions): Engine {
           token: config.httpServer.token,
           path: webUiPath,
           getStartedAt: () => httpServer.startedAt,
+          deviceRegistry,
         });
         httpServer.mountWebUi(webUiApp, webUiPath);
         logger.info({ path: webUiPath }, "Web UI enabled");

@@ -1,6 +1,13 @@
 /** Typed fetch wrappers for the web UI API. */
 
-import type { Automation, DashboardData, LogEntry, StateMap, StatusData } from "./types";
+import type {
+  Automation,
+  DashboardData,
+  DeviceInfo,
+  LogEntry,
+  StateMap,
+  StatusData,
+} from "./types";
 
 let _token = "";
 let _basePath = "/status";
@@ -36,11 +43,21 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
 }
 
 export async function fetchAll(): Promise<DashboardData> {
-  const [statusRes, automationsRes, stateRes, logsRes] = await Promise.all([
+  const [statusRes, automationsRes, stateRes, logsRes, devicesRes] = await Promise.all([
     apiFetch<StatusData>("/api/status"),
     apiFetch<{ automations: Automation[]; count: number }>("/api/automations"),
     apiFetch<{ state: StateMap; count: number }>("/api/state"),
     apiFetch<{ entries: LogEntry[]; count: number }>("/api/logs?limit=150"),
+    apiFetch<{ devices: DeviceInfo[]; count: number }>("/api/devices")
+      .then((r) => ({ devices: r.devices, available: true }))
+      .catch((err: unknown) => {
+        // 503 means the registry is disabled — surface gracefully
+        if ((err as Error).message?.includes("Device registry is disabled")) {
+          return { devices: [] as DeviceInfo[], available: false };
+        }
+        // Any other error (network etc.) — show empty but don't hide the tab
+        return { devices: [] as DeviceInfo[], available: true };
+      }),
   ]);
 
   return {
@@ -48,6 +65,8 @@ export async function fetchAll(): Promise<DashboardData> {
     automations: automationsRes.automations,
     state: stateRes.state,
     logs: logsRes.entries,
+    devices: devicesRes.devices,
+    devicesAvailable: devicesRes.available,
   };
 }
 

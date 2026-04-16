@@ -5,6 +5,7 @@ import type { AutomationManager } from "../automation-manager.js";
 import type { LogBuffer, LogQuery } from "../logging/log-buffer.js";
 import type { MqttService } from "../mqtt/mqtt-service.js";
 import type { StateManager } from "../state/state-manager.js";
+import type { DeviceRegistry } from "../zigbee/device-registry.js";
 import { htmlShell, loginShell } from "./components/html-shell.js";
 
 /** Cookie name used to store the session token in the browser. */
@@ -22,6 +23,11 @@ export interface WebUiDeps {
   path: string;
   /** Returns the engine startedAt timestamp, or null if not started. */
   getStartedAt: () => number | null;
+  /**
+   * Device registry, or `null` when `DEVICE_REGISTRY_ENABLED=false`.
+   * The `/api/devices` endpoint returns 503 when this is null.
+   */
+  deviceRegistry: DeviceRegistry | null;
 }
 
 /**
@@ -34,7 +40,16 @@ export interface WebUiDeps {
  *   - A /api sub-group that mirrors the debug API endpoints
  */
 export function createWebUiApp(deps: WebUiDeps): Hono {
-  const { stateManager, automationManager, logBuffer, mqtt, token, path, getStartedAt } = deps;
+  const {
+    stateManager,
+    automationManager,
+    logBuffer,
+    mqtt,
+    token,
+    path,
+    getStartedAt,
+    deviceRegistry,
+  } = deps;
   const hasAuth = token.length > 0;
 
   const app = new Hono();
@@ -288,6 +303,34 @@ export function createWebUiApp(deps: WebUiDeps): Hono {
 
     const entries = logBuffer.query(query);
     return c.json({ entries, count: entries.length });
+  });
+
+  // ── API: Devices ──────────────────────────────────────────────────────────
+
+  app.get(`${path}/api/devices`, (c) => {
+    if (!deviceRegistry) {
+      return c.json({ error: "Device registry is disabled (DEVICE_REGISTRY_ENABLED=false)" }, 503);
+    }
+
+    const devices = deviceRegistry.getDevices().map((d) => ({
+      friendly_name: d.friendly_name,
+      nice_name: deviceRegistry.getNiceName(d.friendly_name),
+      ieee_address: d.ieee_address,
+      type: d.type,
+      supported: d.supported,
+      interview_state: d.interview_state,
+      power_source: d.power_source ?? null,
+      state: deviceRegistry.getDeviceState(d.friendly_name) ?? null,
+      definition: d.definition
+        ? {
+            model: d.definition.model,
+            vendor: d.definition.vendor,
+            description: d.definition.description,
+          }
+        : null,
+    }));
+
+    return c.json({ devices, count: devices.length });
   });
 
   return app;
