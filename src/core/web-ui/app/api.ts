@@ -18,7 +18,7 @@ export function initApi(basePath: string, token: string) {
 }
 
 export async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const url = _basePath + path;
+  const url = path;
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (_token) headers["Authorization"] = `Bearer ${_token}`;
 

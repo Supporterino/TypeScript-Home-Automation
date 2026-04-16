@@ -1,48 +1,11 @@
-import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
-import pino from "pino";
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { loadConfig } from "../src/config.js";
-import { LogBuffer } from "../src/core/logging/log-buffer.js";
-import { StateManager } from "../src/core/state/state-manager.js";
 import { createWebUiApp } from "../src/core/web-ui/index.js";
-
-const logger = pino({ level: "silent" });
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
-function createMockMqtt(connected = true) {
-  return {
-    isConnected: connected,
-  } as unknown as import("../src/core/mqtt/mqtt-service.js").MqttService;
-}
-
-function createMockAutomationManager(automations: Array<{ name: string }> = []) {
-  return {
-    listAutomations: mock(() => automations),
-    getAutomation: mock((name: string) => automations.find((a) => a.name === name) ?? null),
-    triggerAutomation: mock(async (name: string) => automations.some((a) => a.name === name)),
-  } as unknown as import("../src/core/automation-manager.js").AutomationManager;
-}
-
-function makeApp({
-  token = "",
-  automations = [] as Array<{ name: string }>,
-  started = true,
-  path = "/status",
-} = {}) {
-  const stateManager = new StateManager(logger);
-  const logBuffer = new LogBuffer(100);
-  const mqtt = createMockMqtt(true);
-  const automationManager = createMockAutomationManager(automations);
-
-  return createWebUiApp({
-    stateManager,
-    automationManager,
-    logBuffer,
-    mqtt,
-    token,
-    path,
-    getStartedAt: () => (started ? Date.now() - 60_000 : null),
-  });
+function makeApp({ token = "", path = "/status" } = {}) {
+  return createWebUiApp({ token, path });
 }
 
 async function req(
@@ -103,7 +66,7 @@ describe("webUi config", () => {
   });
 });
 
-// ── Status page app — no auth ─────────────────────────────────────────────
+// ── Dashboard shell — no auth ─────────────────────────────────────────────
 
 describe("createWebUiApp — no auth", () => {
   describe("GET /status", () => {
@@ -152,268 +115,9 @@ describe("createWebUiApp — no auth", () => {
       expect(res.headers.get("location")).toBe("/status");
     });
   });
-
-  describe("GET /status/api/status", () => {
-    it("returns engine and mqtt status", async () => {
-      const app = makeApp({ started: true });
-      const res = await req(app, "/status/api/status");
-      expect(res.status).toBe(200);
-      const body = await res.json();
-      expect(body).toHaveProperty("status");
-      expect(body).toHaveProperty("checks");
-      expect(body.checks).toHaveProperty("mqtt");
-      expect(body.checks).toHaveProperty("engine");
-    });
-
-    it("returns ready=true when mqtt connected and engine started", async () => {
-      const app = makeApp({ started: true });
-      const res = await req(app, "/status/api/status");
-      const body = await res.json();
-      expect(body.status).toBe("ready");
-      expect(body.checks.mqtt).toBe(true);
-      expect(body.checks.engine).toBe(true);
-    });
-
-    it("returns ready=false when engine not started", async () => {
-      const app = makeApp({ started: false });
-      const res = await req(app, "/status/api/status");
-      expect(res.status).toBe(503);
-      const body = await res.json();
-      expect(body.status).toBe("not ready");
-    });
-  });
-
-  describe("GET /status/api/automations", () => {
-    it("returns empty list when no automations", async () => {
-      const app = makeApp({ automations: [] });
-      const res = await req(app, "/status/api/automations");
-      expect(res.status).toBe(200);
-      const body = await res.json();
-      expect(body.automations).toEqual([]);
-      expect(body.count).toBe(0);
-    });
-
-    it("returns automations list", async () => {
-      const automations = [
-        { name: "motion-light", triggers: [{ type: "mqtt", topic: "z2m/sensor" }] },
-      ];
-      const app = makeApp({ automations });
-      const res = await req(app, "/status/api/automations");
-      const body = await res.json();
-      expect(body.count).toBe(1);
-      expect(body.automations[0].name).toBe("motion-light");
-    });
-  });
-
-  describe("GET /status/api/automations/:name", () => {
-    it("returns 404 for unknown automation", async () => {
-      const app = makeApp({ automations: [] });
-      const res = await req(app, "/status/api/automations/nonexistent");
-      expect(res.status).toBe(404);
-      const body = await res.json();
-      expect(body.error).toContain("not found");
-    });
-
-    it("returns the automation when found", async () => {
-      const automations = [{ name: "test-auto", triggers: [] }];
-      const app = makeApp({ automations });
-      const res = await req(app, "/status/api/automations/test-auto");
-      expect(res.status).toBe(200);
-      const body = await res.json();
-      expect(body.name).toBe("test-auto");
-    });
-  });
-
-  describe("POST /status/api/automations/:name/trigger", () => {
-    it("returns 400 when body is not JSON", async () => {
-      const app = makeApp({ automations: [{ name: "test-auto", triggers: [] }] });
-      const res = await req(app, "/status/api/automations/test-auto/trigger", {
-        method: "POST",
-        body: "not-json",
-        headers: { "content-type": "text/plain" },
-      });
-      expect(res.status).toBe(400);
-    });
-
-    it("returns 400 when type field is missing", async () => {
-      const app = makeApp({ automations: [{ name: "test-auto", triggers: [] }] });
-      const res = await req(app, "/status/api/automations/test-auto/trigger", {
-        method: "POST",
-        body: JSON.stringify({ noType: true }),
-        headers: { "content-type": "application/json" },
-      });
-      expect(res.status).toBe(400);
-      const body = await res.json();
-      expect(body.error).toContain("type");
-    });
-
-    it("returns 400 for unknown trigger type", async () => {
-      const app = makeApp({ automations: [{ name: "test-auto", triggers: [] }] });
-      const res = await req(app, "/status/api/automations/test-auto/trigger", {
-        method: "POST",
-        body: JSON.stringify({ type: "invalid" }),
-        headers: { "content-type": "application/json" },
-      });
-      expect(res.status).toBe(400);
-    });
-
-    it("triggers an automation successfully", async () => {
-      const automations = [{ name: "test-auto", triggers: [] }];
-      const app = makeApp({ automations });
-      const res = await req(app, "/status/api/automations/test-auto/trigger", {
-        method: "POST",
-        body: JSON.stringify({ type: "mqtt", topic: "manual/test", payload: {} }),
-        headers: { "content-type": "application/json" },
-      });
-      expect(res.status).toBe(200);
-      const body = await res.json();
-      expect(body.status).toBe("triggered");
-    });
-
-    it("returns 404 when automation does not exist", async () => {
-      const app = makeApp({ automations: [] });
-      const res = await req(app, "/status/api/automations/ghost/trigger", {
-        method: "POST",
-        body: JSON.stringify({ type: "cron" }),
-        headers: { "content-type": "application/json" },
-      });
-      expect(res.status).toBe(404);
-    });
-  });
-
-  describe("GET /status/api/state", () => {
-    it("returns empty state", async () => {
-      const app = makeApp();
-      const res = await req(app, "/status/api/state");
-      expect(res.status).toBe(200);
-      const body = await res.json();
-      expect(body.state).toEqual({});
-      expect(body.count).toBe(0);
-    });
-
-    it("returns state keys after setting values", async () => {
-      const stateManager = new StateManager(logger);
-      stateManager.set("night_mode", true);
-      stateManager.set("count", 42);
-
-      const app = createWebUiApp({
-        stateManager,
-        automationManager: createMockAutomationManager(),
-        logBuffer: new LogBuffer(100),
-        mqtt: createMockMqtt(),
-        token: "",
-        path: "/status",
-        getStartedAt: () => Date.now(),
-      });
-
-      const res = await req(app, "/status/api/state");
-      const body = await res.json();
-      expect(body.count).toBe(2);
-      expect(body.state.night_mode).toBe(true);
-      expect(body.state.count).toBe(42);
-    });
-  });
-
-  describe("PUT /status/api/state/:key", () => {
-    it("sets a state value", async () => {
-      const stateManager = new StateManager(logger);
-      const app = createWebUiApp({
-        stateManager,
-        automationManager: createMockAutomationManager(),
-        logBuffer: new LogBuffer(100),
-        mqtt: createMockMqtt(),
-        token: "",
-        path: "/status",
-        getStartedAt: () => Date.now(),
-      });
-
-      const res = await req(app, "/status/api/state/my-key", {
-        method: "PUT",
-        body: JSON.stringify(true),
-        headers: { "content-type": "application/json" },
-      });
-      expect(res.status).toBe(200);
-      const body = await res.json();
-      expect(body.key).toBe("my-key");
-      expect(body.value).toBe(true);
-      expect(stateManager.get("my-key")).toBe(true);
-    });
-
-    it("returns 400 for invalid JSON body", async () => {
-      const app = makeApp();
-      const res = await req(app, "/status/api/state/my-key", {
-        method: "PUT",
-        body: "not-json",
-        headers: { "content-type": "text/plain" },
-      });
-      expect(res.status).toBe(400);
-    });
-  });
-
-  describe("DELETE /status/api/state/:key", () => {
-    it("deletes an existing key", async () => {
-      const stateManager = new StateManager(logger);
-      stateManager.set("to-delete", "value");
-
-      const app = createWebUiApp({
-        stateManager,
-        automationManager: createMockAutomationManager(),
-        logBuffer: new LogBuffer(100),
-        mqtt: createMockMqtt(),
-        token: "",
-        path: "/status",
-        getStartedAt: () => Date.now(),
-      });
-
-      const res = await req(app, "/status/api/state/to-delete", { method: "DELETE" });
-      expect(res.status).toBe(200);
-      const body = await res.json();
-      expect(body.deleted).toBe(true);
-      expect(stateManager.has("to-delete")).toBe(false);
-    });
-
-    it("returns deleted=false for non-existent key", async () => {
-      const app = makeApp();
-      const res = await req(app, "/status/api/state/nope", { method: "DELETE" });
-      expect(res.status).toBe(200);
-      const body = await res.json();
-      expect(body.deleted).toBe(false);
-    });
-  });
-
-  describe("GET /status/api/logs", () => {
-    it("returns empty log list", async () => {
-      const app = makeApp();
-      const res = await req(app, "/status/api/logs");
-      expect(res.status).toBe(200);
-      const body = await res.json();
-      expect(body.entries).toEqual([]);
-      expect(body.count).toBe(0);
-    });
-
-    it("returns logs written to the buffer", async () => {
-      const logBuffer = new LogBuffer(100);
-      logBuffer.write(JSON.stringify({ level: 30, time: Date.now(), msg: "hello" }));
-
-      const app = createWebUiApp({
-        stateManager: new StateManager(logger),
-        automationManager: createMockAutomationManager(),
-        logBuffer,
-        mqtt: createMockMqtt(),
-        token: "",
-        path: "/status",
-        getStartedAt: () => Date.now(),
-      });
-
-      const res = await req(app, "/status/api/logs");
-      const body = await res.json();
-      expect(body.count).toBe(1);
-      expect(body.entries[0].msg).toBe("hello");
-    });
-  });
 });
 
-// ── Status page app — with auth ───────────────────────────────────────────
+// ── Dashboard shell — with auth ───────────────────────────────────────────
 
 describe("createWebUiApp — with auth", () => {
   const SECRET = "my-secret-token";
@@ -440,6 +144,13 @@ describe("createWebUiApp — with auth", () => {
       const res = await req(app, "/status");
       expect(res.status).toBe(302);
       expect(res.headers.get("location")).toContain("/login");
+    });
+
+    it("serves dashboard when authenticated via Bearer header", async () => {
+      const app = makeApp({ token: SECRET });
+      const res = await authedReq(app, "/status");
+      expect(res.status).toBe(200);
+      expect(res.headers.get("content-type")).toContain("text/html");
     });
   });
 
@@ -495,41 +206,17 @@ describe("createWebUiApp — with auth", () => {
     });
   });
 
-  describe("GET /status/api/* — authenticated via header", () => {
-    it("allows access with correct Bearer token", async () => {
-      const app = makeApp({ token: SECRET });
-      const res = await authedReq(app, "/status/api/status");
-      expect(res.status).toBe(200);
-    });
-
-    it("returns 401 without token", async () => {
-      const app = makeApp({ token: SECRET });
-      const res = await req(app, "/status/api/status");
-      expect(res.status).toBe(401);
-      const body = await res.json();
-      expect(body.error).toContain("Unauthorized");
-    });
-
-    it("returns 401 with wrong token", async () => {
+  describe("GET /status/logout", () => {
+    it("clears session cookie and redirects to login", async () => {
       const app = makeApp({ token: SECRET });
       const res = await app.fetch(
-        new Request("http://localhost/status/api/status", {
-          headers: { Authorization: "Bearer wrong" },
-        }),
-      );
-      expect(res.status).toBe(401);
-    });
-  });
-
-  describe("GET /status/api/* — authenticated via session cookie", () => {
-    it("allows access with valid session cookie", async () => {
-      const app = makeApp({ token: SECRET });
-      const res = await app.fetch(
-        new Request("http://localhost/status/api/status", {
+        new Request("http://localhost/status/logout", {
           headers: { Cookie: `ts-ha-session=${SECRET}` },
         }),
       );
-      expect(res.status).toBe(200);
+      expect(res.status).toBe(302);
+      expect(res.headers.get("location")).toContain("/login");
+      expect(res.headers.get("set-cookie")).toContain("Max-Age=0");
     });
   });
 });

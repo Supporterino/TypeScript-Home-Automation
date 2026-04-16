@@ -58,13 +58,13 @@ export class DebugClient {
     automations: { name: string; triggers: { type: string; [key: string]: unknown }[] }[];
     count: number;
   }> {
-    return this.get("/debug/automations");
+    return this.get("/api/automations");
   }
 
   async getAutomation(
     name: string,
   ): Promise<{ name: string; triggers: { type: string; [key: string]: unknown }[] }> {
-    return this.get(`/debug/automations/${encodeURIComponent(name)}`);
+    return this.get(`/api/automations/${encodeURIComponent(name)}`);
   }
 
   // -------------------------------------------------------------------------
@@ -72,18 +72,18 @@ export class DebugClient {
   // -------------------------------------------------------------------------
 
   async listState(): Promise<{ state: Record<string, unknown>; count: number }> {
-    return this.get("/debug/state");
+    return this.get("/api/state");
   }
 
   async getState(key: string): Promise<{ key: string; value: unknown; exists: boolean }> {
-    return this.get(`/debug/state/${encodeURIComponent(key)}`);
+    return this.get(`/api/state/${encodeURIComponent(key)}`);
   }
 
   async setState(
     key: string,
     value: unknown,
   ): Promise<{ key: string; value: unknown; previous: unknown }> {
-    return this.request(`/debug/state/${encodeURIComponent(key)}`, {
+    return this.request(`/api/state/${encodeURIComponent(key)}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json", ...this.authHeaders() },
       body: JSON.stringify(value),
@@ -91,7 +91,7 @@ export class DebugClient {
   }
 
   async deleteState(key: string): Promise<{ key: string; deleted: boolean }> {
-    return this.request(`/debug/state/${encodeURIComponent(key)}`, {
+    return this.request(`/api/state/${encodeURIComponent(key)}`, {
       method: "DELETE",
     });
   }
@@ -101,11 +101,11 @@ export class DebugClient {
   // -------------------------------------------------------------------------
 
   async listDevices(): Promise<{ devices: SerializedDevice[]; count: number }> {
-    return this.get("/debug/devices");
+    return this.get("/api/devices");
   }
 
   async getDevice(friendlyName: string): Promise<SerializedDevice> {
-    return this.get(`/debug/devices/${encodeURIComponent(friendlyName)}`);
+    return this.get(`/api/devices/${encodeURIComponent(friendlyName)}`);
   }
 
   // -------------------------------------------------------------------------
@@ -122,7 +122,7 @@ export class DebugClient {
     if (options?.limit) params.set("limit", String(options.limit));
 
     const query = params.toString();
-    return this.get(`/debug/logs${query ? `?${query}` : ""}`);
+    return this.get(`/api/logs${query ? `?${query}` : ""}`);
   }
 
   // -------------------------------------------------------------------------
@@ -133,7 +133,7 @@ export class DebugClient {
     name: string,
     context: { type: string; [key: string]: unknown },
   ): Promise<{ status: string; automation: string; type: string }> {
-    return this.request(`/debug/automations/${encodeURIComponent(name)}/trigger`, {
+    return this.request(`/api/automations/${encodeURIComponent(name)}/trigger`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...this.authHeaders() },
       body: JSON.stringify(context),
