@@ -169,7 +169,7 @@ function AutomationRow({ automation, onTrigger }: AutomationRowProps) {
       {/* Always render — let Collapse handle visibility so animation works correctly */}
       <Table.Tr style={{ background: "none" }}>
         <Table.Td colSpan={3} p={0} style={{ borderBottom: "none" }}>
-          <Collapse in={expanded}>
+          <Collapse expanded={expanded}>
             <Stack p="md" gap="xs">
               <Text size="xs" tt="uppercase" fw={600} c="dimmed">
                 Trigger definitions
