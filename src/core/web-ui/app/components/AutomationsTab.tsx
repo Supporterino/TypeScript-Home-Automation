@@ -146,9 +146,11 @@ function AutomationRow({ automation, onTrigger, index }: AutomationRowProps) {
   return (
     <>
       <Table.Tr
-        style={{ cursor: "pointer" }}
+        style={{
+          cursor: "pointer",
+          background: index % 2 !== 0 ? "var(--table-striped-color)" : undefined,
+        }}
         onClick={toggle}
-        bg={index % 2 !== 0 ? "var(--table-striped-color)" : undefined}
       >
         <Table.Td>
           <Text fw={600} ff="monospace" size="sm">
@@ -209,7 +211,7 @@ export function AutomationsTab({ data }: Props) {
       <Title order={2}>Automations</Title>
 
       <Table.ScrollContainer minWidth={500}>
-        <Table striped highlightOnHover withTableBorder withColumnBorders={false}>
+        <Table highlightOnHover withTableBorder withColumnBorders={false}>
           <Table.Thead>
             <Table.Tr>
               <Table.Th>Name</Table.Th>

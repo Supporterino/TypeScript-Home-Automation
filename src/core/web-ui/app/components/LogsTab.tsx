@@ -174,7 +174,7 @@ export function LogsTab({ data }: Props) {
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
-              {filtered.map((entry) => {
+              {filtered.map((entry, index) => {
                 const key = entryKey(entry);
                 return (
                   <LogRow
@@ -214,9 +214,11 @@ function LogRow({ entry, rowKey, isExpanded, onToggle, index }: LogRowProps) {
   return (
     <>
       <Table.Tr
-        style={hasExtras ? { cursor: "pointer" } : undefined}
+        style={{
+          cursor: hasExtras ? "pointer" : undefined,
+          background: index % 2 !== 0 ? "var(--table-striped-color)" : undefined,
+        }}
         onClick={hasExtras ? () => onToggle(rowKey) : undefined}
-        bg={index % 2 !== 0 ? "var(--table-striped-color)" : undefined}
       >
         <Table.Td c="dimmed" style={{ whiteSpace: "nowrap" }}>
           {formatTime(entry.time)}
