@@ -307,6 +307,7 @@ export function createEngine(options: EngineOptions): Engine {
 
       logger.info("Starting Home Automation Engine");
       httpServer?.setManagers(stateManager, manager, logBuffer);
+      httpServer?.setDeviceRegistry(deviceRegistry);
 
       // Mount web UI if enabled (imported lazily to keep it tree-shakeable)
       if (httpServer && config.httpServer.webUi.enabled) {

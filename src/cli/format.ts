@@ -59,6 +59,15 @@ export function formatTrigger(trigger: { type: string; [key: string]: unknown })
       line = `webhook  /${trigger.path}  [${methods.join(", ")}]`;
       break;
     }
+    case "device_state":
+      line = `device_state   ${trigger.friendlyName}`;
+      break;
+    case "device_joined":
+      line = `device_joined  ${trigger.friendlyName}`;
+      break;
+    case "device_left":
+      line = `device_left    ${trigger.friendlyName}`;
+      break;
     default:
       return `${trigger.type}`;
   }
@@ -69,6 +78,56 @@ export function formatTrigger(trigger: { type: string; [key: string]: unknown })
   }
 
   return line;
+}
+
+/**
+ * Format a device for the detail view (one-shot CLI).
+ */
+export function formatDevice(device: {
+  friendly_name: string;
+  nice_name: string;
+  ieee_address: string;
+  type: string;
+  supported: boolean;
+  interview_state: string;
+  power_source?: string | null;
+  state: Record<string, unknown> | null;
+  definition: { model: string; vendor: string; description: string } | null;
+}): string {
+  const lines: string[] = [];
+
+  const label = (l: string) => l.padEnd(16);
+
+  lines.push(`${label("Nice Name:")}${device.nice_name}`);
+  if (device.nice_name !== device.friendly_name) {
+    lines.push(`${label("Friendly:")}${device.friendly_name}`);
+  }
+  lines.push(`${label("IEEE:")}${device.ieee_address}`);
+  lines.push(`${label("Type:")}${device.type}`);
+  lines.push(`${label("Supported:")}${device.supported}`);
+  lines.push(`${label("Interview:")}${device.interview_state}`);
+
+  if (device.power_source) {
+    lines.push(`${label("Power:")}${device.power_source}`);
+  }
+
+  if (device.definition) {
+    const { model, vendor, description } = device.definition;
+    lines.push(`${label("Model:")}${model}  (${vendor}, ${description})`);
+  }
+
+  const stateEntries = device.state ? Object.entries(device.state) : [];
+  if (stateEntries.length > 0) {
+    lines.push("");
+    lines.push(`State (${stateEntries.length} ${stateEntries.length === 1 ? "key" : "keys"}):`);
+    for (const [key, value] of stateEntries) {
+      lines.push(`  ${key.padEnd(22)}${formatValue(value)}`);
+    }
+  } else {
+    lines.push(`${label("State:")}(no state received yet)`);
+  }
+
+  return lines.join("\n");
 }
 
 /**

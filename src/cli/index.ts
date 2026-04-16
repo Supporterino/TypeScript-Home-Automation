@@ -4,6 +4,7 @@ import { DebugClient } from "./client.js";
 import { getAutomation, listAutomations, triggerAutomation } from "./commands/automations.js";
 import { addConfig, listConfig, removeConfig, switchConfig } from "./commands/config.js";
 import { runDashboard } from "./commands/dashboard.js";
+import { getDevice, listDevices } from "./commands/devices.js";
 import { getLogs } from "./commands/logs.js";
 import { pairNanoleaf } from "./commands/nanoleaf.js";
 import { deleteState, getState, listState, setState } from "./commands/state.js";
@@ -19,6 +20,9 @@ Commands:
   automations list                    List all registered automations
   automations get <name>              Get details for a specific automation
   automations trigger <name> <ctx>    Manually trigger an automation
+
+  devices list                        List all tracked Zigbee2MQTT devices
+  devices get <friendly_name>         Get full detail for a single device
 
   state list                          List all state keys and values
   state get <key>                     Get a single state value
@@ -46,7 +50,7 @@ Options:
   --help                              Show this help message
 
 Short aliases:
-  a = automations, s = state, l = logs, d = dashboard, c = config
+  a = automations, dv = devices, s = state, l = logs, d = dashboard, c = config
   ls = list, rm/del = delete
 
 Trigger examples:
@@ -246,6 +250,21 @@ async function main(): Promise<void> {
         console.error("Available: list, get, trigger");
         process.exit(1);
       }
+    } else if (command === "devices" || command === "dv") {
+      if (subcommand === "list" || subcommand === "ls") {
+        await listDevices(client, json);
+      } else if (subcommand === "get") {
+        const friendlyName = args[0];
+        if (!friendlyName) {
+          console.error("Usage: ts-ha devices get <friendly_name>");
+          process.exit(1);
+        }
+        await getDevice(client, friendlyName, json);
+      } else {
+        console.error(`Unknown subcommand: devices ${subcommand}`);
+        console.error("Available: list, get");
+        process.exit(1);
+      }
     } else if (command === "state" || command === "s") {
       if (subcommand === "list" || subcommand === "ls") {
         await listState(client, json);
@@ -294,7 +313,7 @@ async function main(): Promise<void> {
     } else {
       console.error(`Unknown command: ${command}`);
       console.error(
-        "Available: automations (a), state (s), logs (l), dashboard (d), nanoleaf, config (c)",
+        "Available: automations (a), devices (dv), state (s), logs (l), dashboard (d), nanoleaf, config (c)",
       );
       process.exit(1);
     }
