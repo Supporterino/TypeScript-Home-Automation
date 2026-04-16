@@ -19,7 +19,8 @@ nav = [
     { "Shelly" = "services/shelly.md" },
     { "Nanoleaf" = "services/nanoleaf.md" },
     { "Weather" = "services/weather.md" },
-    { "Notifications" = "services/notifications.md" }
+    { "Notifications" = "services/notifications.md" },
+    { "Device Registry" = "device-registry.md" }
   ]},
   { "State Management" = "state.md" },
   { "Device Types" = "device-types.md" },
