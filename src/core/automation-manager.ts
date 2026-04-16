@@ -12,7 +12,12 @@ import type { CronScheduler } from "./scheduling/cron-scheduler.js";
 import type { NanoleafService } from "./services/nanoleaf-service.js";
 import type { ShellyService } from "./services/shelly-service.js";
 import type { StateChangeHandler, StateManager } from "./state/state-manager.js";
-import type { DeviceRegistry } from "./zigbee/device-registry.js";
+import type {
+  DeviceAddedHandler,
+  DeviceRegistry,
+  DeviceRemovedHandler,
+  DeviceStateChangeHandler,
+} from "./zigbee/device-registry.js";
 
 /**
  * Discovers, registers, and manages the lifecycle of all automations.
@@ -31,6 +36,15 @@ export class AutomationManager {
     new Map();
   /** Track webhook paths so we can cleanly remove on shutdown. */
   private webhookPaths: Map<Automation, string[]> = new Map();
+  /** Track device state handlers so we can cleanly unsubscribe on shutdown. */
+  private deviceStateHandlers: Map<
+    Automation,
+    { friendlyName: string; handler: DeviceStateChangeHandler }[]
+  > = new Map();
+  /** Track device-joined handlers so we can cleanly unsubscribe on shutdown. */
+  private deviceJoinedHandlers: Map<Automation, DeviceAddedHandler[]> = new Map();
+  /** Track device-left handlers so we can cleanly unsubscribe on shutdown. */
+  private deviceLeftHandlers: Map<Automation, DeviceRemovedHandler[]> = new Map();
 
   constructor(
     private readonly mqtt: MqttService,
@@ -123,6 +137,9 @@ export class AutomationManager {
     const mqttHandlers: { topic: string; handler: MqttMessageHandler }[] = [];
     const stateHandlers: { key: string; handler: StateChangeHandler }[] = [];
     const webhookPaths: string[] = [];
+    const deviceStateHandlers: { friendlyName: string; handler: DeviceStateChangeHandler }[] = [];
+    const deviceJoinedHandlers: DeviceAddedHandler[] = [];
+    const deviceLeftHandlers: DeviceRemovedHandler[] = [];
 
     for (let i = 0; i < automation.triggers.length; i++) {
       const trigger = automation.triggers[i];
@@ -203,12 +220,106 @@ export class AutomationManager {
 
         webhookPaths.push(trigger.path);
         childLogger.debug({ path: trigger.path, methods }, "Registered webhook trigger");
+      } else if (trigger.type === "device_state") {
+        if (!this.deviceRegistry) {
+          childLogger.warn(
+            { friendlyName: trigger.friendlyName },
+            "device_state trigger ignored — device registry disabled (set DEVICE_REGISTRY_ENABLED=true to enable)",
+          );
+          continue;
+        }
+
+        const { friendlyName } = trigger;
+        const handler: DeviceStateChangeHandler = (state, _prev) => {
+          const device = this.deviceRegistry?.getDevice(friendlyName);
+          if (!device) {
+            childLogger.debug(
+              { friendlyName },
+              "device_state trigger fired but device not in registry — skipping",
+            );
+            return;
+          }
+
+          if (trigger.filter && !trigger.filter(state, device)) {
+            return;
+          }
+
+          childLogger.info({ friendlyName }, "device_state trigger fired");
+          automation.execute({ type: "device_state", friendlyName, state, device }).catch((err) => {
+            childLogger.error({ err, friendlyName }, "Automation execution failed");
+          });
+        };
+
+        this.deviceRegistry.onDeviceStateChange(friendlyName, handler);
+        deviceStateHandlers.push({ friendlyName, handler });
+        childLogger.debug({ friendlyName }, "Registered device_state trigger");
+      } else if (trigger.type === "device_joined") {
+        if (!this.deviceRegistry) {
+          childLogger.warn(
+            { friendlyName: trigger.friendlyName ?? "*" },
+            "device_joined trigger ignored — device registry disabled (set DEVICE_REGISTRY_ENABLED=true to enable)",
+          );
+          continue;
+        }
+
+        const handler: DeviceAddedHandler = (device) => {
+          if (trigger.friendlyName && device.friendly_name !== trigger.friendlyName) {
+            return;
+          }
+
+          childLogger.info({ friendlyName: device.friendly_name }, "device_joined trigger fired");
+          automation.execute({ type: "device_joined", device }).catch((err) => {
+            childLogger.error(
+              { err, friendlyName: device.friendly_name },
+              "Automation execution failed",
+            );
+          });
+        };
+
+        this.deviceRegistry.onDeviceAdded(handler);
+        deviceJoinedHandlers.push(handler);
+        childLogger.debug(
+          { friendlyName: trigger.friendlyName ?? "*" },
+          "Registered device_joined trigger",
+        );
+      } else if (trigger.type === "device_left") {
+        if (!this.deviceRegistry) {
+          childLogger.warn(
+            { friendlyName: trigger.friendlyName ?? "*" },
+            "device_left trigger ignored — device registry disabled (set DEVICE_REGISTRY_ENABLED=true to enable)",
+          );
+          continue;
+        }
+
+        const handler: DeviceRemovedHandler = (device) => {
+          if (trigger.friendlyName && device.friendly_name !== trigger.friendlyName) {
+            return;
+          }
+
+          childLogger.info({ friendlyName: device.friendly_name }, "device_left trigger fired");
+          automation.execute({ type: "device_left", device }).catch((err) => {
+            childLogger.error(
+              { err, friendlyName: device.friendly_name },
+              "Automation execution failed",
+            );
+          });
+        };
+
+        this.deviceRegistry.onDeviceRemoved(handler);
+        deviceLeftHandlers.push(handler);
+        childLogger.debug(
+          { friendlyName: trigger.friendlyName ?? "*" },
+          "Registered device_left trigger",
+        );
       }
     }
 
     this.mqttHandlers.set(automation, mqttHandlers);
     this.stateHandlers.set(automation, stateHandlers);
     this.webhookPaths.set(automation, webhookPaths);
+    this.deviceStateHandlers.set(automation, deviceStateHandlers);
+    this.deviceJoinedHandlers.set(automation, deviceJoinedHandlers);
+    this.deviceLeftHandlers.set(automation, deviceLeftHandlers);
     this.automations.push(automation);
 
     try {
@@ -246,6 +357,24 @@ export class AutomationManager {
         this.httpServer?.removeWebhook(path);
       }
 
+      // Unsubscribe device state handlers
+      const deviceStateH = this.deviceStateHandlers.get(automation) ?? [];
+      for (const { friendlyName, handler } of deviceStateH) {
+        this.deviceRegistry?.offDeviceStateChange(friendlyName, handler);
+      }
+
+      // Unsubscribe device-joined handlers
+      const deviceJoinedH = this.deviceJoinedHandlers.get(automation) ?? [];
+      for (const handler of deviceJoinedH) {
+        this.deviceRegistry?.offDeviceAdded(handler);
+      }
+
+      // Unsubscribe device-left handlers
+      const deviceLeftH = this.deviceLeftHandlers.get(automation) ?? [];
+      for (const handler of deviceLeftH) {
+        this.deviceRegistry?.offDeviceRemoved(handler);
+      }
+
       // Stop cron jobs for this automation
       this.cron.removeByPrefix(`${automation.name}:`);
 
@@ -261,6 +390,9 @@ export class AutomationManager {
     this.mqttHandlers.clear();
     this.stateHandlers.clear();
     this.webhookPaths.clear();
+    this.deviceStateHandlers.clear();
+    this.deviceJoinedHandlers.clear();
+    this.deviceLeftHandlers.clear();
     this.logger.info("All automations stopped");
   }
 
@@ -318,6 +450,20 @@ export class AutomationManager {
         }
         if (t.type === "webhook") {
           return { type: "webhook", path: t.path, methods: t.methods ?? ["POST"] };
+        }
+        if (t.type === "device_state") {
+          return {
+            type: "device_state",
+            friendlyName: t.friendlyName,
+            hasFilter: !!t.filter,
+            filterSource: t.filter?.toString(),
+          };
+        }
+        if (t.type === "device_joined") {
+          return { type: "device_joined", friendlyName: t.friendlyName ?? "*" };
+        }
+        if (t.type === "device_left") {
+          return { type: "device_left", friendlyName: t.friendlyName ?? "*" };
         }
         return { type: (t as { type: string }).type };
       }),
