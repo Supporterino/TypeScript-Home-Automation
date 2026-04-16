@@ -337,14 +337,8 @@ export function createEngine(options: EngineOptions): Engine {
         const { createWebUiApp } = await import("./web-ui/index.js");
         const webUiPath = config.httpServer.webUi.path;
         const webUiApp = createWebUiApp({
-          stateManager,
-          automationManager: manager,
-          logBuffer,
-          mqtt,
           token: config.httpServer.token,
           path: webUiPath,
-          getStartedAt: () => httpServer.startedAt,
-          deviceRegistry,
         });
         httpServer.mountWebUi(webUiApp, webUiPath);
         logger.info({ path: webUiPath }, "Web UI enabled");
