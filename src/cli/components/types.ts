@@ -38,9 +38,29 @@ export interface LogsData {
   count: number;
 }
 
+export interface DeviceInfo {
+  friendly_name: string;
+  nice_name: string;
+  ieee_address: string;
+  type: string;
+  supported: boolean;
+  interview_state: string;
+  power_source?: string | null;
+  state: Record<string, unknown> | null;
+  definition: { model: string; vendor: string; description: string } | null;
+}
+
+export interface DevicesData {
+  devices: DeviceInfo[];
+  count: number;
+  /** `false` when the device registry is disabled (503 response from engine). */
+  available: boolean;
+}
+
 export interface DashboardData {
   readiness: ReadinessData;
   automations: AutomationsData;
+  devices: DevicesData;
   state: StateData;
   logs: LogsData;
   error: string | null;

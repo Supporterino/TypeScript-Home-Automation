@@ -6,6 +6,7 @@ import type { AutomationManager } from "../automation-manager.js";
 import type { LogBuffer, LogQuery } from "../logging/log-buffer.js";
 import type { MqttService } from "../mqtt/mqtt-service.js";
 import type { StateManager } from "../state/state-manager.js";
+import type { DeviceRegistry } from "../zigbee/device-registry.js";
 
 /**
  * Handler function for a registered webhook.
@@ -41,6 +42,8 @@ interface WebhookRoute {
  * - `PUT  /debug/state/:key`                — Set a state value
  * - `DELETE /debug/state/:key`              — Delete a state key
  * - `GET  /debug/logs`                      — Query log buffer
+ * - `GET  /debug/devices`                   — List all tracked Zigbee devices
+ * - `GET  /debug/devices/:friendlyName`     — Get a single device with its state
  *
  * Uses `Bun.serve()` for minimal overhead.
  *
@@ -54,6 +57,7 @@ export class HttpServer {
   private stateManager: StateManager | null = null;
   private automationManager: AutomationManager | null = null;
   private logBuffer: LogBuffer | null = null;
+  private deviceRegistry: DeviceRegistry | null = null;
   private webUiApp: Hono | null = null;
   private webUiPath = "";
 
@@ -72,6 +76,14 @@ export class HttpServer {
     this.stateManager = state;
     this.automationManager = automations;
     this.logBuffer = logs;
+  }
+
+  /**
+   * Set the device registry for the `/debug/devices` endpoints.
+   * Pass `null` when the registry is disabled.
+   */
+  setDeviceRegistry(registry: DeviceRegistry | null): void {
+    this.deviceRegistry = registry;
   }
 
   /**
@@ -307,6 +319,17 @@ export class HttpServer {
       return Response.json({ error: "Method not allowed" }, { status: 405 });
     }
 
+    // GET /debug/devices
+    if (path === "/debug/devices" && req.method === "GET") {
+      return this.debugListDevices();
+    }
+
+    // GET /debug/devices/:friendlyName
+    if (path.startsWith("/debug/devices/") && req.method === "GET") {
+      const friendlyName = decodeURIComponent(path.slice("/debug/devices/".length));
+      return this.debugGetDevice(friendlyName);
+    }
+
     return Response.json({ error: "Not found" }, { status: 404 });
   }
 
@@ -484,6 +507,71 @@ export class HttpServer {
       this.logger.error({ err, automation: name }, "Manual trigger failed");
       return Response.json({ error: "Execution failed" }, { status: 500 });
     }
+  }
+
+  // -------------------------------------------------------------------------
+  // Debug API — Devices
+  // -------------------------------------------------------------------------
+
+  private debugListDevices(): Response {
+    if (!this.deviceRegistry) {
+      return Response.json(
+        { error: "Device registry is disabled (DEVICE_REGISTRY_ENABLED=false)" },
+        { status: 503 },
+      );
+    }
+
+    const devices = this.deviceRegistry.getDevices().map((d) => ({
+      friendly_name: d.friendly_name,
+      nice_name: this.deviceRegistry?.getNiceName(d.friendly_name),
+      ieee_address: d.ieee_address,
+      type: d.type,
+      supported: d.supported,
+      interview_state: d.interview_state,
+      power_source: d.power_source ?? null,
+      state: this.deviceRegistry?.getDeviceState(d.friendly_name) ?? null,
+      definition: d.definition
+        ? {
+            model: d.definition.model,
+            vendor: d.definition.vendor,
+            description: d.definition.description,
+          }
+        : null,
+    }));
+
+    return Response.json({ devices, count: devices.length });
+  }
+
+  private debugGetDevice(friendlyName: string): Response {
+    if (!this.deviceRegistry) {
+      return Response.json(
+        { error: "Device registry is disabled (DEVICE_REGISTRY_ENABLED=false)" },
+        { status: 503 },
+      );
+    }
+
+    const device = this.deviceRegistry.getDevice(friendlyName);
+    if (!device) {
+      return Response.json({ error: "Device not found", friendlyName }, { status: 404 });
+    }
+
+    return Response.json({
+      friendly_name: device.friendly_name,
+      nice_name: this.deviceRegistry.getNiceName(device.friendly_name),
+      ieee_address: device.ieee_address,
+      type: device.type,
+      supported: device.supported,
+      interview_state: device.interview_state,
+      power_source: device.power_source ?? null,
+      state: this.deviceRegistry.getDeviceState(device.friendly_name) ?? null,
+      definition: device.definition
+        ? {
+            model: device.definition.model,
+            vendor: device.definition.vendor,
+            description: device.definition.description,
+          }
+        : null,
+    });
   }
 }
 

@@ -1,4 +1,20 @@
 /**
+ * A Zigbee device as returned by the `/debug/devices` API.
+ * Includes the live merged state and human-readable nice name.
+ */
+export interface SerializedDevice {
+  friendly_name: string;
+  nice_name: string;
+  ieee_address: string;
+  type: string;
+  supported: boolean;
+  interview_state: string;
+  power_source?: string | null;
+  state: Record<string, unknown> | null;
+  definition: { model: string; vendor: string; description: string } | null;
+}
+
+/**
  * HTTP client for the engine's debug API.
  */
 export class DebugClient {
@@ -78,6 +94,18 @@ export class DebugClient {
     return this.request(`/debug/state/${encodeURIComponent(key)}`, {
       method: "DELETE",
     });
+  }
+
+  // -------------------------------------------------------------------------
+  // Devices
+  // -------------------------------------------------------------------------
+
+  async listDevices(): Promise<{ devices: SerializedDevice[]; count: number }> {
+    return this.get("/debug/devices");
+  }
+
+  async getDevice(friendlyName: string): Promise<SerializedDevice> {
+    return this.get(`/debug/devices/${encodeURIComponent(friendlyName)}`);
   }
 
   // -------------------------------------------------------------------------

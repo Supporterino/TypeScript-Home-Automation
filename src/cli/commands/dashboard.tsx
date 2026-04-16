@@ -3,6 +3,7 @@ import { createRoot, useKeyboard, useRenderer, useTerminalDimensions } from "@op
 import { useCallback, useEffect, useState } from "react";
 import type { DebugClient } from "../client.js";
 import { AutomationsTab } from "../components/automations-tab.js";
+import { DevicesTab } from "../components/devices-tab.js";
 import { HelpModal } from "../components/help-modal.js";
 import { LogsTab } from "../components/logs-tab.js";
 import { OverviewTab } from "../components/overview-tab.js";
@@ -40,6 +41,7 @@ function Dashboard({
       tz: null,
     },
     automations: { automations: [], count: 0 },
+    devices: { devices: [], count: 0, available: true },
     state: { state: {}, count: 0 },
     logs: { entries: [], count: 0 },
     error: null,
@@ -49,15 +51,27 @@ function Dashboard({
   const fetchData = useCallback(async () => {
     try {
       const logLimit = Math.max(10, height - 15);
-      const [readiness, automations, state, logs] = await Promise.all([
+      const [readiness, automations, devicesResult, state, logs] = await Promise.all([
         client.getReadiness(),
         client.listAutomations().catch(() => ({ automations: [], count: 0 })),
+        client
+          .listDevices()
+          .then((r) => ({ ...r, available: true }))
+          .catch((err: unknown) => {
+            const msg = (err as Error).message ?? "";
+            // 503 means registry is disabled — surface gracefully
+            if (msg.includes("Device registry is disabled")) {
+              return { devices: [], count: 0, available: false };
+            }
+            return { devices: [], count: 0, available: true };
+          }),
         client.listState().catch(() => ({ state: {}, count: 0 })),
         client.getLogs({ limit: logLimit }).catch(() => ({ entries: [], count: 0 })),
       ]);
       setData({
         readiness,
         automations,
+        devices: devicesResult,
         state,
         logs,
         error: null,
@@ -103,14 +117,15 @@ function Dashboard({
     else if (key.name === "2") setActiveTab(1);
     else if (key.name === "3") setActiveTab(2);
     else if (key.name === "4") setActiveTab(3);
+    else if (key.name === "5") setActiveTab(4);
 
     // Force refresh
     if (key.name === "r") fetchData();
   });
 
   const tabNames = compactTabs
-    ? ["1:Ovw", "2:Auto", "3:State", "4:Logs"]
-    : ["1:Overview", "2:Automations", "3:State", "4:Logs"];
+    ? ["1:Ovw", "2:Auto", "3:Dev", "4:State", "5:Logs"]
+    : ["1:Overview", "2:Automations", "3:Devices", "4:State", "5:Logs"];
 
   return (
     <box flexDirection="column" width="100%" height="100%">
@@ -154,8 +169,9 @@ function Dashboard({
         {activeTab === 1 && (
           <AutomationsTab data={data.automations} client={client} onRefresh={fetchData} />
         )}
-        {activeTab === 2 && <StateTab data={data.state} client={client} onRefresh={fetchData} />}
-        {activeTab === 3 && <LogsTab data={data.logs} />}
+        {activeTab === 2 && <DevicesTab data={data.devices} />}
+        {activeTab === 3 && <StateTab data={data.state} client={client} onRefresh={fetchData} />}
+        {activeTab === 4 && <LogsTab data={data.logs} />}
       </box>
 
       {/* Footer */}
