@@ -2,7 +2,11 @@ import { beforeEach, describe, expect, it, mock } from "bun:test";
 import pino from "pino";
 import type { Config } from "../src/config.js";
 import type { MqttMessageHandler, MqttService } from "../src/core/mqtt/mqtt-service.js";
-import { type DeviceNiceNames, DeviceRegistry } from "../src/core/zigbee/device-registry.js";
+import {
+  type DeviceNiceNames,
+  DeviceRegistry,
+  type DeviceRegistryPersistenceOptions,
+} from "../src/core/zigbee/device-registry.js";
 import type { ZigbeeDevice } from "../src/types/zigbee/bridge.js";
 
 const logger = pino({ level: "silent" });
@@ -13,7 +17,7 @@ const config: Config = {
   logLevel: "info",
   state: { persist: false, filePath: "./state.json" },
   automations: { recursive: false },
-  deviceRegistry: { enabled: true },
+  deviceRegistry: { enabled: true, persist: false, filePath: "./device-registry.json" },
   httpServer: { port: 0, token: "", webUi: { enabled: false, path: "/status" } },
 };
 
@@ -630,6 +634,245 @@ describe("DeviceRegistry", () => {
       registry.getNiceName("my_sensor");
 
       expect(transformFn).not.toHaveBeenCalled();
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Persistence: load() and save()
+  // ---------------------------------------------------------------------------
+
+  describe("persistence", () => {
+    /** Build a registry with specific persistence options and a mock mqtt. */
+    function makePersistedRegistry(
+      persistenceOptions: DeviceRegistryPersistenceOptions,
+      readFileMock?: ReturnType<typeof mock>,
+      writeFileMock?: ReturnType<typeof mock>,
+      mkdirMock?: ReturnType<typeof mock>,
+    ): DeviceRegistry {
+      // Patch node:fs/promises at module level is not straightforward in bun,
+      // so we test the observable behaviour via the public API instead.
+      // The fs tests use real temp files to verify end-to-end behaviour.
+      void readFileMock;
+      void writeFileMock;
+      void mkdirMock;
+      return new DeviceRegistry(
+        mqttMock.mqtt,
+        {
+          ...config,
+          deviceRegistry: {
+            ...config.deviceRegistry,
+            ...persistenceOptions,
+          },
+        },
+        logger,
+        {},
+        persistenceOptions,
+      );
+    }
+
+    it("load() is a no-op when persist is false", async () => {
+      const registry = makePersistedRegistry({ persist: false });
+      // Should not throw and should leave maps empty
+      await registry.load();
+      expect(registry.getDevices()).toHaveLength(0);
+      expect(registry.getDeviceState("any")).toBeUndefined();
+    });
+
+    it("save() is a no-op when persist is false", async () => {
+      const registry = makePersistedRegistry({ persist: false });
+      // Should not throw
+      await registry.save();
+    });
+
+    it("load() handles ENOENT gracefully — starts fresh", async () => {
+      const tmpFile = `/tmp/ts-ha-test-missing-${Date.now()}.json`;
+      const registry = makePersistedRegistry({ persist: true, filePath: tmpFile });
+      // File does not exist — should not throw
+      await registry.load();
+      expect(registry.getDevices()).toHaveLength(0);
+    });
+
+    it("save() then load() round-trips devices and states", async () => {
+      const tmpFile = `/tmp/ts-ha-test-roundtrip-${Date.now()}.json`;
+
+      // Build a fresh registry with its own mqtt mock so we control exactly
+      // which topics fire.
+      const freshMqtt = (() => {
+        const subs: { topic: string; handler: MqttMessageHandler }[] = [];
+        const mqtt = {
+          subscribe: mock((t: string, h: MqttMessageHandler) =>
+            subs.push({ topic: t, handler: h }),
+          ),
+          unsubscribe: mock(() => {}),
+          publish: mock(() => {}),
+        } as unknown as MqttService;
+        function emit(topic: string, payload: Record<string, unknown>) {
+          for (const { topic: t, handler } of subs) {
+            if (t === topic) handler(topic, payload);
+          }
+        }
+        return { mqtt, emit };
+      })();
+
+      const regA = new DeviceRegistry(
+        freshMqtt.mqtt,
+        { ...config, deviceRegistry: { enabled: true, persist: true, filePath: tmpFile } },
+        logger,
+        {},
+        { persist: true, filePath: tmpFile },
+      );
+      regA.start();
+      freshMqtt.emit("zigbee2mqtt/bridge/devices", [
+        makeDevice("bulb"),
+        makeDevice("sensor"),
+      ] as unknown as Record<string, unknown>);
+      freshMqtt.emit("zigbee2mqtt/bulb", { state: "ON", brightness: 200 });
+      freshMqtt.emit("zigbee2mqtt/sensor", { contact: false, battery: 88 });
+
+      expect(regA.getDevices()).toHaveLength(2);
+      expect(regA.getDeviceState("bulb")).toEqual({ state: "ON", brightness: 200 });
+
+      // Save to disk
+      await regA.save();
+
+      // Load into a fresh registry (separate instance, separate mqtt mock)
+      const freshMqtt2 = {
+        subscribe: mock(() => {}),
+        unsubscribe: mock(() => {}),
+        publish: mock(() => {}),
+      } as unknown as MqttService;
+
+      const regB = new DeviceRegistry(
+        freshMqtt2,
+        { ...config, deviceRegistry: { enabled: true, persist: true, filePath: tmpFile } },
+        logger,
+        {},
+        { persist: true, filePath: tmpFile },
+      );
+      await regB.load();
+
+      // Devices and states should be restored
+      expect(regB.getDevices()).toHaveLength(2);
+      expect(regB.getDevice("bulb")?.friendly_name).toBe("bulb");
+      expect(regB.getDevice("sensor")?.friendly_name).toBe("sensor");
+      expect(regB.getDeviceState("bulb")).toEqual({ state: "ON", brightness: 200 });
+      expect(regB.getDeviceState("sensor")).toEqual({ contact: false, battery: 88 });
+    });
+
+    it("load() filters out Coordinator from persisted device list", async () => {
+      const tmpFile = `/tmp/ts-ha-test-coordinator-${Date.now()}.json`;
+
+      // Write a file that contains a Coordinator entry
+      const { writeFile, mkdir } = await import("node:fs/promises");
+      const { dirname } = await import("node:path");
+      await mkdir(dirname(tmpFile), { recursive: true });
+      await writeFile(
+        tmpFile,
+        JSON.stringify({
+          devices: {
+            Coordinator: { ...makeDevice("Coordinator", "Coordinator") },
+            bulb: { ...makeDevice("bulb") },
+          },
+          states: {},
+        }),
+        "utf-8",
+      );
+
+      const freshMqtt = {
+        subscribe: mock(() => {}),
+        unsubscribe: mock(() => {}),
+        publish: mock(() => {}),
+      } as unknown as MqttService;
+
+      const registry = new DeviceRegistry(
+        freshMqtt,
+        { ...config, deviceRegistry: { enabled: true, persist: true, filePath: tmpFile } },
+        logger,
+        {},
+        { persist: true, filePath: tmpFile },
+      );
+      await registry.load();
+
+      expect(registry.hasDevice("Coordinator")).toBe(false);
+      expect(registry.hasDevice("bulb")).toBe(true);
+    });
+
+    it("live MQTT state merges on top of restored state", async () => {
+      const tmpFile = `/tmp/ts-ha-test-merge-${Date.now()}.json`;
+      const { writeFile, mkdir } = await import("node:fs/promises");
+      const { dirname } = await import("node:path");
+      await mkdir(dirname(tmpFile), { recursive: true });
+      await writeFile(
+        tmpFile,
+        JSON.stringify({
+          devices: { bulb: makeDevice("bulb") },
+          states: { bulb: { state: "OFF", brightness: 50, color_temp: 4000 } },
+        }),
+        "utf-8",
+      );
+
+      const subs: { topic: string; handler: MqttMessageHandler }[] = [];
+      const freshMqtt = {
+        subscribe: mock((t: string, h: MqttMessageHandler) => subs.push({ topic: t, handler: h })),
+        unsubscribe: mock(() => {}),
+        publish: mock(() => {}),
+      } as unknown as MqttService;
+
+      const registry = new DeviceRegistry(
+        freshMqtt,
+        { ...config, deviceRegistry: { enabled: true, persist: true, filePath: tmpFile } },
+        logger,
+        {},
+        { persist: true, filePath: tmpFile },
+      );
+      await registry.load();
+      registry.start();
+
+      // Confirm restored state
+      expect(registry.getDeviceState("bulb")).toEqual({
+        state: "OFF",
+        brightness: 50,
+        color_temp: 4000,
+      });
+
+      // Simulate a partial MQTT update — only brightness changes
+      for (const { topic, handler } of subs) {
+        if (topic === "zigbee2mqtt/bulb") handler(topic, { brightness: 200 });
+      }
+
+      // brightness updated, other keys preserved from restored state
+      expect(registry.getDeviceState("bulb")).toEqual({
+        state: "OFF",
+        brightness: 200,
+        color_temp: 4000,
+      });
+    });
+
+    it("save() creates parent directories", async () => {
+      const tmpFile = `/tmp/ts-ha-test-mkdir-${Date.now()}/nested/dir/registry.json`;
+
+      const freshMqtt = {
+        subscribe: mock(() => {}),
+        unsubscribe: mock(() => {}),
+        publish: mock(() => {}),
+      } as unknown as MqttService;
+
+      const registry = new DeviceRegistry(
+        freshMqtt,
+        { ...config, deviceRegistry: { enabled: true, persist: true, filePath: tmpFile } },
+        logger,
+        {},
+        { persist: true, filePath: tmpFile },
+      );
+
+      // Should not throw even with non-existent nested dirs
+      await registry.save();
+
+      const { readFile } = await import("node:fs/promises");
+      const content = await readFile(tmpFile, "utf-8");
+      const parsed = JSON.parse(content) as { devices: unknown; states: unknown };
+      expect(parsed).toHaveProperty("devices");
+      expect(parsed).toHaveProperty("states");
     });
   });
 });

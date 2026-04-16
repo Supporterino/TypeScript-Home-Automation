@@ -57,6 +57,7 @@ export {
   type DeviceAddedHandler,
   type DeviceNiceNames,
   DeviceRegistry,
+  type DeviceRegistryPersistenceOptions,
   type DeviceRemovedHandler,
   type DeviceStateChangeHandler,
 } from "./core/zigbee/device-registry.js";
