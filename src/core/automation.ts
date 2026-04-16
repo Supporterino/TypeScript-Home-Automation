@@ -7,6 +7,7 @@ import type { MqttService } from "./mqtt/mqtt-service.js";
 import type { NanoleafService } from "./services/nanoleaf-service.js";
 import type { ShellyService } from "./services/shelly-service.js";
 import type { StateManager } from "./state/state-manager.js";
+import type { DeviceRegistry } from "./zigbee/device-registry.js";
 
 /**
  * Trigger types for automations.
@@ -111,6 +112,11 @@ export interface AutomationContext {
   notifications: NotificationService | null;
   /** `null` when no weather service is configured on the engine. */
   weather: WeatherService | null;
+  /**
+   * `null` when `DEVICE_REGISTRY_ENABLED` is `false` (the default).
+   * Enable via config to get automatic Zigbee2MQTT device discovery and state tracking.
+   */
+  deviceRegistry: DeviceRegistry | null;
 }
 
 /**
@@ -171,6 +177,7 @@ export abstract class Automation {
   protected config!: Config;
   private notificationService: NotificationService | null = null;
   private weatherService: WeatherService | null = null;
+  private deviceRegistryService: DeviceRegistry | null = null;
 
   /**
    * Called by the AutomationManager to inject dependencies.
@@ -186,6 +193,7 @@ export abstract class Automation {
     this.config = context.config;
     this.notificationService = context.notifications;
     this.weatherService = context.weather;
+    this.deviceRegistryService = context.deviceRegistry;
   }
 
   /**
@@ -227,6 +235,23 @@ export abstract class Automation {
    */
   protected get weather(): WeatherService | null {
     return this.weatherService;
+  }
+
+  /**
+   * The Zigbee2MQTT device registry, or `null` if disabled (`DEVICE_REGISTRY_ENABLED=false`).
+   *
+   * Always null-check before use:
+   *
+   * @example
+   * ```ts
+   * const registry = this.deviceRegistry;
+   * if (!registry) return;
+   * const device = registry.getDevice("my_sensor");
+   * const state = registry.getDeviceState("my_sensor");
+   * ```
+   */
+  protected get deviceRegistry(): DeviceRegistry | null {
+    return this.deviceRegistryService;
   }
 
   /**

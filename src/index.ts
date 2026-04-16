@@ -52,6 +52,13 @@ export {
   StateManager,
   type StateManagerOptions,
 } from "./core/state/state-manager.js";
+// Zigbee2MQTT device registry
+export {
+  type DeviceAddedHandler,
+  DeviceRegistry,
+  type DeviceRemovedHandler,
+  type DeviceStateChangeHandler,
+} from "./core/zigbee/device-registry.js";
 // Nanoleaf types
 export type {
   NanoleafAnimType,
@@ -115,6 +122,8 @@ export type {
   AqaraRemoteSwitchH1SetCommand,
   AqaraTemperatureHumidityPayload,
   AqaraWaterLeakPayload,
+  BridgeEventPayload,
+  BridgeEventType,
   BridgeState,
   ButtonPayload,
   Color,
@@ -162,4 +171,8 @@ export type {
   WaterLeakPayload,
   WhiteSpectrumLightPayload,
   WhiteSpectrumLightSetCommand,
+  ZigbeeDevice,
+  ZigbeeDeviceDefinition,
+  ZigbeeDeviceType,
+  ZigbeeInterviewState,
 } from "./types/zigbee/index.js";

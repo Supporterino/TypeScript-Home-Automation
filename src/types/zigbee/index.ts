@@ -24,11 +24,20 @@ export type {
   AqaraTemperatureHumidityPayload,
   AqaraWaterLeakPayload,
 } from "./aqara.js";
+// Bridge topics
+export type {
+  BridgeEventPayload,
+  BridgeEventType,
+  BridgeState,
+  ZigbeeDevice,
+  ZigbeeDeviceDefinition,
+  ZigbeeDeviceType,
+  ZigbeeInterviewState,
+} from "./bridge.js";
 // Common primitives and generic payloads
 export type {
   AirPurifierPayload,
   AirQualitySensorPayload,
-  BridgeState,
   ButtonPayload,
   Color,
   ColorHex,
