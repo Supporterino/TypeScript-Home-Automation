@@ -27,7 +27,7 @@ const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width
     text-anchor="middle"
     dominant-baseline="auto"
     letter-spacing="-8"
-  >ts</text>
+  >ts-ha</text>
 </svg>`;
 
 await Bun.write(
