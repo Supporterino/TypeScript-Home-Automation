@@ -126,9 +126,10 @@ function TriggerModal({ automation, opened, onClose }: TriggerModalProps) {
 interface AutomationRowProps {
   automation: Automation;
   onTrigger: (automation: Automation) => void;
+  index: number;
 }
 
-function AutomationRow({ automation, onTrigger }: AutomationRowProps) {
+function AutomationRow({ automation, onTrigger, index }: AutomationRowProps) {
   const [expanded, { toggle }] = useDisclosure(false);
 
   const triggerChips = automation.triggers.map((t, i) => (
@@ -144,7 +145,11 @@ function AutomationRow({ automation, onTrigger }: AutomationRowProps) {
 
   return (
     <>
-      <Table.Tr style={{ cursor: "pointer" }} onClick={toggle}>
+      <Table.Tr
+        style={{ cursor: "pointer" }}
+        onClick={toggle}
+        bg={index % 2 !== 0 ? "var(--table-striped-color)" : undefined}
+      >
         <Table.Td>
           <Text fw={600} ff="monospace" size="sm">
             {automation.name}
@@ -222,8 +227,13 @@ export function AutomationsTab({ data }: Props) {
                 </Table.Td>
               </Table.Tr>
             ) : (
-              automations.map((a) => (
-                <AutomationRow key={a.name} automation={a} onTrigger={handleTrigger} />
+              automations.map((a, index) => (
+                <AutomationRow
+                  key={a.name}
+                  automation={a}
+                  onTrigger={handleTrigger}
+                  index={index}
+                />
               ))
             )}
           </Table.Tbody>

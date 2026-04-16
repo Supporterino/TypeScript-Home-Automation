@@ -183,6 +183,7 @@ export function LogsTab({ data }: Props) {
                     rowKey={key}
                     isExpanded={expandedKeys.has(key)}
                     onToggle={toggleRow}
+                    index={index}
                   />
                 );
               })}
@@ -201,9 +202,10 @@ interface LogRowProps {
   rowKey: string;
   isExpanded: boolean;
   onToggle: (key: string) => void;
+  index: number;
 }
 
-function LogRow({ entry, rowKey, isExpanded, onToggle }: LogRowProps) {
+function LogRow({ entry, rowKey, isExpanded, onToggle, index }: LogRowProps) {
   const levelName = LEVEL_NAMES[entry.level] ?? String(entry.level);
   const color = levelColor(entry.level);
   const extras = extraFields(entry);
@@ -214,6 +216,7 @@ function LogRow({ entry, rowKey, isExpanded, onToggle }: LogRowProps) {
       <Table.Tr
         style={hasExtras ? { cursor: "pointer" } : undefined}
         onClick={hasExtras ? () => onToggle(rowKey) : undefined}
+        bg={index % 2 !== 0 ? "var(--table-striped-color)" : undefined}
       >
         <Table.Td c="dimmed" style={{ whiteSpace: "nowrap" }}>
           {formatTime(entry.time)}
