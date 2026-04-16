@@ -101,6 +101,7 @@ function TriggerModal({ automation, opened, onClose }: TriggerModalProps) {
           autosize
           minRows={6}
           formatOnBlur
+          validationError="Invalid JSON"
           ff="monospace"
           fz="xs"
         />
@@ -131,7 +132,12 @@ function AutomationRow({ automation, onTrigger }: AutomationRowProps) {
   const [expanded, { toggle }] = useDisclosure(false);
 
   const triggerChips = automation.triggers.map((t, i) => (
-    <Badge key={i} color={TRIGGER_TYPE_COLORS[t.type] ?? "gray"} variant="light" size="sm">
+    <Badge
+      key={`${t.type}-${i}`}
+      color={TRIGGER_TYPE_COLORS[t.type] ?? "gray"}
+      variant="light"
+      size="sm"
+    >
       {t.type}
     </Badge>
   ));
@@ -163,7 +169,7 @@ function AutomationRow({ automation, onTrigger }: AutomationRowProps) {
       {/* Always render — let Collapse handle visibility so animation works correctly */}
       <Table.Tr style={{ background: "none" }}>
         <Table.Td colSpan={3} p={0} style={{ borderBottom: "none" }}>
-          <Collapse expanded={expanded}>
+          <Collapse in={expanded}>
             <Stack p="md" gap="xs">
               <Text size="xs" tt="uppercase" fw={600} c="dimmed">
                 Trigger definitions

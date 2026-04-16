@@ -157,7 +157,7 @@ export function LogsTab({ data }: Props) {
         </Text>
       </Group>
 
-      <ScrollArea h="calc(100vh - 260px)" type="auto">
+      <ScrollArea.Autosize mah="calc(100vh - 260px)" type="auto" scrollbars="y">
         {filtered.length === 0 ? (
           <Text c="dimmed" ta="center" py="xl">
             No log entries match the current filters
@@ -189,7 +189,7 @@ export function LogsTab({ data }: Props) {
             </Table.Tbody>
           </Table>
         )}
-      </ScrollArea>
+      </ScrollArea.Autosize>
     </Stack>
   );
 }
@@ -251,7 +251,7 @@ function LogRow({ entry, rowKey, isExpanded, onToggle }: LogRowProps) {
       {hasExtras && (
         <Table.Tr style={{ background: "none" }}>
           <Table.Td colSpan={5} p={0} style={{ borderBottom: "none" }}>
-            <Collapse expanded={isExpanded}>
+            <Collapse in={isExpanded}>
               <ExtraFieldsBlock extras={extras} />
             </Collapse>
           </Table.Td>

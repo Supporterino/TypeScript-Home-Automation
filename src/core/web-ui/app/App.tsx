@@ -4,6 +4,7 @@ import {
   Burger,
   Group,
   NavLink,
+  ScrollArea,
   Text,
   Tooltip,
   useComputedColorScheme,
@@ -104,13 +105,14 @@ export function App() {
           </Group>
         </AppShell.Section>
 
-        <AppShell.Section grow>
+        <AppShell.Section grow component={ScrollArea}>
           {NAV_ITEMS.map((item) => (
             <NavLink
               key={item.id}
               label={item.label}
               active={activeTab === item.id}
               onClick={() => handleTabChange(item.id)}
+              component="button"
               mb={2}
               variant="light"
             />
