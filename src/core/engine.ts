@@ -334,19 +334,8 @@ export function createEngine(options: EngineOptions): Engine {
 
       // Mount web UI if enabled (imported lazily to keep it tree-shakeable)
       if (httpServer && config.httpServer.webUi.enabled) {
-        const { createWebUiApp } = await import("./web-ui/index.js");
         const webUiPath = config.httpServer.webUi.path;
-        const webUiApp = createWebUiApp({
-          stateManager,
-          automationManager: manager,
-          logBuffer,
-          mqtt,
-          token: config.httpServer.token,
-          path: webUiPath,
-          getStartedAt: () => httpServer.startedAt,
-          deviceRegistry,
-        });
-        httpServer.mountWebUi(webUiApp, webUiPath);
+        await httpServer.mountWebUi(webUiPath, config.httpServer.token);
         logger.info({ path: webUiPath }, "Web UI enabled");
       }
 
