@@ -2,6 +2,7 @@ import type { Logger } from "pino";
 import type { Config } from "../config.js";
 import type { NotificationOptions, NotificationService } from "../types/notification.js";
 import type { WeatherService } from "../types/weather.js";
+import type { ZigbeeDevice } from "../types/zigbee/bridge.js";
 import type { HttpClient } from "./http/http-client.js";
 import type { MqttService } from "./mqtt/mqtt-service.js";
 import type { NanoleafService } from "./services/nanoleaf-service.js";
@@ -12,19 +13,32 @@ import type { DeviceRegistry } from "./zigbee/device-registry.js";
 /**
  * Trigger types for automations.
  *
- * - mqtt:  Fires when a message is received on the given topic.
- *          Use the Zigbee2MQTT friendly name as the topic suffix.
- *          Supports MQTT wildcards (+ for single level, # for multi level).
- *          An optional `filter` function can narrow which payloads trigger execution.
+ * - mqtt:          Fires when a message is received on the given topic.
+ *                  Use the Zigbee2MQTT friendly name as the topic suffix.
+ *                  Supports MQTT wildcards (+ for single level, # for multi level).
+ *                  An optional `filter` function can narrow which payloads trigger execution.
  *
- * - cron:  Fires on a cron schedule (e.g. "0 7 * * *" = daily at 7 AM).
+ * - cron:          Fires on a cron schedule (e.g. "0 7 * * *" = daily at 7 AM).
  *
- * - state:   Fires when a state key changes value. Use this to react to state
- *            changes made by other automations.
+ * - state:         Fires when a state key changes value. Use this to react to state
+ *                  changes made by other automations.
  *
- * - webhook: Fires when an HTTP request is received on the configured path.
- *            The endpoint is `POST /webhook/<path>` on the health server port.
- *            Supports optional method restriction (default: POST only).
+ * - webhook:       Fires when an HTTP request is received on the configured path.
+ *                  The endpoint is `POST /webhook/<path>` on the health server port.
+ *                  Supports optional method restriction (default: POST only).
+ *
+ * - device_state:  Fires when a tracked Zigbee2MQTT device's state changes.
+ *                  Requires `DEVICE_REGISTRY_ENABLED=true`. The trigger receives the
+ *                  full merged device state and device metadata. An optional filter
+ *                  function can narrow which state changes trigger execution.
+ *
+ * - device_joined: Fires when a Zigbee device joins the network (is added to the
+ *                  device registry). Requires `DEVICE_REGISTRY_ENABLED=true`.
+ *                  Optionally scoped to a specific friendly name.
+ *
+ * - device_left:   Fires when a Zigbee device leaves the network (is removed from
+ *                  the device registry). Requires `DEVICE_REGISTRY_ENABLED=true`.
+ *                  Optionally scoped to a specific friendly name.
  */
 export type Trigger =
   | {
@@ -53,6 +67,32 @@ export type Trigger =
       path: string;
       /** HTTP methods to accept (default: ["POST"]). */
       methods?: ("GET" | "POST" | "PUT" | "DELETE")[];
+    }
+  | {
+      type: "device_state";
+      /** Zigbee2MQTT friendly name of the device to watch. */
+      friendlyName: string;
+      /**
+       * Optional filter — return true to trigger, false to ignore.
+       * Receives the full merged device state and the device metadata.
+       */
+      filter?: (state: Record<string, unknown>, device: ZigbeeDevice) => boolean;
+    }
+  | {
+      type: "device_joined";
+      /**
+       * If provided, only fires when this specific device joins.
+       * Omit to fire whenever any device joins the network.
+       */
+      friendlyName?: string;
+    }
+  | {
+      type: "device_left";
+      /**
+       * If provided, only fires when this specific device leaves.
+       * Omit to fire whenever any device leaves the network.
+       */
+      friendlyName?: string;
     };
 
 /**
@@ -92,6 +132,25 @@ export type TriggerContext =
       query: Record<string, string>;
       /** Parsed request body (JSON object, or raw string). */
       body: unknown;
+    }
+  | {
+      type: "device_state";
+      /** The friendly name of the device whose state changed. */
+      friendlyName: string;
+      /** Full merged device state at the time the trigger fired. */
+      state: Record<string, unknown>;
+      /** The ZigbeeDevice metadata from the registry. */
+      device: ZigbeeDevice;
+    }
+  | {
+      type: "device_joined";
+      /** The device that joined the network. */
+      device: ZigbeeDevice;
+    }
+  | {
+      type: "device_left";
+      /** The device that left the network. */
+      device: ZigbeeDevice;
     };
 
 /**
