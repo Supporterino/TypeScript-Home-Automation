@@ -125,7 +125,7 @@ export function loginShell({ basePath, error }: { basePath: string; error?: stri
     <h1>ts-ha</h1>
     <p>Home Automation Web UI</p>
     ${errorHtml}
-    <form method="POST" action="${esc(basePath)}/login">
+    <form method="POST" action="${esc(basePath === "/" ? "/login" : `${basePath}/login`)}">
       <div style="display:flex;flex-direction:column;gap:5px;margin-bottom:16px">
         <label for="token-input">Access Token</label>
         <input

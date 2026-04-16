@@ -227,3 +227,110 @@ describe("registerWebUiRoutes — with auth", () => {
     });
   });
 });
+
+// ── path="/" — root mount ─────────────────────────────────────────────────
+
+describe("registerWebUiRoutes — path=/", () => {
+  describe("GET / — no auth", () => {
+    it("returns 200 with HTML", async () => {
+      const server = await makeServer({ path: "/" });
+      const res = await req(server, "/");
+      expect(res.status).toBe(200);
+      expect(res.headers.get("content-type")).toContain("text/html");
+    });
+
+    it("HTML includes data-base-path=/", async () => {
+      const server = await makeServer({ path: "/" });
+      const res = await req(server, "/");
+      const html = await res.text();
+      expect(html).toContain('data-base-path="/"');
+    });
+  });
+
+  describe("GET / — with auth", () => {
+    const SECRET = "root-secret";
+
+    it("redirects to /login when unauthenticated", async () => {
+      const server = await makeServer({ token: SECRET, path: "/" });
+      const res = await req(server, "/");
+      expect(res.status).toBe(302);
+      expect(res.headers.get("location")).toBe("/login");
+    });
+
+    it("serves dashboard when authenticated via Bearer header", async () => {
+      const server = await makeServer({ token: SECRET, path: "/" });
+      const res = await server.fetch(
+        new Request("http://localhost/", {
+          headers: { Authorization: `Bearer ${SECRET}` },
+        }),
+      );
+      expect(res.status).toBe(200);
+    });
+
+    it("does not intercept /healthz (unauthenticated probes still work)", async () => {
+      const server = await makeServer({ token: SECRET, path: "/" });
+      const res = await req(server, "/healthz");
+      expect(res.status).toBe(200);
+    });
+
+    it("does not intercept /api/status (API returns 401, not 302)", async () => {
+      const server = await makeServer({ token: SECRET, path: "/" });
+      const res = await req(server, "/api/status");
+      expect(res.status).toBe(401);
+    });
+  });
+
+  describe("GET /login — with auth", () => {
+    const SECRET = "root-secret";
+
+    it("serves login page at /login", async () => {
+      const server = await makeServer({ token: SECRET, path: "/" });
+      const res = await req(server, "/login");
+      expect(res.status).toBe(200);
+      expect(res.headers.get("content-type")).toContain("text/html");
+      const html = await res.text();
+      expect(html).toContain("Access Token");
+    });
+
+    it("login form action points to /login (not //login)", async () => {
+      const server = await makeServer({ token: SECRET, path: "/" });
+      const res = await req(server, "/login");
+      const html = await res.text();
+      expect(html).toContain('action="/login"');
+    });
+  });
+
+  describe("POST /login — with auth", () => {
+    const SECRET = "root-secret";
+
+    it("sets session cookie and redirects to / on correct token", async () => {
+      const server = await makeServer({ token: SECRET, path: "/" });
+      const res = await server.fetch(
+        new Request("http://localhost/login", {
+          method: "POST",
+          body: new URLSearchParams({ token: SECRET }),
+          headers: { "content-type": "application/x-www-form-urlencoded" },
+        }),
+      );
+      expect(res.status).toBe(302);
+      expect(res.headers.get("location")).toBe("/");
+      expect(res.headers.get("set-cookie")).toContain("ts-ha-session=");
+    });
+  });
+
+  describe("GET /logout — with auth", () => {
+    const SECRET = "root-secret";
+
+    it("clears session cookie and redirects to /login", async () => {
+      const server = await makeServer({ token: SECRET, path: "/" });
+      const res = await server.fetch(
+        new Request("http://localhost/logout", {
+          headers: { Cookie: `ts-ha-session=${SECRET}` },
+        }),
+      );
+      expect(res.status).toBe(302);
+      expect(res.headers.get("location")).toBe("/login");
+      expect(res.headers.get("set-cookie")).toContain("Max-Age=0");
+    });
+  });
+});
