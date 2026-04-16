@@ -283,7 +283,7 @@ function LogEntry({ entry, entryKey: key, isExpanded, onToggle }: LogEntryProps)
 
       {/* Expandable extra fields */}
       {hasExtras && (
-        <Collapse in={isExpanded}>
+        <Collapse expanded={isExpanded}>
           <ExtraFieldsBlock extras={extras} />
         </Collapse>
       )}
