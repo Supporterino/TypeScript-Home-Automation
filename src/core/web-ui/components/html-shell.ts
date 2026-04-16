@@ -28,12 +28,23 @@ export function htmlShell({ basePath, hasAuth: _hasAuth }: HtmlShellOptions): st
   // preventing a flash of the wrong color scheme on first paint.
   const colorSchemeScript = `(function(){try{var s=localStorage.getItem("mantine-color-scheme");if(s==="light"||s==="dark"){document.documentElement.setAttribute("data-mantine-color-scheme",s);}else{var m=window.matchMedia("(prefers-color-scheme: dark)").matches;document.documentElement.setAttribute("data-mantine-color-scheme",m?"dark":"light");}}catch(e){}})();`;
 
+  const iconPath = basePath === "/" ? "/icon.svg" : `${basePath}/icon.svg`;
+  const manifestPath = basePath === "/" ? "/manifest.json" : `${basePath}/manifest.json`;
+
   return `<!DOCTYPE html>
 <html lang="en" data-base-path="${esc(basePath)}">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Home Automation — Status</title>
+  <title>ts-ha</title>
+  <meta name="application-name" content="ts-ha" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="ts-ha" />
+  <meta name="theme-color" content="#228be6" />
+  <link rel="manifest" href="${esc(manifestPath)}" />
+  <link rel="apple-touch-icon" href="${esc(iconPath)}" />
+  <link rel="icon" type="image/svg+xml" href="${esc(iconPath)}" />
   <script>${colorSchemeScript}</script>
   <style>${CSS}</style>
 </head>
