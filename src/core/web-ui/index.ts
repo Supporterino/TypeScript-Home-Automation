@@ -1,31 +1,19 @@
-import { type Context, Hono } from "hono";
+import type { Context, Hono } from "hono";
 import { getCookie } from "hono/cookie";
 import { SESSION_COOKIE } from "../http/utils.js";
 import { htmlShell, loginShell } from "./components/html-shell.js";
 
-/** Dependencies required by the web UI Hono app. */
-export interface WebUiDeps {
-  /** The configured bearer token. Empty string means no auth required. */
-  token: string;
-  /** URL path prefix the app is mounted at, e.g. "/status". */
-  path: string;
-}
-
 /**
- * Create the Hono app that powers the web UI.
+ * Register web UI routes directly on an existing Hono app.
  *
- * The returned app is mounted inside the existing HttpServer at the
- * configured path prefix. It handles:
+ * Called by `HttpServer.mountWebUi()` when the web UI is enabled. It handles:
  *   - The HTML shell (dashboard page)
  *   - Login / logout flow when a token is configured
  *
  * All data API routes (`/api/*`) are served directly by `HttpServer`.
  */
-export function createWebUiApp(deps: WebUiDeps): Hono {
-  const { token, path } = deps;
+export function registerWebUiRoutes(app: Hono, path: string, token: string): void {
   const hasAuth = token.length > 0;
-
-  const app = new Hono();
 
   // ── Auth helper ───────────────────────────────────────────────────────────
 
@@ -110,6 +98,4 @@ export function createWebUiApp(deps: WebUiDeps): Hono {
       },
     });
   });
-
-  return app;
 }
