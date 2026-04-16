@@ -205,6 +205,11 @@ function StateRow({ stateKey, value, onMutate }: StateRowProps) {
           <Text size="sm">
             Delete <Code>{stateKey}</Code>? This cannot be undone.
           </Text>
+          {error && (
+            <Text c="red" size="sm">
+              {error}
+            </Text>
+          )}
           <Group justify="flex-end">
             <Button variant="default" onClick={closeDelete}>
               Cancel

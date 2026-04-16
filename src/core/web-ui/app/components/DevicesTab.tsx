@@ -1,15 +1,4 @@
-import {
-  Accordion,
-  Alert,
-  Badge,
-  Code,
-  Group,
-  SimpleGrid,
-  Stack,
-  Table,
-  Text,
-  Title,
-} from "@mantine/core";
+import { Accordion, Alert, Badge, Code, Stack, Table, Text, Title } from "@mantine/core";
 import type { DashboardData, DeviceInfo } from "../types";
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -133,18 +122,18 @@ function DevicePanel({ device }: { device: DeviceInfo }) {
           <Text size="xs" tt="uppercase" fw={600} c="dimmed">
             State ({stateEntries.length} {stateEntries.length === 1 ? "key" : "keys"})
           </Text>
-          <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }} spacing="xs">
-            {stateEntries.map(([key, value]) => (
-              <Group key={key} gap="xs" wrap="nowrap" align="flex-start">
-                <Text size="xs" c="dimmed" ff="monospace" style={{ whiteSpace: "nowrap" }}>
-                  {key}
-                </Text>
-                <Text size="xs" ff="monospace" fw={500}>
-                  {formatStateValue(value)}
-                </Text>
-              </Group>
-            ))}
-          </SimpleGrid>
+          <Table variant="vertical" withTableBorder layout="fixed" fz="xs" ff="monospace">
+            <Table.Tbody>
+              {stateEntries.map(([key, value]) => (
+                <Table.Tr key={key}>
+                  <Table.Th w={180} c="dimmed" fw={400}>
+                    {key}
+                  </Table.Th>
+                  <Table.Td fw={500}>{formatStateValue(value)}</Table.Td>
+                </Table.Tr>
+              ))}
+            </Table.Tbody>
+          </Table>
         </Stack>
       ) : (
         <Text size="sm" c="dimmed">
@@ -178,7 +167,7 @@ export function DevicesTab({ data }: Props) {
 
       {/* Registry disabled */}
       {!available && (
-        <Alert color="yellow" title="Device registry disabled">
+        <Alert color="yellow" title="Device registry disabled" icon="⚠">
           Set{" "}
           <Code fz="sm" c="yellow">
             DEVICE_REGISTRY_ENABLED=true
@@ -199,7 +188,9 @@ export function DevicesTab({ data }: Props) {
         <Accordion variant="separated" radius="md" chevronPosition="right">
           {devices.map((device) => (
             <Accordion.Item key={device.friendly_name} value={device.friendly_name}>
-              <Accordion.Control aria-label={device.nice_name}>
+              <Accordion.Control
+                aria-label={`${device.nice_name} — ${device.type} — ${device.interview_state}`}
+              >
                 <DeviceControlLabel device={device} />
               </Accordion.Control>
               <Accordion.Panel>

@@ -1,6 +1,5 @@
 import {
   Badge,
-  Code,
   Group,
   Paper,
   ScrollArea,
@@ -19,15 +18,6 @@ const LEVEL_NAMES: Record<number, string> = {
   40: "WARN",
   50: "ERROR",
   60: "FATAL",
-};
-
-const LEVEL_COLORS: Record<number, string> = {
-  10: "cyan",
-  20: "cyan",
-  30: "green",
-  40: "yellow",
-  50: "red",
-  60: "red",
 };
 
 function levelColor(level: number): string {
@@ -130,7 +120,7 @@ export function OverviewTab({ data }: Props) {
         <Text size="xs" tt="uppercase" fw={600} c="dimmed" mb="sm">
           Recent Logs
         </Text>
-        <ScrollArea h={280}>
+        <ScrollArea h={280} type="auto" scrollbars="y">
           {recentLogs.length === 0 ? (
             <Text c="dimmed" size="sm" ta="center" py="xl">
               No log entries yet
@@ -138,8 +128,8 @@ export function OverviewTab({ data }: Props) {
           ) : (
             <Table striped highlightOnHover withRowBorders={false} fz="xs" ff="monospace">
               <Table.Tbody>
-                {recentLogs.map((entry, i) => (
-                  <LogRow key={i} entry={entry} />
+                {recentLogs.map((entry) => (
+                  <LogRow key={`${entry.time}-${entry.level}-${entry.msg}`} entry={entry} />
                 ))}
               </Table.Tbody>
             </Table>
