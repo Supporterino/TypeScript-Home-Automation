@@ -19,7 +19,7 @@ The web UI is disabled by default and adds zero overhead when disabled — the m
 
 ## Features
 
-The dashboard auto-refreshes every 5 seconds and has four tabs:
+The dashboard auto-refreshes every 5 seconds and has five tabs:
 
 ### Overview
 
@@ -32,6 +32,13 @@ The dashboard auto-refreshes every 5 seconds and has four tabs:
 - Table of all registered automations with trigger-type badges
 - Click any row to expand the full trigger definition (JSON)
 - **Trigger** button — opens a modal to fire any automation manually with a custom JSON context payload
+
+### Devices
+
+- Accordion list of all Zigbee2MQTT devices tracked by the device registry
+- Each device shows type and interview state as color-coded badges, plus live state key count
+- Click any device to expand: full metadata (IEEE address, power source, model/vendor) and a key-value table of the current device state
+- Displays an informational notice when `DEVICE_REGISTRY_ENABLED=false`
 
 ### State
 
@@ -84,6 +91,7 @@ The page is backed by a Hono sub-app that exposes its own `/api` group. All endp
 | `PUT` | `/status/api/state/:key` | Set a state value (JSON body) |
 | `DELETE` | `/status/api/state/:key` | Delete a state key |
 | `GET` | `/status/api/logs` | Query logs (`?level=&automation=&limit=`) |
+| `GET` | `/status/api/devices` | List all tracked Zigbee devices with merged state and nice names. Returns `503` when `DEVICE_REGISTRY_ENABLED=false`. |
 
 ### Trigger request body
 

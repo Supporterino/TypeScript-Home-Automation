@@ -158,9 +158,59 @@ Setting state via the CLI fires `state` triggers in the running engine — it is
 
 ---
 
+## Devices
+
+Inspect Zigbee2MQTT devices tracked by the device registry. Requires `DEVICE_REGISTRY_ENABLED=true` on the running engine.
+
+```bash
+# List all tracked devices
+ts-ha devices list
+ts-ha dv ls                          # short alias
+
+# Get full detail for a single device
+ts-ha devices get living_room_bulb
+ts-ha dv get living_room_bulb        # short alias
+```
+
+Example output for `ts-ha devices list`:
+
+```
+NICE NAME                TYPE       INTERVIEW    STATE KEYS
+Living Room Lamp         Router     SUCCESSFUL   8
+Kitchen Motion Sensor    EndDevice  SUCCESSFUL   3
+Hallway Plug             Router     SUCCESSFUL   5
+
+3 devices
+```
+
+Example output for `ts-ha devices get living_room_bulb`:
+
+```
+Nice Name:      Living Room Lamp
+Friendly:       living_room_bulb
+IEEE:           0x00158d0001ab1234
+Type:           Router
+Supported:      true
+Interview:      SUCCESSFUL
+Power:          Mains
+Model:          LCA001  (Philips, Hue White and color ambiance)
+
+State (8 keys):
+  state                   ON
+  brightness              200
+  color_temp              4000
+  color_mode              color_temp
+  linkquality             92
+  update_available        false
+```
+
+When the registry is disabled, both commands print a clear message and exit with code 1. Use `--json` to output raw JSON for scripting.
+
+---
+
 ## Dashboard
 
-Interactive terminal dashboard (TUI) showing all four tabs in real time:
+Interactive terminal dashboard (TUI) showing all tabs in real time:
 
 ```bash
 ts-ha dashboard              # 5s refresh interval
@@ -174,14 +224,15 @@ ts-ha d --interval 2         # refresh every 2s
 |---|---|---|
 | Overview | `1` | Engine/MQTT status, uptime, automation + state summary, recent logs |
 | Automations | `2` | List with expand (trigger details) and manual trigger |
-| State | `3` | List with inline edit, add, delete |
-| Logs | `4` | Scrollable viewer with level + automation filter |
+| Devices | `3` | Tracked Zigbee devices — expand for state + metadata (`DEVICE_REGISTRY_ENABLED=true`) |
+| State | `4` | List with inline edit, add, delete |
+| Logs | `5` | Scrollable viewer with level + automation filter |
 
 ### Keyboard shortcuts
 
 | Key | Action |
 |---|---|
-| `1`–`4` | Switch tabs |
+| `1`–`5` | Switch tabs |
 | `q` / `Esc` | Quit |
 | `r` | Force refresh |
 | `?` | Toggle help modal |

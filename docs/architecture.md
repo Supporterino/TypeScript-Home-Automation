@@ -53,6 +53,7 @@ The `src/core/` directory is organised into subfolders by responsibility:
 | `core/logging/` | `log-buffer.ts` |
 | `core/services/` | `shelly-service.ts`, `nanoleaf-service.ts`, `notification-service.ts`, `ntfy-notification-service.ts`, `open-meteo-service.ts`, `openweathermap-service.ts` |
 | `core/devices/` | `aqara-h1-automation.ts`, `ikea-styrbar-automation.ts`, `ikea-rodret-automation.ts` |
+| `core/zigbee/` | `device-registry.ts` — Zigbee2MQTT device discovery and state tracking |
 | `core/web-ui/` | Hono app, HTML shell, React + Mantine frontend, compiled asset constants |
 
 ---
@@ -64,7 +65,7 @@ The `src/core/` directory is organised into subfolders by responsibility:
 A factory function (not a class) that wires all services together and returns an `Engine` object with:
 
 - **Lifecycle:** `start()`, `stop()`
-- **Services:** `mqtt`, `shelly`, `nanoleaf`, `state`, `http`, `notifications`, `weather`
+- **Services:** `mqtt`, `shelly`, `nanoleaf`, `state`, `http`, `notifications`, `weather`, `deviceRegistry`
 - **Internals (advanced):** `config`, `logger`, `manager`
 
 The `start()` call loads automation files, registers triggers, connects to MQTT, and starts the HTTP server.
@@ -112,6 +113,10 @@ Maintains a `Map<string, string>` of device name → host. Each method call cons
 ### `NanoleafService`
 
 Maintains a `Map<string, NanoleafDevice>` of registered panels. Makes HTTP requests to the Nanoleaf OpenAPI (local API, no cloud). Pairing is handled separately by the CLI `nanoleaf pair` command.
+
+### `DeviceRegistry`
+
+Subscribes to `{prefix}/bridge/devices` (a retained Zigbee2MQTT topic) to build a device list, and to `{prefix}/bridge/event` to react to joins and departures in real time. Maintains a per-device MQTT subscription for each tracked device to track live state — incoming payloads are **merged** on top of the last-known state. Exposes device metadata, merged state snapshots, human-readable nice names, and change/join/leave listeners to automations. Enabled via `DEVICE_REGISTRY_ENABLED=true`; exposed as `engine.deviceRegistry` (`null` when disabled).
 
 ### `HttpClient`
 

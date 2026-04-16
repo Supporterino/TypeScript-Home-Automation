@@ -65,6 +65,18 @@ See [Web UI](http/web-ui.md) for full details.
 
 ---
 
+## Device Registry
+
+Automatically discovers all Zigbee2MQTT devices and tracks their live state. Required for `device_state`, `device_joined`, and `device_left` trigger types, as well as the Devices tab in the CLI dashboard and web UI.
+
+| Variable | Default | Description |
+|---|---|---|
+| `DEVICE_REGISTRY_ENABLED` | `false` | Enable automatic Zigbee2MQTT device discovery and state tracking |
+
+See [Device Registry](../device-registry.md) for full details including nice names and device triggers.
+
+---
+
 ## Example `.env`
 
 ```bash
@@ -83,4 +95,6 @@ HTTP_TOKEN=my-secret-token
 
 WEB_UI_ENABLED=true
 WEB_UI_PATH=/status
+
+DEVICE_REGISTRY_ENABLED=true
 ```
