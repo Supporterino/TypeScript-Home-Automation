@@ -2,8 +2,6 @@ import { readdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import type { Logger } from "pino";
 import type { Config } from "../config.js";
-import type { NotificationService } from "../types/notification.js";
-import type { WeatherService } from "../types/weather.js";
 import { Automation, type AutomationContext, type TriggerContext } from "./automation.js";
 import type { HttpClient } from "./http/http-client.js";
 import type { HttpServer } from "./http/http-server.js";
@@ -122,8 +120,6 @@ export class AutomationManager {
       state: this.stateManager,
       logger: childLogger,
       config: this.config,
-      notifications: this.services.get<NotificationService>("notifications"),
-      weather: this.services.get<WeatherService>("weather"),
       deviceRegistry: this.deviceRegistry,
       services: this.services,
     };

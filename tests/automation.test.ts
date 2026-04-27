@@ -70,8 +70,6 @@ function createMockContext(overrides: Partial<AutomationContext> = {}): Automati
     state: {} as StateManager,
     logger: pino({ level: "silent" }),
     config,
-    notifications: null,
-    weather: null,
     deviceRegistry: null,
     services: new ServiceRegistry(),
     ...overrides,
@@ -115,7 +113,9 @@ describe("Automation base class", () => {
     const sendMock = mock(() => Promise.resolve());
     const notifications: NotificationService = { send: sendMock };
 
-    auto._inject(createMockContext({ notifications }));
+    const registry = new ServiceRegistry();
+    registry.register("notifications", notifications);
+    auto._inject(createMockContext({ services: registry }));
 
     const options = { title: "Test", message: "Hello" };
     await auto.callNotify(options);
@@ -127,7 +127,7 @@ describe("Automation base class", () => {
   it("notify does not throw when no notification service is configured", async () => {
     const auto = new TestAutomation();
 
-    auto._inject(createMockContext({ notifications: null }));
+    auto._inject(createMockContext());
 
     // Should not throw
     await auto.callNotify({ title: "Test", message: "Hello" });

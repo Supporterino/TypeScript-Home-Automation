@@ -19,12 +19,23 @@ Press Enter when prompted. The command prints an auth token — save it in your 
 
 ## Registering devices
 
-Register Nanoleaf devices in your entry point before calling `engine.start()`:
+Register Nanoleaf devices in a factory function passed to `services.nanoleaf` in your entry point:
 
 ```ts
-engine.nanoleaf.register("panels", {
-  host: "192.168.1.60",       // IP, hostname, or .local name
-  token: "xxxxxxxxxxxxxxxxxxx", // from pairing
+import { createEngine, NanoleafService } from "ts-home-automation";
+
+const engine = createEngine({
+  automationsDir: "./src/automations",
+  services: {
+    nanoleaf: (http, logger) => {
+      const svc = new NanoleafService(http, logger);
+      svc.register("panels", {
+        host: "192.168.1.60",       // IP, hostname, or .local name
+        token: "xxxxxxxxxxxxxxxxxxx", // from pairing
+      });
+      return svc;
+    },
+  },
 });
 ```
 
