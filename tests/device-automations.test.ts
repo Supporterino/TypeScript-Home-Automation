@@ -29,8 +29,6 @@ function injectMocks(auto: { _inject: AqaraH1Automation["_inject"] }) {
     state: {} as StateManager,
     logger,
     config,
-    notifications: null,
-    weather: null,
     deviceRegistry: null,
     services: new ServiceRegistry(),
   });
