@@ -6,18 +6,25 @@ The built-in `ShellyService` controls Shelly Gen 2 devices (Plus Plug S, Plus 1P
 
 ## Registering devices
 
-Register devices before calling `engine.start()` in your entry point:
+Register devices in a factory function passed to `services.shelly` in your entry point:
 
 ```ts
-import { createEngine } from "ts-home-automation";
+import { createEngine, ShellyService } from "ts-home-automation";
 
-const engine = createEngine({ automationsDir: "./src/automations" });
-
-engine.shelly.registerMany({
-  "living_room_plug": "192.168.1.50",
-  "tv_plug":          "shelly-tv.local",          // mDNS hostnames work
-  "desk_lamp":        "http://192.168.1.52",       // full URLs are normalised
-  "bedroom_shutter":  "shelly-2pm.local:8080",     // custom ports work
+const engine = createEngine({
+  automationsDir: "./src/automations",
+  services: {
+    shelly: (http, logger) => {
+      const svc = new ShellyService(http, logger);
+      svc.registerMany({
+        "living_room_plug": "192.168.1.50",
+        "tv_plug":          "shelly-tv.local",          // mDNS hostnames work
+        "desk_lamp":        "http://192.168.1.52",       // full URLs are normalised
+        "bedroom_shutter":  "shelly-2pm.local:8080",     // custom ports work
+      });
+      return svc;
+    },
+  },
 });
 
 await engine.start();
@@ -26,7 +33,13 @@ await engine.start();
 You can also register a single device:
 
 ```ts
-engine.shelly.register("kitchen_plug", "192.168.1.55");
+services: {
+  shelly: (http, logger) => {
+    const svc = new ShellyService(http, logger);
+    svc.register("kitchen_plug", "192.168.1.55");
+    return svc;
+  },
+},
 ```
 
 ---

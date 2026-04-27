@@ -160,9 +160,8 @@ export type TriggerContext =
  * Passed as a single context object to `_inject()` so that adding new
  * optional services in the future is a non-breaking extension.
  *
- * Well-known optional services (`shelly`, `nanoleaf`, and any custom services)
- * are available via `services.get<T>(key)`. The `notifications` and `weather`
- * fields are kept as top-level shortcuts for backwards compatibility.
+ * Optional services (notifications, weather, shelly, nanoleaf, and any custom
+ * services) are available via `services.get<T>(key)`.
  */
 export interface AutomationContext {
   mqtt: MqttService;
@@ -170,10 +169,6 @@ export interface AutomationContext {
   state: StateManager;
   logger: Logger;
   config: Config;
-  /** `null` when no notification service is configured on the engine. */
-  notifications: NotificationService | null;
-  /** `null` when no weather service is configured on the engine. */
-  weather: WeatherService | null;
   /**
    * `null` when `DEVICE_REGISTRY_ENABLED` is `false` (the default).
    * Enable via config to get automatic Zigbee2MQTT device discovery and state tracking.
@@ -248,8 +243,6 @@ export abstract class Automation {
   protected state!: StateManager;
   protected logger!: Logger;
   protected config!: Config;
-  private notificationService: NotificationService | null = null;
-  private weatherService: WeatherService | null = null;
   private deviceRegistryService: DeviceRegistry | null = null;
   private servicesRegistry!: ServiceRegistry;
 
@@ -263,8 +256,6 @@ export abstract class Automation {
     this.state = context.state;
     this.logger = context.logger;
     this.config = context.config;
-    this.notificationService = context.notifications;
-    this.weatherService = context.weather;
     this.deviceRegistryService = context.deviceRegistry;
     this.servicesRegistry = context.services;
   }
@@ -335,11 +326,12 @@ export abstract class Automation {
    * ```
    */
   protected async notify(options: NotificationOptions): Promise<void> {
-    if (!this.notificationService) {
+    const svc = this.servicesRegistry.get<NotificationService>("notifications");
+    if (!svc) {
       this.logger.warn("notify() called but no notification service is configured");
       return;
     }
-    await this.notificationService.send(options);
+    await svc.send(options);
   }
 
   /**
@@ -356,7 +348,7 @@ export abstract class Automation {
    * ```
    */
   protected get weather(): WeatherService | null {
-    return this.weatherService;
+    return this.servicesRegistry.get<WeatherService>("weather");
   }
 
   /**

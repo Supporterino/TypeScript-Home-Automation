@@ -13,16 +13,18 @@ import { createEngine, NtfyNotificationService } from "ts-home-automation";
 
 const engine = createEngine({
   automationsDir: "./src/automations",
-  notifications: (http, logger) =>
-    new NtfyNotificationService({
-      topic: "my-home-alerts",
-      http,
-      logger,
-      // Optional: self-hosted instance
-      // url: "https://ntfy.example.com",
-      // Optional: authentication token
-      // token: "tk_xxxxxxxxxxxxxxxxxxxx",
-    }),
+  services: {
+    notifications: (http, logger) =>
+      new NtfyNotificationService({
+        topic: "my-home-alerts",
+        http,
+        logger,
+        // Optional: self-hosted instance
+        // url: "https://ntfy.example.com",
+        // Optional: authentication token
+        // token: "tk_xxxxxxxxxxxxxxxxxxxx",
+      }),
+  },
 });
 ```
 
@@ -79,12 +81,16 @@ class TelegramNotifications implements NotificationService {
 
 const engine = createEngine({
   automationsDir: "...",
-  notifications: new TelegramNotifications(),
+  services: {
+    notifications: new TelegramNotifications(),
+  },
 });
 ```
 
 You can also pass a factory function that receives the shared HTTP client and logger:
 
 ```ts
-notifications: (http, logger) => new TelegramNotifications(http, logger),
+services: {
+  notifications: (http, logger) => new TelegramNotifications(http, logger),
+},
 ```

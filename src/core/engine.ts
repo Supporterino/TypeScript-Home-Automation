@@ -68,32 +68,6 @@ export interface EngineOptions {
   logger?: Logger;
 
   /**
-   * Optional notification service for sending push notifications.
-   *
-   * Can be a `NotificationService` instance or a factory function that
-   * receives the engine's `HttpClient` and `Logger` for dependency injection.
-   *
-   * If provided, automations can use `this.notify()` to send notifications.
-   * If omitted, `this.notify()` will log a warning and do nothing.
-   *
-   * @deprecated Pass via `services.notifications` instead.
-   *
-   * @example
-   * ```ts
-   * import { createEngine, NtfyNotificationService } from "ts-home-automation";
-   *
-   * const engine = createEngine({
-   *   automationsDir: "...",
-   *   services: {
-   *     notifications: (http, logger) =>
-   *       new NtfyNotificationService({ topic: "my-home-alerts", http, logger }),
-   *   },
-   * });
-   * ```
-   */
-  notifications?: NotificationService | ServiceFactory<NotificationService>;
-
-  /**
    * State manager options.
    *
    * Controls whether state is persisted to disk on shutdown and restored
@@ -111,14 +85,6 @@ export interface EngineOptions {
    * ```
    */
   state?: StateManagerOptions;
-
-  /**
-   * Optional weather service for fetching weather data.
-   * Accepts a `WeatherService` instance or a factory function.
-   *
-   * @deprecated Pass via `services.weather` instead.
-   */
-  weather?: WeatherService | ServiceFactory<WeatherService>;
 
   /**
    * Runtime options for the Zigbee2MQTT device registry.
@@ -324,10 +290,8 @@ export function createEngine(options: EngineOptions): Engine {
       : value;
   }
 
-  // Backwards-compat: top-level `options.notifications` / `options.weather` are
-  // deprecated aliases for `options.services.notifications` / `options.services.weather`.
-  const notificationsValue = options.services?.notifications ?? options.notifications;
-  const weatherValue = options.services?.weather ?? options.weather;
+  const notificationsValue = options.services?.notifications;
+  const weatherValue = options.services?.weather;
   const shellyValue = options.services?.shelly;
   const nanoleafValue = options.services?.nanoleaf;
 

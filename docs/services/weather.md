@@ -13,12 +13,14 @@ import { createEngine, OpenMeteoService } from "ts-home-automation";
 
 const engine = createEngine({
   automationsDir: "./src/automations",
-  weather: (http, logger) =>
-    new OpenMeteoService(
-      { location: { latitude: 49.4, longitude: 8.7 } },
-      http,
-      logger,
-    ),
+  services: {
+    weather: (http, logger) =>
+      new OpenMeteoService(
+        { location: { latitude: 49.4, longitude: 8.7 } },
+        http,
+        logger,
+      ),
+  },
 });
 ```
 
@@ -33,15 +35,17 @@ import { createEngine, OpenWeatherMapService } from "ts-home-automation";
 
 const engine = createEngine({
   automationsDir: "./src/automations",
-  weather: (http, logger) =>
-    new OpenWeatherMapService(
-      {
-        apiKey: process.env.OWM_API_KEY!,
-        location: { latitude: 49.4, longitude: 8.7 },
-      },
-      http,
-      logger,
-    ),
+  services: {
+    weather: (http, logger) =>
+      new OpenWeatherMapService(
+        {
+          apiKey: process.env.OWM_API_KEY!,
+          location: { latitude: 49.4, longitude: 8.7 },
+        },
+        http,
+        logger,
+      ),
+  },
 });
 ```
 
@@ -116,6 +120,8 @@ class MyWeatherService implements WeatherService {
 
 const engine = createEngine({
   automationsDir: "...",
-  weather: new MyWeatherService(),
+  services: {
+    weather: new MyWeatherService(),
+  },
 });
 ```
