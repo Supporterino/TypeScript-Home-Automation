@@ -51,7 +51,7 @@ export interface ServicePlugin {
 
   /**
    * Called once after the state manager has loaded and before MQTT connects.
-   * Use this to perform async initialisation (e.g. connect to an external API).
+   * Use this to perform async initialization (e.g. connect to an external API).
    */
   onStart?(context: CoreContext): Promise<void>;
 
