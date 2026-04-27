@@ -9,7 +9,7 @@ import {
 } from "../src/core/automation.js";
 import type { HttpClient } from "../src/core/http/http-client.js";
 import type { MqttService } from "../src/core/mqtt/mqtt-service.js";
-import type { NanoleafService } from "../src/core/services/nanoleaf-service.js";
+import { ServiceRegistry } from "../src/core/services/service-registry.js";
 import type { ShellyService } from "../src/core/services/shelly-service.js";
 import type { StateManager } from "../src/core/state/state-manager.js";
 import type { NotificationService } from "../src/types/notification.js";
@@ -45,6 +45,9 @@ class TestAutomation extends Automation {
   getConfig() {
     return this.config;
   }
+  getServices() {
+    return this.services;
+  }
   async callNotify(options: Parameters<Automation["notify"]>[0]) {
     return this.notify(options);
   }
@@ -57,18 +60,20 @@ function createMockContext(overrides: Partial<AutomationContext> = {}): Automati
     logLevel: "info",
     state: { persist: false, filePath: "./state.json" },
     automations: { recursive: false },
+    deviceRegistry: { enabled: false, persist: false, filePath: "./device-registry.json" },
     httpServer: { port: 0, token: "", webUi: { enabled: false, path: "/status" } },
+    services: {},
   };
   return {
     mqtt: {} as MqttService,
-    shelly: {} as ShellyService,
-    nanoleaf: {} as NanoleafService,
     http: {} as HttpClient,
     state: {} as StateManager,
     logger: pino({ level: "silent" }),
     config,
     notifications: null,
     weather: null,
+    deviceRegistry: null,
+    services: new ServiceRegistry(),
     ...overrides,
   };
 }
@@ -81,11 +86,28 @@ describe("Automation base class", () => {
     auto._inject(ctx);
 
     expect(auto.getMqtt()).toBe(ctx.mqtt);
-    expect(auto.getShelly()).toBe(ctx.shelly);
     expect(auto.getHttp()).toBe(ctx.http);
     expect(auto.getState()).toBe(ctx.state);
     expect(auto.getLogger()).toBeDefined();
     expect(auto.getConfig()).toBe(ctx.config);
+    expect(auto.getServices()).toBe(ctx.services);
+  });
+
+  it("shelly getter returns service from registry when registered", () => {
+    const auto = new TestAutomation();
+    const mockShelly = {} as ShellyService;
+    const registry = new ServiceRegistry();
+    registry.register("shelly", mockShelly);
+
+    auto._inject(createMockContext({ services: registry }));
+
+    expect(auto.getShelly()).toBe(mockShelly);
+  });
+
+  it("shelly getter returns null when not registered", () => {
+    const auto = new TestAutomation();
+    auto._inject(createMockContext());
+    expect(auto.getShelly()).toBeNull();
   });
 
   it("notify delegates to notification service when configured", async () => {

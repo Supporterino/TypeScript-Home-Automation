@@ -9,8 +9,7 @@ import type { HttpClient } from "./http/http-client.js";
 import type { HttpServer } from "./http/http-server.js";
 import type { MqttMessageHandler, MqttService } from "./mqtt/mqtt-service.js";
 import type { CronScheduler } from "./scheduling/cron-scheduler.js";
-import type { NanoleafService } from "./services/nanoleaf-service.js";
-import type { ShellyService } from "./services/shelly-service.js";
+import type { ServiceRegistry } from "./services/service-registry.js";
 import type { StateChangeHandler, StateManager } from "./state/state-manager.js";
 import type {
   DeviceAddedHandler,
@@ -50,14 +49,11 @@ export class AutomationManager {
     private readonly mqtt: MqttService,
     private readonly cron: CronScheduler,
     private readonly http: HttpClient,
-    private readonly shelly: ShellyService,
-    private readonly nanoleaf: NanoleafService,
     private readonly stateManager: StateManager,
     private readonly httpServer: HttpServer | null,
-    private readonly notifications: NotificationService | null,
-    private readonly weather: WeatherService | null,
     private readonly config: Config,
     private readonly logger: Logger,
+    private readonly services: ServiceRegistry,
     private readonly deviceRegistry: DeviceRegistry | null,
   ) {}
 
@@ -122,15 +118,14 @@ export class AutomationManager {
 
     const context: AutomationContext = {
       mqtt: this.mqtt,
-      shelly: this.shelly,
-      nanoleaf: this.nanoleaf,
       http: this.http,
       state: this.stateManager,
       logger: childLogger,
       config: this.config,
-      notifications: this.notifications,
-      weather: this.weather,
+      notifications: this.services.get<NotificationService>("notifications"),
+      weather: this.services.get<WeatherService>("weather"),
       deviceRegistry: this.deviceRegistry,
+      services: this.services,
     };
     automation._inject(context);
 

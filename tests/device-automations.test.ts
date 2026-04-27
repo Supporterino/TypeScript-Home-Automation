@@ -6,8 +6,7 @@ import { IkeaRodretAutomation } from "../src/core/devices/ikea-rodret-automation
 import { IkeaStyrbarAutomation } from "../src/core/devices/ikea-styrbar-automation.js";
 import type { HttpClient } from "../src/core/http/http-client.js";
 import type { MqttService } from "../src/core/mqtt/mqtt-service.js";
-import type { NanoleafService } from "../src/core/services/nanoleaf-service.js";
-import type { ShellyService } from "../src/core/services/shelly-service.js";
+import { ServiceRegistry } from "../src/core/services/service-registry.js";
 import type { StateManager } from "../src/core/state/state-manager.js";
 
 const logger = pino({ level: "silent" });
@@ -18,20 +17,22 @@ const config: Config = {
   logLevel: "info",
   automations: { recursive: false },
   state: { persist: false, filePath: "./state.json" },
+  deviceRegistry: { enabled: false, persist: false, filePath: "./device-registry.json" },
   httpServer: { port: 0, token: "", webUi: { enabled: false, path: "/status" } },
+  services: {},
 };
 
 function injectMocks(auto: { _inject: AqaraH1Automation["_inject"] }) {
   auto._inject({
     mqtt: {} as MqttService,
-    shelly: {} as ShellyService,
-    nanoleaf: {} as NanoleafService,
     http: {} as HttpClient,
     state: {} as StateManager,
     logger,
     config,
     notifications: null,
     weather: null,
+    deviceRegistry: null,
+    services: new ServiceRegistry(),
   });
 }
 

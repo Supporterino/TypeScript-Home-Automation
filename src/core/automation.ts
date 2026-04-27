@@ -6,6 +6,7 @@ import type { ZigbeeDevice } from "../types/zigbee/bridge.js";
 import type { HttpClient } from "./http/http-client.js";
 import type { MqttService } from "./mqtt/mqtt-service.js";
 import type { NanoleafService } from "./services/nanoleaf-service.js";
+import type { ServiceRegistry } from "./services/service-registry.js";
 import type { ShellyService } from "./services/shelly-service.js";
 import type { StateManager } from "./state/state-manager.js";
 import type { DeviceRegistry } from "./zigbee/device-registry.js";
@@ -158,11 +159,13 @@ export type TriggerContext =
  *
  * Passed as a single context object to `_inject()` so that adding new
  * optional services in the future is a non-breaking extension.
+ *
+ * Well-known optional services (`shelly`, `nanoleaf`, and any custom services)
+ * are available via `services.get<T>(key)`. The `notifications` and `weather`
+ * fields are kept as top-level shortcuts for backwards compatibility.
  */
 export interface AutomationContext {
   mqtt: MqttService;
-  shelly: ShellyService;
-  nanoleaf: NanoleafService;
   http: HttpClient;
   state: StateManager;
   logger: Logger;
@@ -176,6 +179,18 @@ export interface AutomationContext {
    * Enable via config to get automatic Zigbee2MQTT device discovery and state tracking.
    */
   deviceRegistry: DeviceRegistry | null;
+  /**
+   * The shared service registry.
+   *
+   * Use this to access any optional service registered with the engine,
+   * including `shelly`, `nanoleaf`, or any custom service:
+   *
+   * ```ts
+   * const shelly = this.services.get<ShellyService>("shelly");
+   * if (shelly) await shelly.turnOn("plug");
+   * ```
+   */
+  services: ServiceRegistry;
 }
 
 /**
@@ -187,15 +202,16 @@ export interface AutomationContext {
  * 3. Implement `name`, `triggers`, and `execute`
  *
  * The base class provides access to:
- * - `this.mqtt`   - Publish messages and interact with Zigbee2MQTT devices
- * - `this.shelly` - Control Shelly Gen 2 devices (plugs, switches)
- * - `this.nanoleaf` - Control Nanoleaf light panels
- * - `this.weather` - Fetch weather data (if a WeatherService is configured)
- * - `this.notify` - Send push notifications (if a NotificationService is configured)
- * - `this.state`  - Shared state manager (get/set/delete, persisted across restarts)
- * - `this.http`   - Make outbound HTTP requests
- * - `this.logger` - Structured logger (child logger scoped to this automation)
- * - `this.config` - Application configuration
+ * - `this.mqtt`        - Publish messages and interact with Zigbee2MQTT devices
+ * - `this.shelly`      - Shelly Gen 2 service (null unless registered with the engine)
+ * - `this.nanoleaf`    - Nanoleaf service (null unless registered with the engine)
+ * - `this.weather`     - Fetch weather data (null if no WeatherService is configured)
+ * - `this.notify`      - Send push notifications (no-op if no NotificationService is configured)
+ * - `this.state`       - Shared state manager (get/set/delete, persisted across restarts)
+ * - `this.http`        - Make outbound HTTP requests
+ * - `this.logger`      - Structured logger (child logger scoped to this automation)
+ * - `this.config`      - Application configuration
+ * - `this.services`    - Generic registry for any additional registered services
  *
  * @example
  * ```ts
@@ -228,8 +244,6 @@ export abstract class Automation {
 
   /** Injected services - set by AutomationManager before start. */
   protected mqtt!: MqttService;
-  protected shelly!: ShellyService;
-  protected nanoleaf!: NanoleafService;
   protected http!: HttpClient;
   protected state!: StateManager;
   protected logger!: Logger;
@@ -237,6 +251,7 @@ export abstract class Automation {
   private notificationService: NotificationService | null = null;
   private weatherService: WeatherService | null = null;
   private deviceRegistryService: DeviceRegistry | null = null;
+  private servicesRegistry!: ServiceRegistry;
 
   /**
    * Called by the AutomationManager to inject dependencies.
@@ -244,8 +259,6 @@ export abstract class Automation {
    */
   _inject(context: AutomationContext): void {
     this.mqtt = context.mqtt;
-    this.shelly = context.shelly;
-    this.nanoleaf = context.nanoleaf;
     this.http = context.http;
     this.state = context.state;
     this.logger = context.logger;
@@ -253,6 +266,56 @@ export abstract class Automation {
     this.notificationService = context.notifications;
     this.weatherService = context.weather;
     this.deviceRegistryService = context.deviceRegistry;
+    this.servicesRegistry = context.services;
+  }
+
+  /**
+   * The Shelly service, or `null` if none was registered with the engine.
+   *
+   * Always null-check before use:
+   *
+   * @example
+   * ```ts
+   * const shelly = this.shelly;
+   * if (!shelly) return;
+   * await shelly.turnOn("my-plug");
+   * ```
+   */
+  protected get shelly(): ShellyService | null {
+    return this.servicesRegistry.get<ShellyService>("shelly");
+  }
+
+  /**
+   * The Nanoleaf service, or `null` if none was registered with the engine.
+   *
+   * Always null-check before use:
+   *
+   * @example
+   * ```ts
+   * const nanoleaf = this.nanoleaf;
+   * if (!nanoleaf) return;
+   * await nanoleaf.turnOn("panels");
+   * ```
+   */
+  protected get nanoleaf(): NanoleafService | null {
+    return this.servicesRegistry.get<NanoleafService>("nanoleaf");
+  }
+
+  /**
+   * The shared service registry.
+   *
+   * Use this to access any optional service registered with the engine,
+   * including custom services not exposed as named getters:
+   *
+   * @example
+   * ```ts
+   * const myService = this.services.get<MyCustomService>("my-service");
+   * if (!myService) return;
+   * await myService.doSomething();
+   * ```
+   */
+  protected get services(): ServiceRegistry {
+    return this.servicesRegistry;
   }
 
   /**

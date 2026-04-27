@@ -19,6 +19,7 @@ const config: Config = {
   automations: { recursive: false },
   deviceRegistry: { enabled: true, persist: false, filePath: "./device-registry.json" },
   httpServer: { port: 0, token: "", webUi: { enabled: false, path: "/status" } },
+  services: {},
 };
 
 /** A minimal ZigbeeDevice fixture for tests. */
