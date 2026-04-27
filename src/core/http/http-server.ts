@@ -6,6 +6,7 @@ import type { TriggerContext } from "../automation.js";
 import type { AutomationManager } from "../automation-manager.js";
 import type { LogBuffer, LogQuery } from "../logging/log-buffer.js";
 import type { MqttService } from "../mqtt/mqtt-service.js";
+import type { ServiceRegistry } from "../services/service-registry.js";
 import type { StateManager } from "../state/state-manager.js";
 import type { DeviceRegistry } from "../zigbee/device-registry.js";
 import { levelNameToNumber, SESSION_COOKIE } from "./utils.js";
@@ -109,6 +110,16 @@ export class HttpServer {
     const { registerWebUiRoutes } = await import("../web-ui/index.js");
     registerWebUiRoutes(this.honoApp, path, token);
     this.logger.info({ path }, "Web UI mounted");
+  }
+
+  /**
+   * Call `registerRoutes(app)` on every `ServicePlugin` in the given registry
+   * that implements it. Invoke before `start()` so routes are active when the
+   * server starts listening.
+   */
+  mountServiceRoutes(registry: ServiceRegistry): void {
+    registry.mountRoutes(this.honoApp);
+    this.logger.debug("Service plugin routes mounted");
   }
 
   /**

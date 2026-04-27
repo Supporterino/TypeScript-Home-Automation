@@ -22,7 +22,12 @@ export { AqaraH1Automation } from "./core/devices/aqara-h1-automation.js";
 export { IkeaRodretAutomation } from "./core/devices/ikea-rodret-automation.js";
 export { IkeaStyrbarAutomation } from "./core/devices/ikea-styrbar-automation.js";
 // Engine factory
-export { createEngine, type Engine, type EngineOptions } from "./core/engine.js";
+export {
+  createEngine,
+  type Engine,
+  type EngineOptions,
+  type ServiceFactory,
+} from "./core/engine.js";
 export {
   HttpClient,
   type HttpRequestOptions,
@@ -45,6 +50,12 @@ export {
   type OpenWeatherMapConfig,
   OpenWeatherMapService,
 } from "./core/services/openweathermap-service.js";
+// Service plugin infrastructure
+export type {
+  CoreContext,
+  ServicePlugin,
+} from "./core/services/service-plugin.js";
+export { ServiceRegistry } from "./core/services/service-registry.js";
 export { type ShellyDevice, ShellyService } from "./core/services/shelly-service.js";
 // State management
 export {

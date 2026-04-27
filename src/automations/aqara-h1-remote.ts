@@ -76,8 +76,13 @@ export default class AqaraH1Remote extends AqaraH1Automation {
    * Single right click: toggle the Shelly plug.
    */
   protected async onSingleRight(): Promise<void> {
+    const shelly = this.shelly;
+    if (!shelly) {
+      this.logger.warn("Shelly service not registered — cannot toggle plug");
+      return;
+    }
     this.logger.info("Toggling Shelly plug");
-    await this.shelly.toggle(this.PLUG_NAME);
+    await shelly.toggle(this.PLUG_NAME);
   }
 
   private stopDimming(): void {
