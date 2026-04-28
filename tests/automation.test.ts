@@ -30,9 +30,6 @@ class TestAutomation extends Automation {
   getMqtt() {
     return this.mqtt;
   }
-  getShelly() {
-    return this.shelly;
-  }
   getHttp() {
     return this.http;
   }
@@ -105,23 +102,6 @@ describe("Automation base class", () => {
     expect(auto.getLogger()).toBeDefined();
     expect(auto.getConfig()).toBe(ctx.config);
     expect(auto.getServices()).toBe(ctx.services);
-  });
-
-  it("shelly getter returns service from registry when registered", () => {
-    const auto = new TestAutomation();
-    const mockShelly = {} as ShellyService;
-    const registry = new ServiceRegistry();
-    registry.register("shelly", mockShelly);
-
-    auto._inject(createMockContext({ services: registry }));
-
-    expect(auto.getShelly()).toBe(mockShelly);
-  });
-
-  it("shelly getter returns null when not registered", () => {
-    const auto = new TestAutomation();
-    auto._inject(createMockContext());
-    expect(auto.getShelly()).toBeNull();
   });
 
   it("notify delegates to notification service when configured", async () => {

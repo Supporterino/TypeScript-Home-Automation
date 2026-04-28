@@ -5,9 +5,7 @@ import type { WeatherService } from "../types/weather.js";
 import type { ZigbeeDevice } from "../types/zigbee/bridge.js";
 import type { HttpClient } from "./http/http-client.js";
 import type { MqttService } from "./mqtt/mqtt-service.js";
-import type { NanoleafService } from "./services/nanoleaf-service.js";
 import type { ServiceRegistry } from "./services/service-registry.js";
-import type { ShellyService } from "./services/shelly-service.js";
 import type { StateManager } from "./state/state-manager.js";
 import type { DeviceRegistry } from "./zigbee/device-registry.js";
 
@@ -198,15 +196,14 @@ export interface AutomationContext {
  *
  * The base class provides access to:
  * - `this.mqtt`        - Publish messages and interact with Zigbee2MQTT devices
- * - `this.shelly`      - Shelly Gen 2 service (null unless registered with the engine)
- * - `this.nanoleaf`    - Nanoleaf service (null unless registered with the engine)
  * - `this.weather`     - Fetch weather data (null if no WeatherService is configured)
  * - `this.notify`      - Send push notifications (no-op if no NotificationService is configured)
  * - `this.state`       - Shared state manager (get/set/delete, persisted across restarts)
  * - `this.http`        - Make outbound HTTP requests
  * - `this.logger`      - Structured logger (child logger scoped to this automation)
  * - `this.config`      - Application configuration
- * - `this.services`    - Generic registry for any additional registered services
+ * - `this.services`    - Generic registry for any optional service (shelly, nanoleaf, custom…)
+ * - `this.require`     - Non-null retrieval for services declared in `requiredServices`
  *
  * @example
  * ```ts
@@ -287,38 +284,6 @@ export abstract class Automation {
     this.config = context.config;
     this.deviceRegistryService = context.deviceRegistry;
     this.servicesRegistry = context.services;
-  }
-
-  /**
-   * The Shelly service, or `null` if none was registered with the engine.
-   *
-   * Always null-check before use:
-   *
-   * @example
-   * ```ts
-   * const shelly = this.shelly;
-   * if (!shelly) return;
-   * await shelly.turnOn("my-plug");
-   * ```
-   */
-  protected get shelly(): ShellyService | null {
-    return this.servicesRegistry.get<ShellyService>("shelly");
-  }
-
-  /**
-   * The Nanoleaf service, or `null` if none was registered with the engine.
-   *
-   * Always null-check before use:
-   *
-   * @example
-   * ```ts
-   * const nanoleaf = this.nanoleaf;
-   * if (!nanoleaf) return;
-   * await nanoleaf.turnOn("panels");
-   * ```
-   */
-  protected get nanoleaf(): NanoleafService | null {
-    return this.servicesRegistry.get<NanoleafService>("nanoleaf");
   }
 
   /**
