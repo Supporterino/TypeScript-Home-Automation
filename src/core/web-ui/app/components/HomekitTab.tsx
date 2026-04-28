@@ -93,7 +93,7 @@ function BridgeDetails({ status }: { status: HomekitStatus }) {
 
 function NotConfigured() {
   return (
-    <Alert color="gray" title="HomeKit bridge not configured" icon={<IconHome size={16} />}>
+    <Alert color="blue" title="HomeKit bridge not configured" icon={<IconHome size={16} />}>
       Register a <Code fz="sm">HomekitService</Code> in your engine's <Code fz="sm">services</Code>{" "}
       map to expose your Zigbee devices to Apple Home.
     </Alert>
