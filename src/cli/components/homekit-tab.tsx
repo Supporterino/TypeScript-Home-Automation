@@ -72,7 +72,7 @@ export function HomekitTab({ data }: { data: HomekitStatus | null }) {
         </box>
       </box>
 
-      {/* Volume reminder */}
+      {/* Warning when bridge is stopped */}
       {!data.running && (
         <box marginTop={1} paddingLeft={1}>
           <text fg={COLORS.orange}>⚠ Bridge is not running. Check logs for startup errors.</text>
