@@ -10,7 +10,7 @@ A lightweight, fully typed home automation framework built on MQTT and [Bun](htt
 - **MQTT-native** — designed around Zigbee2MQTT with wildcard topic support
 - **Multiple trigger types** — MQTT messages, cron schedules, state changes, webhooks, and Zigbee device events
 - **Zigbee device registry** — automatic device discovery and state tracking; react to any device state change, join, or departure with a single trigger
-- **Rich service layer** — Shelly devices, Nanoleaf panels, weather data, push notifications
+- **Rich service layer** — Shelly devices, Nanoleaf panels, weather data, push notifications, HomeKit bridge
 - **Observable** — structured logging, in-memory log buffer, web status page, CLI dashboard
 - **Kubernetes-ready** — `/healthz` and `/readyz` probes built in
 
@@ -50,5 +50,6 @@ bun install && bun run dev
 | [Device Registry](device-registry.md) | Zigbee device discovery, state tracking, nice names |
 | [CLI Reference](cli.md) | `ts-ha` command reference |
 | [Web UI](http/web-ui.md) | Browser dashboard |
+| [HomeKit](services/homekit.md) | Apple HomeKit bridge service |
 | [Architecture](architecture.md) | How the engine works internally |
 | [npm package](https://www.npmjs.com/package/ts-home-automation) | `ts-home-automation` on npm |
