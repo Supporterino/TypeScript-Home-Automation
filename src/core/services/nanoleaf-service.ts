@@ -36,17 +36,13 @@ interface NanoleafDevice {
  *
  * @example
  * ```ts
- * // Register in entry point:
- * engine.nanoleaf.register("panels", {
- *   host: "192.168.1.60",
- *   token: "xxxxxxxxxxxxxxxxxxx",
- * });
- *
  * // In an automation:
- * await this.nanoleaf.turnOn("panels");
- * await this.nanoleaf.setBrightness("panels", 80, 2);
- * await this.nanoleaf.setColor("panels", 120, 100);
- * await this.nanoleaf.setEffect("panels", "Northern Lights");
+ * const nanoleaf = this.services.get<NanoleafService>("nanoleaf");
+ * if (!nanoleaf) return;
+ * await nanoleaf.turnOn("panels");
+ * await nanoleaf.setBrightness("panels", 80, 2);
+ * await nanoleaf.setColor("panels", 120, 100);
+ * await nanoleaf.setEffect("panels", "Northern Lights");
  * ```
  */
 export class NanoleafService {

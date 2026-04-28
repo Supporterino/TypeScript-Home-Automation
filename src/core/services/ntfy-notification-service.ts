@@ -32,12 +32,14 @@ export interface NtfyConfig {
  * // The engine provides http and logger automatically:
  * const engine = createEngine({
  *   automationsDir: "...",
- *   notifications: (http, logger) =>
- *     new NtfyNotificationService({
- *       topic: "my-home-alerts",
- *       http,
- *       logger,
- *     }),
+ *   services: {
+ *     notifications: (http, logger) =>
+ *       new NtfyNotificationService({
+ *         topic: "my-home-alerts",
+ *         http,
+ *         logger,
+ *       }),
+ *   },
  * });
  * ```
  *

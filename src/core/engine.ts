@@ -8,14 +8,30 @@ import { HttpServer } from "./http/http-server.js";
 import { LogBuffer } from "./logging/log-buffer.js";
 import { MqttService } from "./mqtt/mqtt-service.js";
 import { CronScheduler } from "./scheduling/cron-scheduler.js";
-import { NanoleafService } from "./services/nanoleaf-service.js";
-import { ShellyService } from "./services/shelly-service.js";
+import type { NanoleafService } from "./services/nanoleaf-service.js";
+import type { CoreContext } from "./services/service-plugin.js";
+import { ServiceRegistry } from "./services/service-registry.js";
+import type { ShellyService } from "./services/shelly-service.js";
 import { StateManager, type StateManagerOptions } from "./state/state-manager.js";
 import {
   type DeviceNiceNames,
   DeviceRegistry,
   type DeviceRegistryPersistenceOptions,
 } from "./zigbee/device-registry.js";
+
+/**
+ * Factory function type for optional services.
+ *
+ * Receives the engine's shared `HttpClient` and a scoped `Logger` so the
+ * service can use them without creating its own.
+ *
+ * @example
+ * ```ts
+ * notifications: (http, logger) =>
+ *   new NtfyNotificationService({ topic: "alerts", http, logger }),
+ * ```
+ */
+export type ServiceFactory<T> = (http: HttpClient, logger: Logger) => T;
 
 /**
  * Options for creating an automation engine.
@@ -52,28 +68,6 @@ export interface EngineOptions {
   logger?: Logger;
 
   /**
-   * Optional notification service for sending push notifications.
-   *
-   * Can be a `NotificationService` instance or a factory function that
-   * receives the engine's `HttpClient` and `Logger` for dependency injection.
-   *
-   * If provided, automations can use `this.notify()` to send notifications.
-   * If omitted, `this.notify()` will log a warning and do nothing.
-   *
-   * @example
-   * ```ts
-   * import { createEngine, NtfyNotificationService } from "ts-home-automation";
-   *
-   * const engine = createEngine({
-   *   automationsDir: "...",
-   *   notifications: (http, logger) =>
-   *     new NtfyNotificationService({ topic: "my-home-alerts", http, logger }),
-   * });
-   * ```
-   */
-  notifications?: NotificationService | ((http: HttpClient, logger: Logger) => NotificationService);
-
-  /**
    * State manager options.
    *
    * Controls whether state is persisted to disk on shutdown and restored
@@ -91,12 +85,6 @@ export interface EngineOptions {
    * ```
    */
   state?: StateManagerOptions;
-
-  /**
-   * Optional weather service for fetching weather data.
-   * Accepts a `WeatherService` instance or a factory function.
-   */
-  weather?: WeatherService | ((http: HttpClient, logger: Logger) => WeatherService);
 
   /**
    * Runtime options for the Zigbee2MQTT device registry.
@@ -134,6 +122,47 @@ export interface EngineOptions {
      */
     filePath?: string;
   };
+
+  /**
+   * Optional services to register with the engine.
+   *
+   * Well-known service keys (`notifications`, `weather`, `shelly`, `nanoleaf`)
+   * accept either a service instance or a `ServiceFactory` function. Additional
+   * services can be registered under any custom key.
+   *
+   * All registered services are available to automations via
+   * `this.services.get<T>(key)`, `this.services.getOrThrow<T>(key)`,
+   * `this.services.use<T, R>(key, fn)`, or `this.require<T>(key)` (when the key
+   * is declared in `requiredServices`).
+   *
+   * @example
+   * ```ts
+   * import { createEngine, ShellyService, NanoleafService } from "ts-home-automation";
+   *
+   * const engine = createEngine({
+   *   automationsDir: "...",
+   *   services: {
+   *     shelly: (http, logger) => {
+   *       const shelly = new ShellyService(http, logger);
+   *       shelly.register("living_room_plug", "192.168.1.50");
+   *       return shelly;
+   *     },
+   *     nanoleaf: (http, logger) =>
+   *       new NanoleafService(http, logger),
+   *     notifications: (http, logger) =>
+   *       new NtfyNotificationService({ topic: "alerts", http, logger }),
+   *   },
+   * });
+   * ```
+   */
+  services?: {
+    notifications?: NotificationService | ServiceFactory<NotificationService>;
+    weather?: WeatherService | ServiceFactory<WeatherService>;
+    shelly?: ShellyService | ServiceFactory<ShellyService>;
+    nanoleaf?: NanoleafService | ServiceFactory<NanoleafService>;
+    /** Any additional custom services registered under arbitrary keys. */
+    [key: string]: unknown;
+  };
 }
 
 /**
@@ -155,12 +184,6 @@ export interface Engine {
   /** The MQTT service (for advanced usage). */
   readonly mqtt: MqttService;
 
-  /** The Shelly service for controlling Shelly Gen 2 devices. */
-  readonly shelly: ShellyService;
-
-  /** The Nanoleaf service for controlling Nanoleaf light panels. */
-  readonly nanoleaf: NanoleafService;
-
   /** The HTTP client (for advanced usage). */
   readonly http: HttpClient;
 
@@ -169,6 +192,9 @@ export interface Engine {
 
   /** The notification service (if configured). */
   readonly notifications: NotificationService | null;
+
+  /** The shared service registry. Use this to access any registered optional service. */
+  readonly services: ServiceRegistry;
 
   /** The automation manager (for advanced usage, e.g. manual registration). */
   readonly manager: AutomationManager;
@@ -227,33 +253,56 @@ export function createEngine(options: EngineOptions): Engine {
   const mqtt = new MqttService(config, logger.child({ service: "mqtt" }));
   const cron = new CronScheduler(logger.child({ service: "cron" }));
   const http = new HttpClient(logger.child({ service: "http" }));
-  const shelly = new ShellyService(http, logger.child({ service: "shelly" }));
   const stateManager = new StateManager(logger.child({ service: "state" }), {
     persist: options.state?.persist ?? config.state.persist,
     filePath: options.state?.filePath ?? config.state.filePath,
   });
 
-  const nanoleaf = new NanoleafService(http, logger.child({ service: "nanoleaf" }));
+  // ── Service registry ──────────────────────────────────────────────────────
 
-  // Initialize optional notification service
-  let notifications: NotificationService | null = null;
-  if (options.notifications) {
-    notifications =
-      typeof options.notifications === "function"
-        ? options.notifications(http, logger.child({ service: "notifications" }))
-        : options.notifications;
+  const serviceRegistry = new ServiceRegistry();
+
+  /**
+   * Resolve a service value that may be a direct instance or a factory function.
+   * Returns `null` when the value is `undefined`.
+   */
+  function resolveService<T>(
+    value: T | ServiceFactory<T> | undefined,
+    serviceKey: string,
+  ): T | null {
+    if (value === undefined) return null;
+    return typeof value === "function"
+      ? (value as ServiceFactory<T>)(http, logger.child({ service: serviceKey }))
+      : value;
   }
 
-  // Initialize optional weather service
-  let weather: WeatherService | null = null;
-  if (options.weather) {
-    weather =
-      typeof options.weather === "function"
-        ? options.weather(http, logger.child({ service: "weather" }))
-        : options.weather;
+  const notificationsValue = options.services?.notifications;
+  const weatherValue = options.services?.weather;
+  const shellyValue = options.services?.shelly;
+  const nanoleafValue = options.services?.nanoleaf;
+
+  const notificationService = resolveService(notificationsValue, "notifications");
+  const weatherService = resolveService(weatherValue, "weather");
+  const shellyService = resolveService(shellyValue, "shelly");
+  const nanoleafService = resolveService(nanoleafValue, "nanoleaf");
+
+  if (notificationService) serviceRegistry.register("notifications", notificationService);
+  if (weatherService) serviceRegistry.register("weather", weatherService);
+  if (shellyService) serviceRegistry.register("shelly", shellyService);
+  if (nanoleafService) serviceRegistry.register("nanoleaf", nanoleafService);
+
+  // Register any additional custom services from the services map.
+  if (options.services) {
+    const WELL_KNOWN = new Set(["notifications", "weather", "shelly", "nanoleaf"]);
+    for (const [key, value] of Object.entries(options.services)) {
+      if (!WELL_KNOWN.has(key) && value !== undefined) {
+        serviceRegistry.register(key, value);
+      }
+    }
   }
 
-  // Initialize device registry (optional — disabled by default)
+  // ── Device registry ───────────────────────────────────────────────────────
+
   const deviceRegistryPersistence: DeviceRegistryPersistenceOptions = {
     persist: options.deviceRegistry?.persist ?? config.deviceRegistry.persist,
     filePath: options.deviceRegistry?.filePath ?? config.deviceRegistry.filePath,
@@ -275,7 +324,8 @@ export function createEngine(options: EngineOptions): Engine {
     );
   }
 
-  // Initialize HTTP server (health probes + webhooks)
+  // ── HTTP server ───────────────────────────────────────────────────────────
+
   const httpServerPort = config.httpServer.port;
   const httpServer =
     httpServerPort > 0
@@ -297,14 +347,11 @@ export function createEngine(options: EngineOptions): Engine {
     mqtt,
     cron,
     http,
-    shelly,
-    nanoleaf,
     stateManager,
     httpServer,
-    notifications,
-    weather,
     config,
     logger.child({ service: "manager" }),
+    serviceRegistry,
     deviceRegistry,
   );
 
@@ -314,11 +361,12 @@ export function createEngine(options: EngineOptions): Engine {
     config,
     logger,
     mqtt,
-    shelly,
-    nanoleaf,
     http,
     state: stateManager,
-    notifications,
+    get notifications(): NotificationService | null {
+      return serviceRegistry.get<NotificationService>("notifications");
+    },
+    services: serviceRegistry,
     manager,
     deviceRegistry,
 
@@ -332,6 +380,11 @@ export function createEngine(options: EngineOptions): Engine {
       httpServer?.setManagers(stateManager, manager, logBuffer);
       httpServer?.setDeviceRegistry(deviceRegistry);
 
+      // Mount routes from service plugins before the server starts listening.
+      if (httpServer) {
+        httpServer.mountServiceRoutes(serviceRegistry);
+      }
+
       // Mount web UI if enabled (imported lazily to keep it tree-shakeable)
       if (httpServer && config.httpServer.webUi.enabled) {
         const webUiPath = config.httpServer.webUi.path;
@@ -342,6 +395,11 @@ export function createEngine(options: EngineOptions): Engine {
       httpServer?.start();
       await stateManager.load();
       await deviceRegistry?.load();
+
+      // Run onStart() lifecycle hooks for all registered ServicePlugins.
+      const coreCtx: CoreContext = { http, logger };
+      await serviceRegistry.startAll(coreCtx);
+
       await mqtt.connect();
       deviceRegistry?.start();
       const recursive = options.recursive ?? config.automations.recursive;
@@ -360,6 +418,10 @@ export function createEngine(options: EngineOptions): Engine {
       httpServer?.setEngineStarted(false);
       await manager.stopAll();
       cron.stopAll();
+
+      // Run onStop() lifecycle hooks for all registered ServicePlugins.
+      await serviceRegistry.stopAll();
+
       await deviceRegistry?.save();
       deviceRegistry?.stop();
       await stateManager.save();

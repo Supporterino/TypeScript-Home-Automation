@@ -6,7 +6,7 @@ import { AutomationManager } from "../src/core/automation-manager.js";
 import type { HttpClient } from "../src/core/http/http-client.js";
 import type { MqttMessageHandler, MqttService } from "../src/core/mqtt/mqtt-service.js";
 import type { CronScheduler } from "../src/core/scheduling/cron-scheduler.js";
-import type { ShellyService } from "../src/core/services/shelly-service.js";
+import { ServiceRegistry } from "../src/core/services/service-registry.js";
 import type { StateChangeHandler, StateManager } from "../src/core/state/state-manager.js";
 
 const logger = pino({ level: "silent" });
@@ -17,7 +17,9 @@ const config: Config = {
   logLevel: "info",
   state: { persist: false, filePath: "./state.json" },
   automations: { recursive: false },
+  deviceRegistry: { enabled: false, persist: false, filePath: "./device-registry.json" },
   httpServer: { port: 0, token: "", webUi: { enabled: false, path: "/status" } },
+  services: {},
 };
 
 /** Concrete test automation with configurable triggers. */
@@ -65,7 +67,6 @@ function createMocks() {
   } as unknown as CronScheduler;
 
   const http = {} as HttpClient;
-  const shelly = {} as ShellyService;
 
   const state = {
     onChange: mock((key: string, handler: StateChangeHandler) => {
@@ -74,7 +75,9 @@ function createMocks() {
     offChange: mock((_key: string, _handler: StateChangeHandler) => {}),
   } as unknown as StateManager;
 
-  return { mqtt, cron, http, shelly, state, subscribedHandlers, stateHandlers };
+  const services = new ServiceRegistry();
+
+  return { mqtt, cron, http, state, services, subscribedHandlers, stateHandlers };
 }
 
 describe("AutomationManager", () => {
@@ -87,14 +90,12 @@ describe("AutomationManager", () => {
       mocks.mqtt,
       mocks.cron,
       mocks.http,
-      mocks.shelly,
-      {} as never, // nanoleaf
       mocks.state,
       null, // httpServer
-      null, // notifications
-      null, // weather
       config,
       logger,
+      mocks.services,
+      null, // deviceRegistry
     );
   });
 
@@ -147,6 +148,33 @@ describe("AutomationManager", () => {
       expect(mocks.mqtt.subscribe).toHaveBeenCalledTimes(1);
       expect(mocks.cron.schedule).toHaveBeenCalledTimes(1);
       expect(mocks.state.onChange).toHaveBeenCalledTimes(1);
+    });
+
+    it("throws before onStart when a required service is missing", async () => {
+      class RequiresShelly extends Automation {
+        readonly name = "requires-shelly";
+        readonly triggers: Trigger[] = [];
+        readonly requiredServices = ["shelly"] as const;
+        async execute(_ctx: TriggerContext): Promise<void> {}
+      }
+
+      const auto = new RequiresShelly();
+      await expect(manager.register(auto)).rejects.toThrow(
+        `Automation "requires-shelly" requires service "shelly" but it is not registered`,
+      );
+    });
+
+    it("does not throw when all required services are present", async () => {
+      class RequiresShelly extends Automation {
+        readonly name = "requires-shelly";
+        readonly triggers: Trigger[] = [];
+        readonly requiredServices = ["shelly"] as const;
+        async execute(_ctx: TriggerContext): Promise<void> {}
+      }
+
+      mocks.services.register("shelly", { turnOn: () => {} });
+      const auto = new RequiresShelly();
+      await expect(manager.register(auto)).resolves.toBeUndefined();
     });
   });
 

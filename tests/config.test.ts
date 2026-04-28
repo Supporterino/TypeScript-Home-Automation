@@ -37,6 +37,7 @@ describe("loadConfig", () => {
       expect(config.state.filePath).toBe("./state.json");
       expect(config.automations.recursive).toBe(false);
       expect(config.httpServer.port).toBe(8080);
+      expect(config.services).toEqual({});
     });
   });
 

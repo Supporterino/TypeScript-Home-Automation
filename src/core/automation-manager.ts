@@ -2,15 +2,12 @@ import { readdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import type { Logger } from "pino";
 import type { Config } from "../config.js";
-import type { NotificationService } from "../types/notification.js";
-import type { WeatherService } from "../types/weather.js";
 import { Automation, type AutomationContext, type TriggerContext } from "./automation.js";
 import type { HttpClient } from "./http/http-client.js";
 import type { HttpServer } from "./http/http-server.js";
 import type { MqttMessageHandler, MqttService } from "./mqtt/mqtt-service.js";
 import type { CronScheduler } from "./scheduling/cron-scheduler.js";
-import type { NanoleafService } from "./services/nanoleaf-service.js";
-import type { ShellyService } from "./services/shelly-service.js";
+import type { ServiceRegistry } from "./services/service-registry.js";
 import type { StateChangeHandler, StateManager } from "./state/state-manager.js";
 import type {
   DeviceAddedHandler,
@@ -50,14 +47,11 @@ export class AutomationManager {
     private readonly mqtt: MqttService,
     private readonly cron: CronScheduler,
     private readonly http: HttpClient,
-    private readonly shelly: ShellyService,
-    private readonly nanoleaf: NanoleafService,
     private readonly stateManager: StateManager,
     private readonly httpServer: HttpServer | null,
-    private readonly notifications: NotificationService | null,
-    private readonly weather: WeatherService | null,
     private readonly config: Config,
     private readonly logger: Logger,
+    private readonly services: ServiceRegistry,
     private readonly deviceRegistry: DeviceRegistry | null,
   ) {}
 
@@ -122,17 +116,26 @@ export class AutomationManager {
 
     const context: AutomationContext = {
       mqtt: this.mqtt,
-      shelly: this.shelly,
-      nanoleaf: this.nanoleaf,
       http: this.http,
       state: this.stateManager,
       logger: childLogger,
       config: this.config,
-      notifications: this.notifications,
-      weather: this.weather,
       deviceRegistry: this.deviceRegistry,
+      services: this.services,
     };
     automation._inject(context);
+
+    // Validate required services before calling onStart.
+    if (automation.requiredServices) {
+      for (const key of automation.requiredServices) {
+        if (!this.services.has(key)) {
+          throw new Error(
+            `Automation "${automation.name}" requires service "${key}" but it is not registered. ` +
+              `Pass it via the services map in createEngine().`,
+          );
+        }
+      }
+    }
 
     const mqttHandlers: { topic: string; handler: MqttMessageHandler }[] = [];
     const stateHandlers: { key: string; handler: StateChangeHandler }[] = [];

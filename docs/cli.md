@@ -248,7 +248,7 @@ ts-ha d --interval 2         # refresh every 2s
 
 ## Nanoleaf
 
-Pair a Nanoleaf device to generate an auth token for use in `engine.nanoleaf.register()`:
+Pair a Nanoleaf device to generate an auth token for use with the `NanoleafService`:
 
 ```bash
 ts-ha nanoleaf pair 192.168.1.60          # by IP address
@@ -260,7 +260,8 @@ ts-ha nanoleaf pair nanoleaf-panels.local  # by mDNS hostname
 3. On success it prints the auth token and a ready-to-use registration snippet:
 
 ```ts
-engine.nanoleaf.register("panels", {
+const nanoleaf = engine.services.getOrThrow("nanoleaf");
+nanoleaf.register("panels", {
   host: "192.168.1.60",
   token: "<printed-token>",
 });

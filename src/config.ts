@@ -45,6 +45,20 @@ const configSchema = z.object({
       path: z.string().default("/status"),
     }),
   }),
+  /**
+   * Passthrough bag for optional-service configuration.
+   *
+   * Services validate and read their own slice of this record from environment
+   * variables. The engine schema treats it as an open record so that adding a
+   * new service never requires modifying `config.ts`.
+   *
+   * @example
+   * ```ts
+   * // A custom service reads its own config:
+   * const token = (config.services["ha_token"] as string | undefined) ?? "";
+   * ```
+   */
+  services: z.record(z.string(), z.unknown()).default({}),
 });
 
 export type Config = z.infer<typeof configSchema>;

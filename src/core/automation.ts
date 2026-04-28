@@ -5,8 +5,7 @@ import type { WeatherService } from "../types/weather.js";
 import type { ZigbeeDevice } from "../types/zigbee/bridge.js";
 import type { HttpClient } from "./http/http-client.js";
 import type { MqttService } from "./mqtt/mqtt-service.js";
-import type { NanoleafService } from "./services/nanoleaf-service.js";
-import type { ShellyService } from "./services/shelly-service.js";
+import type { ServiceRegistry } from "./services/service-registry.js";
 import type { StateManager } from "./state/state-manager.js";
 import type { DeviceRegistry } from "./zigbee/device-registry.js";
 
@@ -158,24 +157,33 @@ export type TriggerContext =
  *
  * Passed as a single context object to `_inject()` so that adding new
  * optional services in the future is a non-breaking extension.
+ *
+ * Optional services (notifications, weather, shelly, nanoleaf, and any custom
+ * services) are available via `services.get<T>(key)`.
  */
 export interface AutomationContext {
   mqtt: MqttService;
-  shelly: ShellyService;
-  nanoleaf: NanoleafService;
   http: HttpClient;
   state: StateManager;
   logger: Logger;
   config: Config;
-  /** `null` when no notification service is configured on the engine. */
-  notifications: NotificationService | null;
-  /** `null` when no weather service is configured on the engine. */
-  weather: WeatherService | null;
   /**
    * `null` when `DEVICE_REGISTRY_ENABLED` is `false` (the default).
    * Enable via config to get automatic Zigbee2MQTT device discovery and state tracking.
    */
   deviceRegistry: DeviceRegistry | null;
+  /**
+   * The shared service registry.
+   *
+   * Use this to access any optional service registered with the engine,
+   * including `shelly`, `nanoleaf`, or any custom service:
+   *
+   * ```ts
+   * const shelly = this.services.get<ShellyService>("shelly");
+   * if (shelly) await shelly.turnOn("plug");
+   * ```
+   */
+  services: ServiceRegistry;
 }
 
 /**
@@ -187,15 +195,15 @@ export interface AutomationContext {
  * 3. Implement `name`, `triggers`, and `execute`
  *
  * The base class provides access to:
- * - `this.mqtt`   - Publish messages and interact with Zigbee2MQTT devices
- * - `this.shelly` - Control Shelly Gen 2 devices (plugs, switches)
- * - `this.nanoleaf` - Control Nanoleaf light panels
- * - `this.weather` - Fetch weather data (if a WeatherService is configured)
- * - `this.notify` - Send push notifications (if a NotificationService is configured)
- * - `this.state`  - Shared state manager (get/set/delete, persisted across restarts)
- * - `this.http`   - Make outbound HTTP requests
- * - `this.logger` - Structured logger (child logger scoped to this automation)
- * - `this.config` - Application configuration
+ * - `this.mqtt`        - Publish messages and interact with Zigbee2MQTT devices
+ * - `this.weather`     - Fetch weather data (null if no WeatherService is configured)
+ * - `this.notify`      - Send push notifications (no-op if no NotificationService is configured)
+ * - `this.state`       - Shared state manager (get/set/delete, persisted across restarts)
+ * - `this.http`        - Make outbound HTTP requests
+ * - `this.logger`      - Structured logger (child logger scoped to this automation)
+ * - `this.config`      - Application configuration
+ * - `this.services`    - Generic registry for any optional service (shelly, nanoleaf, custom…)
+ * - `this.require`     - Non-null retrieval for services declared in `requiredServices`
  *
  * @example
  * ```ts
@@ -226,17 +234,43 @@ export abstract class Automation {
   /** The trigger(s) that cause this automation to execute. */
   abstract readonly triggers: Trigger[];
 
-  /** Injected services - set by AutomationManager before start. */
+  /**
+   * Declare services that must be present when this automation starts.
+   *
+   * The `AutomationManager` checks every key listed here at registration time
+   * (before `onStart` is called) and throws a descriptive error if any of them
+   * are missing from the registry. This gives you fail-fast startup validation
+   * instead of silent `null` surprises at the first trigger.
+   *
+   * Inside `execute()` you can then retrieve those services safely with
+   * `this.require<T>(key)`, which is a non-null assertion (no `if` guard needed).
+   *
+   * Optional services that are NOT listed here continue to use
+   * `this.services.get<T>(key)` with the usual null-check.
+   *
+   * **Important:** declare the value with `as const` so TypeScript infers
+   * a readonly string-literal tuple rather than the wider `string[]` type:
+   *
+   * @example
+   * ```ts
+   * // "as const" gives you string-literal inference ("shelly"), not just string
+   * readonly requiredServices = ["shelly"] as const;
+   *
+   * async execute(): Promise<void> {
+   *   const shelly = this.require<ShellyService>("shelly");
+   *   await shelly.turnOff("tv_plug");
+   * }
+   * ```
+   */
+  readonly requiredServices?: readonly string[];
+
   protected mqtt!: MqttService;
-  protected shelly!: ShellyService;
-  protected nanoleaf!: NanoleafService;
   protected http!: HttpClient;
   protected state!: StateManager;
   protected logger!: Logger;
   protected config!: Config;
-  private notificationService: NotificationService | null = null;
-  private weatherService: WeatherService | null = null;
   private deviceRegistryService: DeviceRegistry | null = null;
+  private servicesRegistry!: ServiceRegistry;
 
   /**
    * Called by the AutomationManager to inject dependencies.
@@ -244,15 +278,69 @@ export abstract class Automation {
    */
   _inject(context: AutomationContext): void {
     this.mqtt = context.mqtt;
-    this.shelly = context.shelly;
-    this.nanoleaf = context.nanoleaf;
     this.http = context.http;
     this.state = context.state;
     this.logger = context.logger;
     this.config = context.config;
-    this.notificationService = context.notifications;
-    this.weatherService = context.weather;
     this.deviceRegistryService = context.deviceRegistry;
+    this.servicesRegistry = context.services;
+  }
+
+  /**
+   * The shared service registry.
+   *
+   * Use this to access any optional service registered with the engine,
+   * including custom services not exposed as named getters.
+   *
+   * Three retrieval styles are available — choose the one that fits:
+   *
+   * **`get`** — nullable; you handle the absent case:
+   * ```ts
+   * const svc = this.services.get<MyService>("my-service");
+   * if (!svc) return;
+   * await svc.doSomething();
+   * ```
+   *
+   * **`getOrThrow`** — throws if not registered (use for required services):
+   * ```ts
+   * const svc = this.services.getOrThrow<MyService>("my-service");
+   * await svc.doSomething();
+   * ```
+   *
+   * **`use`** — callback wrapper; no-ops when absent (best for one-liners):
+   * ```ts
+   * await this.services.use<MyService>("my-service", (s) => s.doSomething());
+   * ```
+   *
+   * For services declared in `requiredServices`, prefer `this.require<T>(key)`
+   * which is validated at startup and has a non-null return type.
+   */
+  protected get services(): ServiceRegistry {
+    return this.servicesRegistry;
+  }
+
+  /**
+   * Retrieve a service that was declared in `requiredServices`.
+   *
+   * The `AutomationManager` already verified at startup that this service is
+   * registered, so this method never returns `null` — no null-check needed.
+   *
+   * Calling `require()` for a key that is **not** listed in `requiredServices`
+   * is allowed but will throw at runtime if the service is absent, identical
+   * to `this.services.getOrThrow(key)`.
+   *
+   * @example
+   * ```ts
+   * readonly requiredServices = ["shelly"] as const;
+   *
+   * async execute(): Promise<void> {
+   *   const shelly = this.require<ShellyService>("shelly");
+   *   await shelly.turnOff("tv_plug");
+   * }
+   * ```
+   */
+  protected require<T>(key: string): T {
+    return this.servicesRegistry.getOrThrow<T>(key);
   }
 
   /**
@@ -272,11 +360,12 @@ export abstract class Automation {
    * ```
    */
   protected async notify(options: NotificationOptions): Promise<void> {
-    if (!this.notificationService) {
+    const svc = this.servicesRegistry.get<NotificationService>("notifications");
+    if (!svc) {
       this.logger.warn("notify() called but no notification service is configured");
       return;
     }
-    await this.notificationService.send(options);
+    await svc.send(options);
   }
 
   /**
@@ -293,7 +382,7 @@ export abstract class Automation {
    * ```
    */
   protected get weather(): WeatherService | null {
-    return this.weatherService;
+    return this.servicesRegistry.get<WeatherService>("weather");
   }
 
   /**

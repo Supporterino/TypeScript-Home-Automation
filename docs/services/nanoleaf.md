@@ -19,12 +19,23 @@ Press Enter when prompted. The command prints an auth token — save it in your 
 
 ## Registering devices
 
-Register Nanoleaf devices in your entry point before calling `engine.start()`:
+Register Nanoleaf devices in a factory function passed to `services.nanoleaf` in your entry point:
 
 ```ts
-engine.nanoleaf.register("panels", {
-  host: "192.168.1.60",       // IP, hostname, or .local name
-  token: "xxxxxxxxxxxxxxxxxxx", // from pairing
+import { createEngine, NanoleafService } from "ts-home-automation";
+
+const engine = createEngine({
+  automationsDir: "./src/automations",
+  services: {
+    nanoleaf: (http, logger) => {
+      const svc = new NanoleafService(http, logger);
+      svc.register("panels", {
+        host: "192.168.1.60",       // IP, hostname, or .local name
+        token: "xxxxxxxxxxxxxxxxxxx", // from pairing
+      });
+      return svc;
+    },
+  },
 });
 ```
 
@@ -54,6 +65,8 @@ engine.nanoleaf.register("panels", {
 ## Example: activate a scene when motion is detected
 
 ```ts
+import type { NanoleafService } from "ts-home-automation";
+
 export default class NanoleafMotion extends Automation {
   readonly name = "nanoleaf-motion";
 
@@ -66,9 +79,11 @@ export default class NanoleafMotion extends Automation {
   ];
 
   async execute(): Promise<void> {
-    await this.nanoleaf.turnOn("panels");
-    await this.nanoleaf.setBrightness("panels", 80, 1);
-    await this.nanoleaf.setEffect("panels", "Northern Lights");
+    const nanoleaf = this.services.get<NanoleafService>("nanoleaf");
+    if (!nanoleaf) return;
+    await nanoleaf.turnOn("panels");
+    await nanoleaf.setBrightness("panels", 80, 1);
+    await nanoleaf.setEffect("panels", "Northern Lights");
   }
 }
 ```
@@ -76,6 +91,8 @@ export default class NanoleafMotion extends Automation {
 ## Example: set a warm evening scene
 
 ```ts
-await this.nanoleaf.setColorTemp("panels", 2700);  // warm white
-await this.nanoleaf.setBrightness("panels", 40, 3); // 40%, 3s transition
+const nanoleaf = this.services.get<NanoleafService>("nanoleaf");
+if (!nanoleaf) return;
+await nanoleaf.setColorTemp("panels", 2700);  // warm white
+await nanoleaf.setBrightness("panels", 40, 3); // 40%, 3s transition
 ```

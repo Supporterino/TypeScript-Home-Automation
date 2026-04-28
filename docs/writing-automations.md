@@ -200,22 +200,72 @@ this.mqtt.publish(topic, payload)
 // Publish to any arbitrary MQTT topic
 ```
 
-### Shelly devices
+### Accessing optional services (Shelly, Nanoleaf, custom…)
+
+Optional services registered with the engine (e.g. `shelly`, `nanoleaf`, or any custom service) are accessed through `this.services`. Import the service type at the top of your automation file to use it in type parameters:
 
 ```ts
+import type { ShellyService } from "ts-home-automation";
+import type { NanoleafService } from "ts-home-automation";
+```
+
+Four retrieval styles are available — choose the one that fits your use case:
+
+**`get<T>(key)`** — returns `null` when absent; you handle the missing case:
+
+```ts
+const shelly = this.services.get<ShellyService>("shelly");
+if (!shelly) return;
+await shelly.turnOn("living_room_plug");
+```
+
+**`getOrThrow<T>(key)`** — throws at runtime if the service was not registered (use when you know it will always be present):
+
+```ts
+const shelly = this.services.getOrThrow<ShellyService>("shelly");
+await shelly.toggle("tv_plug");
+```
+
+**`use<T>(key, fn)`** — callback wrapper that no-ops silently when absent (best for one-liners):
+
+```ts
+await this.services.use<ShellyService>("shelly", (s) => s.turnOff("desk_lamp"));
+```
+
+**`this.require<T>(key)`** — non-null retrieval for services declared in `requiredServices` (validated at startup):
+
+```ts
+export default class MyAutomation extends Automation {
+  readonly requiredServices = ["shelly"] as const;
+
+  async execute(): Promise<void> {
+    const shelly = this.require<ShellyService>("shelly"); // never null
+    await shelly.turnOn("living_room_plug");
+  }
+}
+```
+
+### Shelly devices
+
+Retrieve the service and call any method on it:
+
+```ts
+const shelly = this.services.get<ShellyService>("shelly");
+if (!shelly) return;
+
 // Switch control
-this.shelly.turnOn(name)
-this.shelly.turnOff(name)
-this.shelly.toggle(name)
-this.shelly.isOn(name)           // → Promise<boolean>
-this.shelly.getPower(name)       // → Promise<number> (Watts)
-this.shelly.getStatus(name)      // → full switch status
+await shelly.turnOn(name)
+await shelly.turnOff(name)
+await shelly.toggle(name)
+await shelly.isOn(name)           // → Promise<boolean>
+await shelly.getPower(name)       // → Promise<number> (Watts)
+await shelly.getStatus(name)      // → full switch status
 
 // Cover / shutter control
-this.shelly.coverOpen(name)
-this.shelly.coverClose(name)
-this.shelly.coverStop(name)
-this.shelly.coverGoToPosition(name, 50)  // 0–100%
+await shelly.coverOpen(name)
+await shelly.coverClose(name)
+await shelly.coverStop(name)
+await shelly.coverGoToPosition(name, 50)  // 0–100%
 ```
 
 Devices must be registered first. See [Shelly](services/shelly.md) for the full method list including cover status and relative movement.
@@ -223,10 +273,13 @@ Devices must be registered first. See [Shelly](services/shelly.md) for the full 
 ### Nanoleaf
 
 ```ts
-this.nanoleaf.turnOn(name)
-this.nanoleaf.setBrightness(name, 80, 2)   // 80%, 2s transition
-this.nanoleaf.setColor(name, 120, 100)     // hue, saturation
-this.nanoleaf.setEffect(name, "Aurora")
+const nanoleaf = this.services.get<NanoleafService>("nanoleaf");
+if (!nanoleaf) return;
+
+await nanoleaf.turnOn(name)
+await nanoleaf.setBrightness(name, 80, 2)   // 80%, 2s transition
+await nanoleaf.setColor(name, 120, 100)     // hue, saturation
+await nanoleaf.setEffect(name, "Aurora")
 ```
 
 See [Nanoleaf](services/nanoleaf.md) for pairing and full method list.
@@ -377,7 +430,8 @@ Log errors and continue — never re-throw non-critical failures:
 
 ```ts
 try {
-  await this.shelly.turnOff("tv_plug");
+  const shelly = this.services.get<ShellyService>("shelly");
+  await shelly?.turnOff("tv_plug");
 } catch (err) {
   this.logger.error({ err }, "Failed to turn off TV plug");
 }

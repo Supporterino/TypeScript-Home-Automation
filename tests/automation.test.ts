@@ -9,7 +9,7 @@ import {
 } from "../src/core/automation.js";
 import type { HttpClient } from "../src/core/http/http-client.js";
 import type { MqttService } from "../src/core/mqtt/mqtt-service.js";
-import type { NanoleafService } from "../src/core/services/nanoleaf-service.js";
+import { ServiceRegistry } from "../src/core/services/service-registry.js";
 import type { ShellyService } from "../src/core/services/shelly-service.js";
 import type { StateManager } from "../src/core/state/state-manager.js";
 import type { NotificationService } from "../src/types/notification.js";
@@ -30,9 +30,6 @@ class TestAutomation extends Automation {
   getMqtt() {
     return this.mqtt;
   }
-  getShelly() {
-    return this.shelly;
-  }
   getHttp() {
     return this.http;
   }
@@ -45,8 +42,27 @@ class TestAutomation extends Automation {
   getConfig() {
     return this.config;
   }
+  getServices() {
+    return this.services;
+  }
   async callNotify(options: Parameters<Automation["notify"]>[0]) {
     return this.notify(options);
+  }
+  callRequire<T>(key: string): T {
+    return this.require<T>(key);
+  }
+}
+
+/** Subclass that declares required services. */
+class RequiresShelly extends Automation {
+  readonly name = "requires-shelly";
+  readonly triggers: Trigger[] = [];
+  readonly requiredServices = ["shelly"] as const;
+
+  async execute(_ctx: TriggerContext): Promise<void> {}
+
+  getShellyViaRequire<T>() {
+    return this.require<T>("shelly");
   }
 }
 
@@ -57,18 +73,18 @@ function createMockContext(overrides: Partial<AutomationContext> = {}): Automati
     logLevel: "info",
     state: { persist: false, filePath: "./state.json" },
     automations: { recursive: false },
+    deviceRegistry: { enabled: false, persist: false, filePath: "./device-registry.json" },
     httpServer: { port: 0, token: "", webUi: { enabled: false, path: "/status" } },
+    services: {},
   };
   return {
     mqtt: {} as MqttService,
-    shelly: {} as ShellyService,
-    nanoleaf: {} as NanoleafService,
     http: {} as HttpClient,
     state: {} as StateManager,
     logger: pino({ level: "silent" }),
     config,
-    notifications: null,
-    weather: null,
+    deviceRegistry: null,
+    services: new ServiceRegistry(),
     ...overrides,
   };
 }
@@ -81,11 +97,11 @@ describe("Automation base class", () => {
     auto._inject(ctx);
 
     expect(auto.getMqtt()).toBe(ctx.mqtt);
-    expect(auto.getShelly()).toBe(ctx.shelly);
     expect(auto.getHttp()).toBe(ctx.http);
     expect(auto.getState()).toBe(ctx.state);
     expect(auto.getLogger()).toBeDefined();
     expect(auto.getConfig()).toBe(ctx.config);
+    expect(auto.getServices()).toBe(ctx.services);
   });
 
   it("notify delegates to notification service when configured", async () => {
@@ -93,7 +109,9 @@ describe("Automation base class", () => {
     const sendMock = mock(() => Promise.resolve());
     const notifications: NotificationService = { send: sendMock };
 
-    auto._inject(createMockContext({ notifications }));
+    const registry = new ServiceRegistry();
+    registry.register("notifications", notifications);
+    auto._inject(createMockContext({ services: registry }));
 
     const options = { title: "Test", message: "Hello" };
     await auto.callNotify(options);
@@ -105,7 +123,7 @@ describe("Automation base class", () => {
   it("notify does not throw when no notification service is configured", async () => {
     const auto = new TestAutomation();
 
-    auto._inject(createMockContext({ notifications: null }));
+    auto._inject(createMockContext());
 
     // Should not throw
     await auto.callNotify({ title: "Test", message: "Hello" });
@@ -119,5 +137,45 @@ describe("Automation base class", () => {
   it("onStop default implementation resolves", async () => {
     const auto = new TestAutomation();
     await expect(auto.onStop()).resolves.toBeUndefined();
+  });
+});
+
+describe("Automation.require", () => {
+  it("returns the service when it is registered", () => {
+    const auto = new TestAutomation();
+    const mockShelly = {} as ShellyService;
+    const registry = new ServiceRegistry();
+    registry.register("shelly", mockShelly);
+    auto._inject(createMockContext({ services: registry }));
+
+    expect(auto.callRequire<ShellyService>("shelly")).toBe(mockShelly);
+  });
+
+  it("throws when the service is not registered", () => {
+    const auto = new TestAutomation();
+    auto._inject(createMockContext());
+    expect(() => auto.callRequire("shelly")).toThrow(`Service "shelly" is not registered`);
+  });
+});
+
+describe("Automation.requiredServices", () => {
+  it("is undefined by default", () => {
+    const auto = new TestAutomation();
+    expect(auto.requiredServices).toBeUndefined();
+  });
+
+  it("can be declared as a readonly tuple on a subclass", () => {
+    const auto = new RequiresShelly();
+    expect(auto.requiredServices).toEqual(["shelly"]);
+  });
+
+  it("require() returns the service after inject when declared in requiredServices", () => {
+    const auto = new RequiresShelly();
+    const mockShelly = {} as ShellyService;
+    const registry = new ServiceRegistry();
+    registry.register("shelly", mockShelly);
+    auto._inject(createMockContext({ services: registry }));
+
+    expect(auto.getShellyViaRequire<ShellyService>()).toBe(mockShelly);
   });
 });
