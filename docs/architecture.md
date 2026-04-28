@@ -51,7 +51,7 @@ The `src/core/` directory is organised into subfolders by responsibility:
 | `core/scheduling/` | `cron-scheduler.ts` |
 | `core/state/` | `state-manager.ts` |
 | `core/logging/` | `log-buffer.ts` |
-| `core/services/` | `shelly-service.ts`, `nanoleaf-service.ts`, `ntfy-notification-service.ts`, `open-meteo-service.ts`, `openweathermap-service.ts`, `service-plugin.ts`, `service-registry.ts` |
+| `core/services/` | `shelly-service.ts`, `nanoleaf-service.ts`, `ntfy-notification-service.ts`, `open-meteo-service.ts`, `openweathermap-service.ts`, `homekit-service.ts`, `homekit-accessory-factory.ts`, `service-plugin.ts`, `service-registry.ts` |
 | `core/devices/` | `aqara-h1-automation.ts`, `ikea-styrbar-automation.ts`, `ikea-rodret-automation.ts` |
 | `core/zigbee/` | `device-registry.ts` — Zigbee2MQTT device discovery and state tracking |
 | `core/web-ui/` | Hono app, HTML shell, React + Mantine frontend, compiled asset constants |
@@ -121,6 +121,10 @@ Subscribes to `{prefix}/bridge/devices` (a retained Zigbee2MQTT topic) to build 
 ### `HttpClient`
 
 A simple wrapper around the global `fetch` with structured pino logging of every request and response. Shared across all services that need HTTP.
+
+### `HomekitService`
+
+Runs a HAP-NodeJS bridge inside the engine process. On `onStart()` it iterates all devices already known to the `DeviceRegistry` and creates a HAP accessory for each one (via `homekit-accessory-factory.ts`), then subscribes to device-added, device-removed, and per-device state-change events to keep accessories in sync at runtime. Implements `registerRoutes()` to expose `GET /api/homekit/status` on the shared Hono app. Requires `DEVICE_REGISTRY_ENABLED=true`; logs a warning and skips startup when the registry is absent.
 
 ---
 

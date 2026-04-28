@@ -19,7 +19,7 @@ The web UI is disabled by default and adds zero overhead when disabled — the m
 
 ## Features
 
-The dashboard auto-refreshes every 5 seconds and has five tabs:
+The dashboard auto-refreshes every 5 seconds and has six tabs:
 
 ### Overview
 
@@ -53,6 +53,12 @@ The dashboard auto-refreshes every 5 seconds and has five tabs:
 - Client-side filters: log level, automation name, free text
 - Click any log row to expand extra JSON fields (topic, device, err, etc.)
 - **Pause / Resume** toggle to freeze auto-refresh while reading
+
+### HomeKit
+
+- Status cards: bridge running / stopped badge, registered accessory count, HAP port, pairing state
+- Configuration panel: bridge name, HAP port, MAC address (username), pairing PIN, persist path
+- Informational notice when the `HomekitService` is not registered in the engine
 
 ---
 
@@ -92,6 +98,7 @@ The page is backed by a Hono sub-app that exposes its own `/api` group. All endp
 | `DELETE` | `/status/api/state/:key` | Delete a state key |
 | `GET` | `/status/api/logs` | Query logs (`?level=&automation=&limit=`) |
 | `GET` | `/status/api/devices` | List all tracked Zigbee devices with merged state and nice names. Returns `503` when `DEVICE_REGISTRY_ENABLED=false`. |
+| `GET` | `/status/api/homekit/status` | HomeKit bridge status snapshot (running state, accessory count, configuration). Returns `404` when `HomekitService` is not registered. |
 
 ### Trigger request body
 
