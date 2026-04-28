@@ -79,6 +79,7 @@
     "@opentui/react": "^0.1.99",
     "@tabler/icons-react": "^3.41.1",
     "cron": "^4.4.0",
+    "hap-nodejs": "^0.14.3",
     "hono": "^4.12.14",
     "mqtt": "^5.15.1",
     "pino": "^10.3.1",
