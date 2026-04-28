@@ -222,17 +222,18 @@ ts-ha d --interval 2         # refresh every 2s
 
 | Tab | Key | Features |
 |---|---|---|
-| Overview | `1` | Engine/MQTT status, uptime, automation + state summary, recent logs |
+| Overview | `1` | Engine/MQTT/HomeKit status, uptime, automation + state summary, recent logs |
 | Automations | `2` | List with expand (trigger details) and manual trigger |
 | Devices | `3` | Tracked Zigbee devices — expand for state + metadata (`DEVICE_REGISTRY_ENABLED=true`) |
 | State | `4` | List with inline edit, add, delete |
 | Logs | `5` | Scrollable viewer with level + automation filter |
+| HomeKit | `6` | Bridge running state, accessory count, full configuration — hidden hint when not configured |
 
 ### Keyboard shortcuts
 
 | Key | Action |
 |---|---|
-| `1`–`5` | Switch tabs |
+| `1`–`6` | Switch tabs |
 | `q` / `Esc` | Quit |
 | `r` | Force refresh |
 | `?` | Toggle help modal |
