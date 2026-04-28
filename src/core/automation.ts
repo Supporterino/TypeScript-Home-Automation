@@ -1,7 +1,6 @@
 import type { Logger } from "pino";
 import type { Config } from "../config.js";
 import type { NotificationOptions, NotificationService } from "../types/notification.js";
-import type { WeatherService } from "../types/weather.js";
 import type { ZigbeeDevice } from "../types/zigbee/bridge.js";
 import type { HttpClient } from "./http/http-client.js";
 import type { MqttService } from "./mqtt/mqtt-service.js";
@@ -196,7 +195,6 @@ export interface AutomationContext {
  *
  * The base class provides access to:
  * - `this.mqtt`        - Publish messages and interact with Zigbee2MQTT devices
- * - `this.weather`     - Fetch weather data (null if no WeatherService is configured)
  * - `this.notify`      - Send push notifications (no-op if no NotificationService is configured)
  * - `this.state`       - Shared state manager (get/set/delete, persisted across restarts)
  * - `this.http`        - Make outbound HTTP requests
@@ -366,23 +364,6 @@ export abstract class Automation {
       return;
     }
     await svc.send(options);
-  }
-
-  /**
-   * The configured weather service, or `null` if none was provided to the engine.
-   *
-   * Always null-check before use:
-   *
-   * @example
-   * ```ts
-   * const weather = this.weather;
-   * if (!weather) return;
-   * const current = await weather.getCurrent();
-   * const forecast = await weather.getForecast(3);
-   * ```
-   */
-  protected get weather(): WeatherService | null {
-    return this.servicesRegistry.get<WeatherService>("weather");
   }
 
   /**
