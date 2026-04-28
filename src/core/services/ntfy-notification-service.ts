@@ -114,7 +114,7 @@ export class NtfyNotificationService implements NotificationService {
 
     const endpoint = `${this.url}/${topic}`;
 
-    this.logger.debug({ title, priority, tags, endpoint }, "Sending ntfy.sh notification");
+    this.logger.debug({ title, priority, tags, channel, endpoint }, "Sending ntfy.sh notification");
 
     try {
       const response = await this.http.request(endpoint, {
