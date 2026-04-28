@@ -2,6 +2,19 @@ import { Accessory, Characteristic, Service, uuid } from "hap-nodejs";
 import type { ZigbeeDevice } from "../../types/zigbee/bridge.js";
 
 // ---------------------------------------------------------------------------
+// HAP category constants
+// (Categories is a const enum in hap-nodejs so it cannot be used with
+//  isolatedModules; numeric values are inlined here with documentation.)
+// ---------------------------------------------------------------------------
+
+/** @see https://github.com/homebridge/HAP-NodeJS/blob/master/src/lib/Accessory.ts */
+export const HAP_CATEGORY_OTHER = 1;
+export const HAP_CATEGORY_BRIDGE = 2;
+export const HAP_CATEGORY_LIGHTBULB = 5;
+export const HAP_CATEGORY_SWITCH = 8;
+export const HAP_CATEGORY_SENSOR = 10;
+
+// ---------------------------------------------------------------------------
 // Internal Zigbee2MQTT exposes types
 // ---------------------------------------------------------------------------
 
@@ -357,9 +370,7 @@ export function createAccessory(
   const { friendly_name } = device;
   const accessoryUuid = uuid.generate(device.ieee_address);
 
-  // HAP Category numeric values (Categories const enum cannot be used with isolatedModules)
-  // OTHER = 1, BRIDGE = 2, LIGHTBULB = 5, SWITCH = 8, SENSOR = 10
-  let category: number = 1; // Categories.OTHER
+  let category: number = HAP_CATEGORY_OTHER;
   let accessory: Accessory;
   let updateState: (state: Record<string, unknown>) => void;
 
@@ -368,7 +379,7 @@ export function createAccessory(
   // ------------------------------------------------------------------
 
   if (caps.isLight) {
-    category = 5; // Categories.LIGHTBULB
+    category = HAP_CATEGORY_LIGHTBULB;
     accessory = new Accessory(friendly_name, accessoryUuid);
     accessory.category = category;
 
@@ -442,7 +453,7 @@ export function createAccessory(
       }
     };
   } else if (caps.hasOccupancy) {
-    category = 10; // Categories.SENSOR
+    category = HAP_CATEGORY_SENSOR;
     accessory = new Accessory(friendly_name, accessoryUuid);
     accessory.category = category;
     const motionService = accessory.addService(Service.MotionSensor);
@@ -454,7 +465,7 @@ export function createAccessory(
       }
     };
   } else if (caps.hasContact) {
-    category = 10; // Categories.SENSOR
+    category = HAP_CATEGORY_SENSOR;
     accessory = new Accessory(friendly_name, accessoryUuid);
     accessory.category = category;
     const contactService = accessory.addService(Service.ContactSensor);
@@ -466,7 +477,7 @@ export function createAccessory(
       }
     };
   } else if (caps.hasWaterLeak) {
-    category = 10; // Categories.SENSOR
+    category = HAP_CATEGORY_SENSOR;
     accessory = new Accessory(friendly_name, accessoryUuid);
     accessory.category = category;
     const leakService = accessory.addService(Service.LeakSensor);
@@ -478,7 +489,7 @@ export function createAccessory(
       }
     };
   } else if (caps.hasTemperature || caps.hasHumidity) {
-    category = 10; // Categories.SENSOR
+    category = HAP_CATEGORY_SENSOR;
     accessory = new Accessory(friendly_name, accessoryUuid);
     accessory.category = category;
     const tempService = caps.hasTemperature
@@ -493,7 +504,7 @@ export function createAccessory(
       }
     };
   } else if (caps.isSwitch) {
-    category = 8; // Categories.SWITCH
+    category = HAP_CATEGORY_SWITCH;
     accessory = new Accessory(friendly_name, accessoryUuid);
     accessory.category = category;
     const switchService = accessory.addService(Service.Switch);
