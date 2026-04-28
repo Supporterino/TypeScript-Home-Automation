@@ -8,6 +8,7 @@ import { HttpServer } from "./http/http-server.js";
 import { LogBuffer } from "./logging/log-buffer.js";
 import { MqttService } from "./mqtt/mqtt-service.js";
 import { CronScheduler } from "./scheduling/cron-scheduler.js";
+import type { HomekitService } from "./services/homekit-service.js";
 import type { NanoleafService } from "./services/nanoleaf-service.js";
 import type { CoreContext } from "./services/service-plugin.js";
 import { ServiceRegistry } from "./services/service-registry.js";
@@ -160,6 +161,7 @@ export interface EngineOptions {
     weather?: WeatherService | ServiceFactory<WeatherService>;
     shelly?: ShellyService | ServiceFactory<ShellyService>;
     nanoleaf?: NanoleafService | ServiceFactory<NanoleafService>;
+    homekit?: HomekitService | ServiceFactory<HomekitService>;
     /** Any additional custom services registered under arbitrary keys. */
     [key: string]: unknown;
   };
@@ -280,20 +282,23 @@ export function createEngine(options: EngineOptions): Engine {
   const weatherValue = options.services?.weather;
   const shellyValue = options.services?.shelly;
   const nanoleafValue = options.services?.nanoleaf;
+  const homekitValue = options.services?.homekit;
 
   const notificationService = resolveService(notificationsValue, "notifications");
   const weatherService = resolveService(weatherValue, "weather");
   const shellyService = resolveService(shellyValue, "shelly");
   const nanoleafService = resolveService(nanoleafValue, "nanoleaf");
+  const homekitService = resolveService(homekitValue, "homekit");
 
   if (notificationService) serviceRegistry.register("notifications", notificationService);
   if (weatherService) serviceRegistry.register("weather", weatherService);
   if (shellyService) serviceRegistry.register("shelly", shellyService);
   if (nanoleafService) serviceRegistry.register("nanoleaf", nanoleafService);
+  if (homekitService) serviceRegistry.register("homekit", homekitService);
 
   // Register any additional custom services from the services map.
   if (options.services) {
-    const WELL_KNOWN = new Set(["notifications", "weather", "shelly", "nanoleaf"]);
+    const WELL_KNOWN = new Set(["notifications", "weather", "shelly", "nanoleaf", "homekit"]);
     for (const [key, value] of Object.entries(options.services)) {
       if (!WELL_KNOWN.has(key) && value !== undefined) {
         serviceRegistry.register(key, value);

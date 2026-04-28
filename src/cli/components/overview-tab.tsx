@@ -8,6 +8,7 @@ export function OverviewTab({ data }: { data: DashboardData }) {
   const { width } = useTerminalDimensions();
   const engineOk = readiness.checks.engine;
   const mqttOk = readiness.checks.mqtt;
+  const homekitRunning = data.homekit?.running ?? null;
   const keyWidth = Math.max(20, Math.floor(width * 0.35));
 
   return (
@@ -24,6 +25,14 @@ export function OverviewTab({ data }: { data: DashboardData }) {
             {mqttOk ? "connected" : "disconnected"}
           </span>
         </text>
+        {homekitRunning !== null && (
+          <text>
+            HomeKit:{" "}
+            <span fg={homekitRunning ? COLORS.green : COLORS.red}>
+              {homekitRunning ? "running" : "stopped"}
+            </span>
+          </text>
+        )}
         <text>
           Uptime: <span fg={COLORS.cyan}>{formatUptime(readiness.startedAt)}</span>
         </text>
