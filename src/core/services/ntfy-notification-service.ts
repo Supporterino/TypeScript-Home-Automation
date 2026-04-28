@@ -8,8 +8,24 @@ import type { HttpClient } from "../http/http-client.js";
 export interface NtfyConfig {
   /** ntfy.sh server URL (default: "https://ntfy.sh"). */
   url?: string;
-  /** Topic to publish notifications to. */
+  /** Default topic to publish notifications to when no channel is specified. */
   topic: string;
+  /**
+   * Named channel map — logical channel name → ntfy topic string.
+   *
+   * Automations can pass `channel: "alerts"` in `NotificationOptions` to
+   * route a notification to a specific ntfy topic without hard-coding the
+   * topic name in each automation.
+   *
+   * @example
+   * ```ts
+   * channels: {
+   *   alerts: "home-alerts",
+   *   debug:  "home-debug",
+   * }
+   * ```
+   */
+  channels?: Record<string, string>;
   /** Optional: bearer token for access-controlled topics. */
   token?: string;
   /** HTTP client instance (injected by the engine). */
@@ -36,6 +52,10 @@ export interface NtfyConfig {
  *     notifications: (http, logger) =>
  *       new NtfyNotificationService({
  *         topic: "my-home-alerts",
+ *         channels: {
+ *           alerts: "my-home-urgent",
+ *           debug:  "my-home-debug",
+ *         },
  *         http,
  *         logger,
  *       }),
@@ -48,6 +68,7 @@ export interface NtfyConfig {
 export class NtfyNotificationService implements NotificationService {
   private readonly url: string;
   private readonly topic: string;
+  private readonly channels: Record<string, string>;
   private readonly token?: string;
   private readonly http: HttpClient;
   private readonly logger: Logger;
@@ -55,13 +76,27 @@ export class NtfyNotificationService implements NotificationService {
   constructor(config: NtfyConfig) {
     this.url = config.url ?? "https://ntfy.sh";
     this.topic = config.topic;
+    this.channels = config.channels ?? {};
     this.token = config.token;
     this.http = config.http;
     this.logger = config.logger;
   }
 
   async send(options: NotificationOptions): Promise<void> {
-    const { title, message, priority = "default", tags = [] } = options;
+    const { title, message, priority = "default", tags = [], channel } = options;
+
+    let topic = this.topic;
+    if (channel !== undefined) {
+      const mapped = this.channels[channel];
+      if (mapped !== undefined) {
+        topic = mapped;
+      } else {
+        this.logger.warn(
+          { channel, defaultTopic: this.topic },
+          "Notification channel not found in channels map, falling back to default topic",
+        );
+      }
+    }
 
     const headers: Record<string, string> = {
       "Content-Type": "text/plain",
@@ -77,9 +112,9 @@ export class NtfyNotificationService implements NotificationService {
       headers.Authorization = `Bearer ${this.token}`;
     }
 
-    const endpoint = `${this.url}/${this.topic}`;
+    const endpoint = `${this.url}/${topic}`;
 
-    this.logger.debug({ title, priority, tags, endpoint }, "Sending ntfy.sh notification");
+    this.logger.debug({ title, priority, tags, channel, endpoint }, "Sending ntfy.sh notification");
 
     try {
       const response = await this.http.request(endpoint, {
