@@ -1,4 +1,4 @@
-import type { Bridge } from "hap-nodejs";
+import type { Bridge, HAPStorage, uuid as UuidModule } from "hap-nodejs";
 import type { Hono } from "hono";
 import type { Logger } from "pino";
 import type { ZigbeeDevice } from "../../types/zigbee/bridge.js";
@@ -13,6 +13,9 @@ import type { CreatedAccessory } from "./homekit-accessory-factory.js";
 import type { CoreContext, ServicePlugin } from "./service-plugin.js";
 
 export const HOMEKIT_SERVICE_KEY = "homekit";
+
+/** HAP category code for a Bridge accessory. */
+const HAP_CATEGORY_BRIDGE = 2;
 
 /**
  * Runtime status snapshot for the HomeKit bridge.
@@ -197,13 +200,13 @@ export class HomekitService implements ServicePlugin {
     // Lazily load hap-nodejs so that simply importing HomekitService does not
     // evaluate the hap-nodejs module (which checks for native crypto ciphers).
     let BridgeCtor: typeof Bridge;
-    let HAPStorage: { setCustomStoragePath: (path: string) => void };
-    let uuidUtil: { generate: (s: string) => string };
+    let HAPStorageMod: typeof HAPStorage;
+    let uuidMod: typeof UuidModule;
     try {
       const hap = await import("hap-nodejs");
       BridgeCtor = hap.Bridge;
-      HAPStorage = hap.HAPStorage;
-      uuidUtil = hap.uuid;
+      HAPStorageMod = hap.HAPStorage;
+      uuidMod = hap.uuid;
     } catch (err) {
       this.logger.error(
         { err },
@@ -222,11 +225,11 @@ export class HomekitService implements ServicePlugin {
     const username = this.options.username ?? "CC:22:3D:E3:CE:F8";
 
     // Configure HAP storage before creating the bridge so pairing data survives restarts.
-    HAPStorage.setCustomStoragePath(persistPath);
+    HAPStorageMod.setCustomStoragePath(persistPath);
 
     // Use the stable username (MAC address) as the UUID seed so the bridge
     // identity survives renames and remains unique per bridge instance.
-    this.bridge = new BridgeCtor(bridgeName, uuidUtil.generate(username));
+    this.bridge = new BridgeCtor(bridgeName, uuidMod.generate(username));
 
     // Register all devices that are already known at startup.
     for (const device of this.registry.getDevices()) {
@@ -243,7 +246,7 @@ export class HomekitService implements ServicePlugin {
       username,
       pincode: this.options.pinCode,
       port,
-      category: 2, // HAP_CATEGORY_BRIDGE
+      category: HAP_CATEGORY_BRIDGE,
     });
 
     // Only mark running after publish() resolves successfully.
