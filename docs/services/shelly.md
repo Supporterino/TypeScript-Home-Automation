@@ -62,7 +62,9 @@ services: {
 ### Switch status fields
 
 ```ts
-const status = await this.shelly.getStatus("living_room_plug");
+const shelly = this.services.get<ShellyService>("shelly");
+if (!shelly) return;
+const status = await shelly.getStatus("living_room_plug");
 
 status.output      // boolean — on or off
 status.apower      // number — active power in Watts
@@ -75,6 +77,8 @@ status.temperature // { tC: number, tF: number }
 ### Example: auto-off after TV goes idle
 
 ```ts
+import type { ShellyService } from "ts-home-automation";
+
 export default class TvAutoOff extends Automation {
   readonly name = "tv-auto-off";
 
@@ -83,10 +87,12 @@ export default class TvAutoOff extends Automation {
   ];
 
   async execute(): Promise<void> {
-    const status = await this.shelly.getStatus("tv_plug");
+    const shelly = this.services.get<ShellyService>("shelly");
+    if (!shelly) return;
+    const status = await shelly.getStatus("tv_plug");
     if (status.output && status.apower < 5) {
       this.logger.info("TV is idle, switching off");
-      await this.shelly.turnOff("tv_plug");
+      await shelly.turnOff("tv_plug");
     }
   }
 }
@@ -118,7 +124,9 @@ For Shelly Plus 2PM devices configured in roller mode:
 ### Cover status fields
 
 ```ts
-const status = await this.shelly.getCoverStatus("bedroom_shutter");
+const shelly = this.services.get<ShellyService>("shelly");
+if (!shelly) return;
+const status = await shelly.getCoverStatus("bedroom_shutter");
 
 status.state        // CoverState string
 status.current_pos  // number 0–100, or null if uncalibrated
@@ -129,6 +137,8 @@ status.pos_control  // true if calibrated for position control
 ### Example: close shutters at sunset via cron
 
 ```ts
+import type { ShellyService } from "ts-home-automation";
+
 export default class SunsetShutters extends Automation {
   readonly name = "sunset-shutters";
 
@@ -137,8 +147,10 @@ export default class SunsetShutters extends Automation {
   ];
 
   async execute(): Promise<void> {
-    await this.shelly.coverClose("bedroom_shutter");
-    await this.shelly.coverClose("living_room_shutter");
+    const shelly = this.services.get<ShellyService>("shelly");
+    if (!shelly) return;
+    await shelly.coverClose("bedroom_shutter");
+    await shelly.coverClose("living_room_shutter");
   }
 }
 ```
