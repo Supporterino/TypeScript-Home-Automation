@@ -15,6 +15,21 @@ export interface NotificationOptions {
   priority?: NotificationPriority;
   /** Tags / emoji shortcodes (e.g. ["warning", "thermometer"]). */
   tags?: string[];
+  /**
+   * Named destination channel within the notification service.
+   *
+   * When provided, the service routes the notification to the channel
+   * registered under this name instead of the default channel. If the
+   * name is not found the service falls back to its default channel.
+   *
+   * The exact meaning is provider-specific:
+   * - **ntfy.sh**: maps to an ntfy topic string
+   * - **Telegram**: could map to a chat ID
+   * - **email**: could map to a recipient address
+   *
+   * Omit this field to use the service's default channel.
+   */
+  channel?: string;
 }
 
 /**

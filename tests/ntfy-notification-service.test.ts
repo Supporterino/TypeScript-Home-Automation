@@ -117,4 +117,50 @@ describe("NtfyNotificationService", () => {
     expect(call[1].body).toBe("Hello world");
     expect(call[1].headers["Content-Type"]).toBe("text/plain");
   });
+
+  describe("channel routing", () => {
+    it("routes to the mapped ntfy topic when channel is found in the channels map", async () => {
+      const withChannels = new NtfyNotificationService({
+        topic: "home-general",
+        channels: { alerts: "home-alerts", debug: "home-debug" },
+        http,
+        logger,
+      });
+      await withChannels.send({ title: "Test", message: "body", channel: "alerts" });
+      const call = (http.request as ReturnType<typeof mock>).mock.calls[0];
+      expect(call[0]).toBe("https://ntfy.sh/home-alerts");
+    });
+
+    it("falls back to the default topic when channel name is not in the channels map", async () => {
+      const warnLogger = pino({ level: "silent" });
+      const withChannels = new NtfyNotificationService({
+        topic: "home-general",
+        channels: { alerts: "home-alerts" },
+        http,
+        logger: warnLogger,
+      });
+      await withChannels.send({ title: "Test", message: "body", channel: "unknown-channel" });
+      const call = (http.request as ReturnType<typeof mock>).mock.calls[0];
+      expect(call[0]).toBe("https://ntfy.sh/home-general");
+    });
+
+    it("uses the default topic when no channel is specified (regression)", async () => {
+      const withChannels = new NtfyNotificationService({
+        topic: "home-general",
+        channels: { alerts: "home-alerts" },
+        http,
+        logger,
+      });
+      await withChannels.send({ title: "Test", message: "body" });
+      const call = (http.request as ReturnType<typeof mock>).mock.calls[0];
+      expect(call[0]).toBe("https://ntfy.sh/home-general");
+    });
+
+    it("falls back gracefully when no channels map is configured but channel option is set", async () => {
+      // ntfy configured without channels — channel option should fall back to default topic
+      await ntfy.send({ title: "Test", message: "body", channel: "alerts" });
+      const call = (http.request as ReturnType<typeof mock>).mock.calls[0];
+      expect(call[0]).toBe("https://ntfy.sh/test-alerts");
+    });
+  });
 });
