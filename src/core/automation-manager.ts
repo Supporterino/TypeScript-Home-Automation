@@ -125,6 +125,18 @@ export class AutomationManager {
     };
     automation._inject(context);
 
+    // Validate required services before calling onStart.
+    if (automation.requiredServices) {
+      for (const key of automation.requiredServices) {
+        if (!this.services.has(key)) {
+          throw new Error(
+            `Automation "${automation.name}" requires service "${key}" but it is not registered. ` +
+              `Pass it via the services map in createEngine().`,
+          );
+        }
+      }
+    }
+
     const mqttHandlers: { topic: string; handler: MqttMessageHandler }[] = [];
     const stateHandlers: { key: string; handler: StateChangeHandler }[] = [];
     const webhookPaths: string[] = [];

@@ -149,6 +149,33 @@ describe("AutomationManager", () => {
       expect(mocks.cron.schedule).toHaveBeenCalledTimes(1);
       expect(mocks.state.onChange).toHaveBeenCalledTimes(1);
     });
+
+    it("throws before onStart when a required service is missing", async () => {
+      class RequiresShelly extends Automation {
+        readonly name = "requires-shelly";
+        readonly triggers: Trigger[] = [];
+        readonly requiredServices = ["shelly"] as const;
+        async execute(_ctx: TriggerContext): Promise<void> {}
+      }
+
+      const auto = new RequiresShelly();
+      await expect(manager.register(auto)).rejects.toThrow(
+        `Automation "requires-shelly" requires service "shelly" but it is not registered`,
+      );
+    });
+
+    it("does not throw when all required services are present", async () => {
+      class RequiresShelly extends Automation {
+        readonly name = "requires-shelly";
+        readonly triggers: Trigger[] = [];
+        readonly requiredServices = ["shelly"] as const;
+        async execute(_ctx: TriggerContext): Promise<void> {}
+      }
+
+      mocks.services.register("shelly", { turnOn: () => {} });
+      const auto = new RequiresShelly();
+      await expect(manager.register(auto)).resolves.toBeUndefined();
+    });
   });
 
   describe("MQTT trigger execution", () => {
