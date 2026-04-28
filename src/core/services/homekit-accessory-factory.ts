@@ -513,6 +513,10 @@ export function createAccessory(
     });
     updateState = (state) => {
       applySwitchState(switchService, state);
+      if (caps.hasBattery) {
+        const bat = accessory.getService(Service.Battery);
+        if (bat) applyBatteryState(bat, state);
+      }
     };
   } else {
     // No supported capability detected

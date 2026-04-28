@@ -1,4 +1,4 @@
-import { Bridge, HAPStorage, uuid } from "hap-nodejs";
+import type { Bridge } from "hap-nodejs";
 import type { Hono } from "hono";
 import type { Logger } from "pino";
 import type { ZigbeeDevice } from "../../types/zigbee/bridge.js";
@@ -9,11 +9,7 @@ import type {
   DeviceRemovedHandler,
   DeviceStateChangeHandler,
 } from "../zigbee/device-registry.js";
-import {
-  type CreatedAccessory,
-  createAccessory,
-  HAP_CATEGORY_BRIDGE,
-} from "./homekit-accessory-factory.js";
+import type { CreatedAccessory } from "./homekit-accessory-factory.js";
 import type { CoreContext, ServicePlugin } from "./service-plugin.js";
 
 export const HOMEKIT_SERVICE_KEY = "homekit";
@@ -35,8 +31,6 @@ export interface HomekitStatus {
   persistPath: string;
   /** Number of HomeKit accessories currently registered on the bridge. */
   accessoryCount: number;
-  /** Pairing PIN shown to the user when scanning to add the bridge. */
-  pinCode: string;
 }
 
 /**
@@ -136,6 +130,16 @@ export class HomekitService implements ServicePlugin {
   readonly serviceKey = HOMEKIT_SERVICE_KEY;
 
   private bridge: Bridge | null = null;
+  /** Set to `true` only after `bridge.publish()` resolves successfully. */
+  private published = false;
+
+  /** Factory function loaded lazily in `onStart()`. */
+  private createAccessoryFn:
+    | ((
+        device: ZigbeeDevice,
+        onSet: (command: Record<string, unknown>) => void,
+      ) => CreatedAccessory | null)
+    | null = null;
 
   /** Maps friendly_name → CreatedAccessory (accessory + updateState fn). */
   private readonly accessories: Map<string, CreatedAccessory> = new Map();
@@ -163,13 +167,12 @@ export class HomekitService implements ServicePlugin {
    */
   getStatus(): HomekitStatus {
     return {
-      running: this.bridge !== null,
+      running: this.published,
       bridgeName: this.options.bridgeName ?? "TS-Home-Automation",
       port: this.options.port ?? 47128,
       username: this.options.username ?? "CC:22:3D:E3:CE:F8",
       persistPath: this.options.persistPath ?? "./homekit-persist",
       accessoryCount: this.accessories.size,
-      pinCode: this.options.pinCode,
     };
   }
 
@@ -191,6 +194,28 @@ export class HomekitService implements ServicePlugin {
       return;
     }
 
+    // Lazily load hap-nodejs so that simply importing HomekitService does not
+    // evaluate the hap-nodejs module (which checks for native crypto ciphers).
+    let BridgeCtor: typeof Bridge;
+    let HAPStorage: { setCustomStoragePath: (path: string) => void };
+    let uuidUtil: { generate: (s: string) => string };
+    try {
+      const hap = await import("hap-nodejs");
+      BridgeCtor = hap.Bridge;
+      HAPStorage = hap.HAPStorage;
+      uuidUtil = hap.uuid;
+    } catch (err) {
+      this.logger.error(
+        { err },
+        "hap-nodejs failed to load — HomeKit bridge cannot start. Ensure hap-nodejs is installed and the runtime supports the required native crypto ciphers.",
+      );
+      return;
+    }
+
+    // Lazily import the factory too (it has its own top-level hap-nodejs import).
+    const { createAccessory } = await import("./homekit-accessory-factory.js");
+    this.createAccessoryFn = createAccessory;
+
     const persistPath = this.options.persistPath ?? "./homekit-persist";
     const bridgeName = this.options.bridgeName ?? "TS-Home-Automation";
     const port = this.options.port ?? 47128;
@@ -199,7 +224,9 @@ export class HomekitService implements ServicePlugin {
     // Configure HAP storage before creating the bridge so pairing data survives restarts.
     HAPStorage.setCustomStoragePath(persistPath);
 
-    this.bridge = new Bridge(bridgeName, uuid.generate(bridgeName));
+    // Use the stable username (MAC address) as the UUID seed so the bridge
+    // identity survives renames and remains unique per bridge instance.
+    this.bridge = new BridgeCtor(bridgeName, uuidUtil.generate(username));
 
     // Register all devices that are already known at startup.
     for (const device of this.registry.getDevices()) {
@@ -216,8 +243,11 @@ export class HomekitService implements ServicePlugin {
       username,
       pincode: this.options.pinCode,
       port,
-      category: HAP_CATEGORY_BRIDGE,
+      category: 2, // HAP_CATEGORY_BRIDGE
     });
+
+    // Only mark running after publish() resolves successfully.
+    this.published = true;
 
     this.logger.info(
       { bridgeName, port, username, accessories: this.accessories.size },
@@ -242,6 +272,7 @@ export class HomekitService implements ServicePlugin {
     this.accessories.clear();
 
     await this.bridge.unpublish();
+    this.published = false;
     this.bridge = null;
 
     this.logger.info("HomeKit bridge unpublished");
@@ -256,7 +287,7 @@ export class HomekitService implements ServicePlugin {
    * Also registers a state-change listener so the accessory stays in sync.
    */
   private addAccessory(device: ZigbeeDevice): void {
-    if (!this.bridge) return;
+    if (!this.bridge || !this.createAccessoryFn) return;
 
     const { friendly_name } = device;
 
@@ -265,7 +296,7 @@ export class HomekitService implements ServicePlugin {
       return;
     }
 
-    const created = createAccessory(device, (command) => {
+    const created = this.createAccessoryFn(device, (command) => {
       this.mqtt.publishToDevice(friendly_name, command);
     });
 

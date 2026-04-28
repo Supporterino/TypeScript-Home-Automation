@@ -783,4 +783,14 @@ describe("createAccessory — updateState", () => {
       result?.accessory.getService(HumidSensorSvc)?.getCharacteristic(CurrentHumidChar).value,
     ).toBe(55);
   });
+
+  it("sets battery via updateState for a switch with battery", () => {
+    const device = makeDevice([...switchExposes(), numericExpose("battery")]);
+    const result = factory.createAccessory(device, mock());
+    result?.updateState({ state: "ON", battery: 72 });
+    expect(result?.accessory.getService(SwitchSvc)?.getCharacteristic(OnChar).value).toBe(true);
+    expect(result?.accessory.getService(BatterySvc)?.getCharacteristic(BattLevelChar).value).toBe(
+      72,
+    );
+  });
 });

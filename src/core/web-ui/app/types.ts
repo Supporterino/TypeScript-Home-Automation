@@ -57,7 +57,6 @@ export interface HomekitStatus {
   username: string;
   persistPath: string;
   accessoryCount: number;
-  pinCode: string;
 }
 
 export interface DashboardData {
