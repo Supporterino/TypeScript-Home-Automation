@@ -1,4 +1,5 @@
 import { Bridge, HAPStorage, uuid } from "hap-nodejs";
+import type { Hono } from "hono";
 import type { Logger } from "pino";
 import type { ZigbeeDevice } from "../../types/zigbee/bridge.js";
 import type { MqttService } from "../mqtt/mqtt-service.js";
@@ -16,6 +17,27 @@ import {
 import type { CoreContext, ServicePlugin } from "./service-plugin.js";
 
 export const HOMEKIT_SERVICE_KEY = "homekit";
+
+/**
+ * Runtime status snapshot for the HomeKit bridge.
+ * Returned by `HomekitService.getStatus()` and the `GET /api/homekit/status` endpoint.
+ */
+export interface HomekitStatus {
+  /** Whether the HAP bridge is currently published and accepting connections. */
+  running: boolean;
+  /** Display name advertised to the Home app. */
+  bridgeName: string;
+  /** TCP port the HAP server listens on. */
+  port: number;
+  /** HAP bridge MAC address used as the unique bridge identifier. */
+  username: string;
+  /** Path to the directory where HAP pairing data is persisted. */
+  persistPath: string;
+  /** Number of HomeKit accessories currently registered on the bridge. */
+  accessoryCount: number;
+  /** Pairing PIN shown to the user when scanning to add the bridge. */
+  pinCode: string;
+}
 
 /**
  * Configuration options for the `HomekitService`.
@@ -130,6 +152,34 @@ export class HomekitService implements ServicePlugin {
     private readonly registry: DeviceRegistry | null,
     private readonly options: HomekitServiceOptions,
   ) {}
+
+  // ---------------------------------------------------------------------------
+  // Public API
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Returns a snapshot of the current bridge state.
+   * Safe to call at any time, including before `onStart`.
+   */
+  getStatus(): HomekitStatus {
+    return {
+      running: this.bridge !== null,
+      bridgeName: this.options.bridgeName ?? "TS-Home-Automation",
+      port: this.options.port ?? 47128,
+      username: this.options.username ?? "CC:22:3D:E3:CE:F8",
+      persistPath: this.options.persistPath ?? "./homekit-persist",
+      accessoryCount: this.accessories.size,
+      pinCode: this.options.pinCode,
+    };
+  }
+
+  /**
+   * Mounts `GET /api/homekit/status` on the shared Hono app.
+   * The route is automatically protected by the `/api/*` auth middleware.
+   */
+  registerRoutes(app: Hono): void {
+    app.get("/api/homekit/status", (c) => c.json(this.getStatus()));
+  }
 
   // ---------------------------------------------------------------------------
   // ServicePlugin lifecycle

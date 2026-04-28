@@ -4,6 +4,7 @@ import type {
   Automation,
   DashboardData,
   DeviceInfo,
+  HomekitStatus,
   LogEntry,
   StateMap,
   StatusData,
@@ -43,7 +44,7 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
 }
 
 export async function fetchAll(): Promise<DashboardData> {
-  const [statusRes, automationsRes, stateRes, logsRes, devicesRes] = await Promise.all([
+  const [statusRes, automationsRes, stateRes, logsRes, devicesRes, homekitRes] = await Promise.all([
     apiFetch<StatusData>("/api/status"),
     apiFetch<{ automations: Automation[]; count: number }>("/api/automations"),
     apiFetch<{ state: StateMap; count: number }>("/api/state"),
@@ -58,6 +59,7 @@ export async function fetchAll(): Promise<DashboardData> {
         // Any other error (network etc.) — show empty but don't hide the tab
         return { devices: [] as DeviceInfo[], available: true };
       }),
+    apiFetch<HomekitStatus>("/api/homekit/status").catch(() => null),
   ]);
 
   return {
@@ -67,6 +69,7 @@ export async function fetchAll(): Promise<DashboardData> {
     logs: logsRes.entries,
     devices: devicesRes.devices,
     devicesAvailable: devicesRes.available,
+    homekit: homekitRes,
   };
 }
 
