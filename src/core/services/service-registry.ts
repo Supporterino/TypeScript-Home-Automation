@@ -14,16 +14,23 @@ import type { CoreContext, ServicePlugin } from "./service-plugin.js";
  * Any additional services registered under custom keys are accessible via
  * `this.services.get<MyService>("my-service")` inside an automation.
  *
- * @example
- * ```ts
- * const registry = new ServiceRegistry();
- * registry.register("shelly", myShellyService);
+ * ## Retrieval options
  *
- * // In an automation:
+ * **`get`** — nullable lookup; you handle the absent case yourself:
+ * ```ts
  * const shelly = this.services.get<ShellyService>("shelly");
- * if (shelly) {
- *   await shelly.turnOn("my-plug");
- * }
+ * if (shelly) await shelly.turnOn("my-plug");
+ * ```
+ *
+ * **`getOrThrow`** — asserts presence; throws at runtime if missing:
+ * ```ts
+ * const shelly = this.services.getOrThrow<ShellyService>("shelly");
+ * await shelly.turnOn("my-plug");
+ * ```
+ *
+ * **`use`** — callback wrapper; no-ops silently when the service is absent:
+ * ```ts
+ * await this.services.use<ShellyService>("shelly", (s) => s.turnOn("my-plug"));
  * ```
  */
 export class ServiceRegistry {
@@ -44,6 +51,54 @@ export class ServiceRegistry {
   get<T>(key: string): T | null {
     const val = this.store.get(key);
     return val !== undefined ? (val as T) : null;
+  }
+
+  /**
+   * Look up a service by key and throw if it is not registered.
+   *
+   * Use this when the service is required for the automation to work at all.
+   * The TypeScript return type is `T` (not `T | null`), so no null-check is needed.
+   *
+   * @throws {Error} with a descriptive message if the service is not registered.
+   *
+   * @example
+   * ```ts
+   * const shelly = this.services.getOrThrow<ShellyService>("shelly");
+   * await shelly.turnOn("my-plug");
+   * ```
+   */
+  getOrThrow<T>(key: string): T {
+    const val = this.store.get(key);
+    if (val === undefined) {
+      throw new Error(
+        `Service "${key}" is not registered. Make sure it is passed via the services map in createEngine().`,
+      );
+    }
+    return val as T;
+  }
+
+  /**
+   * Call `fn` with the service if it is registered; otherwise do nothing.
+   *
+   * Returns the result of `fn` (which may be a `Promise`) or `undefined` when
+   * the service is absent. Compose with `??` to supply a fallback value.
+   *
+   * Best suited for one-shot, fire-and-forget calls where the service is
+   * genuinely optional.
+   *
+   * @example
+   * ```ts
+   * // Fire-and-forget — no null-check needed:
+   * await this.services.use<ShellyService>("shelly", (s) => s.turnOff("tv_plug"));
+   *
+   * // With a fallback value:
+   * const isOn = (await this.services.use("shelly", (s) => s.isOn("tv_plug"))) ?? false;
+   * ```
+   */
+  use<T, R>(key: string, fn: (service: T) => R): R | undefined {
+    const val = this.store.get(key);
+    if (val === undefined) return undefined;
+    return fn(val as T);
   }
 
   /**

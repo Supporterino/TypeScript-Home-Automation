@@ -51,6 +51,22 @@ class TestAutomation extends Automation {
   async callNotify(options: Parameters<Automation["notify"]>[0]) {
     return this.notify(options);
   }
+  callRequire<T>(key: string): T {
+    return this.require<T>(key);
+  }
+}
+
+/** Subclass that declares required services. */
+class RequiresShelly extends Automation {
+  readonly name = "requires-shelly";
+  readonly triggers: Trigger[] = [];
+  readonly requiredServices = ["shelly"] as const;
+
+  async execute(_ctx: TriggerContext): Promise<void> {}
+
+  getShellyViaRequire<T>() {
+    return this.require<T>("shelly");
+  }
 }
 
 function createMockContext(overrides: Partial<AutomationContext> = {}): AutomationContext {
@@ -141,5 +157,45 @@ describe("Automation base class", () => {
   it("onStop default implementation resolves", async () => {
     const auto = new TestAutomation();
     await expect(auto.onStop()).resolves.toBeUndefined();
+  });
+});
+
+describe("Automation.require", () => {
+  it("returns the service when it is registered", () => {
+    const auto = new TestAutomation();
+    const mockShelly = {} as ShellyService;
+    const registry = new ServiceRegistry();
+    registry.register("shelly", mockShelly);
+    auto._inject(createMockContext({ services: registry }));
+
+    expect(auto.callRequire<ShellyService>("shelly")).toBe(mockShelly);
+  });
+
+  it("throws when the service is not registered", () => {
+    const auto = new TestAutomation();
+    auto._inject(createMockContext());
+    expect(() => auto.callRequire("shelly")).toThrow(`Service "shelly" is not registered`);
+  });
+});
+
+describe("Automation.requiredServices", () => {
+  it("is undefined by default", () => {
+    const auto = new TestAutomation();
+    expect(auto.requiredServices).toBeUndefined();
+  });
+
+  it("can be declared as a readonly tuple on a subclass", () => {
+    const auto = new RequiresShelly();
+    expect(auto.requiredServices).toEqual(["shelly"]);
+  });
+
+  it("require() returns the service after inject when declared in requiredServices", () => {
+    const auto = new RequiresShelly();
+    const mockShelly = {} as ShellyService;
+    const registry = new ServiceRegistry();
+    registry.register("shelly", mockShelly);
+    auto._inject(createMockContext({ services: registry }));
+
+    expect(auto.getShellyViaRequire<ShellyService>()).toBe(mockShelly);
   });
 });

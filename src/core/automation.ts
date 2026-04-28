@@ -237,7 +237,32 @@ export abstract class Automation {
   /** The trigger(s) that cause this automation to execute. */
   abstract readonly triggers: Trigger[];
 
-  /** Injected services - set by AutomationManager before start. */
+  /**
+   * Declare services that must be present when this automation starts.
+   *
+   * The `AutomationManager` checks every key listed here at registration time
+   * (before `onStart` is called) and throws a descriptive error if any of them
+   * are missing from the registry. This gives you fail-fast startup validation
+   * instead of silent `null` surprises at the first trigger.
+   *
+   * Inside `execute()` you can then retrieve those services safely with
+   * `this.require<T>(key)`, which is a non-null assertion (no `if` guard needed).
+   *
+   * Optional services that are NOT listed here continue to use
+   * `this.services.get<T>(key)` with the usual null-check.
+   *
+   * @example
+   * ```ts
+   * readonly requiredServices = ["shelly"] as const;
+   *
+   * async execute(): Promise<void> {
+   *   const shelly = this.require<ShellyService>("shelly");
+   *   await shelly.turnOff("tv_plug");
+   * }
+   * ```
+   */
+  readonly requiredServices?: readonly string[];
+
   protected mqtt!: MqttService;
   protected http!: HttpClient;
   protected state!: StateManager;
@@ -296,17 +321,57 @@ export abstract class Automation {
    * The shared service registry.
    *
    * Use this to access any optional service registered with the engine,
-   * including custom services not exposed as named getters:
+   * including custom services not exposed as named getters.
    *
-   * @example
+   * Three retrieval styles are available — choose the one that fits:
+   *
+   * **`get`** — nullable; you handle the absent case:
    * ```ts
-   * const myService = this.services.get<MyCustomService>("my-service");
-   * if (!myService) return;
-   * await myService.doSomething();
+   * const svc = this.services.get<MyService>("my-service");
+   * if (!svc) return;
+   * await svc.doSomething();
    * ```
+   *
+   * **`getOrThrow`** — throws if not registered (use for required services):
+   * ```ts
+   * const svc = this.services.getOrThrow<MyService>("my-service");
+   * await svc.doSomething();
+   * ```
+   *
+   * **`use`** — callback wrapper; no-ops when absent (best for one-liners):
+   * ```ts
+   * await this.services.use<MyService>("my-service", (s) => s.doSomething());
+   * ```
+   *
+   * For services declared in `requiredServices`, prefer `this.require<T>(key)`
+   * which is validated at startup and has a non-null return type.
    */
   protected get services(): ServiceRegistry {
     return this.servicesRegistry;
+  }
+
+  /**
+   * Retrieve a service that was declared in `requiredServices`.
+   *
+   * The `AutomationManager` already verified at startup that this service is
+   * registered, so this method never returns `null` — no null-check needed.
+   *
+   * Calling `require()` for a key that is **not** listed in `requiredServices`
+   * is allowed but will throw at runtime if the service is absent, identical
+   * to `this.services.getOrThrow(key)`.
+   *
+   * @example
+   * ```ts
+   * readonly requiredServices = ["shelly"] as const;
+   *
+   * async execute(): Promise<void> {
+   *   const shelly = this.require<ShellyService>("shelly");
+   *   await shelly.turnOff("tv_plug");
+   * }
+   * ```
+   */
+  protected require<T>(key: string): T {
+    return this.servicesRegistry.getOrThrow<T>(key);
   }
 
   /**
