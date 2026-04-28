@@ -16,6 +16,7 @@ nav = [
   { "Writing Automations" = "writing-automations.md" },
   { "Device Base Classes" = "device-classes.md" },
   { "Services" = [
+    { "HomeKit" = "services/homekit.md" },
     { "Shelly" = "services/shelly.md" },
     { "Nanoleaf" = "services/nanoleaf.md" },
     { "Weather" = "services/weather.md" },
