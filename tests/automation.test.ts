@@ -120,6 +120,22 @@ describe("Automation base class", () => {
     expect(sendMock).toHaveBeenCalledWith(options);
   });
 
+  it("notify forwards channel option to service unchanged", async () => {
+    const auto = new TestAutomation();
+    const sendMock = mock(() => Promise.resolve());
+    const notifications: NotificationService = { send: sendMock };
+
+    const registry = new ServiceRegistry();
+    registry.register("notifications", notifications);
+    auto._inject(createMockContext({ services: registry }));
+
+    const options = { title: "Alarm", message: "Front door at 3 AM", channel: "alerts" };
+    await auto.callNotify(options);
+
+    expect(sendMock).toHaveBeenCalledTimes(1);
+    expect(sendMock).toHaveBeenCalledWith(options);
+  });
+
   it("notify does not throw when no notification service is configured", async () => {
     const auto = new TestAutomation();
 
