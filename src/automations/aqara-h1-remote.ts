@@ -1,4 +1,5 @@
 import { AqaraH1Automation } from "../core/devices/aqara-h1-automation.js";
+import type { ShellyService } from "../core/services/shelly-service.js";
 
 /**
  * Aqara Wireless Remote Switch H1 (WXKG15LM) automation.
@@ -76,8 +77,13 @@ export default class AqaraH1Remote extends AqaraH1Automation {
    * Single right click: toggle the Shelly plug.
    */
   protected async onSingleRight(): Promise<void> {
+    const shelly = this.services.get<ShellyService>("shelly");
+    if (!shelly) {
+      this.logger.warn("Shelly service not registered — cannot toggle plug");
+      return;
+    }
     this.logger.info("Toggling Shelly plug");
-    await this.shelly.toggle(this.PLUG_NAME);
+    await shelly.toggle(this.PLUG_NAME);
   }
 
   private stopDimming(): void {

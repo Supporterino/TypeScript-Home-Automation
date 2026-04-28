@@ -10,6 +10,7 @@ The Aqara H1 double-rocker switch (WXKG15LM / WRS-R02) exposes 12 distinct actio
 
 ```ts
 import { AqaraH1Automation } from "ts-home-automation";
+import type { ShellyService } from "ts-home-automation";
 
 export default class LivingRoomRemote extends AqaraH1Automation {
   readonly name = "living-room-remote";
@@ -24,7 +25,9 @@ export default class LivingRoomRemote extends AqaraH1Automation {
   }
 
   protected async onSingleRight(): Promise<void> {
-    await this.shelly.toggle("living_room_plug");
+    const shelly = this.services.get<ShellyService>("shelly");
+    if (!shelly) return;
+    await shelly.toggle("living_room_plug");
   }
 }
 ```

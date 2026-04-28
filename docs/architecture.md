@@ -51,7 +51,7 @@ The `src/core/` directory is organised into subfolders by responsibility:
 | `core/scheduling/` | `cron-scheduler.ts` |
 | `core/state/` | `state-manager.ts` |
 | `core/logging/` | `log-buffer.ts` |
-| `core/services/` | `shelly-service.ts`, `nanoleaf-service.ts`, `notification-service.ts`, `ntfy-notification-service.ts`, `open-meteo-service.ts`, `openweathermap-service.ts` |
+| `core/services/` | `shelly-service.ts`, `nanoleaf-service.ts`, `ntfy-notification-service.ts`, `open-meteo-service.ts`, `openweathermap-service.ts`, `service-plugin.ts`, `service-registry.ts` |
 | `core/devices/` | `aqara-h1-automation.ts`, `ikea-styrbar-automation.ts`, `ikea-rodret-automation.ts` |
 | `core/zigbee/` | `device-registry.ts` — Zigbee2MQTT device discovery and state tracking |
 | `core/web-ui/` | Hono app, HTML shell, React + Mantine frontend, compiled asset constants |
@@ -65,7 +65,7 @@ The `src/core/` directory is organised into subfolders by responsibility:
 A factory function (not a class) that wires all services together and returns an `Engine` object with:
 
 - **Lifecycle:** `start()`, `stop()`
-- **Services:** `mqtt`, `shelly`, `nanoleaf`, `state`, `http`, `notifications`, `weather`, `deviceRegistry`
+- **Services:** `mqtt`, `http`, `state`, `deviceRegistry`, plus any services registered via the `services` map (e.g. `shelly`, `nanoleaf`, `notifications`, `weather`, or custom services)
 - **Internals (advanced):** `config`, `logger`, `manager`
 
 The `start()` call loads automation files, registers triggers, connects to MQTT, and starts the HTTP server.
@@ -75,7 +75,7 @@ The `start()` call loads automation files, registers triggers, connects to MQTT,
 Discovers and loads automation files from `automationsDir` at startup. For each automation it:
 
 1. Creates a child pino logger scoped with `{ automation: name }`
-2. Calls `_inject()` to provide services (mqtt, shelly, nanoleaf, state, notify, http, logger, config)
+2. Calls `_inject()` to provide services (mqtt, state, http, logger, config, services registry, deviceRegistry)
 3. Calls `onStart()`
 4. Registers all triggers with the appropriate service
 

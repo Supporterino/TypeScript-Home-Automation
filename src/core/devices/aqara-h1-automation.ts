@@ -39,7 +39,8 @@ import { Automation, type Trigger, type TriggerContext } from "../automation.js"
  *   }
  *
  *   protected async onHoldLeft(): Promise<void> {
- *     await this.shelly.toggle("plug");
+ *     const shelly = this.services.get<ShellyService>("shelly");
+ *     if (shelly) await shelly.toggle("plug");
  *   }
  * }
  * ```

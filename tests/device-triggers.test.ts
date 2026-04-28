@@ -6,7 +6,7 @@ import { AutomationManager } from "../src/core/automation-manager.js";
 import type { HttpClient } from "../src/core/http/http-client.js";
 import type { MqttService } from "../src/core/mqtt/mqtt-service.js";
 import type { CronScheduler } from "../src/core/scheduling/cron-scheduler.js";
-import type { ShellyService } from "../src/core/services/shelly-service.js";
+import { ServiceRegistry } from "../src/core/services/service-registry.js";
 import type { StateManager } from "../src/core/state/state-manager.js";
 import type {
   DeviceAddedHandler,
@@ -24,8 +24,9 @@ const config: Config = {
   logLevel: "info",
   state: { persist: false, filePath: "./state.json" },
   automations: { recursive: false },
-  deviceRegistry: { enabled: true },
+  deviceRegistry: { enabled: true, persist: false, filePath: "./device-registry.json" },
   httpServer: { port: 0, token: "", webUi: { enabled: false, path: "/status" } },
+  services: {},
 };
 
 /** Minimal ZigbeeDevice fixture. */
@@ -118,14 +119,11 @@ function createManager(registry: DeviceRegistry | null) {
     {} as MqttService,
     { schedule: mock(() => {}), removeByPrefix: mock(() => {}) } as unknown as CronScheduler,
     {} as HttpClient,
-    {} as ShellyService,
-    {} as never, // nanoleaf
     { onChange: mock(() => {}), offChange: mock(() => {}) } as unknown as StateManager,
     null, // httpServer
-    null, // notifications
-    null, // weather
     config,
     logger,
+    new ServiceRegistry(),
     registry,
   );
 }

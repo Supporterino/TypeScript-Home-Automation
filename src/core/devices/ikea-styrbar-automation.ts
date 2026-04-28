@@ -42,7 +42,8 @@ import { Automation, type Trigger, type TriggerContext } from "../automation.js"
  *   }
  *
  *   protected async onArrowLeftClick(): Promise<void> {
- *     await this.shelly.toggle("tv_plug");
+ *     const shelly = this.services.get<ShellyService>("shelly");
+ *     if (shelly) await shelly.toggle("tv_plug");
  *   }
  * }
  * ```
