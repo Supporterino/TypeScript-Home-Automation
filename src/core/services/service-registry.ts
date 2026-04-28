@@ -124,7 +124,11 @@ export class ServiceRegistry {
   async startAll(context: CoreContext): Promise<void> {
     for (const service of this.store.values()) {
       if (isPlugin(service) && service.onStart) {
-        await service.onStart(context);
+        const pluginContext: CoreContext = {
+          ...context,
+          logger: context.logger.child({ service: service.serviceKey }),
+        };
+        await service.onStart(pluginContext);
       }
     }
   }

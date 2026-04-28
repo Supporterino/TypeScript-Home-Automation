@@ -209,7 +209,7 @@ import type { ShellyService } from "ts-home-automation";
 import type { NanoleafService } from "ts-home-automation";
 ```
 
-Three retrieval styles are available — choose the one that fits your use case:
+Four retrieval styles are available — choose the one that fits your use case:
 
 **`get<T>(key)`** — returns `null` when absent; you handle the missing case:
 

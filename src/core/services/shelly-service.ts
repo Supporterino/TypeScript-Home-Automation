@@ -30,10 +30,12 @@ export interface ShellyDevice {
  * @example
  * ```ts
  * // Inside an automation:
- * await this.shelly.turnOn("living_room_plug");
- * await this.shelly.turnOff("living_room_plug");
+ * const shelly = this.services.get<ShellyService>("shelly");
+ * if (!shelly) return;
+ * await shelly.turnOn("living_room_plug");
+ * await shelly.turnOff("living_room_plug");
  *
- * const status = await this.shelly.getStatus("living_room_plug");
+ * const status = await shelly.getStatus("living_room_plug");
  * this.logger.info({ power: status.apower }, "Current power draw");
  * ```
  */
