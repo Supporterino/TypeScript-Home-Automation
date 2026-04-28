@@ -109,6 +109,30 @@ export class DebugClient {
   }
 
   // -------------------------------------------------------------------------
+  // HomeKit
+  // -------------------------------------------------------------------------
+
+  async getHomekitStatus(): Promise<{
+    running: boolean;
+    bridgeName: string;
+    port: number;
+    username: string;
+    persistPath: string;
+    accessoryCount: number;
+    pinCode: string;
+  } | null> {
+    return this.get<{
+      running: boolean;
+      bridgeName: string;
+      port: number;
+      username: string;
+      persistPath: string;
+      accessoryCount: number;
+      pinCode: string;
+    }>("/api/homekit/status").catch(() => null);
+  }
+
+  // -------------------------------------------------------------------------
   // Logs
   // -------------------------------------------------------------------------
 

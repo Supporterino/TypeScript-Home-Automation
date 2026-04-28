@@ -42,7 +42,7 @@ export function StatusFooter({
           {refreshLabel} · {interval}s refresh
         </span>
       </text>
-      <text fg={COLORS.comment}>1-4 tabs · ? help · q quit</text>
+      <text fg={COLORS.comment}>1-6 tabs · ? help · q quit</text>
     </box>
   );
 }

@@ -16,6 +16,7 @@ import {
   IconDatabase,
   IconDevices,
   IconFileText,
+  IconHome,
   IconLayoutDashboard,
   IconMoon,
   IconPlayerPause,
@@ -29,6 +30,7 @@ import {
 import { useState } from "react";
 import { AutomationsTab } from "./components/AutomationsTab.js";
 import { DevicesTab } from "./components/DevicesTab.js";
+import { HomekitTab } from "./components/HomekitTab.js";
 import { LogsTab } from "./components/LogsTab.js";
 import { OverviewTab } from "./components/OverviewTab.js";
 import { StateTab } from "./components/StateTab.js";
@@ -40,7 +42,7 @@ const basePath =
   (document.documentElement as HTMLElement & { dataset: DOMStringMap }).dataset.basePath ??
   "/status";
 
-type TabId = "overview" | "automations" | "devices" | "state" | "logs";
+type TabId = "overview" | "automations" | "devices" | "state" | "logs" | "homekit";
 
 const NAV_ITEMS: { id: TabId; label: string; icon: React.ReactNode }[] = [
   { id: "overview", label: "Overview", icon: <IconLayoutDashboard size={16} /> },
@@ -48,6 +50,7 @@ const NAV_ITEMS: { id: TabId; label: string; icon: React.ReactNode }[] = [
   { id: "devices", label: "Devices", icon: <IconDevices size={16} /> },
   { id: "state", label: "State", icon: <IconDatabase size={16} /> },
   { id: "logs", label: "Logs", icon: <IconFileText size={16} /> },
+  { id: "homekit", label: "HomeKit", icon: <IconHome size={16} /> },
 ];
 
 const HEADER_HEIGHT = 52;
@@ -203,6 +206,7 @@ export function App() {
         {activeTab === "devices" && <DevicesTab data={data} />}
         {activeTab === "state" && <StateTab data={data} onMutate={refresh} />}
         {activeTab === "logs" && <LogsTab data={data} />}
+        {activeTab === "homekit" && <HomekitTab data={data} />}
       </AppShell.Main>
     </AppShell>
   );

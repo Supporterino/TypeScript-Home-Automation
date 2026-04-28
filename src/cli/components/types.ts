@@ -57,12 +57,24 @@ export interface DevicesData {
   available: boolean;
 }
 
+export interface HomekitStatus {
+  running: boolean;
+  bridgeName: string;
+  port: number;
+  username: string;
+  persistPath: string;
+  accessoryCount: number;
+  pinCode: string;
+}
+
 export interface DashboardData {
   readiness: ReadinessData;
   automations: AutomationsData;
   devices: DevicesData;
   state: StateData;
   logs: LogsData;
+  /** `null` when the HomeKit service is not configured. */
+  homekit: HomekitStatus | null;
   error: string | null;
   lastRefresh: number;
 }

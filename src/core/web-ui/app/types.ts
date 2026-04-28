@@ -50,6 +50,16 @@ export interface DeviceInfo {
   definition: DeviceDefinition | null;
 }
 
+export interface HomekitStatus {
+  running: boolean;
+  bridgeName: string;
+  port: number;
+  username: string;
+  persistPath: string;
+  accessoryCount: number;
+  pinCode: string;
+}
+
 export interface DashboardData {
   status: StatusData | null;
   automations: Automation[];
@@ -59,4 +69,6 @@ export interface DashboardData {
   devices: DeviceInfo[];
   /** `false` when the device registry is disabled (503 from /api/devices). */
   devicesAvailable: boolean;
+  /** `null` when the HomeKit service is not configured. */
+  homekit: HomekitStatus | null;
 }
