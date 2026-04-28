@@ -108,17 +108,20 @@ export interface WeatherLocation {
  * Abstract weather service interface.
  *
  * Implement this to integrate any weather data provider.
- * The engine accepts an optional `WeatherService` — if configured,
- * automations can use `this.weather` to fetch weather data.
+ * The engine accepts an optional `WeatherService` registered under the `"weather"` key.
+ * Access it in automations via `this.services.get<WeatherService>("weather")`.
  *
  * @example
  * ```ts
- * const current = await this.weather.getCurrent();
+ * const weather = this.services.get<WeatherService>("weather");
+ * if (!weather) return;
+ *
+ * const current = await weather.getCurrent();
  * if (current.temperature > 30) {
  *   this.logger.info("It's hot!");
  * }
  *
- * const forecast = await this.weather.getForecast(3);
+ * const forecast = await weather.getForecast(3);
  * if (forecast[0].precipitationChance > 0.5) {
  *   this.logger.info("Rain expected tomorrow");
  * }
