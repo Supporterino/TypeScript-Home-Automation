@@ -54,7 +54,8 @@ export async function pairNanoleaf(hostArg: string): Promise<void> {
         const data = (await response.json()) as { auth_token: string };
         console.log(`\n✓ Auth token: ${data.auth_token}`);
         console.log("\nUse this token when registering the device:");
-        console.log(`  engine.nanoleaf.register("my-panels", {`);
+        console.log(`  const nanoleaf = engine.services.getOrThrow("nanoleaf");`);
+        console.log(`  nanoleaf.register("my-panels", {`);
         console.log(`    host: "${host}",`);
         console.log(`    token: "${data.auth_token}",`);
         console.log("  });");

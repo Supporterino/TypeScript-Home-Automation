@@ -130,9 +130,10 @@ export interface EngineOptions {
    * accept either a service instance or a `ServiceFactory` function. Additional
    * services can be registered under any custom key.
    *
-   * Registered services are available to automations via `this.services.get<T>(key)`.
-   * Well-known services (`shelly`, `nanoleaf`) are also accessible as typed getters
-   * (`this.shelly`, `this.nanoleaf`) that return `T | null`.
+   * All registered services are available to automations via
+   * `this.services.get<T>(key)`, `this.services.getOrThrow<T>(key)`,
+   * `this.services.use<T, R>(key, fn)`, or `this.require<T>(key)` (when the key
+   * is declared in `requiredServices`).
    *
    * @example
    * ```ts
@@ -182,21 +183,6 @@ export interface Engine {
 
   /** The MQTT service (for advanced usage). */
   readonly mqtt: MqttService;
-
-  /**
-   * The Shelly service, or `null` if not registered via `services.shelly`.
-   *
-   * @example
-   * ```ts
-   * engine.shelly?.register("plug", "192.168.1.50");
-   * ```
-   */
-  readonly shelly: ShellyService | null;
-
-  /**
-   * The Nanoleaf service, or `null` if not registered via `services.nanoleaf`.
-   */
-  readonly nanoleaf: NanoleafService | null;
 
   /** The HTTP client (for advanced usage). */
   readonly http: HttpClient;
@@ -375,12 +361,6 @@ export function createEngine(options: EngineOptions): Engine {
     config,
     logger,
     mqtt,
-    get shelly(): ShellyService | null {
-      return serviceRegistry.get<ShellyService>("shelly");
-    },
-    get nanoleaf(): NanoleafService | null {
-      return serviceRegistry.get<NanoleafService>("nanoleaf");
-    },
     http,
     state: stateManager,
     get notifications(): NotificationService | null {
