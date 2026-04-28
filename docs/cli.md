@@ -260,7 +260,7 @@ ts-ha nanoleaf pair nanoleaf-panels.local  # by mDNS hostname
 3. On success it prints the auth token and a ready-to-use registration snippet:
 
 ```ts
-const nanoleaf = engine.services.getOrThrow<NanoleafService>("nanoleaf");
+const nanoleaf = engine.services.getOrThrow("nanoleaf");
 nanoleaf.register("panels", {
   host: "192.168.1.60",
   token: "<printed-token>",

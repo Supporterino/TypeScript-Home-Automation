@@ -33,10 +33,14 @@ export interface NotificationOptions {
  *
  * const engine = createEngine({
  *   automationsDir: "...",
- *   notifications: new NtfyNotificationService({
- *     url: "https://ntfy.sh",
- *     topic: "my-home-alerts",
- *   }),
+ *   services: {
+ *     notifications: (http, logger) =>
+ *       new NtfyNotificationService({
+ *         topic: "my-home-alerts",
+ *         http,
+ *         logger,
+ *       }),
+ *   },
  * });
  * ```
  */

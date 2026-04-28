@@ -33,13 +33,20 @@ await engine.start();
 You can also register a single device:
 
 ```ts
-services: {
-  shelly: (http, logger) => {
-    const svc = new ShellyService(http, logger);
-    svc.register("kitchen_plug", "192.168.1.55");
-    return svc;
+import { createEngine, ShellyService } from "ts-home-automation";
+
+const engine = createEngine({
+  automationsDir: "./src/automations",
+  services: {
+    shelly: (http, logger) => {
+      const svc = new ShellyService(http, logger);
+      svc.register("kitchen_plug", "192.168.1.55");
+      return svc;
+    },
   },
-},
+});
+
+await engine.start();
 ```
 
 ---
