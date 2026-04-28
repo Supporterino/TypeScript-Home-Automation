@@ -8,7 +8,11 @@ import type {
   DeviceRemovedHandler,
   DeviceStateChangeHandler,
 } from "../zigbee/device-registry.js";
-import { type CreatedAccessory, createAccessory } from "./homekit-accessory-factory.js";
+import {
+  type CreatedAccessory,
+  createAccessory,
+  HAP_CATEGORY_BRIDGE,
+} from "./homekit-accessory-factory.js";
 import type { CoreContext, ServicePlugin } from "./service-plugin.js";
 
 export const HOMEKIT_SERVICE_KEY = "homekit";
@@ -162,7 +166,7 @@ export class HomekitService implements ServicePlugin {
       username,
       pincode: this.options.pinCode,
       port,
-      category: 2, // Categories.BRIDGE
+      category: HAP_CATEGORY_BRIDGE,
     });
 
     this.logger.info(
