@@ -286,10 +286,12 @@ See [Nanoleaf](services/nanoleaf.md) for pairing and full method list.
 
 ### Weather
 
-> **Requires configuration.** `this.weather` returns `null` when no `WeatherService` is configured. Always null-check before use:
+> **Requires configuration.** Returns `null` when no `WeatherService` is configured. Always null-check before use:
 
 ```ts
-const weather = this.weather;
+import type { WeatherService } from "ts-home-automation";
+
+const weather = this.services.get<WeatherService>("weather");
 if (!weather) {
   this.logger.warn("Weather service not configured");
   return;

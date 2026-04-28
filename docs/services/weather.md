@@ -54,15 +54,20 @@ const engine = createEngine({
 ## Using in automations
 
 ```ts
+import type { WeatherService } from "ts-home-automation";
+
 // Current conditions
-const current = await this.weather.getCurrent();
+const weather = this.services.get<WeatherService>("weather");
+if (!weather) return;
+
+const current = await weather.getCurrent();
 this.logger.info(
   { temp: current.temperature, condition: current.condition },
   "Current weather",
 );
 
 // 3-day forecast
-const forecast = await this.weather.getForecast(3);
+const forecast = await weather.getForecast(3);
 if (forecast[0].precipitationChance > 0.5) {
   await this.notify({ title: "Rain tomorrow", message: "Bring an umbrella" });
 }
