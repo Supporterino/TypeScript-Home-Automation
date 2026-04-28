@@ -251,8 +251,12 @@ export abstract class Automation {
    * Optional services that are NOT listed here continue to use
    * `this.services.get<T>(key)` with the usual null-check.
    *
+   * **Important:** declare the value with `as const` so TypeScript infers
+   * a readonly string-literal tuple rather than the wider `string[]` type:
+   *
    * @example
    * ```ts
+   * // "as const" gives you string-literal inference ("shelly"), not just string
    * readonly requiredServices = ["shelly"] as const;
    *
    * async execute(): Promise<void> {

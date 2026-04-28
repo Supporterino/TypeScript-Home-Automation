@@ -81,7 +81,9 @@ export class ServiceRegistry {
    * Call `fn` with the service if it is registered; otherwise do nothing.
    *
    * Returns the result of `fn` (which may be a `Promise`) or `undefined` when
-   * the service is absent. Compose with `??` to supply a fallback value.
+   * the service is absent. When the callback is async, `await` the whole
+   * expression before applying `??`, because `use()` returns
+   * `Promise<R> | undefined` — not `Promise<R | undefined>`:
    *
    * Best suited for one-shot, fire-and-forget calls where the service is
    * genuinely optional.
@@ -89,9 +91,9 @@ export class ServiceRegistry {
    * @example
    * ```ts
    * // Fire-and-forget — no null-check needed:
-   * await this.services.use<ShellyService>("shelly", (s) => s.turnOff("tv_plug"));
+   * await (this.services.use<ShellyService>("shelly", (s) => s.turnOff("tv_plug")) ?? Promise.resolve());
    *
-   * // With a fallback value:
+   * // With a fallback value — await first, then apply ??:
    * const isOn = (await this.services.use("shelly", (s) => s.isOn("tv_plug"))) ?? false;
    * ```
    */
