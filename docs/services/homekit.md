@@ -137,8 +137,7 @@ Example response:
   "port": 47128,
   "username": "CC:22:3D:E3:CE:F8",
   "persistPath": "./homekit-persist",
-  "accessoryCount": 12,
-  "pinCode": "031-45-154"
+  "accessoryCount": 12
 }
 ```
 

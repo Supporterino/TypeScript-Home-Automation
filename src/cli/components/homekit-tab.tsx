@@ -59,13 +59,6 @@ export function HomekitTab({ data }: { data: HomekitStatus | null }) {
 
         <box flexDirection="row" paddingLeft={2}>
           <text fg={COLORS.comment} width={18}>
-            Pairing PIN:
-          </text>
-          <text fg={COLORS.yellow}>{data.pinCode}</text>
-        </box>
-
-        <box flexDirection="row" paddingLeft={2}>
-          <text fg={COLORS.comment} width={18}>
             Persist path:
           </text>
           <text fg={COLORS.fg}>{data.persistPath}</text>

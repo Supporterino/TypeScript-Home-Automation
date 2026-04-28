@@ -74,12 +74,6 @@ function BridgeDetails({ status }: { status: HomekitStatus }) {
         </Group>
         <Group gap="xs">
           <Text size="sm" c="dimmed" w={120}>
-            Pairing PIN
-          </Text>
-          <Code fz="sm">{status.pinCode}</Code>
-        </Group>
-        <Group gap="xs">
-          <Text size="sm" c="dimmed" w={120}>
             Persist path
           </Text>
           <Code fz="sm">{status.persistPath}</Code>
@@ -143,7 +137,7 @@ export function HomekitTab({ data }: Props) {
 
             <StatCard label="Status" icon={<IconPlugConnected size={14} />}>
               <Badge color={status.running ? "teal" : "gray"} size="lg" variant="light">
-                {status.running ? "Paired & Live" : "Offline"}
+                {status.running ? "Published" : "Offline"}
               </Badge>
             </StatCard>
           </SimpleGrid>
