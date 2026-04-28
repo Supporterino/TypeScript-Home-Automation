@@ -39,6 +39,12 @@ export { LogBuffer, type LogEntry, type LogQuery } from "./core/logging/log-buff
 // Core services (exposed for advanced usage)
 export { type MqttMessageHandler, MqttService } from "./core/mqtt/mqtt-service.js";
 export { CronScheduler } from "./core/scheduling/cron-scheduler.js";
+// HomeKit bridge service
+export {
+  HOMEKIT_SERVICE_KEY,
+  HomekitService,
+  type HomekitServiceOptions,
+} from "./core/services/homekit-service.js";
 export { type NanoleafDeviceConfig, NanoleafService } from "./core/services/nanoleaf-service.js";
 // Notification implementations
 export {
