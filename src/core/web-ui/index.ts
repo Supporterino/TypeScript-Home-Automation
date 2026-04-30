@@ -1,5 +1,6 @@
 import type { Context, Hono } from "hono";
 import { getCookie } from "hono/cookie";
+import type { Logger } from "pino";
 import { SESSION_COOKIE } from "../http/utils.js";
 import { ICON_SVG } from "./assets/icon-svg.js";
 import { htmlShell, loginShell } from "./components/html-shell.js";
@@ -12,8 +13,10 @@ import { htmlShell, loginShell } from "./components/html-shell.js";
  *   - Login / logout flow when a token is configured
  *
  * All data API routes (`/api/*`) are served directly by `HttpServer`.
+ *
+ * @param logger Optional logger for authentication events
  */
-export function registerWebUiRoutes(app: Hono, path: string, token: string): void {
+export function registerWebUiRoutes(app: Hono, path: string, token: string, logger?: Logger): void {
   const hasAuth = token.length > 0;
 
   // ── Path helper ───────────────────────────────────────────────────────────
@@ -108,8 +111,11 @@ export function registerWebUiRoutes(app: Hono, path: string, token: string): voi
     }
 
     if (formToken !== token) {
+      logger?.warn("Failed login attempt (invalid token)");
       return c.html(loginShell({ basePath: path, error: "Invalid access token." }), 401);
     }
+
+    logger?.info("Successful login");
 
     // Set session cookie and redirect to dashboard.
     // We build the Response manually so we can attach both the Location header
@@ -125,6 +131,7 @@ export function registerWebUiRoutes(app: Hono, path: string, token: string): voi
   });
 
   app.get(subpath("logout"), () => {
+    logger?.info("User logged out");
     // Clear the session cookie by expiring it and redirect to the login page
     return new Response(null, {
       status: 302,

@@ -9,7 +9,7 @@ interface ScheduledJob {
 
 /** @internal */
 export class CronScheduler {
-  private jobs: ScheduledJob[] = [];
+  private readonly jobs: Map<string, ScheduledJob> = new Map();
   private readonly timeZone: string | undefined;
 
   constructor(private readonly logger: Logger) {
@@ -47,7 +47,7 @@ export class CronScheduler {
       timeZone: this.timeZone,
     });
 
-    this.jobs.push({ id, expression, job });
+    this.jobs.set(id, { id, expression, job });
     this.logger.info({ id, expression }, "Cron job scheduled");
   }
 
@@ -55,10 +55,10 @@ export class CronScheduler {
    * Remove a scheduled job by id.
    */
   remove(id: string): void {
-    const index = this.jobs.findIndex((j) => j.id === id);
-    if (index !== -1) {
-      this.jobs[index].job.stop();
-      this.jobs.splice(index, 1);
+    const entry = this.jobs.get(id);
+    if (entry) {
+      entry.job.stop();
+      this.jobs.delete(id);
       this.logger.debug({ id }, "Cron job removed");
     }
   }
@@ -67,13 +67,16 @@ export class CronScheduler {
    * Remove all jobs matching a prefix (e.g. all jobs for an automation).
    */
   removeByPrefix(prefix: string): void {
-    const toRemove = this.jobs.filter((j) => j.id.startsWith(prefix));
-    for (const job of toRemove) {
-      job.job.stop();
+    let count = 0;
+    for (const [id, entry] of this.jobs) {
+      if (id.startsWith(prefix)) {
+        entry.job.stop();
+        this.jobs.delete(id);
+        count++;
+      }
     }
-    this.jobs = this.jobs.filter((j) => !j.id.startsWith(prefix));
-    if (toRemove.length > 0) {
-      this.logger.debug({ prefix, count: toRemove.length }, "Cron jobs removed by prefix");
+    if (count > 0) {
+      this.logger.debug({ prefix, count }, "Cron jobs removed by prefix");
     }
   }
 
@@ -81,10 +84,10 @@ export class CronScheduler {
    * Stop all scheduled jobs.
    */
   stopAll(): void {
-    for (const job of this.jobs) {
-      job.job.stop();
+    for (const entry of this.jobs.values()) {
+      entry.job.stop();
     }
-    this.logger.info({ count: this.jobs.length }, "All cron jobs stopped");
-    this.jobs = [];
+    this.logger.info({ count: this.jobs.size }, "All cron jobs stopped");
+    this.jobs.clear();
   }
 }

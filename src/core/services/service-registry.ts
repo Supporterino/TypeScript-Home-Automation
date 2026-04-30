@@ -1,4 +1,5 @@
 import type { Hono } from "hono";
+import type { Logger } from "pino";
 import type { CoreContext, ServicePlugin } from "./service-plugin.js";
 
 /**
@@ -35,6 +36,14 @@ import type { CoreContext, ServicePlugin } from "./service-plugin.js";
  */
 export class ServiceRegistry {
   private readonly store: Map<string, unknown> = new Map();
+  private logger: Logger | null = null;
+
+  /**
+   * Attach a logger for lifecycle events. Called by the engine after construction.
+   */
+  setLogger(logger: Logger): void {
+    this.logger = logger;
+  }
 
   /**
    * Register a service under the given key.
@@ -42,6 +51,7 @@ export class ServiceRegistry {
    */
   register<T>(key: string, service: T): void {
     this.store.set(key, service);
+    this.logger?.debug({ key }, "Service registered");
   }
 
   /**
@@ -120,6 +130,7 @@ export class ServiceRegistry {
   /**
    * Call `onStart()` on every registered `ServicePlugin`, in insertion order.
    * Services that do not implement `ServicePlugin` are silently skipped.
+   * Errors in individual plugins are logged and do not prevent other plugins from starting.
    */
   async startAll(context: CoreContext): Promise<void> {
     for (const service of this.store.values()) {
@@ -128,7 +139,12 @@ export class ServiceRegistry {
           ...context,
           logger: context.logger.child({ service: service.serviceKey }),
         };
-        await service.onStart(pluginContext);
+        try {
+          this.logger?.info({ service: service.serviceKey }, "Starting service plugin");
+          await service.onStart(pluginContext);
+        } catch (err) {
+          this.logger?.error({ err, service: service.serviceKey }, "Service plugin onStart failed");
+        }
       }
     }
   }
@@ -136,11 +152,17 @@ export class ServiceRegistry {
   /**
    * Call `onStop()` on every registered `ServicePlugin`, in insertion order.
    * Services that do not implement `ServicePlugin` are silently skipped.
+   * Errors in individual plugins are logged and do not prevent other plugins from stopping.
    */
   async stopAll(): Promise<void> {
     for (const service of this.store.values()) {
       if (isPlugin(service) && service.onStop) {
-        await service.onStop();
+        try {
+          this.logger?.info({ service: service.serviceKey }, "Stopping service plugin");
+          await service.onStop();
+        } catch (err) {
+          this.logger?.error({ err, service: service.serviceKey }, "Service plugin onStop failed");
+        }
       }
     }
   }
@@ -148,11 +170,19 @@ export class ServiceRegistry {
   /**
    * Call `registerRoutes(app)` on every registered `ServicePlugin` that
    * implements it. Invoked by the engine once the HTTP server is ready.
+   * Errors in individual plugins are logged and do not prevent other plugins from mounting.
    */
   mountRoutes(app: Hono): void {
     for (const service of this.store.values()) {
       if (isPlugin(service) && service.registerRoutes) {
-        service.registerRoutes(app);
+        try {
+          service.registerRoutes(app);
+        } catch (err) {
+          this.logger?.error(
+            { err, service: service.serviceKey },
+            "Service plugin registerRoutes failed",
+          );
+        }
       }
     }
   }

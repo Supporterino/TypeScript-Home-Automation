@@ -108,7 +108,7 @@ export class HttpServer {
    */
   async mountWebUi(path: string, token: string): Promise<void> {
     const { registerWebUiRoutes } = await import("../web-ui/index.js");
-    registerWebUiRoutes(this.honoApp, path, token);
+    registerWebUiRoutes(this.honoApp, path, token, this.logger.child({ service: "web-ui" }));
     this.logger.info({ path }, "Web UI mounted");
   }
 
@@ -319,21 +319,24 @@ export class HttpServer {
         case "mqtt":
           context = {
             type: "mqtt",
-            topic: (body.topic as string) ?? `manual/${name}`,
-            payload: (body.payload as Record<string, unknown>) ?? {},
+            topic: typeof body.topic === "string" ? body.topic : `manual/${name}`,
+            payload:
+              body.payload && typeof body.payload === "object" && !Array.isArray(body.payload)
+                ? (body.payload as Record<string, unknown>)
+                : {},
           };
           break;
         case "cron":
           context = {
             type: "cron",
-            expression: (body.expression as string) ?? "manual",
+            expression: typeof body.expression === "string" ? body.expression : "manual",
             firedAt: new Date(),
           };
           break;
         case "state":
           context = {
             type: "state",
-            key: (body.key as string) ?? "manual",
+            key: typeof body.key === "string" ? body.key : "manual",
             newValue: body.newValue,
             oldValue: body.oldValue,
           };
@@ -341,10 +344,16 @@ export class HttpServer {
         case "webhook":
           context = {
             type: "webhook",
-            path: (body.path as string) ?? "manual",
-            method: (body.method as string) ?? "POST",
-            headers: (body.headers as Record<string, string>) ?? {},
-            query: (body.query as Record<string, string>) ?? {},
+            path: typeof body.path === "string" ? body.path : "manual",
+            method: typeof body.method === "string" ? body.method : "POST",
+            headers:
+              body.headers && typeof body.headers === "object" && !Array.isArray(body.headers)
+                ? (body.headers as Record<string, string>)
+                : {},
+            query:
+              body.query && typeof body.query === "object" && !Array.isArray(body.query)
+                ? (body.query as Record<string, string>)
+                : {},
             body: body.body ?? null,
           };
           break;
@@ -424,7 +433,10 @@ export class HttpServer {
       if (level) logQuery.level = levelNameToNumber(level);
 
       const limit = c.req.query("limit");
-      if (limit) logQuery.limit = Number.parseInt(limit, 10);
+      if (limit) {
+        const parsed = Number.parseInt(limit, 10);
+        logQuery.limit = Number.isNaN(parsed) ? 50 : Math.max(1, Math.min(parsed, 1000));
+      }
 
       const entries = this.logBuffer.query(logQuery);
       return c.json({ entries, count: entries.length });

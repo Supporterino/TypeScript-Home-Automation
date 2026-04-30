@@ -81,6 +81,12 @@ interface OWMOneCallResponse {
 export class OpenWeatherMapService implements WeatherService {
   private readonly baseUrl: string;
 
+  /** Cached API response with TTL. */
+  private cache: { data: OWMOneCallResponse; fetchedAt: number } | null = null;
+
+  /** Cache TTL in milliseconds (default: 5 minutes). */
+  private readonly cacheTtlMs = 5 * 60 * 1000;
+
   constructor(
     private readonly config: OpenWeatherMapConfig,
     private readonly http: HttpClient,
@@ -137,6 +143,11 @@ export class OpenWeatherMapService implements WeatherService {
   }
 
   private async fetchOneCall(): Promise<OWMOneCallResponse> {
+    // Return cached data if still fresh
+    if (this.cache && Date.now() - this.cache.fetchedAt < this.cacheTtlMs) {
+      return this.cache.data;
+    }
+
     const { latitude, longitude } = this.config.location;
     const url = `${this.baseUrl}/data/3.0/onecall?lat=${latitude}&lon=${longitude}&units=metric&appid=${this.config.apiKey}`;
 
@@ -149,6 +160,7 @@ export class OpenWeatherMapService implements WeatherService {
       throw new Error(errMsg);
     }
 
+    this.cache = { data: response.data, fetchedAt: Date.now() };
     return response.data;
   }
 }

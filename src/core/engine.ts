@@ -286,6 +286,7 @@ export function createEngine(options: EngineOptions): Engine {
   // ── Service registry ──────────────────────────────────────────────────────
 
   const serviceRegistry = new ServiceRegistry();
+  serviceRegistry.setLogger(logger.child({ service: "services" }));
 
   /**
    * Resolve a service value that may be a direct instance or a factory function.
@@ -416,36 +417,93 @@ export function createEngine(options: EngineOptions): Engine {
       }
 
       logger.info("Starting Home Automation Engine");
-      httpServer?.setManagers(stateManager, manager, logBuffer);
-      httpServer?.setDeviceRegistry(deviceRegistry);
 
-      // Mount routes from service plugins before the server starts listening.
-      if (httpServer) {
-        httpServer.mountServiceRoutes(serviceRegistry);
+      // Warn when the HTTP server is running without authentication
+      if (httpServer && config.httpServer.token.length === 0) {
+        logger.warn(
+          "HTTP_TOKEN is empty — all API endpoints are unauthenticated. " +
+            "Set the HTTP_TOKEN environment variable to secure the API.",
+        );
       }
 
-      // Mount web UI if enabled (imported lazily to keep it tree-shakeable)
-      if (httpServer && config.httpServer.webUi.enabled) {
-        const webUiPath = config.httpServer.webUi.path;
-        await httpServer.mountWebUi(webUiPath, config.httpServer.token);
-        logger.info({ path: webUiPath }, "Web UI enabled");
+      try {
+        httpServer?.setManagers(stateManager, manager, logBuffer);
+        httpServer?.setDeviceRegistry(deviceRegistry);
+
+        // Mount routes from service plugins before the server starts listening.
+        if (httpServer) {
+          httpServer.mountServiceRoutes(serviceRegistry);
+        }
+
+        // Mount web UI if enabled (imported lazily to keep it tree-shakeable)
+        if (httpServer && config.httpServer.webUi.enabled) {
+          const webUiPath = config.httpServer.webUi.path;
+          await httpServer.mountWebUi(webUiPath, config.httpServer.token);
+          logger.info({ path: webUiPath }, "Web UI enabled");
+        }
+
+        httpServer?.start();
+        await stateManager.load();
+        await deviceRegistry?.load();
+
+        // Run onStart() lifecycle hooks for all registered ServicePlugins.
+        const coreCtx: CoreContext = { http, logger };
+        await serviceRegistry.startAll(coreCtx);
+
+        await mqtt.connect();
+        deviceRegistry?.start();
+        const recursive = options.recursive ?? config.automations.recursive;
+        await manager.discoverAndRegister(options.automationsDir, recursive);
+        started = true;
+        httpServer?.setEngineStarted(true);
+        logger.info(
+          {
+            automations: manager.listAutomations().length,
+            services: serviceRegistry.keys().length,
+            mqtt: config.mqtt.host,
+            httpPort: httpServerPort > 0 ? httpServerPort : "disabled",
+            deviceRegistry: config.deviceRegistry.enabled,
+            statePersistence:
+              stateManager !== null && (options.state?.persist ?? config.state.persist),
+          },
+          "Home Automation Engine is running",
+        );
+      } catch (err) {
+        logger.error({ err }, "Engine startup failed — rolling back");
+        // Best-effort cleanup of whatever was partially started
+        try {
+          await manager.stopAll();
+        } catch {
+          /* already logging above */
+        }
+        try {
+          cron.stopAll();
+        } catch {
+          /* swallow */
+        }
+        try {
+          await serviceRegistry.stopAll();
+        } catch {
+          /* swallow */
+        }
+        try {
+          deviceRegistry?.stop();
+        } catch {
+          /* swallow */
+        }
+        try {
+          await mqtt.disconnect();
+        } catch {
+          /* swallow */
+        }
+        try {
+          httpServer?.stop();
+        } catch {
+          /* swallow */
+        }
+        started = false;
+        throw err;
       }
-
-      httpServer?.start();
-      await stateManager.load();
-      await deviceRegistry?.load();
-
-      // Run onStart() lifecycle hooks for all registered ServicePlugins.
-      const coreCtx: CoreContext = { http, logger };
-      await serviceRegistry.startAll(coreCtx);
-
-      await mqtt.connect();
-      deviceRegistry?.start();
-      const recursive = options.recursive ?? config.automations.recursive;
-      await manager.discoverAndRegister(options.automationsDir, recursive);
-      started = true;
-      httpServer?.setEngineStarted(true);
-      logger.info("Home Automation Engine is running");
     },
 
     async stop(): Promise<void> {

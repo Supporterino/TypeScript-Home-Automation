@@ -151,6 +151,9 @@ export class StateManager {
    * @param key The state key to watch
    * @param handler Callback fired with (key, newValue, oldValue)
    */
+  /** Threshold for warning about potential listener leaks. */
+  private static readonly LISTENER_WARN_THRESHOLD = 10;
+
   onChange<T = unknown>(key: string, handler: StateChangeHandler<T>): void {
     let handlers = this.listeners.get(key);
     if (!handlers) {
@@ -158,6 +161,13 @@ export class StateManager {
       this.listeners.set(key, handlers);
     }
     handlers.add(handler as StateChangeHandler);
+
+    if (handlers.size > StateManager.LISTENER_WARN_THRESHOLD) {
+      this.logger.warn(
+        { key, count: handlers.size, threshold: StateManager.LISTENER_WARN_THRESHOLD },
+        "High number of state change listeners for a single key — possible listener leak",
+      );
+    }
   }
 
   /**
