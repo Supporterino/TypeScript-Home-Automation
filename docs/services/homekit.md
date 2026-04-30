@@ -13,7 +13,9 @@ The built-in `HomekitService` runs a [HAP-NodeJS](https://github.com/homebridge/
 
 ## Registering the service
 
-Pass a `HomekitService` instance (or factory) to the `services.homekit` field in your entry point:
+Pass a `HomekitService` factory to the `services.homekit` field in your entry point.
+The factory receives `mqtt` and `deviceRegistry` as extra arguments so there is no
+circular reference between the factory and the `engine` object:
 
 ```ts
 import { createEngine, HomekitService, HOMEKIT_SERVICE_KEY } from "ts-home-automation";
@@ -21,8 +23,8 @@ import { createEngine, HomekitService, HOMEKIT_SERVICE_KEY } from "ts-home-autom
 const engine = createEngine({
   automationsDir: "./src/automations",
   services: {
-    [HOMEKIT_SERVICE_KEY]: (_http, logger) =>
-      new HomekitService(engine.mqtt, logger, engine.deviceRegistry, {
+    [HOMEKIT_SERVICE_KEY]: (_http, logger, mqtt, deviceRegistry) =>
+      new HomekitService(mqtt, logger, deviceRegistry, {
         pinCode: "031-45-154",
       }),
   },
@@ -31,7 +33,10 @@ const engine = createEngine({
 await engine.start();
 ```
 
-> **Important:** the service needs `engine.mqtt` and `engine.deviceRegistry`. Access them via the `engine` object returned by `createEngine()` — both are available immediately after calling `createEngine()`, before `start()`.
+> **Note:** `HomekitService` uses a dedicated `HomekitServiceFactory` type
+> `(http, logger, mqtt, deviceRegistry) => HomekitService` instead of the generic
+> `ServiceFactory<T>`. The engine resolves `mqtt` and `deviceRegistry` before
+> calling the factory, so both are guaranteed to be available.
 
 ---
 

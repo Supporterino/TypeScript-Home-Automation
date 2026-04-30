@@ -35,6 +35,29 @@ import {
 export type ServiceFactory<T> = (http: HttpClient, logger: Logger) => T;
 
 /**
+ * Factory function type specifically for `HomekitService`.
+ *
+ * Extends the standard `ServiceFactory` signature with the two extra
+ * dependencies that HomeKit requires — `MqttService` and `DeviceRegistry`.
+ * Both are constructed synchronously inside `createEngine()` before this
+ * factory is called, so there is no circular reference.
+ *
+ * @example
+ * ```ts
+ * homekit: (http, logger, mqtt, deviceRegistry) =>
+ *   new HomekitService(mqtt, logger, deviceRegistry, {
+ *     pinCode: "031-45-154",
+ *   }),
+ * ```
+ */
+export type HomekitServiceFactory = (
+  http: HttpClient,
+  logger: Logger,
+  mqtt: MqttService,
+  deviceRegistry: DeviceRegistry | null,
+) => HomekitService;
+
+/**
  * Options for creating an automation engine.
  *
  * All fields are optional — sensible defaults are derived from
@@ -161,7 +184,7 @@ export interface EngineOptions {
     weather?: WeatherService | ServiceFactory<WeatherService>;
     shelly?: ShellyService | ServiceFactory<ShellyService>;
     nanoleaf?: NanoleafService | ServiceFactory<NanoleafService>;
-    homekit?: HomekitService | ServiceFactory<HomekitService>;
+    homekit?: HomekitService | HomekitServiceFactory;
     /** Any additional custom services registered under arbitrary keys. */
     [key: string]: unknown;
   };
@@ -288,23 +311,11 @@ export function createEngine(options: EngineOptions): Engine {
   const weatherService = resolveService(weatherValue, "weather");
   const shellyService = resolveService(shellyValue, "shelly");
   const nanoleafService = resolveService(nanoleafValue, "nanoleaf");
-  const homekitService = resolveService(homekitValue, "homekit");
 
   if (notificationService) serviceRegistry.register("notifications", notificationService);
   if (weatherService) serviceRegistry.register("weather", weatherService);
   if (shellyService) serviceRegistry.register("shelly", shellyService);
   if (nanoleafService) serviceRegistry.register("nanoleaf", nanoleafService);
-  if (homekitService) serviceRegistry.register("homekit", homekitService);
-
-  // Register any additional custom services from the services map.
-  if (options.services) {
-    const WELL_KNOWN = new Set(["notifications", "weather", "shelly", "nanoleaf", "homekit"]);
-    for (const [key, value] of Object.entries(options.services)) {
-      if (!WELL_KNOWN.has(key) && value !== undefined) {
-        serviceRegistry.register(key, value);
-      }
-    }
-  }
 
   // ── Device registry ───────────────────────────────────────────────────────
 
@@ -327,6 +338,29 @@ export function createEngine(options: EngineOptions): Engine {
     logger.info(
       "Device registry disabled (DEVICE_REGISTRY_ENABLED=false) — set to true to enable automatic device discovery",
     );
+  }
+
+  // HomekitService needs mqtt + deviceRegistry in addition to the standard
+  // (http, logger) pair, so it cannot use the generic resolveService helper.
+  // It is resolved here — after deviceRegistry is constructed — so both are
+  // available as local consts with no circular reference.
+  const homekitService =
+    homekitValue === undefined
+      ? null
+      : typeof homekitValue === "function"
+        ? homekitValue(http, logger.child({ service: "homekit" }), mqtt, deviceRegistry)
+        : homekitValue;
+
+  if (homekitService) serviceRegistry.register("homekit", homekitService);
+
+  // Register any additional custom services from the services map.
+  if (options.services) {
+    const WELL_KNOWN = new Set(["notifications", "weather", "shelly", "nanoleaf", "homekit"]);
+    for (const [key, value] of Object.entries(options.services)) {
+      if (!WELL_KNOWN.has(key) && value !== undefined) {
+        serviceRegistry.register(key, value);
+      }
+    }
   }
 
   // ── HTTP server ───────────────────────────────────────────────────────────

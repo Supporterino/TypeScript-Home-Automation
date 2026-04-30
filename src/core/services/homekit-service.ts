@@ -44,7 +44,7 @@ export interface HomekitStatus {
  * const engine = createEngine({
  *   automationsDir: "...",
  *   services: {
- *     homekit: (_http, logger) =>
+ *     homekit: (_http, logger, mqtt, deviceRegistry) =>
  *       new HomekitService(mqtt, logger, deviceRegistry, {
  *         pinCode: "031-45-154",
  *         persistPath: "./homekit-persist",
@@ -121,8 +121,8 @@ export interface HomekitServiceOptions {
  * const engine = createEngine({
  *   automationsDir: "...",
  *   services: {
- *     homekit: (_http, logger) =>
- *       new HomekitService(engine.mqtt, logger, engine.deviceRegistry, {
+ *     homekit: (_http, logger, mqtt, deviceRegistry) =>
+ *       new HomekitService(mqtt, logger, deviceRegistry, {
  *         pinCode: "031-45-154",
  *       }),
  *   },
