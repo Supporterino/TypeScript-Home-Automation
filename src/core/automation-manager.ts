@@ -112,6 +112,15 @@ export class AutomationManager {
    * Injects dependencies, wires up triggers, and calls onStart.
    */
   async register(automation: Automation): Promise<void> {
+    // Detect duplicate automation names (would cause cron job ID collisions)
+    const existing = this.automations.find((a) => a.name === automation.name);
+    if (existing) {
+      throw new Error(
+        `Duplicate automation name "${automation.name}". ` +
+          `Each automation must have a unique name.`,
+      );
+    }
+
     const childLogger = this.logger.child({ automation: automation.name });
 
     const context: AutomationContext = {
@@ -328,7 +337,37 @@ export class AutomationManager {
     try {
       await automation.onStart();
     } catch (err) {
-      childLogger.error({ err }, "Automation onStart failed");
+      childLogger.error({ err }, "Automation onStart failed — unregistering");
+      // Clean up triggers that were already wired
+      for (const { topic, handler } of mqttHandlers) {
+        this.mqtt.unsubscribe(topic, handler);
+      }
+      for (const { key, handler } of stateHandlers) {
+        this.stateManager.offChange(key, handler);
+      }
+      for (const path of webhookPaths) {
+        this.httpServer?.removeWebhook(path);
+      }
+      for (const { friendlyName, handler } of deviceStateHandlers) {
+        this.deviceRegistry?.offDeviceStateChange(friendlyName, handler);
+      }
+      for (const handler of deviceJoinedHandlers) {
+        this.deviceRegistry?.offDeviceAdded(handler);
+      }
+      for (const handler of deviceLeftHandlers) {
+        this.deviceRegistry?.offDeviceRemoved(handler);
+      }
+      this.cron.removeByPrefix(`${automation.name}:`);
+      // Remove from the automations list
+      const idx = this.automations.indexOf(automation);
+      if (idx !== -1) this.automations.splice(idx, 1);
+      this.mqttHandlers.delete(automation);
+      this.stateHandlers.delete(automation);
+      this.webhookPaths.delete(automation);
+      this.deviceStateHandlers.delete(automation);
+      this.deviceJoinedHandlers.delete(automation);
+      this.deviceLeftHandlers.delete(automation);
+      return;
     }
 
     childLogger.info("Automation registered");
@@ -486,7 +525,12 @@ export class AutomationManager {
     if (!automation) return false;
 
     this.logger.info({ automation: name, type: context.type }, "Manual trigger via debug API");
-    await automation.execute(context);
+    try {
+      await automation.execute(context);
+    } catch (err) {
+      this.logger.error({ err, automation: name, type: context.type }, "Manual trigger failed");
+      throw err;
+    }
     return true;
   }
 }

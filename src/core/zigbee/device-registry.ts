@@ -379,6 +379,10 @@ export class DeviceRegistry {
     // Build a set of incoming friendly names (excluding coordinators)
     const incomingMap = new Map<string, ZigbeeDevice>();
     for (const device of incoming) {
+      // Basic structural validation — skip malformed entries
+      if (!device || typeof device !== "object" || typeof device.friendly_name !== "string") {
+        continue;
+      }
       if (device.type === "Coordinator") continue;
       incomingMap.set(device.friendly_name, device);
     }
@@ -407,6 +411,11 @@ export class DeviceRegistry {
    * registry consistent with the broker's authoritative state.
    */
   private handleBridgeEvent(event: BridgeEventPayload): void {
+    if (!event || typeof event !== "object" || typeof event.type !== "string") {
+      this.logger.warn("bridge/event payload is malformed — ignoring");
+      return;
+    }
+
     if (event.type === "device_joined" || event.type === "device_leave") {
       this.logger.info(
         { type: event.type, friendlyName: event.data.friendly_name },

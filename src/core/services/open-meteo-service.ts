@@ -73,6 +73,12 @@ interface OMCurrentResponse {
 export class OpenMeteoService implements WeatherService {
   private readonly baseUrl: string;
 
+  /** Cached API response with TTL. */
+  private cache: { data: OMCurrentResponse; fetchedAt: number; forecastDays: number } | null = null;
+
+  /** Cache TTL in milliseconds (default: 5 minutes). */
+  private readonly cacheTtlMs = 5 * 60 * 1000;
+
   constructor(
     private readonly config: OpenMeteoConfig,
     private readonly http: HttpClient,
@@ -131,6 +137,15 @@ export class OpenMeteoService implements WeatherService {
   }
 
   private async fetchData(forecastDays: number): Promise<OMCurrentResponse> {
+    // Return cached data if still fresh and covers enough forecast days
+    if (
+      this.cache &&
+      Date.now() - this.cache.fetchedAt < this.cacheTtlMs &&
+      this.cache.forecastDays >= forecastDays
+    ) {
+      return this.cache.data;
+    }
+
     const { latitude, longitude } = this.config.location;
     const params = [
       `latitude=${latitude}`,
@@ -152,6 +167,7 @@ export class OpenMeteoService implements WeatherService {
       throw new Error(errMsg);
     }
 
+    this.cache = { data: response.data, fetchedAt: Date.now(), forecastDays };
     return response.data;
   }
 }

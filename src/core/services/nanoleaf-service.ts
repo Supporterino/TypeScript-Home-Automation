@@ -115,9 +115,19 @@ export class NanoleafService {
    * @param duration Transition time in seconds (optional)
    */
   async setBrightness(name: string, value: number, duration?: number): Promise<void> {
-    this.logger.info({ device: name, brightness: value, duration }, "Setting Nanoleaf brightness");
+    const clamped = Math.max(0, Math.min(100, Math.round(value)));
+    if (clamped !== value) {
+      this.logger.warn(
+        { device: name, requested: value, clamped },
+        "Brightness clamped to 0-100 range",
+      );
+    }
+    this.logger.info(
+      { device: name, brightness: clamped, duration },
+      "Setting Nanoleaf brightness",
+    );
     await this.setState(name, {
-      brightness: duration !== undefined ? { value, duration } : { value },
+      brightness: duration !== undefined ? { value: clamped, duration } : { value: clamped },
     });
   }
 
@@ -133,10 +143,15 @@ export class NanoleafService {
    * @param saturation Saturation 0-100
    */
   async setColor(name: string, hue: number, saturation: number): Promise<void> {
-    this.logger.info({ device: name, hue, saturation }, "Setting Nanoleaf color");
+    const clampedHue = Math.max(0, Math.min(360, Math.round(hue)));
+    const clampedSat = Math.max(0, Math.min(100, Math.round(saturation)));
+    this.logger.info(
+      { device: name, hue: clampedHue, saturation: clampedSat },
+      "Setting Nanoleaf color",
+    );
     await this.setState(name, {
-      hue: { value: hue },
-      sat: { value: saturation },
+      hue: { value: clampedHue },
+      sat: { value: clampedSat },
     });
   }
 
@@ -147,8 +162,15 @@ export class NanoleafService {
    * @param value Color temperature in Kelvin (1200-6500)
    */
   async setColorTemp(name: string, value: number): Promise<void> {
-    this.logger.info({ device: name, colorTemp: value }, "Setting Nanoleaf color temperature");
-    await this.setState(name, { ct: { value } });
+    const clamped = Math.max(1200, Math.min(6500, Math.round(value)));
+    if (clamped !== value) {
+      this.logger.warn(
+        { device: name, requested: value, clamped },
+        "Color temperature clamped to 1200-6500 range",
+      );
+    }
+    this.logger.info({ device: name, colorTemp: clamped }, "Setting Nanoleaf color temperature");
+    await this.setState(name, { ct: { value: clamped } });
   }
 
   // -------------------------------------------------------------------------

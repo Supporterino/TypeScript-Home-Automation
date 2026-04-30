@@ -182,8 +182,15 @@ export class ShellyService {
    * @param position Target position 0–100 (0 = closed, 100 = fully open)
    */
   async coverGoToPosition(name: string, position: number): Promise<void> {
-    const params = new URLSearchParams({ id: "0", pos: String(position) });
-    this.logger.info({ device: name, position }, "Moving Shelly cover to position");
+    const clamped = Math.max(0, Math.min(100, Math.round(position)));
+    if (clamped !== position) {
+      this.logger.warn(
+        { device: name, requested: position, clamped },
+        "Cover position clamped to 0-100 range",
+      );
+    }
+    const params = new URLSearchParams({ id: "0", pos: String(clamped) });
+    this.logger.info({ device: name, position: clamped }, "Moving Shelly cover to position");
     await this.rpc(name, "Cover.GoToPosition", params);
   }
 
@@ -195,8 +202,15 @@ export class ShellyService {
    * @param offset Relative position change (-100 to 100, positive = open, negative = close)
    */
   async coverMoveRelative(name: string, offset: number): Promise<void> {
-    const params = new URLSearchParams({ id: "0", rel: String(offset) });
-    this.logger.info({ device: name, offset }, "Moving Shelly cover by relative offset");
+    const clamped = Math.max(-100, Math.min(100, Math.round(offset)));
+    if (clamped !== offset) {
+      this.logger.warn(
+        { device: name, requested: offset, clamped },
+        "Cover offset clamped to -100 to 100 range",
+      );
+    }
+    const params = new URLSearchParams({ id: "0", rel: String(clamped) });
+    this.logger.info({ device: name, offset: clamped }, "Moving Shelly cover by relative offset");
     await this.rpc(name, "Cover.GoToPosition", params);
   }
 

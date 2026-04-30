@@ -13,6 +13,10 @@ const configSchema = z.object({
   mqtt: z.object({
     host: z.string().default("localhost"),
     port: z.coerce.number().int().positive().default(1883),
+    /** Username for MQTT broker authentication. Empty = no auth. */
+    username: z.string().default(""),
+    /** Password for MQTT broker authentication. */
+    password: z.string().default(""),
   }),
   zigbee2mqttPrefix: z.string().default("zigbee2mqtt"),
   logLevel: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info"),
@@ -74,6 +78,8 @@ export function loadConfig(): Config {
     mqtt: {
       host: process.env.MQTT_HOST,
       port: process.env.MQTT_PORT,
+      username: process.env.MQTT_USERNAME,
+      password: process.env.MQTT_PASSWORD,
     },
     zigbee2mqttPrefix: process.env.ZIGBEE2MQTT_PREFIX,
     logLevel: process.env.LOG_LEVEL,

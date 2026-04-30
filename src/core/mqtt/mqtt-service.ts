@@ -3,7 +3,10 @@ import type { Logger } from "pino";
 import type { Config } from "../../config.js";
 import { hasWildcard, splitPattern, topicMatchesParts } from "./mqtt-utils.js";
 
-export type MqttMessageHandler = (topic: string, payload: Record<string, unknown>) => void;
+export type MqttMessageHandler = (
+  topic: string,
+  payload: Record<string, unknown>,
+) => void | Promise<void>;
 
 /**
  * A subscription to an exact (non-wildcard) topic.
@@ -68,6 +71,13 @@ export class MqttService {
       reconnectPeriod: 5000,
       connectTimeout: 10000,
     };
+
+    // Add credentials if configured
+    if (this.config.mqtt.username) {
+      options.username = this.config.mqtt.username;
+      options.password = this.config.mqtt.password || undefined;
+      this.logger.debug("MQTT authentication enabled");
+    }
 
     return new Promise((resolve, reject) => {
       this.client = mqtt.connect(url, options);
@@ -249,7 +259,12 @@ export class MqttService {
     if (exactSubs) {
       for (const sub of exactSubs) {
         try {
-          sub.handler(topic, payload);
+          const result = sub.handler(topic, payload);
+          if (result && typeof result.catch === "function") {
+            result.catch((err: unknown) => {
+              this.logger.error({ err, topic }, "Error in async MQTT message handler");
+            });
+          }
         } catch (err) {
           this.logger.error({ err, topic }, "Error in MQTT message handler");
         }
@@ -259,7 +274,15 @@ export class MqttService {
     // Dispatch to wildcard handlers
     for (const sub of wildcardMatches) {
       try {
-        sub.handler(topic, payload);
+        const result = sub.handler(topic, payload);
+        if (result && typeof result.catch === "function") {
+          result.catch((err: unknown) => {
+            this.logger.error(
+              { err, topic, pattern: sub.topic },
+              "Error in async MQTT message handler",
+            );
+          });
+        }
       } catch (err) {
         this.logger.error({ err, topic, pattern: sub.topic }, "Error in MQTT message handler");
       }

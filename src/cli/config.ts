@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -55,6 +55,8 @@ export async function loadCliConfig(): Promise<CliConfig> {
 export async function saveCliConfig(config: CliConfig): Promise<void> {
   await mkdir(dirname(CONFIG_PATH), { recursive: true });
   await writeFile(CONFIG_PATH, JSON.stringify(config, null, 2), "utf-8");
+  // Restrict file permissions to owner only (tokens are stored in plaintext)
+  await chmod(CONFIG_PATH, 0o600);
 }
 
 /**

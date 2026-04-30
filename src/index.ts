@@ -97,7 +97,6 @@ export type {
   NanoleafState,
   NanoleafStateSet,
 } from "./types/nanoleaf.js";
-// Notification services
 // Notification service interface + types
 export type {
   NotificationOptions,
@@ -128,11 +127,7 @@ export type {
   WeatherService,
   WindData,
 } from "./types/weather.js";
-// Zigbee2MQTT types — common primitives
-// Zigbee2MQTT types — generic payloads (work across brands)
-// Zigbee2MQTT types — Philips Hue specific
-// Zigbee2MQTT types — IKEA specific
-// Zigbee2MQTT types — Aqara specific
+// Zigbee2MQTT types (common, Philips, IKEA, Aqara, bridge)
 export type {
   AirPurifierPayload,
   AirQualitySensorPayload,
