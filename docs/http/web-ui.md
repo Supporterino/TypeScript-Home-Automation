@@ -86,6 +86,8 @@ The dashboard follows the browser/OS light or dark mode preference automatically
 
 The page is backed by a Hono sub-app that exposes its own `/api` group. All endpoints return JSON and require the bearer token when `HTTP_TOKEN` is set.
 
+> **Path prefix:** The paths below use the default `WEB_UI_PATH=/status`. If you configure a different path (e.g. `/dashboard`), all API routes shift accordingly (e.g. `/dashboard/api/status`).
+
 | Method | Path | Description |
 |---|---|---|
 | `GET` | `/status/api/status` | Engine + MQTT readiness and uptime |
@@ -98,6 +100,7 @@ The page is backed by a Hono sub-app that exposes its own `/api` group. All endp
 | `DELETE` | `/status/api/state/:key` | Delete a state key |
 | `GET` | `/status/api/logs` | Query logs (`?level=&automation=&limit=`) |
 | `GET` | `/status/api/devices` | List all tracked Zigbee devices with merged state and nice names. Returns `503` when `DEVICE_REGISTRY_ENABLED=false`. |
+| `GET` | `/status/api/devices/:friendlyName` | Get a single device with full metadata and merged state. Returns `404` when not found. |
 | `GET` | `/status/api/homekit/status` | HomeKit bridge status snapshot (running state, accessory count, configuration). Returns `404` when `HomekitService` is not registered. |
 
 ### Trigger request body

@@ -32,10 +32,22 @@ const engine = createEngine({
       svc.register("panels", {
         host: "192.168.1.60",       // IP, hostname, or .local name
         token: "xxxxxxxxxxxxxxxxxxx", // from pairing
+        // port: 16021,             // optional, defaults to 16021
       });
       return svc;
     },
   },
+});
+```
+
+### Bulk registration
+
+Use `registerMany()` to register multiple devices at once:
+
+```ts
+svc.registerMany({
+  panels: { host: "192.168.1.60", token: "xxx" },
+  bedroom: { host: "192.168.1.61", token: "yyy", port: 16021 },
 });
 ```
 

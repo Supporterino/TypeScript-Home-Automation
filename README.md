@@ -78,11 +78,14 @@ See [Configuration](https://Supporterino.github.io/TypeScript-Home-Automation/co
 |---|---|
 | [Getting Started](https://Supporterino.github.io/TypeScript-Home-Automation/getting-started/) | Install, configure, first automation |
 | [Writing Automations](https://Supporterino.github.io/TypeScript-Home-Automation/writing-automations/) | Triggers, services, lifecycle hooks |
+| [API Reference](https://Supporterino.github.io/TypeScript-Home-Automation/api-reference/) | All public classes, types, and methods |
 | [Device Registry](https://Supporterino.github.io/TypeScript-Home-Automation/device-registry/) | Zigbee device discovery, state tracking, nice names |
 | [Configuration](https://Supporterino.github.io/TypeScript-Home-Automation/configuration/) | All environment variables |
 | [CLI Reference](https://Supporterino.github.io/TypeScript-Home-Automation/cli/) | `ts-ha` commands |
-| [Web Status Page](https://Supporterino.github.io/TypeScript-Home-Automation/http/web-ui/) | Browser dashboard |
+| [Web UI](https://Supporterino.github.io/TypeScript-Home-Automation/http/web-ui/) | Browser dashboard |
+| [Deployment](https://Supporterino.github.io/TypeScript-Home-Automation/deployment/) | Docker, Kubernetes, production setup |
 | [Architecture](https://Supporterino.github.io/TypeScript-Home-Automation/architecture/) | How the engine works |
+| [Troubleshooting](https://Supporterino.github.io/TypeScript-Home-Automation/troubleshooting/) | Common issues and solutions |
 | [Contributing](https://Supporterino.github.io/TypeScript-Home-Automation/contributing/) | Dev setup, conventions |
 
 ---

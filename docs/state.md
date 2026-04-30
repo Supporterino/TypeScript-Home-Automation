@@ -30,7 +30,10 @@ State is always available in-memory regardless of persistence. The `persist` fla
 ## Reading and writing
 
 ```ts
-// Write — also fires state triggers in other automations
+// Write — fires state triggers in other automations
+// Note: set() is a no-op when the new value equals the current value
+// (compared via JSON.stringify for objects, strict equality for primitives),
+// so duplicate writes do not trigger spurious change events.
 this.state.set<boolean>("night_mode", true);
 this.state.set<number>("motion_count", 42);
 this.state.set("last_motion", { room: "hallway", time: Date.now() });
