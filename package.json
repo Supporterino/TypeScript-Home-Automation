@@ -76,7 +76,7 @@
     "@mantine/core": "^9.0.2",
     "@mantine/hooks": "^9.0.2",
     "@opentui/core": "^0.1.99",
-    "@opentui/react": "^0.1.99",
+    "@opentui/react": "^0.2.0",
     "@tabler/icons-react": "^3.41.1",
     "cron": "^4.4.0",
     "hap-nodejs": "^0.14.3",
