@@ -47,9 +47,13 @@ bun install && bun run dev
 | [Getting Started](getting-started.md) | Install, configure, write your first automation |
 | [Configuration](configuration.md) | All environment variables |
 | [Writing Automations](writing-automations.md) | Triggers, services, lifecycle hooks |
+| [API Reference](api-reference.md) | Complete reference for all public classes, types, and methods |
 | [Device Registry](device-registry.md) | Zigbee device discovery, state tracking, nice names |
+| [Custom Service Plugins](service-plugins.md) | Extend the engine with your own services |
 | [CLI Reference](cli.md) | `ts-ha` command reference |
 | [Web UI](http/web-ui.md) | Browser dashboard |
 | [HomeKit](services/homekit.md) | Apple HomeKit bridge service |
+| [Deployment & Operations](deployment.md) | Docker, Kubernetes, production setup |
 | [Architecture](architecture.md) | How the engine works internally |
+| [Troubleshooting & FAQ](troubleshooting.md) | Common issues and solutions |
 | [npm package](https://www.npmjs.com/package/ts-home-automation) | `ts-home-automation` on npm |

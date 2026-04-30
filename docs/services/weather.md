@@ -77,7 +77,7 @@ if (forecast[0].precipitationChance > 0.5) {
 
 ## Data types
 
-### Current weather (`WeatherCurrent`)
+### Current weather (`CurrentWeather`)
 
 | Field | Type | Description |
 |---|---|---|
@@ -89,9 +89,11 @@ if (forecast[0].precipitationChance > 0.5) {
 | `wind.speed` | `number` | Wind speed in m/s |
 | `wind.direction` | `number` | Wind direction in degrees |
 | `cloudCover` | `number` | Cloud cover % |
+| `visibility` | `number \| undefined` | Visibility in metres (if available) |
 | `uvIndex` | `number \| undefined` | UV index (if available) |
+| `timestamp` | `Date` | Observation time |
 
-### Forecast day (`WeatherForecastDay`)
+### Forecast day (`DailyForecast`)
 
 | Field | Type | Description |
 |---|---|---|
@@ -100,9 +102,13 @@ if (forecast[0].precipitationChance > 0.5) {
 | `tempLow` | `number` | Minimum temperature in °C |
 | `precipitationChance` | `number` | Probability of precipitation 0–1 |
 | `condition` | `string` | Day condition category |
+| `precipitationAmount` | `number \| undefined` | Expected precipitation in mm |
 | `description` | `string` | Human-readable description |
+| `wind` | `WindData` | Wind speed (m/s), direction (degrees), gust |
 | `sunrise` | `Date \| undefined` | Sunrise time |
 | `sunset` | `Date \| undefined` | Sunset time |
+
+> **Caching:** Both built-in services cache API responses for 5 minutes to reduce network traffic and stay within rate limits. Repeated calls within that window return the cached result.
 
 ---
 
@@ -111,14 +117,14 @@ if (forecast[0].precipitationChance > 0.5) {
 Implement the `WeatherService` interface to integrate any other weather provider:
 
 ```ts
-import type { WeatherService, WeatherCurrent, WeatherForecastDay } from "ts-home-automation";
+import type { WeatherService, CurrentWeather, DailyForecast } from "ts-home-automation";
 
 class MyWeatherService implements WeatherService {
-  async getCurrent(): Promise<WeatherCurrent> {
+  async getCurrent(): Promise<CurrentWeather> {
     // fetch from your API
   }
 
-  async getForecast(days: number): Promise<WeatherForecastDay[]> {
+  async getForecast(days: number): Promise<DailyForecast[]> {
     // fetch from your API
   }
 }

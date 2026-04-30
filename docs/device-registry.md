@@ -368,6 +368,7 @@ The device metadata object returned by `getDevices()`, `getDevice()`, and all de
 | `type` | `"Router" \| "EndDevice" \| "Coordinator"` | Zigbee device role |
 | `supported` | `boolean` | Whether Z2M has a definition for this device |
 | `disabled` | `boolean` | Whether disabled in Z2M |
+| `description` | `string \| undefined` | Optional user-set description in Z2M |
 | `interview_state` | `"PENDING" \| "IN_PROGRESS" \| "SUCCESSFUL" \| "FAILED"` | Interview status |
 | `power_source` | `string \| null \| undefined` | E.g. `"Mains"`, `"Battery"` |
 | `definition` | `ZigbeeDeviceDefinition \| null` | Model info — `null` when `supported` is `false` |
@@ -379,6 +380,7 @@ The device metadata object returned by `getDevices()`, `getDevice()`, and all de
 | `model` | `string` | Model identifier (e.g. `LCA001`) |
 | `vendor` | `string` | Manufacturer name |
 | `description` | `string` | Human-readable description |
+| `source` | `"native" \| "generated" \| "external"` | Where the device definition originates from |
 | `exposes` | `unknown[]` | Z2M exposes definitions |
 | `options` | `unknown[]` | Z2M device options |
 

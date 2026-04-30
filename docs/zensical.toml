@@ -21,16 +21,20 @@ nav = [
     { "Nanoleaf" = "services/nanoleaf.md" },
     { "Weather" = "services/weather.md" },
     { "Notifications" = "services/notifications.md" },
-    { "Device Registry" = "device-registry.md" }
+    { "Device Registry" = "device-registry.md" },
+    { "Custom Service Plugins" = "service-plugins.md" }
   ]},
   { "State Management" = "state.md" },
   { "Device Types" = "device-types.md" },
+  { "API Reference" = "api-reference.md" },
   { "HTTP" = [
     { "Health Probes" = "http/health-probes.md" },
     { "Web UI" = "http/web-ui.md" }
   ]},
   { "CLI Reference" = "cli.md" },
+  { "Deployment & Operations" = "deployment.md" },
   { "Architecture" = "architecture.md" },
+  { "Troubleshooting & FAQ" = "troubleshooting.md" },
   { "Contributing" = "contributing.md" }
 ]
 
@@ -70,4 +74,4 @@ generator = false
 
 [[project.extra.social]]
 icon = "fontawesome/brands/github"
-link = "https://https://github.com/Supporterino"
+link = "https://github.com/Supporterino"

@@ -58,6 +58,36 @@ If no notification service is configured, `this.notify()` logs a warning and doe
 | `message` | `string` | required | Notification body |
 | `priority` | `"min" \| "low" \| "default" \| "high" \| "urgent"` | `"default"` | Delivery priority |
 | `tags` | `string[]` | `[]` | Tags / emoji shortcuts (e.g. `["warning", "rotating_light"]`) |
+| `channel` | `string` | _(none)_ | Route to a named channel (see below) |
+
+### Channels
+
+The ntfy service supports routing notifications to different ntfy topics via named **channels**. Configure the channel map in `NtfyConfig`:
+
+```ts
+new NtfyNotificationService({
+  topic: "my-home-alerts",        // default topic
+  channels: {
+    security: "home-security",    // channel "security" → ntfy topic "home-security"
+    climate:  "home-climate",     // channel "climate"  → ntfy topic "home-climate"
+  },
+  http,
+  logger,
+});
+```
+
+Then specify the `channel` field when sending:
+
+```ts
+await this.notify({
+  title: "Water leak!",
+  message: "Kitchen sensor triggered",
+  priority: "urgent",
+  channel: "security",   // → posts to the "home-security" ntfy topic
+});
+```
+
+When `channel` is omitted or has no matching entry in the `channels` map, the notification is sent to the default `topic`.
 
 ---
 
