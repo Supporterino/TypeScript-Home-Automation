@@ -199,6 +199,9 @@ export class HomekitService implements ServicePlugin {
 
     // Lazily load hap-nodejs so that simply importing HomekitService does not
     // evaluate the hap-nodejs module (which checks for native crypto ciphers).
+    // Under Bun we polyfill the missing chacha20-poly1305 cipher first.
+    await import("./homekit-crypto-polyfill.js");
+
     let BridgeCtor: typeof Bridge;
     let HAPStorageMod: typeof HAPStorage;
     let uuidMod: typeof UuidModule;
@@ -208,10 +211,7 @@ export class HomekitService implements ServicePlugin {
       HAPStorageMod = hap.HAPStorage;
       uuidMod = hap.uuid;
     } catch (err) {
-      this.logger.error(
-        { err },
-        "hap-nodejs failed to load — HomeKit bridge cannot start. Ensure hap-nodejs is installed and the runtime supports the required native crypto ciphers.",
-      );
+      this.logger.error({ err }, "hap-nodejs failed to load — HomeKit bridge cannot start.");
       return;
     }
 
