@@ -58,7 +58,7 @@ new HomekitService(mqtt, logger, deviceRegistry, {
 | `bridgeName` | `string` | `"TS-Home-Automation"` | Display name shown in the Apple Home app |
 | `port` | `number` | `47128` | TCP port for the HAP server |
 | `username` | `string` | `"CC:22:3D:E3:CE:F8"` | Bridge MAC address — must be unique per bridge on your network |
-| `persistPath` | `string` | `"./homekit-persist"` | Directory for HAP pairing data; created automatically if missing |
+| `persistPath` | `string` | `"./homekit-persist"` | Directory for HAP pairing data; created automatically if missing. Resolved to an absolute path at runtime. |
 
 ---
 
@@ -147,6 +147,25 @@ Example response:
 ```
 
 This endpoint is protected by the same `HTTP_TOKEN` bearer auth as all other `/api/*` routes.
+
+---
+
+## Running in Docker / Kubernetes
+
+`hap-nodejs` uses `node-persist` for storage, and older versions of `node-persist` resolve relative paths against their own `__dirname` inside `node_modules` rather than `process.cwd()`. In a container this often points to a read-only layer, causing an `EACCES: permission denied` crash.
+
+`HomekitService` resolves the configured `persistPath` to an **absolute path** before handing it to `hap-nodejs`, so `./homekit-persist` becomes `/app/homekit-persist` instead of `/app/node_modules/node-persist/src/storage/homekit-persist`.
+
+For production deployments it is recommended to mount a dedicated volume and use an absolute path explicitly:
+
+```ts
+new HomekitService(mqtt, logger, registry, {
+  pinCode: "031-45-154",
+  persistPath: "/data/homekit-persist",
+});
+```
+
+Make sure the container user has write access to that directory.
 
 ---
 
