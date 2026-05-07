@@ -78,6 +78,7 @@
     "@opentui/core": "^0.2.0",
     "@opentui/react": "^0.2.0",
     "@tabler/icons-react": "^3.41.1",
+    "chacha": "^2.1.0",
     "cron": "^4.4.0",
     "hap-nodejs": "^0.14.3",
     "hono": "^4.12.14",
