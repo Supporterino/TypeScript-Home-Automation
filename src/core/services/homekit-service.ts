@@ -1,3 +1,4 @@
+import { resolve } from "node:path";
 import type { Bridge, HAPStorage, uuid as UuidModule } from "hap-nodejs";
 import type { Hono } from "hono";
 import type { Logger } from "pino";
@@ -174,7 +175,7 @@ export class HomekitService implements ServicePlugin {
       bridgeName: this.options.bridgeName ?? "TS-Home-Automation",
       port: this.options.port ?? 47128,
       username: this.options.username ?? "CC:22:3D:E3:CE:F8",
-      persistPath: this.options.persistPath ?? "./homekit-persist",
+      persistPath: resolve(this.options.persistPath ?? "./homekit-persist"),
       accessoryCount: this.accessories.size,
     };
   }
@@ -219,12 +220,14 @@ export class HomekitService implements ServicePlugin {
     const { createAccessory } = await import("./homekit-accessory-factory.js");
     this.createAccessoryFn = createAccessory;
 
-    const persistPath = this.options.persistPath ?? "./homekit-persist";
+    const persistPath = resolve(this.options.persistPath ?? "./homekit-persist");
     const bridgeName = this.options.bridgeName ?? "TS-Home-Automation";
     const port = this.options.port ?? 47128;
     const username = this.options.username ?? "CC:22:3D:E3:CE:F8";
 
     // Configure HAP storage before creating the bridge so pairing data survives restarts.
+    // Resolve to absolute path because node-persist resolves relative paths against
+    // its own __dirname inside node_modules, which is often read-only in containers.
     HAPStorageMod.setCustomStoragePath(persistPath);
 
     // Use the stable username (MAC address) as the UUID seed so the bridge

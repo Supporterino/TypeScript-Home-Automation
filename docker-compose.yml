@@ -11,6 +11,8 @@ services:
       - NODE_ENV=production
       - TZ=Europe/Berlin
       - HTTP_PORT=8080
+    volumes:
+      - homekit-persist:/data/homekit-persist
     healthcheck:
       test: ["CMD", "bun", "-e", "const r = await fetch('http://localhost:8080/readyz'); process.exit(r.ok ? 0 : 1)"]
       interval: 10s
@@ -44,5 +46,6 @@ networks:
     driver: bridge
 
 volumes:
+  homekit-persist:
   mosquitto-data:
   mosquitto-log:
