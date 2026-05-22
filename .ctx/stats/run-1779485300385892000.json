@@ -1,0 +1,13 @@
+{
+  "original_tokens": 551,
+  "packed_tokens": 425,
+  "reduction_pct": 22.86751361161524,
+  "latency_ms": 0,
+  "agent": null,
+  "command": null,
+  "status": null,
+  "exit_code": null,
+  "fallback_used": false,
+  "pack_path": "/Users/supporterino/WebstormProjects/TypeScript-Home-Automation/.ctx/packs/pack-1779485300385.json",
+  "query": "Analyse the following issue when the app is running on kubernetes as a bun install in a project built to a docker container apple home cant find the bridge"
+}

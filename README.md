@@ -8,6 +8,8 @@ A lightweight, fully typed home automation framework built on MQTT and [Bun](htt
 
 → **[Full documentation](https://Supporterino.github.io/TypeScript-Home-Automation/)**
 
+> This project is developed with the assistance of AI tools (code generation, documentation, and testing).
+
 ---
 
 ## Install

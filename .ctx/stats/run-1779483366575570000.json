@@ -1,0 +1,13 @@
+{
+  "original_tokens": 4724,
+  "packed_tokens": 361,
+  "reduction_pct": 92.35817104149027,
+  "latency_ms": 0,
+  "agent": null,
+  "command": null,
+  "status": null,
+  "exit_code": null,
+  "fallback_used": false,
+  "pack_path": "/Users/supporterino/WebstormProjects/TypeScript-Home-Automation/.ctx/packs/pack-1779483366575.json",
+  "query": "Since we now have the option of the device registry we could offer another kind of general service for metrics exposure with an prometheus endpoint as concret implementation."
+}
