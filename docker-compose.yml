@@ -3,6 +3,20 @@ services:
     build: .
     container_name: home-automation
     restart: unless-stopped
+    # ---- HomeKit mDNS discovery ----
+    # hap-nodejs advertises the bridge via mDNS (Bonjour) multicast. Docker bridge
+    # networks isolate multicast traffic, so Apple devices on the host network
+    # cannot discover the bridge.  Three options:
+    #
+    # 1. network_mode: host — simplest; change MQTT_HOST to localhost (or host IP).
+    # 2. macvlan network — create a macvlan Docker network and use the engine's
+    #    HomekitServiceOptions `bind` to the macvlan interface name.
+    # 3. avahi-reflector on the Docker host — forwards mDNS between networks.
+    #
+    # With the default bridge network the bridge will only be reachable from other
+    # containers on the same network.
+    #
+    # Kubernetes: see docs/deployment.md (hostNetwork or Multus CNI + macvlan).
     environment:
       - MQTT_HOST=mosquitto
       - MQTT_PORT=1883

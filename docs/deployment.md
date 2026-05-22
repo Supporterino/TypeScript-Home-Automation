@@ -108,6 +108,19 @@ Pair it with a `docker-compose.yml` that provides the MQTT broker and any config
 
 The engine exposes health probes that integrate with Kubernetes pod lifecycle management.
 
+> **HomeKit & mDNS:** `hap-nodejs` advertises the bridge via mDNS (Bonjour) multicast.
+> Kubernetes pod network namespaces isolate multicast traffic by default — Apple devices
+> on your LAN cannot discover the bridge.
+>
+> **Option A — hostNetwork (simplest):** Set `hostNetwork: true` in the pod spec.
+> `MQTT_HOST` must then be an IP or hostname reachable from the host network, not a
+> cluster-internal DNS name.
+>
+> **Option B — Multus CNI + macvlan (no hostNetwork):** Attach a secondary macvlan
+> interface with a LAN IP, then use the `bind` option in `HomekitServiceOptions` to
+> advertise mDNS only on that interface.  The pod keeps its cluster network for MQTT/HTTP.
+> See [HomeKit Bridge → Running in Docker / Kubernetes](services/homekit.md#running-in-docker--kubernetes).
+
 ### Pod manifest
 
 ```yaml
@@ -116,6 +129,7 @@ kind: Pod
 metadata:
   name: home-automation
 spec:
+  hostNetwork: true
   containers:
     - name: engine
       image: your-registry/home-automation:latest
