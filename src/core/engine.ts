@@ -359,7 +359,11 @@ export function createEngine(options: EngineOptions): Engine {
     const WELL_KNOWN = new Set(["notifications", "weather", "shelly", "nanoleaf", "homekit"]);
     for (const [key, value] of Object.entries(options.services)) {
       if (!WELL_KNOWN.has(key) && value !== undefined) {
-        serviceRegistry.register(key, value);
+        const resolved =
+          typeof value === "function"
+            ? (value as ServiceFactory<unknown>)(http, logger.child({ service: key }))
+            : value;
+        serviceRegistry.register(key, resolved);
       }
     }
   }
@@ -447,7 +451,7 @@ export function createEngine(options: EngineOptions): Engine {
         await deviceRegistry?.load();
 
         // Run onStart() lifecycle hooks for all registered ServicePlugins.
-        const coreCtx: CoreContext = { http, logger };
+        const coreCtx: CoreContext = { http, logger, deviceRegistry };
         await serviceRegistry.startAll(coreCtx);
 
         await mqtt.connect();

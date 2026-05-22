@@ -1,6 +1,7 @@
 import type { Hono } from "hono";
 import type { Logger } from "pino";
 import type { HttpClient } from "../http/http-client.js";
+import type { DeviceRegistry } from "../zigbee/device-registry.js";
 
 /**
  * Minimal context provided to a `ServicePlugin.onStart()` hook.
@@ -13,6 +14,11 @@ export interface CoreContext {
   http: HttpClient;
   /** A logger instance. Each plugin receives its own child logger from the engine. */
   logger: Logger;
+  /**
+   * The Zigbee2MQTT device registry.
+   * `null` when `DEVICE_REGISTRY_ENABLED` is `false`.
+   */
+  deviceRegistry: DeviceRegistry | null;
 }
 
 /**
