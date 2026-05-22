@@ -1,0 +1,596 @@
+{
+  "files": {
+    ".github/workflows/docs.yml": {
+      "fingerprint": "63ea3612a0af6190",
+      "bytes": 792
+    },
+    ".github/workflows/publish.yml": {
+      "fingerprint": "49ecb138dd829804",
+      "bytes": 1926
+    },
+    "AGENTS.md": {
+      "fingerprint": "3481586ea7ce5b43",
+      "bytes": 10523
+    },
+    "README.md": {
+      "fingerprint": "83b60f97eb930f42",
+      "bytes": 3795
+    },
+    "biome.json": {
+      "fingerprint": "74a606b8245b616a",
+      "bytes": 854
+    },
+    "docker-compose.yml": {
+      "fingerprint": "effbdd420b8afeaf",
+      "bytes": 1342
+    },
+    "docs/api-reference.md": {
+      "fingerprint": "b2b8f30679b1fbb2",
+      "bytes": 23339
+    },
+    "docs/architecture.md": {
+      "fingerprint": "b69db1733fd54731",
+      "bytes": 10364
+    },
+    "docs/cli.md": {
+      "fingerprint": "fb7c4cc43247995a",
+      "bytes": 7443
+    },
+    "docs/configuration.md": {
+      "fingerprint": "e23bb5f31114c9a9",
+      "bytes": 3119
+    },
+    "docs/contributing.md": {
+      "fingerprint": "0a90c1a520474fad",
+      "bytes": 3223
+    },
+    "docs/deployment.md": {
+      "fingerprint": "1849783d9e4f8c94",
+      "bytes": 8017
+    },
+    "docs/device-classes.md": {
+      "fingerprint": "64541de1a24b2799",
+      "bytes": 4962
+    },
+    "docs/device-registry.md": {
+      "fingerprint": "706314923473c9a6",
+      "bytes": 13204
+    },
+    "docs/device-types.md": {
+      "fingerprint": "92c4c590f26a0856",
+      "bytes": 3718
+    },
+    "docs/getting-started.md": {
+      "fingerprint": "ecadad5e1cf913f3",
+      "bytes": 3673
+    },
+    "docs/http/health-probes.md": {
+      "fingerprint": "714a079efee40bd4",
+      "bytes": 2008
+    },
+    "docs/http/web-ui.md": {
+      "fingerprint": "6f061344fd87a323",
+      "bytes": 4948
+    },
+    "docs/index.md": {
+      "fingerprint": "a01b3c79f922ac8f",
+      "bytes": 2484
+    },
+    "docs/service-plugins.md": {
+      "fingerprint": "ca7e9cc4b18bf2c2",
+      "bytes": 7817
+    },
+    "docs/services/homekit.md": {
+      "fingerprint": "431f7e6f6274c190",
+      "bytes": 6674
+    },
+    "docs/services/nanoleaf.md": {
+      "fingerprint": "b3a3de838e71f714",
+      "bytes": 3373
+    },
+    "docs/services/notifications.md": {
+      "fingerprint": "6d7bf217bc667549",
+      "bytes": 3716
+    },
+    "docs/services/shelly.md": {
+      "fingerprint": "3a1fc8cb3d80d741",
+      "bytes": 5263
+    },
+    "docs/services/weather.md": {
+      "fingerprint": "59870eb35b36c6b7",
+      "bytes": 3943
+    },
+    "docs/state.md": {
+      "fingerprint": "91b053be71b22de2",
+      "bytes": 4102
+    },
+    "docs/troubleshooting.md": {
+      "fingerprint": "2a7c858d508c7bfc",
+      "bytes": 10472
+    },
+    "docs/writing-automations.md": {
+      "fingerprint": "f80662a25a69ab78",
+      "bytes": 11875
+    },
+    "docs/zensical.toml": {
+      "fingerprint": "4c18ee592f4b360e",
+      "bytes": 2382
+    },
+    "opencode.json": {
+      "fingerprint": "d0d5b97c13ed1490",
+      "bytes": 530
+    },
+    "package.json": {
+      "fingerprint": "bfe02bd1c11cf6ff",
+      "bytes": 2847
+    },
+    "renovate.json": {
+      "fingerprint": "c8a9313015815472",
+      "bytes": 689
+    },
+    "scripts/build-web-ui.ts": {
+      "fingerprint": "c4810c7332e1c531",
+      "bytes": 3415
+    },
+    "scripts/generate-icon.ts": {
+      "fingerprint": "928efdf2163ce222",
+      "bytes": 1212
+    },
+    "src/automations/aqara-h1-remote.ts": {
+      "fingerprint": "24506f78b4a2c6ab",
+      "bytes": 2911
+    },
+    "src/automations/contact-sensor-alarm.ts": {
+      "fingerprint": "d8c37d6fd32f2b76",
+      "bytes": 5367
+    },
+    "src/automations/motion-light-disableable.ts": {
+      "fingerprint": "3d99b48d07510309",
+      "bytes": 9680
+    },
+    "src/automations/motion-light-schedule.ts": {
+      "fingerprint": "d1d3bdf2ebcc32d3",
+      "bytes": 12650
+    },
+    "src/automations/motion-light-state.ts": {
+      "fingerprint": "ba9e805b7a974801",
+      "bytes": 8592
+    },
+    "src/automations/scheduled-report.ts": {
+      "fingerprint": "b29c9d54db9212a6",
+      "bytes": 1467
+    },
+    "src/automations/shortcut-button-flash.ts": {
+      "fingerprint": "39eeea6dd086f3f2",
+      "bytes": 4882
+    },
+    "src/automations/shortcut-button-timer.ts": {
+      "fingerprint": "ae235e429cdd1e71",
+      "bytes": 2855
+    },
+    "src/automations/temperature-alert.ts": {
+      "fingerprint": "e2f2e0b8498186fc",
+      "bytes": 6303
+    },
+    "src/automations/water-leak-alert.ts": {
+      "fingerprint": "b67e085f88078be4",
+      "bytes": 4463
+    },
+    "src/cli/client.ts": {
+      "fingerprint": "4f8e393e9f863612",
+      "bytes": 6534
+    },
+    "src/cli/commands/automations.ts": {
+      "fingerprint": "01dc4a865d99b522",
+      "bytes": 1953
+    },
+    "src/cli/commands/config.ts": {
+      "fingerprint": "87f74f6a71558027",
+      "bytes": 1188
+    },
+    "src/cli/commands/dashboard.tsx": {
+      "fingerprint": "b5212ff6054f0195",
+      "bytes": 6818
+    },
+    "src/cli/commands/devices.ts": {
+      "fingerprint": "110367ef5e6f10f9",
+      "bytes": 1963
+    },
+    "src/cli/commands/logs.ts": {
+      "fingerprint": "e54c1a53731c92c7",
+      "bytes": 3560
+    },
+    "src/cli/commands/nanoleaf.ts": {
+      "fingerprint": "65e646f1e9581985",
+      "bytes": 3218
+    },
+    "src/cli/commands/state.ts": {
+      "fingerprint": "edfc4feb0199331f",
+      "bytes": 1926
+    },
+    "src/cli/components/automations-tab.tsx": {
+      "fingerprint": "d53dbee93d39890c",
+      "bytes": 6129
+    },
+    "src/cli/components/devices-tab.tsx": {
+      "fingerprint": "cfc2d625437128f0",
+      "bytes": 7247
+    },
+    "src/cli/components/help-modal.tsx": {
+      "fingerprint": "f9f25e901dd8dbbd",
+      "bytes": 2529
+    },
+    "src/cli/components/homekit-tab.tsx": {
+      "fingerprint": "cb980b43efb58431",
+      "bytes": 2455
+    },
+    "src/cli/components/logs-tab.tsx": {
+      "fingerprint": "1d3ee79f1d022096",
+      "bytes": 10145
+    },
+    "src/cli/components/overview-tab.tsx": {
+      "fingerprint": "3ce9f3d2eb2e567a",
+      "bytes": 4119
+    },
+    "src/cli/components/state-tab.tsx": {
+      "fingerprint": "0a28ba9bc6a6926c",
+      "bytes": 5548
+    },
+    "src/cli/components/status-footer.tsx": {
+      "fingerprint": "10403c1290683abd",
+      "bytes": 1329
+    },
+    "src/cli/components/theme.ts": {
+      "fingerprint": "07116e6382333bb7",
+      "bytes": 2200
+    },
+    "src/cli/components/types.ts": {
+      "fingerprint": "82e963b47a36d323",
+      "bytes": 1657
+    },
+    "src/cli/config.ts": {
+      "fingerprint": "be3c569a286ca5bf",
+      "bytes": 3408
+    },
+    "src/cli/format.ts": {
+      "fingerprint": "cf38bd9a0fe86f2f",
+      "bytes": 4884
+    },
+    "src/cli/index.ts": {
+      "fingerprint": "fab4aeebe290057b",
+      "bytes": 11151
+    },
+    "src/config.ts": {
+      "fingerprint": "d23372a67be679b5",
+      "bytes": 4040
+    },
+    "src/core/automation-manager.ts": {
+      "fingerprint": "a956ca7c0353a0d1",
+      "bytes": 20073
+    },
+    "src/core/automation.ts": {
+      "fingerprint": "53a1531db387ba75",
+      "bytes": 13801
+    },
+    "src/core/devices/aqara-h1-automation.ts": {
+      "fingerprint": "f0eb52df435de846",
+      "bytes": 4936
+    },
+    "src/core/devices/ikea-rodret-automation.ts": {
+      "fingerprint": "59b2b7bc4e70516d",
+      "bytes": 3703
+    },
+    "src/core/devices/ikea-styrbar-automation.ts": {
+      "fingerprint": "0cd32f29b40f9205",
+      "bytes": 5291
+    },
+    "src/core/engine.ts": {
+      "fingerprint": "24062cee06f95282",
+      "bytes": 17210
+    },
+    "src/core/http/http-client.ts": {
+      "fingerprint": "0b53b87a199c5dd0",
+      "bytes": 5314
+    },
+    "src/core/http/http-server.ts": {
+      "fingerprint": "560fa8b5db4161fc",
+      "bytes": 18525
+    },
+    "src/core/http/utils.ts": {
+      "fingerprint": "1279ab7a736e55b3",
+      "bytes": 500
+    },
+    "src/core/logging/log-buffer.ts": {
+      "fingerprint": "e2962627e361f633",
+      "bytes": 2307
+    },
+    "src/core/mqtt/mqtt-service.ts": {
+      "fingerprint": "2ea0989dcc73a209",
+      "bytes": 9538
+    },
+    "src/core/mqtt/mqtt-utils.ts": {
+      "fingerprint": "352db37e5165af3e",
+      "bytes": 1649
+    },
+    "src/core/scheduling/cron-scheduler.ts": {
+      "fingerprint": "dc2a4137f7d85fa5",
+      "bytes": 2422
+    },
+    "src/core/services/homekit-accessory-factory.ts": {
+      "fingerprint": "4cba4caa359f364e",
+      "bytes": 18720
+    },
+    "src/core/services/homekit-crypto-polyfill.ts": {
+      "fingerprint": "80c7bb8d878f0fb7",
+      "bytes": 2414
+    },
+    "src/core/services/homekit-service.ts": {
+      "fingerprint": "7c7e70e982fedbfa",
+      "bytes": 12360
+    },
+    "src/core/services/nanoleaf-service.ts": {
+      "fingerprint": "9f9a1eff19250580",
+      "bytes": 10216
+    },
+    "src/core/services/ntfy-notification-service.ts": {
+      "fingerprint": "9cc0eb308e113b43",
+      "bytes": 3915
+    },
+    "src/core/services/open-meteo-service.ts": {
+      "fingerprint": "23fbf34643d0c5d5",
+      "bytes": 7219
+    },
+    "src/core/services/openweathermap-service.ts": {
+      "fingerprint": "896fbbc43ec44725",
+      "bytes": 5556
+    },
+    "src/core/services/service-plugin.ts": {
+      "fingerprint": "78a86e757e166dc3",
+      "bytes": 2146
+    },
+    "src/core/services/service-registry.ts": {
+      "fingerprint": "c518cfdc29d43d46",
+      "bytes": 6665
+    },
+    "src/core/services/shelly-service.ts": {
+      "fingerprint": "69f6146ca1c6c621",
+      "bytes": 12938
+    },
+    "src/core/state/state-manager.ts": {
+      "fingerprint": "995eafd6ae713210",
+      "bytes": 8665
+    },
+    "src/core/web-ui/app/App.tsx": {
+      "fingerprint": "85427543243b74fa",
+      "bytes": 7525
+    },
+    "src/core/web-ui/app/api.ts": {
+      "fingerprint": "61b78563ef1aad50",
+      "bytes": 3021
+    },
+    "src/core/web-ui/app/components/AutomationsTab.tsx": {
+      "fingerprint": "ebb513b6a29d686b",
+      "bytes": 7048
+    },
+    "src/core/web-ui/app/components/DevicesTab.tsx": {
+      "fingerprint": "be355c69a5d08817",
+      "bytes": 7213
+    },
+    "src/core/web-ui/app/components/HomekitTab.tsx": {
+      "fingerprint": "fafb5a5ef0f9373f",
+      "bytes": 4412
+    },
+    "src/core/web-ui/app/components/LogsTab.tsx": {
+      "fingerprint": "2d027d7bda05645d",
+      "bytes": 10473
+    },
+    "src/core/web-ui/app/components/OverviewTab.tsx": {
+      "fingerprint": "0019f9735602cdef",
+      "bytes": 6554
+    },
+    "src/core/web-ui/app/components/StateTab.tsx": {
+      "fingerprint": "3bc1da539bafc34a",
+      "bytes": 7558
+    },
+    "src/core/web-ui/app/hooks/useApiPoller.ts": {
+      "fingerprint": "64eed160c38a2e94",
+      "bytes": 2235
+    },
+    "src/core/web-ui/app/hooks/useAuth.ts": {
+      "fingerprint": "25a37f08d4fda98b",
+      "bytes": 1080
+    },
+    "src/core/web-ui/app/index.tsx": {
+      "fingerprint": "9456cc64fd1166e7",
+      "bytes": 597
+    },
+    "src/core/web-ui/app/tsconfig.json": {
+      "fingerprint": "ccc9fc1a3a8f064e",
+      "bytes": 465
+    },
+    "src/core/web-ui/app/types.ts": {
+      "fingerprint": "83d30bdf594f3eff",
+      "bytes": 1600
+    },
+    "src/core/web-ui/app/utils/logUtils.ts": {
+      "fingerprint": "27cf0b8d47759e84",
+      "bytes": 2643
+    },
+    "src/core/web-ui/assets/app-js.ts": {
+      "fingerprint": "4bb35c6f729755f5",
+      "bytes": 686527
+    },
+    "src/core/web-ui/assets/icon-svg.ts": {
+      "fingerprint": "6fe26fd98e206d32",
+      "bytes": 544
+    },
+    "src/core/web-ui/assets/style-css.ts": {
+      "fingerprint": "25155cca9481e22a",
+      "bytes": 318041
+    },
+    "src/core/web-ui/components/html-shell.ts": {
+      "fingerprint": "49615b49b9640d25",
+      "bytes": 5685
+    },
+    "src/core/web-ui/index.ts": {
+      "fingerprint": "6e0cf88da473571e",
+      "bytes": 5630
+    },
+    "src/core/zigbee/device-registry.ts": {
+      "fingerprint": "e5d6c990dff02268",
+      "bytes": 17424
+    },
+    "src/index.ts": {
+      "fingerprint": "b30f0a086a11e61c",
+      "bytes": 5270
+    },
+    "src/standalone.ts": {
+      "fingerprint": "3624c5458205c553",
+      "bytes": 918
+    },
+    "src/types/chacha.d.ts": {
+      "fingerprint": "7b07d820cde21e28",
+      "bytes": 483
+    },
+    "src/types/nanoleaf.ts": {
+      "fingerprint": "ff5cf0cd0b775fa9",
+      "bytes": 4609
+    },
+    "src/types/notification.ts": {
+      "fingerprint": "4cdf3960924fb656",
+      "bytes": 2034
+    },
+    "src/types/shelly.ts": {
+      "fingerprint": "2ded164615b06a59",
+      "bytes": 8768
+    },
+    "src/types/weather.ts": {
+      "fingerprint": "f73fdeba630520e2",
+      "bytes": 3894
+    },
+    "src/types/zigbee/aqara.ts": {
+      "fingerprint": "7dc0754ddab93478",
+      "bytes": 2522
+    },
+    "src/types/zigbee/bridge.ts": {
+      "fingerprint": "ce405681c12cc516",
+      "bytes": 2051
+    },
+    "src/types/zigbee/common.ts": {
+      "fingerprint": "c9f135d87b17d504",
+      "bytes": 9661
+    },
+    "src/types/zigbee/ikea.ts": {
+      "fingerprint": "ab6e913d0a97cc7d",
+      "bytes": 5084
+    },
+    "src/types/zigbee/index.ts": {
+      "fingerprint": "649f267824afd093",
+      "bytes": 2372
+    },
+    "src/types/zigbee/philips.ts": {
+      "fingerprint": "ef96aafbb79a03c0",
+      "bytes": 3261
+    },
+    "tests/automation-manager.test.ts": {
+      "fingerprint": "6333c1a22344eff1",
+      "bytes": 14836
+    },
+    "tests/automation.test.ts": {
+      "fingerprint": "719c55ab0a599ca1",
+      "bytes": 6373
+    },
+    "tests/config.test.ts": {
+      "fingerprint": "2b7583f1a1ba9f63",
+      "bytes": 3242
+    },
+    "tests/cron-scheduler.test.ts": {
+      "fingerprint": "325b3e7e75e558cf",
+      "bytes": 1405
+    },
+    "tests/device-automations.test.ts": {
+      "fingerprint": "36f904c2775b4076",
+      "bytes": 11811
+    },
+    "tests/device-registry.test.ts": {
+      "fingerprint": "261abd4ab47f3e82",
+      "bytes": 30677
+    },
+    "tests/device-triggers.test.ts": {
+      "fingerprint": "b241e208883e8ab7",
+      "bytes": 20776
+    },
+    "tests/engine.test.ts": {
+      "fingerprint": "2e49491d721a6357",
+      "bytes": 9832
+    },
+    "tests/format.test.ts": {
+      "fingerprint": "3210a82be2196699",
+      "bytes": 5100
+    },
+    "tests/homekit-accessory-factory.test.ts": {
+      "fingerprint": "47bdd9063e4ddd84",
+      "bytes": 30096
+    },
+    "tests/http-client.test.ts": {
+      "fingerprint": "8df249d08f9f8759",
+      "bytes": 12129
+    },
+    "tests/http-server.test.ts": {
+      "fingerprint": "7b411b98319f329d",
+      "bytes": 22192
+    },
+    "tests/log-buffer.test.ts": {
+      "fingerprint": "d7fec3277e94fb9c",
+      "bytes": 4934
+    },
+    "tests/mqtt-perf.test.ts": {
+      "fingerprint": "67287a158ef09b66",
+      "bytes": 6412
+    },
+    "tests/mqtt-service.test.ts": {
+      "fingerprint": "6b762656be181dbe",
+      "bytes": 12649
+    },
+    "tests/mqtt-utils.test.ts": {
+      "fingerprint": "ec552e6005659bdb",
+      "bytes": 2657
+    },
+    "tests/nanoleaf-service.test.ts": {
+      "fingerprint": "5fdf710400f3e094",
+      "bytes": 8886
+    },
+    "tests/ntfy-notification-service.test.ts": {
+      "fingerprint": "e844f67d43a3691c",
+      "bytes": 6246
+    },
+    "tests/service-registry.test.ts": {
+      "fingerprint": "bdfab1566cba5086",
+      "bytes": 3033
+    },
+    "tests/shelly-service.test.ts": {
+      "fingerprint": "ac2461f675520d4c",
+      "bytes": 11943
+    },
+    "tests/state-manager.test.ts": {
+      "fingerprint": "ade0b893bce41b5c",
+      "bytes": 6200
+    },
+    "tests/status-page.test.ts": {
+      "fingerprint": "44adad1cbfc6d54c",
+      "bytes": 12272
+    },
+    "tests/weather-services.test.ts": {
+      "fingerprint": "78db3fb398a6af0e",
+      "bytes": 10429
+    },
+    "tsconfig.build.json": {
+      "fingerprint": "936d299d8672df59",
+      "bytes": 336
+    },
+    "tsconfig.json": {
+      "fingerprint": "9a1acb30328a31fc",
+      "bytes": 560
+    }
+  }
+}
