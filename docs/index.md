@@ -53,7 +53,12 @@ bun install && bun run dev
 | [CLI Reference](cli.md) | `ts-ha` command reference |
 | [Web UI](http/web-ui.md) | Browser dashboard |
 | [HomeKit](services/homekit.md) | Apple HomeKit bridge service |
+| [Prometheus Metrics](services/prometheus.md) | Prometheus metrics endpoint |
 | [Deployment & Operations](deployment.md) | Docker, Kubernetes, production setup |
 | [Architecture](architecture.md) | How the engine works internally |
 | [Troubleshooting & FAQ](troubleshooting.md) | Common issues and solutions |
 | [npm package](https://www.npmjs.com/package/ts-home-automation) | `ts-home-automation` on npm |
+
+---
+
+> **Note:** This documentation is generated with AI assistance and may contain inaccuracies. Please verify critical information against the source code or by running the commands directly.

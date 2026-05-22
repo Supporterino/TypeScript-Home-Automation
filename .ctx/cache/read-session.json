@@ -1,0 +1,25 @@
+{
+  "cache_hits": 0,
+  "cache_misses": 1,
+  "files": {
+    "docs/api-reference.md": {
+      "fingerprint": "b2b8f30679b1fbb2",
+      "line_count": 633,
+      "symbol_count": 12,
+      "outline_lines": [
+        "- import import { createEngine, Automation, type Trigger, type TriggerContext } from \"ts-home-automation\"; :: import { createEngine, Automation, type Trigger, type TriggerContext } from \"ts-home-automation\";",
+        "- import import { createEngine } from \"ts-home-automation\"; :: import { createEngine } from \"ts-home-automation\";",
+        "- import import { Automation, type Trigger, type TriggerContext } from \"ts-home-automation\"; :: import { Automation, type Trigger, type TriggerContext } from \"ts-home-automation\";",
+        "- import import type { MqttService, MqttMessageHandler } from \"ts-home-automation\"; :: import type { MqttService, MqttMessageHandler } from \"ts-home-automation\";",
+        "- import import type { HttpClient, HttpRequestOptions, HttpResponse } from \"ts-home-automation\"; :: import type { HttpClient, HttpRequestOptions, HttpResponse } from \"ts-home-automation\";",
+        "- import import type { StateManager, StateManagerOptions, StateChangeHandler } from \"ts-home-automation\"; :: import type { StateManager, StateManagerOptions, StateChangeHandler } from \"ts-home-automation\";",
+        "- import import type { ServiceRegistry } from \"ts-home-automation\"; :: import type { ServiceRegistry } from \"ts-home-automation\";",
+        "- import import type { ServicePlugin, CoreContext } from \"ts-home-automation\"; :: import type { ServicePlugin, CoreContext } from \"ts-home-automation\";",
+        "- import import type { LogBuffer, LogEntry, LogQuery } from \"ts-home-automation\"; :: import type { LogBuffer, LogEntry, LogQuery } from \"ts-home-automation\";",
+        "- import import type { Config } from \"ts-home-automation\"; :: import type { Config } from \"ts-home-automation\";",
+        "- import import type { OccupancyPayload, ColorLightSetCommand, ZigbeeDevice } from \"ts-home-automation\"; :: import type { OccupancyPayload, ColorLightSetCommand, ZigbeeDevice } from \"ts-home-automation\";",
+        "- import import type { ShellySwitchStatus, ShellyCoverStatus } from \"ts-home-automation\"; :: import type { ShellySwitchStatus, ShellyCoverStatus } from \"ts-home-automation\";"
+      ]
+    }
+  }
+}

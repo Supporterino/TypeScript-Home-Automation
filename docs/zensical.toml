@@ -22,6 +22,7 @@ nav = [
     { "Weather" = "services/weather.md" },
     { "Notifications" = "services/notifications.md" },
     { "Device Registry" = "device-registry.md" },
+    { "Prometheus" = "services/prometheus.md" },
     { "Custom Service Plugins" = "service-plugins.md" }
   ]},
   { "State Management" = "state.md" },
