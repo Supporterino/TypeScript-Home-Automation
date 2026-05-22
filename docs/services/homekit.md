@@ -49,6 +49,7 @@ new HomekitService(mqtt, logger, deviceRegistry, {
   port: 47128,                  // optional, default: 47128
   username: "CC:22:3D:E3:CE:F8",// optional, default: "CC:22:3D:E3:CE:F8"
   persistPath: "./homekit-persist", // optional, default: "./homekit-persist"
+  bind: ["net1"],               // optional — restrict mDNS to specific interfaces
 })
 ```
 
@@ -59,6 +60,7 @@ new HomekitService(mqtt, logger, deviceRegistry, {
 | `port` | `number` | `47128` | TCP port for the HAP server |
 | `username` | `string` | `"CC:22:3D:E3:CE:F8"` | Bridge MAC address — must be unique per bridge on your network |
 | `persistPath` | `string` | `"./homekit-persist"` | Directory for HAP pairing data; created automatically if missing. Resolved to an absolute path at runtime. |
+| `bind` | `string \| string[]` | _(all interfaces)_ | Restrict mDNS advertisement to specific network interfaces or IPs. Interface names (e.g. `"eth0"`) are preferred over IPs because they survive address changes. For containers see below. |
 
 ---
 
@@ -151,6 +153,91 @@ This endpoint is protected by the same `HTTP_TOKEN` bearer auth as all other `/a
 ---
 
 ## Running in Docker / Kubernetes
+
+### Container networking & mDNS discovery
+
+`hap-nodejs` advertises the bridge via **mDNS (Bonjour) multicast** so Apple devices can
+discover it on the local network.  Docker bridge networks and Kubernetes pod network
+namespaces **isolate multicast traffic** — the bridge starts and runs correctly, but
+Apple Home cannot discover it.
+
+Three options ranked by simplicity:
+
+#### 1. Host networking (simplest)
+
+| Platform | Fix |
+|---|---|
+| **Docker Compose** | `network_mode: host` on the service (see `docker-compose.yml`) |
+| **Kubernetes** | `hostNetwork: true` in the pod spec (see `docs/deployment.md`) |
+
+When using host networking:
+- Docker: remove `networks` / `depends_on` blocks (they conflict with host mode) and
+  use `localhost` or host IPs for service references.
+- Kubernetes: `MQTT_HOST` must be an IP or hostname reachable from the host network,
+  not a cluster-internal service DNS name.
+
+#### 2. Multus CNI + macvlan + bind (Kubernetes, no hostNetwork)
+
+Attach a secondary network interface with a LAN IP to the pod using
+[Multus CNI](https://github.com/k8snetworkplumbingwg/multus-cni) and a macvlan
+attachment.  Then use the `bind` option to advertise mDNS only on that interface:
+
+```yaml
+# NetworkAttachmentDefinition (applied once per namespace)
+apiVersion: k8s.cni.cncf.io/v1
+kind: NetworkAttachmentDefinition
+metadata:
+  name: lan-macvlan
+spec:
+  config: |
+    {
+      "cniVersion": "0.3.1",
+      "type": "macvlan",
+      "master": "eth0",
+      "mode": "bridge",
+      "ipam": {
+        "type": "host-local",
+        "subnet": "192.168.1.0/24",
+        "rangeStart": "192.168.1.200",
+        "rangeEnd": "192.168.1.210"
+      }
+    }
+```
+
+```yaml
+# Pod (from docs/deployment.md) — add the annotation and bind option:
+apiVersion: v1
+kind: Pod
+metadata:
+  name: home-automation
+  annotations:
+    k8s.v1.cni.cncf.io/networks: lan-macvlan
+spec:
+  # hostNetwork: true  ← NOT needed with Multus
+  containers:
+    - name: engine
+      env:
+        - name: HOMEKIT_BIND
+          value: net1   # the macvlan interface (first attachment = net1)
+```
+
+```ts
+// Pass the bind value from the environment into HomekitServiceOptions:
+bind: process.env.HOMEKIT_BIND?.split(",") ?? undefined,
+```
+
+The pod keeps its cluster network (eth0) for MQTT and HTTP while mDNS goes out the
+macvlan interface (net1) directly onto the LAN.  Apple devices discover the bridge
+at the macvlan IP.
+
+#### 3. mDNS repeater (any environment)
+
+If neither host networking nor Multus is available, run an mDNS repeater/proxy (e.g.
+[avahi-reflector](https://man.archlinux.org/man/avahi-daemon.conf.5) in
+reflection mode) to forward multicast between the container network and the host
+network.  This approach is more complex and not covered here.
+
+### Pairing data persistence
 
 `hap-nodejs` uses `node-persist` for storage, and older versions of `node-persist` resolve relative paths against their own `__dirname` inside `node_modules` rather than `process.cwd()`. In a container this often points to a read-only layer, causing an `EACCES: permission denied` crash.
 

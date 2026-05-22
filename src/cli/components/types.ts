@@ -64,6 +64,7 @@ export interface HomekitStatus {
   username: string;
   persistPath: string;
   accessoryCount: number;
+  bind?: string | string[];
 }
 
 export interface DashboardData {

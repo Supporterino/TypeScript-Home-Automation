@@ -35,6 +35,8 @@ export interface HomekitStatus {
   persistPath: string;
   /** Number of HomeKit accessories currently registered on the bridge. */
   accessoryCount: number;
+  /** Network interfaces/IPs the bridge advertises mDNS on (from `bind` option). */
+  bind?: string | string[];
 }
 
 /**
@@ -95,6 +97,36 @@ export interface HomekitServiceOptions {
    * @default "CC:22:3D:E3:CE:F8"
    */
   username?: string;
+
+  /**
+   * Network interfaces or IP addresses to advertise mDNS on.
+   *
+   * Passed directly to `hap-nodejs`' `publish({ bind })`. Controls which network
+   * interface the HAP server binds to and advertises mDNS records on.  By default
+   * (undefined), the bridge advertises on all available interfaces.
+   *
+   * Essential for containerized environments where the primary pod/container
+   * network interface is isolated from the LAN:
+   *
+   * - **Docker:** use `network_mode: host` or specify the host-facing interface
+   *   name (e.g. `"eth0"`).
+   * - **Kubernetes (Multus CNI):** add a macvlan secondary interface that has
+   *   a LAN IP and bind to it (e.g. `["net1"]`).  See docs for details.
+   * - **Standalone / host network:** leave undefined.
+   *
+   * Accepts a single interface/IP or an array.  Interface names are preferred
+   * over IPs because they auto-update when the address changes.
+   *
+   * @example
+   * ```ts
+   * // Multus macvlan secondary interface
+   * bind: ["net1"],
+   *
+   * // Specific Docker host-facing interface
+   * bind: "eth0",
+   * ```
+   */
+  bind?: string | string[];
 }
 
 /**
@@ -177,6 +209,7 @@ export class HomekitService implements ServicePlugin {
       username: this.options.username ?? "CC:22:3D:E3:CE:F8",
       persistPath: resolve(this.options.persistPath ?? "./homekit-persist"),
       accessoryCount: this.accessories.size,
+      bind: this.options.bind,
     };
   }
 
@@ -250,6 +283,7 @@ export class HomekitService implements ServicePlugin {
       pincode: this.options.pinCode,
       port,
       category: HAP_CATEGORY_BRIDGE,
+      bind: this.options.bind,
     });
 
     // Only mark running after publish() resolves successfully.
