@@ -6,49 +6,30 @@ Coding conventions and instructions for AI agents working in this repository.
 
 ```bash
 bun install                  # Install dependencies
+bun install --frozen-lockfile # CI-style install (no lockfile mutation)
 bun run dev                  # Run with hot-reload (standalone mode)
 bun run start                # Production run
 bun run typecheck            # TypeScript type checking (tsc --noEmit)
 bun run check                # Biome format + lint + import organize (auto-fix)
 bun run format               # Format only
 bun run lint                 # Lint only
-bun run build                # Build package to dist/ (runs web UI build first)
+bun run build                # Build package to dist/ (runs prebuild hook → web UI build first)
 bun run build:web-ui         # Build only the React web UI frontend
 bun test                     # Run all tests
 bun test tests/state-manager.test.ts           # Run a single test file
 bun test --filter "topicMatches"               # Run tests matching a name pattern
 ```
 
-Always run `bun run typecheck && bun run check && bun test` before committing.
+**Before committing, always run `bun run typecheck && bun run check && bun test`.**
 
-Other available scripts: `bun run format:check` (format check without write), `bun run lint:fix` (lint with auto-fix), `bun run docker:build/up/down` (Docker Compose wrappers), `bun run prepublishOnly` (full build before npm publish).
+Other scripts: `format:check`, `lint:fix`, `docker:build/up/down`, `prepublishOnly`.
 
-> **Note on `typecheck`**: `tsc --noEmit` does not trigger the `prebuild` hook and does not
-> compile `src/core/web-ui/app/**` (excluded from `tsconfig.json`). That subtree has its
-> own `src/core/web-ui/app/tsconfig.json` for IDE support and is compiled exclusively by
-> `scripts/build-web-ui.ts` via `Bun.build`.
+### Build details
 
-## Project Structure
-
-- `src/core/` — Framework core, organised into subfolders by responsibility:
-  - `src/core/engine.ts`, `automation.ts`, `automation-manager.ts` — glue layer (flat)
-  - `src/core/mqtt/` — `mqtt-service.ts`, `mqtt-utils.ts`
-  - `src/core/http/` — `http-server.ts`, `http-client.ts`
-  - `src/core/scheduling/` — `cron-scheduler.ts`
-  - `src/core/state/` — `state-manager.ts`
-  - `src/core/logging/` — `log-buffer.ts`
-  - `src/core/services/` — `shelly-service.ts`, `nanoleaf-service.ts`, `ntfy-notification-service.ts`, `open-meteo-service.ts`, `openweathermap-service.ts`
-  - `src/core/devices/` — `aqara-h1-automation.ts`, `ikea-styrbar-automation.ts`, `ikea-rodret-automation.ts`
-  - `src/core/web-ui/` — Web dashboard served by Hono
-    - `src/core/web-ui/app/` — React + Mantine frontend source (compiled by `Bun.build`, **not** `tsc`)
-    - `src/core/web-ui/assets/` — Generated JS/CSS string constants (git-ignored, rebuilt by `build:web-ui`)
-- `src/automations/` — Example automations (excluded from npm package build)
-- `src/types/` — Device and service type definitions (Zigbee2MQTT brands, Shelly, Nanoleaf, Weather, Notifications)
-- `src/cli/` — CLI tool (`ts-ha`) for managing running instances
-  - `src/cli/commands/` — CLI command implementations (`.ts` and `.tsx`)
-  - `src/cli/components/` — OpenTUI React components for the interactive dashboard
-- `scripts/` — Build scripts (e.g. `build-web-ui.ts`)
-- `tests/` — Unit tests (flat directory, `*.test.ts`)
+- **`typecheck`**: `tsc --noEmit` does **not** trigger the `prebuild` hook (`generate-icon` + `build-web-ui`).
+- **`build`**: `tsc -p tsconfig.build.json` with `prebuild` hook. Excludes `src/standalone.ts`, `src/automations/**`, and `src/core/web-ui/app/**`. Produces `dist/` with declarations and source maps.
+- **`build:web-ui`**: Compiles `src/core/web-ui/app/` (React + Mantine) via `Bun.build` into generated string constants at `src/core/web-ui/assets/app-js.ts` (git-ignored). The web UI subtree has its own `tsconfig.json` for IDE support.
+- **Test runner**: `bun test` (uses `bun:test`), not Jest/Vitest.
 
 ## Runtime & Module System
 
@@ -58,24 +39,49 @@ Other available scripts: `bun run format:check` (format check without write), `b
 - **Always use `.js` extensions** in relative imports: `from "./automation.js"`
 - **Use `node:` prefix** for Node built-ins: `from "node:fs/promises"`
 
-## CLI Dashboard (OpenTUI / React)
+## Project Structure
 
-The interactive dashboard (`ts-ha dashboard`) uses `@opentui/core` and `@opentui/react` for a terminal UI. Key conventions:
+- `src/core/` — Framework core, organised into subfolders by responsibility:
+  - `engine.ts`, `automation.ts`, `automation-manager.ts` — glue layer (flat)
+  - `mqtt/` — `mqtt-service.ts`, `mqtt-utils.ts`
+  - `http/` — `http-server.ts`, `http-client.ts`
+  - `scheduling/` — `cron-scheduler.ts`
+  - `state/` — `state-manager.ts`
+  - `logging/` — `log-buffer.ts`
+  - `services/` — `shelly-service.ts`, `nanoleaf-service.ts`, `ntfy-notification-service.ts`, `open-meteo-service.ts`, `openweathermap-service.ts`, `homekit-service.ts`, `service-registry.ts`, `service-plugin.ts`
+  - `devices/` — `aqara-h1-automation.ts`, `ikea-styrbar-automation.ts`, `ikea-rodret-automation.ts`
+  - `zigbee/` — `device-registry.ts` (Zigbee2MQTT device discovery and state tracking)
+  - `web-ui/` — Web dashboard served by Hono
+    - `web-ui/app/` — React + Mantine frontend (compiled by `Bun.build`, **not** `tsc`)
+    - `web-ui/assets/` — Generated JS/CSS string constants (git-ignored, rebuilt by `build:web-ui`)
+- `src/automations/` — Example automations (excluded from npm package build, included in standalone mode)
+- `src/types/` — Device and service type definitions (Zigbee2MQTT brands, Shelly, Nanoleaf, Weather, Notifications)
+- `src/cli/` — CLI tool (`ts-ha`) for managing running instances
+  - `cli/commands/` — CLI command implementations (`.ts` and `.tsx`)
+  - `cli/components/` — OpenTUI React components for the interactive dashboard
+- `scripts/` — Build scripts (e.g. `build-web-ui.ts`)
+- `tests/` — Unit tests (flat directory, `*.test.ts`)
 
-- **JSX files** use `.tsx` extension — located in `src/cli/commands/` and `src/cli/components/`
-- **`jsxImportSource`** is `@opentui/react` (set in `tsconfig.json`) — JSX elements are OpenTUI intrinsics (`<box>`, `<text>`, `<scrollbox>`), not HTML
-- **Never call `process.exit()`** — use `renderer.destroy()` for cleanup
-- **Text styling** uses nested modifier tags: `<strong>`, `<em>`, `<span fg="red">` inside `<text>`
-- **Hooks**: `useKeyboard`, `useRenderer`, `useTerminalDimensions`, `useTimeline` from `@opentui/react`
-- **Tab components** are separate files in `src/cli/components/` (one per tab)
-- **Shared theme** in `src/cli/components/theme.ts` (Dracula color palette)
-- **Shared types** in `src/cli/components/types.ts` (dashboard data interfaces)
+## Key Environment Variables
+
+Full schema in `src/config.ts`. `.env.example` lists defaults. Notable env vars:
+
+| Variable | Default | Description |
+|---|---|---|
+| `MQTT_HOST` | `localhost` | MQTT broker hostname |
+| `LOG_LEVEL` | `info` | `trace` · `debug` · `info` · `warn` · `error` |
+| `HTTP_PORT` | `8080` | HTTP server port (`0` = disabled) |
+| `WEB_UI_ENABLED` | `false` | Enable the web UI dashboard |
+| `DEVICE_REGISTRY_ENABLED` | `false` | Enable Zigbee device discovery — controls `deviceRegistry` nullability in automations |
+| `AUTOMATIONS_RECURSIVE` | `false` | Scan subdirectories recursively for automation files |
+| `STATE_PERSIST` | `false` | Persist state to disk on shutdown |
 
 ## Formatting (Biome)
 
 - **2 spaces** indent, **100 char** line width, **LF** line endings
 - Biome auto-organizes imports — don't manually reorder
 - `noForEach` is disabled but prefer `for...of` loops in practice
+- Web UI source (`src/core/web-ui/app/**`) has linting disabled via biome overrides
 
 ## Import Conventions
 
@@ -99,7 +105,7 @@ import { type StateManagerOptions, StateManager } from "./state-manager.js";
 | Interfaces | PascalCase, no `I` prefix | `EngineOptions`, `NotificationService` |
 | Type aliases | PascalCase | `Trigger`, `TriggerContext`, `DeviceState` |
 | Module-level constants | SCREAMING_SNAKE | `STATE_PREFIX`, `COLORS` |
-| Private class config | `private readonly` SCREAMING_SNAKE | `ALARM_STATE_KEY`, `LUX_THRESHOLD` |
+| Private class config | `private readonly` with SCREAMING_SNAKE | `ALARM_STATE_KEY`, `LUX_THRESHOLD` |
 | Private fields | `private` keyword, camelCase | `private connected`, `private store` |
 | Methods | camelCase | `publishToDevice()`, `turnOn()` |
 | Files | kebab-case | `mqtt-service.ts`, `state-manager.ts` |
@@ -107,29 +113,80 @@ import { type StateManagerOptions, StateManager } from "./state-manager.js";
 | State keys | snake_case, colon prefix for scoping | `"night_mode"`, `"motion-light:lights_on"` |
 | Booleans | camelCase, descriptive | `lightsAreOn`, `skipLux`, `stillArmed` |
 
+Zigbee type naming: `{Capability}Payload` for device state, `{Capability}SetCommand` for commands.
+
 ## Class Patterns
 
-**Automation base class:** Abstract class with `abstract readonly name`, `abstract readonly triggers`, and `abstract execute()`. Dependencies injected via `_inject()` with definite assignment (`!`). Optional lifecycle hooks `onStart()`/`onStop()` have empty default implementations.
+### Automation base class
 
-**Service classes:** Constructor DI with `private readonly` parameters. No interfaces for services themselves. Internal helpers under `// Internal` section separator.
+Abstract class with `abstract readonly name`, `abstract readonly triggers`, and `abstract execute()`. Dependencies injected via `_inject(context: AutomationContext)` with definite assignment (`!`). Optional lifecycle hooks `onStart()`/`onStop()` have empty default implementations.
 
-**Device-specific abstracts** (e.g., `AqaraH1Automation`, `IkeaStyrbarAutomation`, `IkeaRodretAutomation`): Extend `Automation`, use `get triggers()` getter (not field) because abstract properties aren't available during super construction. Dispatcher pattern in `execute()` routing to `protected async` handler methods with no-op defaults.
+### Required services with `requiredServices` + `require()`
 
-**Factory functions:** `createEngine()` returns an object literal with closures, not a class instance.
+Declare services that must be registered at startup using `requiredServices` (with `as const` for literal type inference). The manager validates these are registered before `onStart`, so you can use `this.require<T>(key)` in `execute()` for a non-null return:
+
+```ts
+readonly requiredServices = ["shelly"] as const;
+
+async execute(): Promise<void> {
+  const shelly = this.require<ShellyService>("shelly");
+  await shelly.turnOff("tv_plug");
+}
+```
+
+### Optional services via `ServiceRegistry`
+
+For optional services not listed in `requiredServices`, use the registry's three retrieval methods:
+
+```ts
+// nullable — you handle the absent case:
+const svc = this.services.get<MyService>("my-service");
+if (svc) await svc.doSomething();
+
+// throws if missing (use for truly-required services):
+const svc = this.services.getOrThrow<MyService>("my-service");
+
+// callback wrapper — no-ops when absent (best for one-liners):
+await this.services.use<MyService>("my-service", (s) => s.doSomething());
+```
+
+Convenience methods: `this.notify(options)` sends a push notification (no-ops if not configured). `this.deviceRegistry` is `null` when `DEVICE_REGISTRY_ENABLED=false` — always null-check.
+
+### Device-specific abstracts
+
+Extend `Automation`, use `get triggers()` getter (not field) because abstract properties aren't available during super construction. Dispatcher pattern in `execute()` routing to `protected async` handler methods with no-op defaults. Examples: `AqaraH1Automation`, `IkeaStyrbarAutomation`, `IkeaRodretAutomation`.
+
+### Service classes
+
+Constructor DI with `private readonly` parameters. No interfaces for services themselves.
+
+### Engine factory
+
+`createEngine(options)` returns an object literal with closures, not a class instance.
+
+### ServiceFactory pattern
+
+Services accepted by `createEngine()` can be instances or factory functions `(http: HttpClient, logger: Logger) => T`. The `homekit` service is special — its factory receives 4 args: `(http, logger, mqtt, deviceRegistry)`.
+
+### ServicePlugin
+
+Services implementing `ServicePlugin` (`src/core/services/service-plugin.ts`) receive lifecycle hooks (`onStart`, `onStop`) and can mount HTTP routes (`registerRoutes`) via `ServiceRegistry.startAll()/stopAll()/mountRoutes()`.
 
 ## Automation File Pattern
 
 ```ts
 import { Automation, type Trigger, type TriggerContext } from "../core/automation.js";
 import type { SomePayload } from "../types/zigbee/index.js";
-
-interface LocalConfig { /* file-scoped, not exported */ }
+import type { ShellyService } from "../core/services/shelly-service.js";
 
 export default class MyAutomation extends Automation {
   readonly name = "my-automation";
 
   // ---- Configuration ----
   private readonly SOME_SETTING = "value";
+
+  // ---- Required services (validated at startup) ----
+  readonly requiredServices = ["shelly"] as const;
 
   // ---- Internal state ----
   private timer: ReturnType<typeof setTimeout> | null = null;
@@ -139,7 +196,9 @@ export default class MyAutomation extends Automation {
   async execute(context: TriggerContext): Promise<void> {
     if (context.type !== "mqtt") return;
     const payload = context.payload as unknown as SomePayload;
-    // ...
+    // Required services — non-null, validated at startup:
+    const shelly = this.require<ShellyService>("shelly");
+    await shelly.turnOn("plug");
   }
 
   async onStop(): Promise<void> {
@@ -158,22 +217,6 @@ export default class MyAutomation extends Automation {
 - **Timer cleanup:** Always clear + null in `onStop()`
 - **Expected FS errors:** Check `(err as NodeJS.ErrnoException).code === "ENOENT"`
 - Timer types: `ReturnType<typeof setTimeout>` (not `NodeJS.Timeout`)
-
-## Type Organization
-
-`src/types/` contains:
-- `zigbee/` — Zigbee2MQTT types split by brand:
-  - `common.ts` — primitives and generic payloads (`DeviceState`, `ColorXY`, `OccupancyPayload`, …)
-  - `philips.ts` — Philips Hue specific types
-  - `ikea.ts` — IKEA specific types
-  - `aqara.ts` — Aqara specific types
-  - `index.ts` — barrel re-exporting all of the above
-- `shelly.ts` — Shelly Gen 2 RPC types
-- `nanoleaf.ts` — Nanoleaf OpenAPI types
-- `weather.ts` — `WeatherService` interface and data types
-- `notification.ts` — `NotificationService` interface and option types
-
-Zigbee type naming: `{Capability}Payload` for device state, `{Capability}SetCommand` for commands.
 
 ## Test Patterns
 
@@ -202,13 +245,18 @@ describe("ClassName", () => {
 - Max 2 levels of `describe` nesting
 - Test names start with a verb: `"sets and gets a boolean"`
 
-## Dependency Injection
+## CLI Dashboard (OpenTUI / React)
 
-- **Constructor injection** for services (via `private readonly` params)
-- **`_inject(context: AutomationContext)` method** for automations (framework-internal, underscore-prefixed) — takes a single context object, not positional parameters
-- **`T | null`** for optional services (`notifications`, `weather`), check before use
-- **Child loggers** scoped per service: `logger.child({ service: "mqtt" })`
-- **Factory function overload** for notifications/weather: accepts instance or `(http, logger) => Service`
+The interactive dashboard (`ts-ha dashboard`) uses `@opentui/core` and `@opentui/react` for a terminal UI.
+
+- **JSX files** use `.tsx` extension — located in `src/cli/commands/` and `src/cli/components/`
+- **`jsxImportSource`** is `@opentui/react` (set in `tsconfig.json`) — JSX elements are OpenTUI intrinsics (`<box>`, `<text>`, `<scrollbox>`), not HTML
+- **Never call `process.exit()`** — use `renderer.destroy()` for cleanup
+- **Text styling** uses nested modifier tags: `<strong>`, `<em>`, `<span fg="red">` inside `<text>`
+- **Hooks**: `useKeyboard`, `useRenderer`, `useTerminalDimensions`, `useTimeline` from `@opentui/react`
+- **Tab components** are separate files in `src/cli/components/` (one per tab)
+- **Shared theme** in `src/cli/components/theme.ts` (Dracula color palette)
+- **Shared types** in `src/cli/components/types.ts` (dashboard data interfaces)
 
 ## Exports (`src/index.ts`)
 
