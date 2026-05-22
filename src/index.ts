@@ -58,6 +58,7 @@ export {
   type OpenWeatherMapConfig,
   OpenWeatherMapService,
 } from "./core/services/openweathermap-service.js";
+export { PrometheusMetricsService } from "./core/services/prometheus-metrics-service.js";
 // Service plugin infrastructure
 export type {
   CoreContext,
