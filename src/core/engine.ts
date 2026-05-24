@@ -10,6 +10,7 @@ import { MqttService } from "./mqtt/mqtt-service.js";
 import { CronScheduler } from "./scheduling/cron-scheduler.js";
 import type { HomekitService } from "./services/homekit-service.js";
 import type { NanoleafService } from "./services/nanoleaf-service.js";
+import type { PrometheusMetricsService } from "./services/prometheus-metrics-service";
 import type { CoreContext } from "./services/service-plugin.js";
 import { ServiceRegistry } from "./services/service-registry.js";
 import type { ShellyService } from "./services/shelly-service.js";
@@ -184,6 +185,7 @@ export interface EngineOptions {
     weather?: WeatherService | ServiceFactory<WeatherService>;
     shelly?: ShellyService | ServiceFactory<ShellyService>;
     nanoleaf?: NanoleafService | ServiceFactory<NanoleafService>;
+    metrics?: PrometheusMetricsService | ServiceFactory<PrometheusMetricsService>;
     homekit?: HomekitService | HomekitServiceFactory;
     /** Any additional custom services registered under arbitrary keys. */
     [key: string]: unknown;
@@ -307,16 +309,19 @@ export function createEngine(options: EngineOptions): Engine {
   const shellyValue = options.services?.shelly;
   const nanoleafValue = options.services?.nanoleaf;
   const homekitValue = options.services?.homekit;
+  const metricsValue = options.services?.metrics;
 
   const notificationService = resolveService(notificationsValue, "notifications");
   const weatherService = resolveService(weatherValue, "weather");
   const shellyService = resolveService(shellyValue, "shelly");
   const nanoleafService = resolveService(nanoleafValue, "nanoleaf");
+  const metricsService = resolveService(metricsValue, "metrics");
 
   if (notificationService) serviceRegistry.register("notifications", notificationService);
   if (weatherService) serviceRegistry.register("weather", weatherService);
   if (shellyService) serviceRegistry.register("shelly", shellyService);
   if (nanoleafService) serviceRegistry.register("nanoleaf", nanoleafService);
+  if (metricsService) serviceRegistry.register("metrics", metricsService);
 
   // ── Device registry ───────────────────────────────────────────────────────
 
@@ -356,7 +361,14 @@ export function createEngine(options: EngineOptions): Engine {
 
   // Register any additional custom services from the services map.
   if (options.services) {
-    const WELL_KNOWN = new Set(["notifications", "weather", "shelly", "nanoleaf", "homekit"]);
+    const WELL_KNOWN = new Set([
+      "notifications",
+      "weather",
+      "shelly",
+      "nanoleaf",
+      "homekit",
+      "metrics",
+    ]);
     for (const [key, value] of Object.entries(options.services)) {
       if (!WELL_KNOWN.has(key) && value !== undefined) {
         const resolved =
