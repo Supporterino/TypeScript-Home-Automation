@@ -79,6 +79,11 @@ export class PrometheusMetricsService implements ServicePlugin {
   // Motion / occupancy
   private readonly occupancyGauge: Gauge<"device">;
 
+  // Presence
+  private readonly presenceGauge: Gauge<"device">;
+  private readonly targetDistanceGauge: Gauge<"device">;
+  private readonly pirDetectionGauge: Gauge<"device">;
+
   // Contact
   private readonly contactGauge: Gauge<"device">;
 
@@ -177,6 +182,20 @@ export class PrometheusMetricsService implements ServicePlugin {
       "Occupancy sensor state (1 = occupied, 0 = vacant)",
     );
 
+    // Presence
+    this.presenceGauge = this.makeGauge(
+      "zigbee_device_presence",
+      "Presence sensor state (1 = presence detected, 0 = vacant)",
+    );
+    this.targetDistanceGauge = this.makeGauge(
+      "zigbee_device_target_distance",
+      "Distance to detected target in meters",
+    );
+    this.pirDetectionGauge = this.makeGauge(
+      "zigbee_device_pir_detection",
+      "PIR motion detection state (1 = motion detected, 0 = none)",
+    );
+
     // Contact
     this.contactGauge = this.makeGauge(
       "zigbee_device_contact",
@@ -259,6 +278,9 @@ export class PrometheusMetricsService implements ServicePlugin {
       this.vocIndexGauge,
       this.airQualityGauge,
       this.occupancyGauge,
+      this.presenceGauge,
+      this.targetDistanceGauge,
+      this.pirDetectionGauge,
       this.contactGauge,
       this.waterLeakGauge,
       this.powerGauge,
@@ -428,6 +450,11 @@ export class PrometheusMetricsService implements ServicePlugin {
     // Occupancy / contact — booleans / strings
     this.setBoolFrom(state, labels, "occupancy", this.occupancyGauge);
     this.setBoolFrom(state, labels, "contact", this.contactGauge);
+
+    // Presence
+    this.setBoolFrom(state, labels, "presence", this.presenceGauge);
+    this.setNumeric(state, labels, "target_distance", this.targetDistanceGauge);
+    this.setBoolFrom(state, labels, "pir_detection", this.pirDetectionGauge);
 
     // Water leak
     this.setBoolFrom(state, labels, "water_leak", this.waterLeakGauge);
