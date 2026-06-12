@@ -246,6 +246,22 @@ export interface ContactPayload {
 }
 
 /**
+ * Generic mmWave presence sensor payload.
+ *
+ * Works with: any mmWave presence sensor (Aqara FP300, FP1, etc.).
+ */
+export interface PresencePayload {
+  presence: boolean;
+  target_distance?: number;
+  illuminance?: number;
+  temperature?: number;
+  humidity?: number;
+  battery?: number;
+  voltage?: number;
+  linkquality?: number;
+}
+
+/**
  * Generic water leak sensor payload.
  *
  * Works with: any water leak sensor (Aqara SJCGQ11LM, etc.).
@@ -306,6 +322,15 @@ export interface PlugPayload {
   current?: number;
   energy?: number;
   linkquality?: number;
+}
+
+/**
+ * Generic set command for any mmWave presence sensor.
+ *
+ * Works with: any presence sensor that supports motion sensitivity configuration.
+ */
+export interface PresenceSetCommand {
+  motion_sensitivity?: "low" | "medium" | "high";
 }
 
 /**
