@@ -2,7 +2,12 @@
  * Aqara — brand-specific Zigbee2MQTT payload types.
  */
 
-import type { TemperatureHumidityPayload, WaterLeakPayload } from "./common.js";
+import type {
+  PresencePayload,
+  PresenceSetCommand,
+  TemperatureHumidityPayload,
+  WaterLeakPayload,
+} from "./common.js";
 
 // ---------------------------------------------------------------------------
 // Aqara — remotes and buttons
@@ -86,3 +91,48 @@ export interface AqaraWaterLeakPayload extends WaterLeakPayload {
  * - Aqara WSDCGQ11LM (temperature/humidity/pressure sensor)
  */
 export interface AqaraTemperatureHumidityPayload extends TemperatureHumidityPayload {}
+
+/**
+ * State payload for Aqara mmWave presence sensor.
+ *
+ * Extends the generic `PresencePayload` with FP300-specific fields including PIR
+ * detection, AI configuration, and zone-based detection range.
+ *
+ * Supported devices:
+ * - Aqara PS-S04D / FP300 (mmWave + PIR presence sensor)
+ */
+export interface AqaraPresencePayload extends PresencePayload {
+  pir_detection?: boolean;
+  presence_detection_options?: "both" | "mmwave" | "pir";
+  motion_sensitivity?: "low" | "medium" | "high";
+  ai_interference_source_selfidentification?: "ON" | "OFF";
+  ai_sensitivity_adaptive?: "ON" | "OFF";
+  absence_delay_timer?: number;
+  pir_detection_interval?: number;
+  detection_range?: number;
+  detection_range_composite?: Record<string, boolean>;
+  power_outage_count?: number;
+}
+
+/**
+ * Set command for Aqara mmWave presence sensor.
+ *
+ * Extends `PresenceSetCommand` with FP300-specific writable configuration and
+ * write-only commands like spatial learning and device restart.
+ *
+ * Supported devices:
+ * - Aqara PS-S04D / FP300 (mmWave + PIR presence sensor)
+ */
+export interface AqaraPresenceSetCommand extends PresenceSetCommand {
+  presence_detection_options?: "both" | "mmwave" | "pir";
+  ai_interference_source_selfidentification?: "ON" | "OFF";
+  ai_sensitivity_adaptive?: "ON" | "OFF";
+  absence_delay_timer?: number;
+  pir_detection_interval?: number;
+  detection_range?: number;
+  detection_range_composite?: Record<string, boolean>;
+  spatial_learning?: "Start Learning";
+  restart_device?: "Restart Device";
+  identify?: "identify";
+  track_target_distance?: "start_tracking_distance";
+}

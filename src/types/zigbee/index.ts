@@ -18,6 +18,8 @@
 export type {
   AqaraClickMode,
   AqaraOperationMode,
+  AqaraPresencePayload,
+  AqaraPresenceSetCommand,
   AqaraRemoteSwitchH1Action,
   AqaraRemoteSwitchH1Payload,
   AqaraRemoteSwitchH1SetCommand,
@@ -57,6 +59,8 @@ export type {
   OccupancyPayload,
   PlugPayload,
   PowerOnBehavior,
+  PresencePayload,
+  PresenceSetCommand,
   SwitchSetCommand,
   TemperatureHumidityPayload,
   WaterLeakPayload,
