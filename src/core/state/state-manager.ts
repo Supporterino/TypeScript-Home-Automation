@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, open, readFile, rename } from "node:fs/promises";
 import { dirname } from "node:path";
 import type { Logger } from "pino";
 
@@ -210,25 +210,53 @@ export class StateManager {
   async load(): Promise<void> {
     if (!this.persist) return;
 
+    let data: string;
     try {
-      const data = await readFile(this.filePath, "utf-8");
-      const parsed = JSON.parse(data) as Record<string, unknown>;
-
-      for (const [key, value] of Object.entries(parsed)) {
-        this.store.set(key, value);
-      }
-
-      this.logger.info(
-        { keys: Object.keys(parsed).length, file: this.filePath },
-        "State restored from disk",
-      );
+      data = await readFile(this.filePath, "utf-8");
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code === "ENOENT") {
         this.logger.debug({ file: this.filePath }, "No persisted state file found, starting fresh");
       } else {
         this.logger.error({ err, file: this.filePath }, "Failed to load persisted state");
       }
+      return;
     }
+
+    try {
+      this.restore(JSON.parse(data) as Record<string, unknown>, this.filePath);
+    } catch (err) {
+      // Primary file is corrupt/unparseable — attempt recovery from the backup.
+      this.logger.error(
+        { err, file: this.filePath },
+        "Persisted state file is corrupt, attempting backup recovery",
+      );
+      await this.recoverFromBackup();
+    }
+  }
+
+  /**
+   * Attempt to restore state from the backup file (`filePath` + `.bak`).
+   * On failure the in-memory store is left empty and an error is logged.
+   */
+  private async recoverFromBackup(): Promise<void> {
+    const backupPath = `${this.filePath}.bak`;
+    try {
+      const data = await readFile(backupPath, "utf-8");
+      this.restore(JSON.parse(data) as Record<string, unknown>, backupPath);
+    } catch (err) {
+      this.logger.error(
+        { err, file: backupPath },
+        "Backup state file missing or corrupt, starting with an empty store",
+      );
+    }
+  }
+
+  /** Load parsed key-value pairs into the store and log success. */
+  private restore(parsed: Record<string, unknown>, file: string): void {
+    for (const [key, value] of Object.entries(parsed)) {
+      this.store.set(key, value);
+    }
+    this.logger.info({ keys: Object.keys(parsed).length, file }, "State restored from disk");
   }
 
   /**
@@ -239,18 +267,62 @@ export class StateManager {
     if (!this.persist) return;
 
     try {
+      // Serialize each entry individually so one bad value cannot abort the
+      // entire save — unserializable keys are skipped and logged.
       const data: Record<string, unknown> = {};
       for (const [key, value] of this.store) {
-        data[key] = value;
+        try {
+          JSON.stringify(value);
+          data[key] = value;
+        } catch (err) {
+          this.logger.warn({ err, key }, "Skipping unserializable state value while persisting");
+        }
       }
 
-      await mkdir(dirname(this.filePath), { recursive: true });
-      await writeFile(this.filePath, JSON.stringify(data, null, 2), "utf-8");
+      // Every surviving value serialized individually, so this cannot throw.
+      const contents = JSON.stringify(data, null, 2);
 
-      this.logger.info({ keys: this.store.size, file: this.filePath }, "State persisted to disk");
+      await mkdir(dirname(this.filePath), { recursive: true });
+      await this.atomicWrite(this.filePath, contents);
+
+      this.logger.info(
+        { keys: Object.keys(data).length, file: this.filePath },
+        "State persisted to disk",
+      );
     } catch (err) {
       this.logger.error({ err, file: this.filePath }, "Failed to persist state");
     }
+  }
+
+  /**
+   * Durably write `contents` to `filePath` atomically.
+   *
+   * Writes to a temp file, `fsync`s it to disk, preserves any existing file as
+   * a `.bak` backup (best-effort), then atomically renames the temp file over
+   * `filePath`. An interrupted write can never leave `filePath` truncated.
+   */
+  private async atomicWrite(filePath: string, contents: string): Promise<void> {
+    const tmpPath = `${filePath}.tmp`;
+
+    const fh = await open(tmpPath, "w");
+    try {
+      await fh.writeFile(contents, "utf-8");
+      await fh.sync();
+    } finally {
+      await fh.close();
+    }
+
+    // Best-effort backup of the previous good file — a failed backup (e.g. the
+    // file does not exist yet) MUST NOT block the primary save.
+    try {
+      await copyFile(filePath, `${filePath}.bak`);
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
+        this.logger.warn({ err, file: filePath }, "Failed to back up prior state file");
+      }
+    }
+
+    await rename(tmpPath, filePath);
   }
 
   // -------------------------------------------------------------------------
