@@ -14,6 +14,20 @@
  */
 
 // ---------------------------------------------------------------------------
+// Device modelling (HomeKit bridging)
+// ---------------------------------------------------------------------------
+
+/**
+ * The HomeKit-facing type of a registered Shelly device.
+ *
+ * Determines which HAP service the bridge exposes for the device:
+ * - `"switch"` → `Service.Switch`
+ * - `"outlet"` → `Service.Outlet`
+ * - `"cover"`  → `Service.WindowCovering`
+ */
+export type ShellyDeviceType = "switch" | "outlet" | "cover";
+
+// ---------------------------------------------------------------------------
 // Device info (Shelly.GetDeviceInfo)
 // ---------------------------------------------------------------------------
 

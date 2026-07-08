@@ -4,6 +4,7 @@ import type {
   ShellyCoverState,
   ShellyCoverStatus,
   ShellyDeviceInfo,
+  ShellyDeviceType,
   ShellySwitchConfig,
   ShellySwitchSetResult,
   ShellySwitchStatus,
@@ -12,14 +13,23 @@ import type {
 import type { HttpClient } from "../http/http-client.js";
 
 /**
- * A registered Shelly device with its name and IP/hostname.
+ * A registered Shelly device with its name, IP/hostname, and HomeKit type.
  */
 export interface ShellyDevice {
   /** Friendly name for logging and lookup (e.g. "living_room_plug"). */
   name: string;
   /** IP address or hostname of the Shelly device. */
   host: string;
+  /**
+   * The HomeKit-facing device type, used by the HomeKit bridge to decide which
+   * HAP service to expose. Defaults to `"switch"` when not specified at
+   * registration.
+   */
+  type: ShellyDeviceType;
 }
+
+/** Callback fired when a Shelly device is registered. */
+export type ShellyDeviceRegisteredHandler = (device: ShellyDevice) => void;
 
 /**
  * Service for interacting with Shelly Gen 2 devices over their HTTP RPC API.
@@ -42,6 +52,12 @@ export interface ShellyDevice {
 export class ShellyService {
   private readonly devices: Map<string, ShellyDevice> = new Map();
 
+  /**
+   * Handlers fired when a device is registered. Uses a plain `Set` (mirroring
+   * `DeviceRegistry`) rather than Node's `EventEmitter`.
+   */
+  private readonly deviceRegisteredHandlers: Set<ShellyDeviceRegisteredHandler> = new Set();
+
   constructor(
     private readonly http: HttpClient,
     private readonly logger: Logger,
@@ -57,30 +73,74 @@ export class ShellyService {
    * - `"shelly-plug.local:8080"` → OK (custom port)
    * - `"http://shelly-plug.local"` → normalized to `"shelly-plug.local"`
    *
+   * An optional device `type` (`"switch" | "outlet" | "cover"`) controls how
+   * the HomeKit bridge models the device; it defaults to `"switch"` so existing
+   * two-argument calls keep working.
+   *
    * @param name Friendly name for the device (used in all other methods)
    * @param host IP address, hostname, or URL of the Shelly device
    */
-  register(name: string, host: string): void {
+  register(name: string, host: string): void;
+  register(name: string, host: string, type: ShellyDeviceType): void;
+  register(name: string, host: string, type: ShellyDeviceType = "switch"): void {
     const normalized = this.normalizeHost(host);
-    this.devices.set(name, { name, host: normalized });
-    this.logger.info({ name, host: normalized }, "Shelly device registered");
+    const device: ShellyDevice = { name, host: normalized, type };
+    this.devices.set(name, device);
+    this.logger.info({ name, host: normalized, type }, "Shelly device registered");
+
+    // Notify registration listeners, isolating each so one failure does not
+    // prevent the others from running.
+    for (const cb of this.deviceRegisteredHandlers) {
+      try {
+        cb(device);
+      } catch (err) {
+        this.logger.error({ err, name }, "Error in onDeviceRegistered handler");
+      }
+    }
   }
 
   /**
    * Register multiple Shelly devices at once.
    *
-   * @param devices Array of { name, host } objects or a Record<name, host>
+   * @param devices Array of `ShellyDevice`-like objects (name/host, optional
+   *   type) or a `Record<name, host>`
    */
-  registerMany(devices: ShellyDevice[] | Record<string, string>): void {
+  registerMany(
+    devices:
+      | Array<{ name: string; host: string; type?: ShellyDeviceType }>
+      | Record<string, string>,
+  ): void {
     if (Array.isArray(devices)) {
       for (const device of devices) {
-        this.register(device.name, device.host);
+        this.register(device.name, device.host, device.type ?? "switch");
       }
     } else {
       for (const [name, host] of Object.entries(devices)) {
         this.register(name, host);
       }
     }
+  }
+
+  /**
+   * Return a read-only snapshot of all currently registered devices, including
+   * their name, normalized host, and type.
+   */
+  getDevices(): ShellyDevice[] {
+    return Array.from(this.devices.values());
+  }
+
+  /**
+   * Subscribe to device registrations. The handler is invoked synchronously
+   * whenever a device is registered (including devices registered after service
+   * startup).
+   */
+  onDeviceRegistered(cb: ShellyDeviceRegisteredHandler): void {
+    this.deviceRegisteredHandlers.add(cb);
+  }
+
+  /** Remove a previously-registered registration handler. */
+  offDeviceRegistered(cb: ShellyDeviceRegisteredHandler): void {
+    this.deviceRegisteredHandlers.delete(cb);
   }
 
   // -------------------------------------------------------------------------

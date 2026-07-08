@@ -26,6 +26,7 @@ export {
   createEngine,
   type Engine,
   type EngineOptions,
+  type HomekitServiceContext,
   type HomekitServiceFactory,
   type ServiceFactory,
 } from "./core/engine.js";
