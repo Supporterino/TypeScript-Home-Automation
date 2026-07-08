@@ -3,6 +3,13 @@ import type { Logger } from "pino";
 import type { CoreContext, ServicePlugin } from "./service-plugin.js";
 
 /**
+ * Per-plugin lifecycle timeout (ms). Generous enough not to kill legitimately
+ * slow plugins (e.g. HomeKit mDNS publish) while preventing a hanging plugin
+ * from wedging startup or shutdown indefinitely.
+ */
+const PLUGIN_LIFECYCLE_TIMEOUT_MS = 15_000;
+
+/**
  * A type-safe, key/value registry for optional services.
  *
  * Services are registered by string key and retrieved with a type parameter.
@@ -37,6 +44,15 @@ import type { CoreContext, ServicePlugin } from "./service-plugin.js";
 export class ServiceRegistry {
   private readonly store: Map<string, unknown> = new Map();
   private logger: Logger | null = null;
+  private readonly pluginLifecycleTimeoutMs: number;
+
+  /**
+   * @param pluginLifecycleTimeoutMs Per-plugin `onStart`/`onStop` timeout in ms.
+   *   Defaults to {@link PLUGIN_LIFECYCLE_TIMEOUT_MS}. Overridable primarily for tests.
+   */
+  constructor(pluginLifecycleTimeoutMs: number = PLUGIN_LIFECYCLE_TIMEOUT_MS) {
+    this.pluginLifecycleTimeoutMs = pluginLifecycleTimeoutMs;
+  }
 
   /**
    * Attach a logger for lifecycle events. Called by the engine after construction.
@@ -141,7 +157,11 @@ export class ServiceRegistry {
         };
         try {
           this.logger?.info({ service: service.serviceKey }, "Starting service plugin");
-          await service.onStart(pluginContext);
+          await this.withTimeout(
+            service.onStart(pluginContext),
+            this.pluginLifecycleTimeoutMs,
+            `${service.serviceKey} onStart`,
+          );
         } catch (err) {
           this.logger?.error({ err, service: service.serviceKey }, "Service plugin onStart failed");
         }
@@ -155,15 +175,40 @@ export class ServiceRegistry {
    * Errors in individual plugins are logged and do not prevent other plugins from stopping.
    */
   async stopAll(): Promise<void> {
-    for (const service of this.store.values()) {
+    // Stop in reverse (LIFO) registration order.
+    for (const service of [...this.store.values()].reverse()) {
       if (isPlugin(service) && service.onStop) {
         try {
           this.logger?.info({ service: service.serviceKey }, "Stopping service plugin");
-          await service.onStop();
+          await this.withTimeout(
+            service.onStop(),
+            this.pluginLifecycleTimeoutMs,
+            `${service.serviceKey} onStop`,
+          );
         } catch (err) {
           this.logger?.error({ err, service: service.serviceKey }, "Service plugin onStop failed");
         }
       }
+    }
+  }
+
+  /**
+   * Race a plugin lifecycle promise against a timeout. If the promise does not
+   * settle within `ms`, log a timeout error and settle so the registry can
+   * continue with the next plugin rather than blocking indefinitely.
+   */
+  private async withTimeout(promise: Promise<void>, ms: number, label: string): Promise<void> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<void>((resolve) => {
+      timer = setTimeout(() => {
+        this.logger?.error({ label, timeoutMs: ms }, "Service plugin lifecycle hook timed out");
+        resolve();
+      }, ms);
+    });
+    try {
+      await Promise.race([promise, timeout]);
+    } finally {
+      if (timer) clearTimeout(timer);
     }
   }
 

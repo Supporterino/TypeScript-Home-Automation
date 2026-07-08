@@ -32,13 +32,24 @@ export class CronScheduler {
    * @param expression Cron expression (e.g. "0 7 * * *" for daily at 7 AM)
    * @param callback Function to execute when the cron fires
    */
-  schedule(id: string, expression: string, callback: () => void): void {
+  schedule(id: string, expression: string, callback: () => void | Promise<void>): void {
+    // Stop any existing job for the same id before replacing it so the previous
+    // job's timer is not leaked.
+    const existing = this.jobs.get(id);
+    if (existing) {
+      existing.job.stop();
+      this.logger.debug({ id }, "Stopped existing cron job before rescheduling");
+    }
+
     const job = CronJob.from({
       cronTime: expression,
-      onTick: () => {
+      // `onTick` is async and awaits the callback so both synchronous throws and
+      // asynchronous rejections are captured and logged rather than becoming
+      // unhandled rejections.
+      onTick: async () => {
         this.logger.debug({ id, expression }, "Cron job triggered");
         try {
-          callback();
+          await callback();
         } catch (err) {
           this.logger.error({ err, id }, "Error in cron job handler");
         }

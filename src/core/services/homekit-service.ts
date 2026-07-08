@@ -287,13 +287,36 @@ export class HomekitService implements ServicePlugin {
       await source.start(sink);
     }
 
-    await this.bridge.publish({
-      username,
-      pincode: this.options.pinCode,
-      port,
-      category: HAP_CATEGORY_BRIDGE,
-      bind: this.options.bind,
-    });
+    try {
+      await this.bridge.publish({
+        username,
+        pincode: this.options.pinCode,
+        port,
+        category: HAP_CATEGORY_BRIDGE,
+        bind: this.options.bind,
+      });
+    } catch (err) {
+      // publish() failed after sources were started. The registry will not call
+      // our onStop() (plugin onStart failed), so tear down the already-started
+      // sources here to release poll intervals and registry listeners, then
+      // rethrow so the failure is logged by the registry.
+      this.logger.error({ err }, "HomeKit bridge publish failed — tearing down started sources");
+      for (const source of this.sources) {
+        try {
+          await source.stop();
+        } catch (stopErr) {
+          this.logger.error(
+            { err: stopErr, source: source.name },
+            "Error stopping accessory source during publish-failure teardown",
+          );
+        }
+      }
+      this.sources = [];
+      this.accessories.clear();
+      this.published = false;
+      this.bridge = null;
+      throw err;
+    }
 
     // Only mark running after publish() resolves successfully.
     this.published = true;
