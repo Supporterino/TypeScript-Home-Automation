@@ -166,7 +166,7 @@ Constructor DI with `private readonly` parameters. No interfaces for services th
 
 ### ServiceFactory pattern
 
-Services accepted by `createEngine()` can be instances or factory functions `(http: HttpClient, logger: Logger) => T`. The `homekit` service is special — its factory receives 4 args: `(http, logger, mqtt, deviceRegistry)`.
+Services accepted by `createEngine()` can be instances or factory functions `(http: HttpClient, logger: Logger) => T`. The `homekit` service is special — its factory receives a single `HomekitServiceContext` object: `(ctx: { http, logger, mqtt, deviceRegistry, shelly }) => HomekitService`.
 
 ### ServicePlugin
 
