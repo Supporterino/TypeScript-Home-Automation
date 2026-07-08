@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, mock } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
+import { EventEmitter } from "node:events";
 import pino from "pino";
 import type { Config } from "../src/config.js";
 import { type MqttMessageHandler, MqttService } from "../src/core/mqtt/mqtt-service.js";
@@ -300,5 +301,102 @@ describe("MqttService", () => {
       expect(handler1).not.toHaveBeenCalled();
       expect(handler2).toHaveBeenCalledTimes(1);
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Connect lifecycle — mock the `mqtt` module so we can drive `connect`, `error`,
+// etc. events without a real broker, and assert single-fire + zombie teardown.
+// ---------------------------------------------------------------------------
+
+/** A fake MqttClient built on EventEmitter that records subscribe/end calls. */
+class FakeClient extends EventEmitter {
+  readonly subscribed: string[] = [];
+  endCalls = 0;
+  lastEndForce: boolean | undefined;
+
+  subscribe(topic: string, cb?: (err: Error | null) => void): this {
+    this.subscribed.push(topic);
+    cb?.(null);
+    return this;
+  }
+
+  end(force?: boolean): this {
+    this.endCalls += 1;
+    this.lastEndForce = force;
+    return this;
+  }
+
+  async endAsync(): Promise<void> {
+    this.endCalls += 1;
+  }
+}
+
+describe("MqttService connect lifecycle", () => {
+  let fakeClient: FakeClient;
+  let resubscribeSpy: ReturnType<typeof mock>;
+
+  beforeEach(async () => {
+    fakeClient = new FakeClient();
+    await mock.module("mqtt", () => ({
+      default: { connect: () => fakeClient },
+      connect: () => fakeClient,
+    }));
+    resubscribeSpy = mock(() => {});
+  });
+
+  afterEach(() => {
+    mock.restore();
+  });
+
+  /** Build a service whose private `resubscribeAll` is spied. */
+  function makeService(): MqttService {
+    const service = new MqttService(config, logger);
+    (service as unknown as { resubscribeAll: () => void }).resubscribeAll = resubscribeSpy;
+    return service;
+  }
+
+  it("calls resubscribeAll exactly once on the initial connect", async () => {
+    const service = makeService();
+    const connectPromise = service.connect();
+
+    fakeClient.emit("connect");
+    await connectPromise;
+
+    expect(resubscribeSpy).toHaveBeenCalledTimes(1);
+    expect(service.isConnected).toBe(true);
+  });
+
+  it("handles a reconnect after a prior connect as a reconnection", async () => {
+    const service = makeService();
+    const connectPromise = service.connect();
+
+    // First connect resolves the promise
+    fakeClient.emit("connect");
+    await connectPromise;
+    expect(resubscribeSpy).toHaveBeenCalledTimes(1);
+
+    // A subsequent connect (reconnection) resubscribes again
+    fakeClient.emit("connect");
+    expect(resubscribeSpy).toHaveBeenCalledTimes(2);
+    expect(service.isConnected).toBe(true);
+  });
+
+  it("rejects and ends the client when an error fires before the first connect", async () => {
+    const service = makeService();
+    const connectPromise = service.connect();
+
+    const boom = new Error("connection refused");
+    fakeClient.emit("error", boom);
+
+    await expect(connectPromise).rejects.toThrow("connection refused");
+    // The zombie client is force-ended so no background reconnect survives
+    expect(fakeClient.endCalls).toBe(1);
+    expect(fakeClient.lastEndForce).toBe(true);
+    expect(service.isConnected).toBe(false);
+
+    // disconnect() afterwards is a safe no-op (client reference already cleared)
+    await expect(service.disconnect()).resolves.toBeUndefined();
+    expect(fakeClient.endCalls).toBe(1);
   });
 });

@@ -417,6 +417,18 @@ export class DeviceRegistry {
     }
 
     if (event.type === "device_joined" || event.type === "device_leave") {
+      if (
+        !event.data ||
+        typeof event.data !== "object" ||
+        typeof event.data.friendly_name !== "string"
+      ) {
+        this.logger.warn(
+          { type: event.type },
+          "bridge/event missing usable data.friendly_name — skipping",
+        );
+        return;
+      }
+
       this.logger.info(
         { type: event.type, friendlyName: event.data.friendly_name },
         "Bridge device event — refreshing device list",
@@ -486,6 +498,13 @@ export class DeviceRegistry {
    * any registered handlers.
    */
   private handleDeviceState(friendlyName: string, payload: Record<string, unknown>): void {
+    // Guard against non-object payloads (e.g. a bare availability string such
+    // as "online", a number, or null) which would corrupt state when spread.
+    if (payload === null || typeof payload !== "object" || Array.isArray(payload)) {
+      this.logger.debug({ friendlyName, payload }, "Ignoring non-object device state payload");
+      return;
+    }
+
     const prev = this.deviceStates.get(friendlyName);
     const next = { ...prev, ...payload };
     this.deviceStates.set(friendlyName, next);
