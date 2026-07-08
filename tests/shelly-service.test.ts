@@ -96,6 +96,68 @@ describe("ShellyService", () => {
     it("throws for unregistered devices", () => {
       expect(shelly.turnOn("unknown")).rejects.toThrow('Shelly device "unknown" is not registered');
     });
+
+    it("defaults device type to switch when omitted", () => {
+      shelly.register("plug", "192.168.1.6");
+      const [device] = shelly.getDevices();
+      expect(device.type).toBe("switch");
+    });
+
+    it("stores an explicit device type", () => {
+      shelly.register("blind", "192.168.1.5", "cover");
+      const device = shelly.getDevices().find((d) => d.name === "blind");
+      expect(device?.type).toBe("cover");
+    });
+
+    it("registerMany preserves per-device type", () => {
+      shelly.registerMany([
+        { name: "plug", host: "192.168.1.50" },
+        { name: "blind", host: "192.168.1.60", type: "cover" },
+      ]);
+      const devices = shelly.getDevices();
+      expect(devices.find((d) => d.name === "plug")?.type).toBe("switch");
+      expect(devices.find((d) => d.name === "blind")?.type).toBe("cover");
+    });
+  });
+
+  describe("device inventory", () => {
+    it("getDevices returns all registered devices with normalized host and type", () => {
+      shelly.register("plug", "http://192.168.1.50/", "outlet");
+      shelly.register("blind", "192.168.1.60", "cover");
+      const devices = shelly.getDevices();
+      expect(devices).toHaveLength(2);
+      const plug = devices.find((d) => d.name === "plug");
+      expect(plug).toEqual({ name: "plug", host: "192.168.1.50", type: "outlet" });
+      const blind = devices.find((d) => d.name === "blind");
+      expect(blind).toEqual({ name: "blind", host: "192.168.1.60", type: "cover" });
+    });
+  });
+
+  describe("registration events", () => {
+    it("fires listeners with the registered device", () => {
+      const received: string[] = [];
+      shelly.onDeviceRegistered((d) => received.push(`${d.name}:${d.type}`));
+      shelly.register("plug", "192.168.1.50", "outlet");
+      expect(received).toEqual(["plug:outlet"]);
+    });
+
+    it("does not fire removed listeners", () => {
+      const cb = mock(() => {});
+      shelly.onDeviceRegistered(cb);
+      shelly.offDeviceRegistered(cb);
+      shelly.register("plug", "192.168.1.50");
+      expect(cb).toHaveBeenCalledTimes(0);
+    });
+
+    it("isolates a throwing listener so others still run", () => {
+      const good = mock(() => {});
+      shelly.onDeviceRegistered(() => {
+        throw new Error("boom");
+      });
+      shelly.onDeviceRegistered(good);
+      shelly.register("plug", "192.168.1.50");
+      expect(good).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe("switch control", () => {
