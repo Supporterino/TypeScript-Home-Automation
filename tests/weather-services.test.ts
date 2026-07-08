@@ -171,6 +171,18 @@ describe("OpenMeteoService", () => {
 
     expect(service.getCurrent()).rejects.toThrow("HTTP 500");
   });
+
+  it("throws a descriptive error when the current section is missing (200 error body)", async () => {
+    const http = createMockHttp({ error: true, reason: "invalid" });
+    const service = new OpenMeteoService({ location: { latitude: 0, longitude: 0 } }, http, logger);
+    expect(service.getCurrent()).rejects.toThrow(/missing the expected `current` section/);
+  });
+
+  it("throws a descriptive error when daily arrays are missing", async () => {
+    const http = createMockHttp({ current: OPEN_METEO_RESPONSE.current });
+    const service = new OpenMeteoService({ location: { latitude: 0, longitude: 0 } }, http, logger);
+    expect(service.getForecast(3)).rejects.toThrow(/missing the expected `daily` forecast arrays/);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -334,5 +346,25 @@ describe("OpenWeatherMapService", () => {
     );
 
     expect(service.getCurrent()).rejects.toThrow("HTTP 401");
+  });
+
+  it("throws a descriptive error when the current section is missing (200 error body)", async () => {
+    const http = createMockHttp({ cod: 401, message: "invalid api key" });
+    const service = new OpenWeatherMapService(
+      { apiKey: "bad", location: { latitude: 0, longitude: 0 } },
+      http,
+      logger,
+    );
+    expect(service.getCurrent()).rejects.toThrow(/missing the expected `current` section/);
+  });
+
+  it("throws a descriptive error when the daily array is missing", async () => {
+    const http = createMockHttp({ current: OWM_RESPONSE.current });
+    const service = new OpenWeatherMapService(
+      { apiKey: "k", location: { latitude: 0, longitude: 0 } },
+      http,
+      logger,
+    );
+    expect(service.getForecast(2)).rejects.toThrow(/missing the expected `daily` forecast array/);
   });
 });

@@ -98,7 +98,10 @@ export class OpenWeatherMapService implements WeatherService {
   async getCurrent(): Promise<CurrentWeather> {
     const data = await this.fetchOneCall();
     const c = data.current;
-    const weather = c.weather[0];
+    if (c === null || typeof c !== "object") {
+      throw new Error("OpenWeatherMap response is missing the expected `current` section");
+    }
+    const weather = c.weather?.[0];
 
     return {
       temperature: c.temp,
@@ -121,8 +124,19 @@ export class OpenWeatherMapService implements WeatherService {
 
   async getForecast(days = 5): Promise<DailyForecast[]> {
     const data = await this.fetchOneCall();
+    if (!Array.isArray(data.daily)) {
+      throw new Error("OpenWeatherMap response is missing the expected `daily` forecast array");
+    }
     return data.daily.slice(0, days).map((day) => {
-      const weather = day.weather[0];
+      if (
+        day === null ||
+        typeof day !== "object" ||
+        day.temp === null ||
+        typeof day.temp !== "object"
+      ) {
+        throw new Error("OpenWeatherMap daily forecast entry is missing the expected structure");
+      }
+      const weather = day.weather?.[0];
       return {
         date: new Date(day.dt * 1000).toISOString().slice(0, 10),
         tempHigh: day.temp.max,

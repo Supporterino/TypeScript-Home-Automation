@@ -43,17 +43,23 @@ export class LogBuffer {
   }
 
   /**
-   * Write a log line (called by pino's stream).
-   * Parses the JSON line and stores it in the ring buffer.
+   * Write a log chunk (called by pino's stream).
+   *
+   * A single chunk may contain multiple newline-delimited JSON objects (as pino
+   * may deliver batched writes). Each non-empty line is parsed independently and
+   * stored; a single malformed line is skipped without dropping the others.
    */
-  write(line: string): boolean {
-    try {
-      const entry = JSON.parse(line) as LogEntry;
-      this.buffer[this.writeIndex] = entry;
-      this.writeIndex = (this.writeIndex + 1) % this.capacity;
-      if (this.count < this.capacity) this.count++;
-    } catch {
-      // Ignore unparseable lines
+  write(chunk: string): boolean {
+    for (const line of chunk.split("\n")) {
+      if (line.length === 0) continue;
+      try {
+        const entry = JSON.parse(line) as LogEntry;
+        this.buffer[this.writeIndex] = entry;
+        this.writeIndex = (this.writeIndex + 1) % this.capacity;
+        if (this.count < this.capacity) this.count++;
+      } catch {
+        // Ignore unparseable lines; other valid lines in the chunk still store.
+      }
     }
     return true;
   }

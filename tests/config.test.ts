@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
 import { loadConfig } from "../src/config.js";
 
 describe("loadConfig", () => {
@@ -83,9 +83,16 @@ describe("loadConfig", () => {
       ["true", true],
       ["1", true],
       ["yes", true],
+      ["on", true],
+      ["TRUE", true],
+      ["On", true],
+      ["  true  ", true],
       ["false", false],
       ["0", false],
       ["no", false],
+      ["off", false],
+      ["FALSE", false],
+      ["Off", false],
     ] as const)("STATE_PERSIST='%s' parses to %s", (envValue, expected) => {
       process.env.STATE_PERSIST = envValue;
       const config = loadConfig();
@@ -96,6 +103,26 @@ describe("loadConfig", () => {
       process.env.STATE_FILE_PATH = "/data/state.json";
       const config = loadConfig();
       expect(config.state.filePath).toBe("/data/state.json");
+    });
+
+    it("fails gracefully via process.exit on an invalid boolean value", () => {
+      process.env.STATE_PERSIST = "maybe";
+
+      const originalExit = process.exit;
+      const originalError = console.error;
+      const exitMock = mock(() => {
+        throw new Error("process.exit called");
+      });
+      process.exit = exitMock as unknown as typeof process.exit;
+      console.error = mock(() => {});
+
+      try {
+        expect(() => loadConfig()).toThrow("process.exit called");
+        expect(exitMock).toHaveBeenCalledWith(1);
+      } finally {
+        process.exit = originalExit;
+        console.error = originalError;
+      }
     });
   });
 

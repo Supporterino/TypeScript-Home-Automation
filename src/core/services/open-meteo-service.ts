@@ -90,6 +90,9 @@ export class OpenMeteoService implements WeatherService {
   async getCurrent(): Promise<CurrentWeather> {
     const data = await this.fetchData(1);
     const c = data.current;
+    if (c === null || typeof c !== "object") {
+      throw new Error("Open-Meteo response is missing the expected `current` section");
+    }
 
     return {
       temperature: c.temperature_2m,
@@ -104,7 +107,7 @@ export class OpenMeteoService implements WeatherService {
         gust: c.wind_gusts_10m / 3.6,
       },
       cloudCover: c.cloud_cover,
-      uvIndex: data.daily.uv_index_max?.[0],
+      uvIndex: data.daily?.uv_index_max?.[0],
       timestamp: Math.floor(new Date(c.time).getTime() / 1000),
     };
   }
@@ -112,9 +115,19 @@ export class OpenMeteoService implements WeatherService {
   async getForecast(days = 5): Promise<DailyForecast[]> {
     const data = await this.fetchData(Math.min(days, 16));
     const d = data.daily;
+    if (d === null || typeof d !== "object" || !Array.isArray(d.time)) {
+      throw new Error("Open-Meteo response is missing the expected `daily` forecast arrays");
+    }
     const result: DailyForecast[] = [];
 
     for (let i = 0; i < d.time.length && i < days; i++) {
+      if (
+        d.temperature_2m_max[i] === undefined ||
+        d.temperature_2m_min[i] === undefined ||
+        d.weather_code[i] === undefined
+      ) {
+        throw new Error(`Open-Meteo daily forecast is missing expected values for day index ${i}`);
+      }
       result.push({
         date: d.time[i],
         tempHigh: d.temperature_2m_max[i],

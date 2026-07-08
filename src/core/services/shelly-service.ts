@@ -448,6 +448,22 @@ export class ShellyService {
       throw new Error(errMsg);
     }
 
+    // Validate the parsed body before returning it to callers. A Shelly device
+    // can return an RPC error object (e.g. `{ error: ... }`) with HTTP 200;
+    // casting that blindly to the typed shape would yield `undefined`/`NaN`.
+    const data = response.data as unknown;
+    if (data === null || typeof data !== "object") {
+      const errMsg = `Shelly RPC ${method} for "${name}" (${device.host}) returned an unexpected response body`;
+      this.logger.error({ device: name, host: device.host, method }, errMsg);
+      throw new Error(errMsg);
+    }
+    if ("error" in data) {
+      const rpcError = (data as { error: unknown }).error;
+      const errMsg = `Shelly RPC ${method} for "${name}" (${device.host}) returned an error: ${JSON.stringify(rpcError)}`;
+      this.logger.error({ device: name, host: device.host, method, rpcError }, errMsg);
+      throw new Error(errMsg);
+    }
+
     this.logger.debug({ device: name, method, result: response.data }, "Shelly RPC response");
 
     return response.data;

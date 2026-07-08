@@ -1,13 +1,29 @@
 import { z } from "zod";
 
-/** Coerce common truthy/falsy strings to boolean. */
-const booleanString = z
-  .enum(["true", "false", "1", "0", "yes", "no"])
-  .optional()
-  .transform((val) => {
-    if (val === undefined) return undefined;
-    return val === "true" || val === "1" || val === "yes";
-  });
+const TRUTHY = new Set(["true", "1", "yes", "on"]);
+const FALSY = new Set(["false", "0", "no", "off"]);
+
+/**
+ * Tolerant boolean coercion for environment variables, performed inside the
+ * schema so any failure is reported through the normal validation-failure path
+ * (`safeParse` → formatted error → `process.exit(1)`) rather than throwing an
+ * uncaught `ZodError`.
+ *
+ * Matching is case-insensitive and ignores surrounding whitespace. Accepts
+ * `true/false/1/0/yes/no/on/off`. Missing values fall through to the provided
+ * default.
+ */
+function booleanEnv(defaultValue: boolean) {
+  return z.preprocess((val) => {
+    if (val === undefined || val === null) return defaultValue;
+    if (typeof val === "boolean") return val;
+    const normalized = String(val).trim().toLowerCase();
+    if (TRUTHY.has(normalized)) return true;
+    if (FALSY.has(normalized)) return false;
+    // Return the raw value so zod's boolean check fails with a clear message.
+    return val;
+  }, z.boolean());
+}
 
 const configSchema = z.object({
   mqtt: z.object({
@@ -21,18 +37,18 @@ const configSchema = z.object({
   zigbee2mqttPrefix: z.string().default("zigbee2mqtt"),
   logLevel: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info"),
   state: z.object({
-    persist: z.boolean().default(false),
+    persist: booleanEnv(false),
     filePath: z.string().default("./state.json"),
   }),
   automations: z.object({
     /** Whether to scan subdirectories recursively for automation files. */
-    recursive: z.boolean().default(false),
+    recursive: booleanEnv(false),
   }),
   deviceRegistry: z.object({
     /** Whether to enable automatic Zigbee2MQTT device discovery and state tracking. */
-    enabled: z.boolean().default(false),
+    enabled: booleanEnv(false),
     /** Whether to persist the device list and state to disk on shutdown. */
-    persist: z.boolean().default(false),
+    persist: booleanEnv(false),
     /** Path to the device registry persistence JSON file. */
     filePath: z.string().default("./device-registry.json"),
   }),
@@ -44,7 +60,7 @@ const configSchema = z.object({
     /** Optional web UI served by Hono. */
     webUi: z.object({
       /** Whether to enable the web UI. */
-      enabled: z.boolean().default(false),
+      enabled: booleanEnv(false),
       /** URL path prefix for the web UI. Must start with /. */
       path: z.string().default("/status"),
     }),
@@ -68,12 +84,6 @@ const configSchema = z.object({
 export type Config = z.infer<typeof configSchema>;
 
 export function loadConfig(): Config {
-  const parsedPersist = booleanString.parse(process.env.STATE_PERSIST);
-  const parsedRecursive = booleanString.parse(process.env.AUTOMATIONS_RECURSIVE);
-  const parsedWebUiEnabled = booleanString.parse(process.env.WEB_UI_ENABLED);
-  const parsedDeviceRegistryEnabled = booleanString.parse(process.env.DEVICE_REGISTRY_ENABLED);
-  const parsedDeviceRegistryPersist = booleanString.parse(process.env.DEVICE_REGISTRY_PERSIST);
-
   const result = configSchema.safeParse({
     mqtt: {
       host: process.env.MQTT_HOST,
@@ -84,22 +94,22 @@ export function loadConfig(): Config {
     zigbee2mqttPrefix: process.env.ZIGBEE2MQTT_PREFIX,
     logLevel: process.env.LOG_LEVEL,
     state: {
-      persist: parsedPersist,
+      persist: process.env.STATE_PERSIST,
       filePath: process.env.STATE_FILE_PATH,
     },
     automations: {
-      recursive: parsedRecursive,
+      recursive: process.env.AUTOMATIONS_RECURSIVE,
     },
     deviceRegistry: {
-      enabled: parsedDeviceRegistryEnabled,
-      persist: parsedDeviceRegistryPersist,
+      enabled: process.env.DEVICE_REGISTRY_ENABLED,
+      persist: process.env.DEVICE_REGISTRY_PERSIST,
       filePath: process.env.DEVICE_REGISTRY_FILE_PATH,
     },
     httpServer: {
       port: process.env.HTTP_PORT,
       token: process.env.HTTP_TOKEN,
       webUi: {
-        enabled: parsedWebUiEnabled,
+        enabled: process.env.WEB_UI_ENABLED,
         path: process.env.WEB_UI_PATH,
       },
     },

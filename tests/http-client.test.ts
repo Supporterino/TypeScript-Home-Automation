@@ -319,5 +319,154 @@ describe("HttpClient", () => {
       expect(response.ok).toBe(false);
       expect(fetchMock.mock.calls).toHaveLength(2);
     });
+
+    // ── 7.1 Delivered response with unparseable body ──────────────────────
+
+    it("does not retry a 200 with malformed JSON and surfaces a clear error", async () => {
+      const fetchMock = mockFetch("{not valid json", 200, "application/json");
+      await expect(
+        client.request("http://localhost/api", { retries: 3, timeout: 30000 }),
+      ).rejects.toThrow(/Failed to parse JSON response body/);
+      // The request reached the server; a parse error must not trigger retries.
+      expect(fetchMock.mock.calls).toHaveLength(1);
+    });
+
+    // ── 7.2 Idempotent-only retry policy ──────────────────────────────────
+
+    it("does not auto-retry a POST on 5xx by default", async () => {
+      const fetchMock = mockFetch({ error: "server error" }, 500);
+      const response = await client.request("http://localhost/api", {
+        method: "POST",
+        body: { name: "test" },
+        retries: 3,
+        timeout: 30000,
+      });
+      expect(response.status).toBe(500);
+      expect(fetchMock.mock.calls).toHaveLength(1);
+    });
+
+    it("does auto-retry a GET on 5xx", async () => {
+      let callCount = 0;
+      globalThis.fetch = mock(() => {
+        callCount++;
+        if (callCount < 2) {
+          return new Response(JSON.stringify({ error: "internal" }), {
+            status: 500,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        return new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }) as unknown as typeof fetch;
+
+      const response = await client.request("http://localhost/api", {
+        method: "GET",
+        retries: 3,
+        timeout: 30000,
+      });
+      expect(response.ok).toBe(true);
+      expect(callCount).toBe(2);
+    });
+
+    // ── 7.3 Backoff jitter ────────────────────────────────────────────────
+
+    it("includes jitter in the backoff delay", async () => {
+      let callCount = 0;
+      globalThis.fetch = mock(() => {
+        callCount++;
+        if (callCount < 2) {
+          return Promise.reject(new Error("transient failure"));
+        }
+        return new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }) as unknown as typeof fetch;
+
+      // With Math.random forced to a non-zero value, the delay must exceed the
+      // pure exponential base (500ms for the first retry).
+      const originalRandom = Math.random;
+      const delays: number[] = [];
+      const originalSetTimeout = globalThis.setTimeout;
+      globalThis.setTimeout = ((fn: () => void, ms?: number) => {
+        if (typeof ms === "number" && ms > 0) delays.push(ms);
+        return originalSetTimeout(fn, 0);
+      }) as unknown as typeof setTimeout;
+      Math.random = () => 0.5;
+
+      try {
+        await client.request("http://localhost/api", { retries: 3, timeout: 30000 });
+      } finally {
+        Math.random = originalRandom;
+        globalThis.setTimeout = originalSetTimeout;
+      }
+
+      // base = 500, jitter = 500 * 0.5 * 0.5 = 125 → 625ms > 500ms
+      const backoffDelay = delays.find((d) => d >= 500);
+      expect(backoffDelay).toBeDefined();
+      expect(backoffDelay).toBeGreaterThan(500);
+    });
+  });
+
+  // ── 7.4 Path-token masking ──────────────────────────────────────────────
+
+  describe("path-token masking in logs", () => {
+    it("masks a Nanoleaf-style token path segment and leaves benign paths intact", async () => {
+      const logged: unknown[] = [];
+      const capturingLogger = pino(
+        { level: "debug" },
+        {
+          write(line: string) {
+            logged.push(JSON.parse(line));
+          },
+        },
+      );
+      const capturingClient = new HttpClient(capturingLogger);
+
+      mockFetch({ ok: true });
+      const url = "http://host:16021/api/v1/SECRETTOKEN1234567890/state";
+      await capturingClient.get(url);
+
+      const loggedUrls = logged
+        .map((e) => (e as { url?: string }).url)
+        .filter((u): u is string => typeof u === "string");
+      expect(loggedUrls.length).toBeGreaterThan(0);
+      for (const u of loggedUrls) {
+        expect(u).not.toContain("SECRETTOKEN1234567890");
+        expect(u).toContain("***");
+        // Benign path segments remain intact.
+        expect(u).toContain("/api/v1/");
+        expect(u).toContain("/state");
+      }
+      // fetch still receives the real (unsanitized) URL.
+      const fetchCalls = (globalThis.fetch as ReturnType<typeof mock>).mock.calls;
+      expect(fetchCalls[0][0]).toBe(url);
+    });
+
+    it("does not mask short benign path segments", async () => {
+      const logged: unknown[] = [];
+      const capturingLogger = pino(
+        { level: "debug" },
+        {
+          write(line: string) {
+            logged.push(JSON.parse(line));
+          },
+        },
+      );
+      const capturingClient = new HttpClient(capturingLogger);
+
+      mockFetch({ ok: true });
+      await capturingClient.get("http://host/api/v1/status");
+
+      const loggedUrls = logged
+        .map((e) => (e as { url?: string }).url)
+        .filter((u): u is string => typeof u === "string");
+      for (const u of loggedUrls) {
+        expect(u).not.toContain("***");
+        expect(u).toContain("/status");
+      }
+    });
   });
 });
