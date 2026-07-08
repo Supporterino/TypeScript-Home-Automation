@@ -81,9 +81,9 @@ The system MUST support three service registration patterns:
 
 1. **Direct instance**: `services: { shelly: myShellyInstance }`
 2. **Factory function**: `services: { shelly: (http, logger) => new ShellyService(http, logger) }`
-3. **HomeKit-specific factory**: `services: { homekit: (http, logger, mqtt, deviceRegistry) => new HomekitService(...) }`
+3. **HomeKit-specific factory**: `services: { homekit: (ctx) => new HomekitService(ctx.mqtt, ctx.logger, ctx.deviceRegistry, ctx.shelly, ...) }`
 
-Factory functions receive the engine's shared `HttpClient` and a child `Logger`. HomeKit's factory additionally receives `MqttService` and `DeviceRegistry | null`.
+Factory functions receive the engine's shared `HttpClient` and a child `Logger`. HomeKit's factory instead receives a single `HomekitServiceContext` object with `http`, `logger`, `mqtt`, `deviceRegistry | null`, and `shelly | null`.
 
 ### Custom Services
 
