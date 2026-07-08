@@ -45,6 +45,25 @@ describe("LogBuffer", () => {
       expect(result[0].msg).toBe("first");
       expect(result[2].msg).toBe("third");
     });
+
+    it("stores all entries from a multi-object newline-delimited chunk", () => {
+      const chunk = `${entry({ msg: "a" })}\n${entry({ msg: "b" })}\n${entry({ msg: "c" })}\n`;
+      buffer.write(chunk);
+      const result = buffer.query();
+      expect(result).toHaveLength(3);
+      expect(result[0].msg).toBe("a");
+      expect(result[1].msg).toBe("b");
+      expect(result[2].msg).toBe("c");
+    });
+
+    it("skips only the malformed line in a multi-object chunk", () => {
+      const chunk = `${entry({ msg: "valid1" })}\nnot json\n${entry({ msg: "valid2" })}\n`;
+      buffer.write(chunk);
+      const result = buffer.query();
+      expect(result).toHaveLength(2);
+      expect(result[0].msg).toBe("valid1");
+      expect(result[1].msg).toBe("valid2");
+    });
   });
 
   describe("ring buffer behavior", () => {

@@ -380,5 +380,39 @@ describe("ShellyService", () => {
       s.register("plug", "192.168.1.50");
       expect(s.turnOn("plug")).rejects.toThrow("HTTP 500");
     });
+
+    it("throws a descriptive error on an RPC error body returned with HTTP 200", async () => {
+      const errorHttp = {
+        get: mock(() =>
+          Promise.resolve({
+            status: 200,
+            ok: true,
+            headers: new Headers(),
+            data: { error: { code: -32602, message: "Invalid params" } },
+          }),
+        ),
+      } as unknown as HttpClient;
+
+      const s = new ShellyService(errorHttp, logger);
+      s.register("plug", "192.168.1.50");
+      expect(s.getStatus("plug")).rejects.toThrow(/returned an error/);
+    });
+
+    it("throws a descriptive error when the body is not an object", async () => {
+      const errorHttp = {
+        get: mock(() =>
+          Promise.resolve({
+            status: 200,
+            ok: true,
+            headers: new Headers(),
+            data: "unexpected string body",
+          }),
+        ),
+      } as unknown as HttpClient;
+
+      const s = new ShellyService(errorHttp, logger);
+      s.register("plug", "192.168.1.50");
+      expect(s.getStatus("plug")).rejects.toThrow(/unexpected response body/);
+    });
   });
 });

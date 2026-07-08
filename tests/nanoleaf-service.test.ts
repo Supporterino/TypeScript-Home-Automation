@@ -230,5 +230,40 @@ describe("NanoleafService", () => {
       n.register("p", { host: "192.168.1.60", token: "t" });
       expect(n.turnOn("p")).rejects.toThrow("HTTP 500");
     });
+
+    it("throws a descriptive error when the state response lacks the expected structure", async () => {
+      const badHttp = {
+        get: mock(() =>
+          Promise.resolve({ status: 200, ok: true, headers: new Headers(), data: {} }),
+        ),
+        put: mock(() =>
+          Promise.resolve({ status: 200, ok: true, headers: new Headers(), data: {} }),
+        ),
+      } as unknown as HttpClient;
+
+      const n = new NanoleafService(badHttp, logger);
+      n.register("panels", { host: "192.168.1.60", token: "t" });
+      expect(n.getState("panels")).rejects.toThrow(/malformed device info response/);
+    });
+
+    it("toggle throws a descriptive error when on.value is missing", async () => {
+      const badHttp = {
+        get: mock(() =>
+          Promise.resolve({
+            status: 200,
+            ok: true,
+            headers: new Headers(),
+            data: { state: { brightness: { value: 50 } } },
+          }),
+        ),
+        put: mock(() =>
+          Promise.resolve({ status: 200, ok: true, headers: new Headers(), data: {} }),
+        ),
+      } as unknown as HttpClient;
+
+      const n = new NanoleafService(badHttp, logger);
+      n.register("panels", { host: "192.168.1.60", token: "t" });
+      expect(n.toggle("panels")).rejects.toThrow(/cannot toggle/);
+    });
   });
 });

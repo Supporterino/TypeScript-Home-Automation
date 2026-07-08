@@ -98,6 +98,11 @@ export class NanoleafService {
   /** Toggle power. Reads current state and inverts it. */
   async toggle(name: string): Promise<void> {
     const state = await this.getState(name);
+    if (state.on === null || typeof state.on !== "object" || typeof state.on.value !== "boolean") {
+      throw new Error(
+        `Nanoleaf device "${name}" returned a state without a valid on.value field; cannot toggle`,
+      );
+    }
     const newValue = !state.on.value;
     this.logger.info({ device: name, on: newValue }, "Toggling Nanoleaf");
     await this.setState(name, { on: { value: newValue } });
@@ -194,6 +199,16 @@ export class NanoleafService {
    */
   async getState(name: string): Promise<NanoleafState> {
     const info = await this.get<NanoleafDeviceInfo>(name, "");
+    if (
+      info === null ||
+      typeof info !== "object" ||
+      info.state === null ||
+      typeof info.state !== "object"
+    ) {
+      throw new Error(
+        `Nanoleaf device "${name}" returned a malformed device info response lacking the expected state object`,
+      );
+    }
     return info.state;
   }
 
