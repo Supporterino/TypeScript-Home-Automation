@@ -545,19 +545,34 @@ export function createEngine(options: EngineOptions): Engine {
       }
 
       logger.info("Stopping Home Automation Engine");
-      httpServer?.setEngineStarted(false);
-      await manager.stopAll();
-      cron.stopAll();
 
-      // Run onStop() lifecycle hooks for all registered ServicePlugins.
-      await serviceRegistry.stopAll();
+      // Each teardown step is isolated: a failure in one step is logged but must
+      // never prevent the remaining steps from running (e.g. a failed state save
+      // must not stop MQTT from disconnecting or the HTTP port from closing).
+      const safe = async (step: () => void | Promise<void>, label: string): Promise<void> => {
+        try {
+          await step();
+        } catch (err) {
+          logger.error({ err, step: label }, "Shutdown step failed");
+        }
+      };
 
-      await deviceRegistry?.save();
-      deviceRegistry?.stop();
-      await stateManager.save();
-      await mqtt.disconnect();
-      httpServer?.stop();
-      started = false;
+      try {
+        await safe(() => httpServer?.setEngineStarted(false), "unmark-http-started");
+        await safe(() => manager.stopAll(), "stop-automations");
+        await safe(() => cron.stopAll(), "stop-cron");
+        // Run onStop() lifecycle hooks for all registered ServicePlugins.
+        await safe(() => serviceRegistry.stopAll(), "stop-service-plugins");
+        await safe(() => deviceRegistry?.save(), "save-device-registry");
+        await safe(() => deviceRegistry?.stop(), "stop-device-registry");
+        await safe(() => stateManager.save(), "save-state");
+        await safe(() => mqtt.disconnect(), "disconnect-mqtt");
+        await safe(() => httpServer?.stop(), "stop-http");
+      } finally {
+        // Always clear started, even if a step above threw, so the engine does
+        // not remain permanently "started" after a partial teardown.
+        started = false;
+      }
       logger.info("Home Automation Engine stopped");
     },
   };

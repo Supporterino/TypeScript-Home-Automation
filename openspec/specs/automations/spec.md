@@ -106,6 +106,8 @@ If an automation declares `requiredServices`, the system MUST validate at regist
 
 ### Automation Manager
 
+The Automation Manager MUST discover, register, and clean up automations, and MUST release any resources created during a partially-failed `onStart()`.
+
 #### Discovery
 
 The system MUST discover automation files via `discoverAndRegister(automationsDir, recursive)`:
@@ -130,7 +132,7 @@ For each discovered automation, `register(automation)` MUST:
    - `device_joined` → `deviceRegistry.onDeviceAdded(handler)`
    - `device_left` → `deviceRegistry.onDeviceRemoved(handler)`
 6. Call `automation.onStart()`
-7. If `onStart()` throws, unwind all wired triggers and remove the automation
+7. If `onStart()` throws, unwind all wired triggers, call the automation's `onStop()` (best-effort, errors caught and logged) so any timers or listeners created during the partial `onStart()` are released, and remove the automation from the registry
 
 #### Lifecycle Cleanup
 
@@ -151,6 +153,11 @@ The system MUST expose these query methods for the debug API:
 - `listAutomations()` — All registered automations with trigger summaries
 - `getAutomation(name)` — Single automation details, or `null` if not found
 - `triggerAutomation(name, context)` — Manual trigger via debug API
+
+#### Scenario: onStart failure releases partial resources
+
+- **WHEN** an automation's `onStart()` creates a timer or listener and then throws
+- **THEN** registration rollback unwinds the wired triggers, calls the automation's `onStop()` to release those resources, and removes the automation — leaving no orphaned timer or listener
 
 ### Execution Error Handling
 

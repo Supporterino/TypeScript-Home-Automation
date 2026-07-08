@@ -113,6 +113,29 @@ describe("AutomationManager", () => {
       await manager.register(auto);
     });
 
+    it("calls onStop during rollback when onStart throws", async () => {
+      const auto = new TestAutomation("test", [{ type: "mqtt", topic: "zigbee2mqtt/sensor" }]);
+      auto.onStartFn.mockImplementation(() => Promise.reject(new Error("start failed")));
+
+      await manager.register(auto);
+
+      // onStop must be invoked so any partial resources are released.
+      expect(auto.onStopFn).toHaveBeenCalledTimes(1);
+      // The wired trigger must be unwound and the automation removed.
+      expect(mocks.mqtt.unsubscribe).toHaveBeenCalledTimes(1);
+      expect(manager.getAutomation("test")).toBeNull();
+    });
+
+    it("swallows onStop errors during rollback", async () => {
+      const auto = new TestAutomation("test");
+      auto.onStartFn.mockImplementation(() => Promise.reject(new Error("start failed")));
+      auto.onStopFn.mockImplementation(() => Promise.reject(new Error("stop failed")));
+
+      // Should not throw despite both hooks rejecting.
+      await manager.register(auto);
+      expect(auto.onStopFn).toHaveBeenCalledTimes(1);
+    });
+
     it("subscribes to MQTT topic for mqtt triggers", async () => {
       const auto = new TestAutomation("test", [{ type: "mqtt", topic: "zigbee2mqtt/sensor" }]);
       await manager.register(auto);

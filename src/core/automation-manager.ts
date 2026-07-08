@@ -358,6 +358,13 @@ export class AutomationManager {
         this.deviceRegistry?.offDeviceRemoved(handler);
       }
       this.cron.removeByPrefix(`${automation.name}:`);
+      // Call onStop() (best-effort) so any timers or listeners the automation
+      // created during the partial onStart() are released before removal.
+      try {
+        await automation.onStop();
+      } catch (stopErr) {
+        childLogger.error({ err: stopErr }, "Automation onStop failed during rollback");
+      }
       // Remove from the automations list
       const idx = this.automations.indexOf(automation);
       if (idx !== -1) this.automations.splice(idx, 1);

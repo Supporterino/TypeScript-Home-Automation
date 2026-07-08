@@ -16,6 +16,8 @@ import pino from "pino";
 
 const bridged: unknown[] = [];
 const unbridged: unknown[] = [];
+// When set, MockBridge.publish rejects with this error (reset per test).
+let publishError: Error | null = null;
 
 class MockBridge {
   UUID: string;
@@ -28,7 +30,9 @@ class MockBridge {
   removeBridgedAccessory(acc: unknown) {
     unbridged.push(acc);
   }
-  async publish(_info: unknown) {}
+  async publish(_info: unknown) {
+    if (publishError) throw publishError;
+  }
   async unpublish() {}
 }
 
@@ -83,6 +87,7 @@ describe("HomekitService (source host)", () => {
     bridged.length = 0;
     unbridged.length = 0;
     accessoryCounter = 0;
+    publishError = null;
   });
 
   it("skips startup when no sources are available", async () => {
@@ -124,6 +129,29 @@ describe("HomekitService (source host)", () => {
     expect(svc.getStatus().accessoryCount).toBe(1);
 
     await svc.onStop();
+  });
+
+  it("tears down started sources and resets state when publish() rejects", async () => {
+    const shelly = new ShellyService(createMockHttp(), logger);
+    shelly.register("plug", "192.168.1.50", "switch");
+
+    const svc = new HomekitService(mqtt, logger, null, shelly, {
+      pinCode: "031-45-154",
+      pollIntervalMs: 1_000_000,
+    });
+
+    publishError = new Error("publish failed");
+
+    // onStart must propagate the publish error.
+    await expect(svc.onStart(ctx)).rejects.toThrow("publish failed");
+
+    // State must be fully reset so no orphaned bridge/sources remain.
+    const status = svc.getStatus();
+    expect(status.running).toBe(false);
+    expect(status.accessoryCount).toBe(0);
+
+    // A subsequent onStop must be a safe no-op (bridge already cleared).
+    await expect(svc.onStop()).resolves.toBeUndefined();
   });
 
   it("clears accessories and unpublishes on stop", async () => {

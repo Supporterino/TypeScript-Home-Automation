@@ -195,6 +195,28 @@ describe("createEngine", () => {
       await engine.stop();
       // If persist=false, save is a no-op and should not throw
     });
+
+    it("isolates a failing teardown step: MQTT still disconnects and started resets", async () => {
+      engine = createTestEngine();
+      await engine.start();
+
+      // Force an intermediate step (state save) to throw during shutdown.
+      (engine.state as { save: unknown }).save = mock(() =>
+        Promise.reject(new Error("save failed")),
+      );
+
+      // stop() must not reject even though a step failed.
+      await engine.stop();
+
+      // MQTT must still have been disconnected despite the earlier failure.
+      const disconnectMock = engine.mqtt.disconnect as ReturnType<typeof mock>;
+      expect(disconnectMock).toHaveBeenCalledTimes(1);
+
+      // started must be reset — proven by being able to start again cleanly.
+      await engine.start();
+      const connectMock = engine.mqtt.connect as ReturnType<typeof mock>;
+      expect(connectMock).toHaveBeenCalledTimes(2);
+    });
   });
 
   // ── Startup rollback ───────────────────────────────────────────────────
