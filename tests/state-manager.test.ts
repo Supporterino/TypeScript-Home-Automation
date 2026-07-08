@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
-import { unlink } from "node:fs/promises";
+import { access, readFile, unlink, writeFile } from "node:fs/promises";
 import pino from "pino";
 import { StateManager } from "../src/core/state/state-manager.js";
 
@@ -158,11 +158,22 @@ describe("StateManager", () => {
   });
 
   describe("persistence", () => {
-    afterEach(async () => {
+    async function fileExists(path: string): Promise<boolean> {
       try {
-        await unlink(TEST_STATE_FILE);
+        await access(path);
+        return true;
       } catch {
-        // ignore if file doesn't exist
+        return false;
+      }
+    }
+
+    afterEach(async () => {
+      for (const path of [TEST_STATE_FILE, `${TEST_STATE_FILE}.bak`, `${TEST_STATE_FILE}.tmp`]) {
+        try {
+          await unlink(path);
+        } catch {
+          // ignore if file doesn't exist
+        }
       }
     });
 
@@ -205,6 +216,81 @@ describe("StateManager", () => {
       // Should not throw
       await s.load();
       expect(s.keys()).toEqual([]);
+    });
+
+    it("skips an unserializable value but persists all other keys", async () => {
+      const s1 = new StateManager(logger, {
+        persist: true,
+        filePath: TEST_STATE_FILE,
+      });
+      // Circular reference — JSON.stringify would throw on this value.
+      const circular: Record<string, unknown> = {};
+      circular.self = circular;
+      s1.set("good_a", 1);
+      s1.set("bad", circular);
+      s1.set("good_b", "two");
+      await s1.save();
+
+      const s2 = new StateManager(logger, {
+        persist: true,
+        filePath: TEST_STATE_FILE,
+      });
+      await s2.load();
+      expect(s2.get<number>("good_a")).toBe(1);
+      expect(s2.get<string>("good_b")).toBe("two");
+      expect(s2.has("bad")).toBe(false);
+    });
+
+    it("preserves the prior content as a .bak after a successful save", async () => {
+      const s = new StateManager(logger, {
+        persist: true,
+        filePath: TEST_STATE_FILE,
+      });
+      s.set("value", "first");
+      await s.save();
+
+      s.set("value", "second");
+      await s.save();
+
+      const backup = JSON.parse(await readFile(`${TEST_STATE_FILE}.bak`, "utf-8"));
+      expect(backup.value).toBe("first");
+    });
+
+    it("recovers from .bak when the primary file is corrupt", async () => {
+      // Valid backup, corrupt primary.
+      await writeFile(`${TEST_STATE_FILE}.bak`, JSON.stringify({ recovered: true }), "utf-8");
+      await writeFile(TEST_STATE_FILE, "{ this is not valid json", "utf-8");
+
+      const s = new StateManager(logger, {
+        persist: true,
+        filePath: TEST_STATE_FILE,
+      });
+      await s.load();
+      expect(s.get<boolean>("recovered")).toBe(true);
+    });
+
+    it("starts empty without throwing when primary and backup are both corrupt", async () => {
+      await writeFile(TEST_STATE_FILE, "not json", "utf-8");
+      await writeFile(`${TEST_STATE_FILE}.bak`, "also not json", "utf-8");
+
+      const s = new StateManager(logger, {
+        persist: true,
+        filePath: TEST_STATE_FILE,
+      });
+      // Should not throw.
+      await s.load();
+      expect(s.keys()).toEqual([]);
+    });
+
+    it("leaves no .tmp file after a successful save", async () => {
+      const s = new StateManager(logger, {
+        persist: true,
+        filePath: TEST_STATE_FILE,
+      });
+      s.set("key", "value");
+      await s.save();
+
+      expect(await fileExists(`${TEST_STATE_FILE}.tmp`)).toBe(false);
     });
   });
 });
