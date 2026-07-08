@@ -43,6 +43,8 @@ interface WildcardSubscription {
 export class MqttService {
   private client: MqttClient | null = null;
   private connected = false;
+  /** Whether this client instance has fired its first `connect` event. */
+  private hasConnectedOnce = false;
 
   /** Exact topic → handlers (O(1) lookup). */
   private readonly exactHandlers: Map<string, ExactSubscription[]> = new Map();
@@ -79,22 +81,24 @@ export class MqttService {
       this.logger.debug("MQTT authentication enabled");
     }
 
+    // A fresh client instance — treat the next connect as the first.
+    this.hasConnectedOnce = false;
+
     return new Promise((resolve, reject) => {
       this.client = mqtt.connect(url, options);
 
-      // Resolve the promise only on the initial connection
-      this.client.once("connect", () => {
-        this.connected = true;
-        this.logger.info("Connected to MQTT broker");
-        this.resubscribeAll();
-        resolve();
-      });
-
-      // Re-subscribe on subsequent reconnections
+      // Single connect handler: resubscribe exactly once per connect event and
+      // distinguish the initial connection from a subsequent reconnection.
       this.client.on("connect", () => {
         this.connected = true;
-        this.logger.info("Reconnected to MQTT broker");
         this.resubscribeAll();
+        if (!this.hasConnectedOnce) {
+          this.hasConnectedOnce = true;
+          this.logger.info("Connected to MQTT broker");
+          resolve();
+        } else {
+          this.logger.info("Reconnected to MQTT broker");
+        }
       });
 
       this.client.on("reconnect", () => {
@@ -104,6 +108,13 @@ export class MqttService {
       this.client.on("error", (err) => {
         this.logger.error({ err }, "MQTT connection error");
         if (!this.connected) {
+          // Tear down the zombie client so no background auto-reconnect loop
+          // survives a rejected initial connect(). Guard against double-end.
+          const client = this.client;
+          if (client) {
+            this.client = null;
+            client.end(true);
+          }
           reject(err);
         }
       });

@@ -321,6 +321,15 @@ describe("DeviceRegistry", () => {
 
       expect(registry.getDeviceState("bulb")).toBeUndefined();
     });
+
+    it("ignores a non-object payload and leaves existing state unchanged", () => {
+      mqttMock.emit("zigbee2mqtt/bulb", { state: "ON", brightness: 200 });
+
+      // A bare availability string must not corrupt the merged state
+      mqttMock.emit("zigbee2mqtt/bulb", "online" as unknown as Record<string, unknown>);
+
+      expect(registry.getDeviceState("bulb")).toEqual({ state: "ON", brightness: 200 });
+    });
   });
 
   // ---------------------------------------------------------------------------
@@ -550,6 +559,25 @@ describe("DeviceRegistry", () => {
       });
 
       expect(mqttMock.publications).toHaveLength(0);
+    });
+
+    it("skips a device_joined event without a data field without throwing", () => {
+      expect(() =>
+        mqttMock.emit("zigbee2mqtt/bridge/event", {
+          type: "device_joined",
+        }),
+      ).not.toThrow();
+
+      // No refresh request published for the malformed event
+      expect(mqttMock.publications).toHaveLength(0);
+
+      // Handler is still functional afterwards — a valid event triggers a refresh
+      mqttMock.emit("zigbee2mqtt/bridge/event", {
+        type: "device_joined",
+        data: { friendly_name: "new_device", ieee_address: "0xabc" },
+      });
+      expect(mqttMock.publications).toHaveLength(1);
+      expect(mqttMock.publications[0]?.topic).toBe("zigbee2mqtt/bridge/request/devices");
     });
   });
 
