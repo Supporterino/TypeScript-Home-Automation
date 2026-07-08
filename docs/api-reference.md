@@ -60,15 +60,18 @@ A factory function that receives the engine's shared HTTP client and a scoped lo
 #### `HomekitServiceFactory`
 
 ```ts
-type HomekitServiceFactory = (
-  http: HttpClient,
-  logger: Logger,
-  mqtt: MqttService,
-  deviceRegistry: DeviceRegistry | null,
-) => HomekitService;
+interface HomekitServiceContext {
+  http: HttpClient;
+  logger: Logger;
+  mqtt: MqttService;
+  deviceRegistry: DeviceRegistry | null;
+  shelly: ShellyService | null;
+}
+
+type HomekitServiceFactory = (ctx: HomekitServiceContext) => HomekitService;
 ```
 
-Extended factory for the HomeKit bridge that also receives the MQTT service and device registry.
+Dedicated factory for the HomeKit bridge. It receives a single `HomekitServiceContext` object carrying the shared HTTP client, a scoped logger, the MQTT service, the optional device registry, and the optional Shelly service. All are resolved by the engine before the factory is called.
 
 #### `Engine`
 

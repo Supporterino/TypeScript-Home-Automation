@@ -1,12 +1,17 @@
 # HomeKit Bridge
 
-The built-in `HomekitService` runs a [HAP-NodeJS](https://github.com/homebridge/HAP-NodeJS) bridge inside the automation engine. It translates every Zigbee2MQTT device tracked by the device registry into a HomeKit accessory in real time — no separate Homebridge process required.
+The built-in `HomekitService` runs a [HAP-NodeJS](https://github.com/homebridge/HAP-NodeJS) bridge inside the automation engine. It exposes devices from one or more **accessory sources** — Zigbee2MQTT devices (via the device registry) and Shelly devices (via HTTP polling) — as HomeKit accessories in real time. No separate Homebridge process required.
+
+The bridge itself is source-agnostic: it owns the HAP bridge lifecycle (publish/unpublish, pairing PIN, port, persist path, the accessory map, the status endpoint) while each source handles its own discovery, freshness, and write-back.
 
 ---
 
 ## Prerequisites
 
-- **`DEVICE_REGISTRY_ENABLED=true`** — the service reads devices and their live state from the device registry. If the registry is not available the bridge skips startup and logs a warning.
+- **At least one accessory source** must be available:
+  - **Zigbee source** requires **`DEVICE_REGISTRY_ENABLED=true`** — it reads devices and their live state from the device registry. When the registry is absent this source is skipped with a warning.
+  - **Shelly source** requires a registered `ShellyService`. When no `ShellyService` is provided this source is not created.
+- If **neither** source is available, the bridge logs a warning and skips startup.
 - `hap-nodejs` is already bundled as a dependency of `ts-home-automation`. No additional installation is needed.
 
 ---
@@ -14,8 +19,9 @@ The built-in `HomekitService` runs a [HAP-NodeJS](https://github.com/homebridge/
 ## Registering the service
 
 Pass a `HomekitService` factory to the `services.homekit` field in your entry point.
-The factory receives `mqtt` and `deviceRegistry` as extra arguments so there is no
-circular reference between the factory and the `engine` object:
+The factory receives a single **`HomekitServiceContext`** object carrying every
+dependency HomeKit may need, so there is no circular reference between the factory
+and the `engine` object:
 
 ```ts
 import { createEngine, HomekitService, HOMEKIT_SERVICE_KEY } from "ts-home-automation";
@@ -23,8 +29,8 @@ import { createEngine, HomekitService, HOMEKIT_SERVICE_KEY } from "ts-home-autom
 const engine = createEngine({
   automationsDir: "./src/automations",
   services: {
-    [HOMEKIT_SERVICE_KEY]: (_http, logger, mqtt, deviceRegistry) =>
-      new HomekitService(mqtt, logger, deviceRegistry, {
+    [HOMEKIT_SERVICE_KEY]: ({ logger, mqtt, deviceRegistry, shelly }) =>
+      new HomekitService(mqtt, logger, deviceRegistry, shelly, {
         pinCode: "031-45-154",
       }),
   },
@@ -34,22 +40,63 @@ await engine.start();
 ```
 
 > **Note:** `HomekitService` uses a dedicated `HomekitServiceFactory` type
-> `(http, logger, mqtt, deviceRegistry) => HomekitService` instead of the generic
-> `ServiceFactory<T>`. The engine resolves `mqtt` and `deviceRegistry` before
-> calling the factory, so both are guaranteed to be available.
+> `(ctx: HomekitServiceContext) => HomekitService` instead of the generic
+> `ServiceFactory<T>`. The context object contains `http`, `logger`, `mqtt`,
+> `deviceRegistry`, and `shelly`, all resolved by the engine before the factory
+> is called.
+>
+> **Breaking change:** earlier versions used a positional factory
+> `(http, logger, mqtt, deviceRegistry) => HomekitService` and a 4-argument
+> constructor. The constructor now takes a `shelly: ShellyService | null` handle:
+> `new HomekitService(mqtt, logger, deviceRegistry, shelly, options)`.
+
+### Bridging Shelly devices
+
+To expose Shelly plugs, switches, and covers, register a `ShellyService` with the
+appropriate device `type` and the bridge picks them up automatically:
+
+```ts
+import { createEngine, HomekitService, ShellyService } from "ts-home-automation";
+
+const engine = createEngine({
+  automationsDir: "./src/automations",
+  services: {
+    shelly: (http, logger) => {
+      const shelly = new ShellyService(http, logger);
+      shelly.register("living_room_plug", "192.168.1.50");          // type defaults to "switch"
+      shelly.register("kitchen_outlet", "192.168.1.51", "outlet");
+      shelly.register("bedroom_blind", "192.168.1.60", "cover");
+      return shelly;
+    },
+    homekit: ({ logger, mqtt, deviceRegistry, shelly }) =>
+      new HomekitService(mqtt, logger, deviceRegistry, shelly, {
+        pinCode: "031-45-154",
+        pollIntervalMs: 10000, // how often Shelly state is refreshed over HTTP
+      }),
+  },
+});
+```
+
+Shelly devices are HTTP-only (no MQTT). The bridge keeps their state fresh with a
+single global polling loop and routes HomeKit write-back to `ShellyService`
+methods (`turnOn`/`turnOff` for switches/outlets, `coverGoToPosition`/`coverStop`
+for covers). Because automations register Shelly devices *after* services start,
+the bridge reacts to registration events, so devices registered at any time —
+including at runtime — are bridged automatically.
 
 ---
 
 ## Options
 
 ```ts
-new HomekitService(mqtt, logger, deviceRegistry, {
+new HomekitService(mqtt, logger, deviceRegistry, shelly, {
   pinCode: "031-45-154",        // required — shown in the Home app when pairing
   bridgeName: "My Home Bridge", // optional, default: "TS-Home-Automation"
   port: 47128,                  // optional, default: 47128
   username: "CC:22:3D:E3:CE:F8",// optional, default: "CC:22:3D:E3:CE:F8"
   persistPath: "./homekit-persist", // optional, default: "./homekit-persist"
   bind: ["net1"],               // optional — restrict mDNS to specific interfaces
+  pollIntervalMs: 10000,        // optional, default: 10000 — Shelly poll interval
 })
 ```
 
@@ -61,6 +108,7 @@ new HomekitService(mqtt, logger, deviceRegistry, {
 | `username` | `string` | `"CC:22:3D:E3:CE:F8"` | Bridge MAC address — must be unique per bridge on your network |
 | `persistPath` | `string` | `"./homekit-persist"` | Directory for HAP pairing data; created automatically if missing. Resolved to an absolute path at runtime. |
 | `bind` | `string \| string[]` | _(all interfaces)_ | Restrict mDNS advertisement to specific network interfaces or IPs. Interface names (e.g. `"eth0"`) are preferred over IPs because they survive address changes. For containers see below. |
+| `pollIntervalMs` | `number` | `10000` | Global interval (ms) for refreshing Shelly device state over HTTP. No effect when no Shelly source is active. |
 
 ---
 
@@ -70,11 +118,13 @@ new HomekitService(mqtt, logger, deviceRegistry, {
 2. Open the **Home** app on iPhone/iPad, tap **+** → **Add Accessory** → **More options**.
 3. Select the bridge (it will appear as `bridgeName`).
 4. Enter the `pinCode` when prompted.
-5. All supported Zigbee devices are exposed as individual accessories inside the bridge.
+5. All supported devices (Zigbee and Shelly) are exposed as individual accessories inside the bridge.
 
 ---
 
 ## Supported device types
+
+### Zigbee2MQTT
 
 The bridge maps Zigbee2MQTT device capabilities to HomeKit services automatically:
 
@@ -93,15 +143,29 @@ The bridge maps Zigbee2MQTT device capabilities to HomeKit services automaticall
 
 Devices that expose none of the above capabilities are silently skipped.
 
+### Shelly
+
+The bridge maps a registered Shelly device's `type` (set via `shelly.register(name, host, type)`) to a HomeKit service:
+
+| Shelly `type` | HomeKit service | Notes |
+|---|---|---|
+| `"switch"` (default) | Switch | `Switch.GetStatus.output` → `On` |
+| `"outlet"` | Outlet | `Switch.GetStatus.output` → `On` |
+| `"cover"` | Window Covering | Position + direction from `Cover.GetStatus` |
+
+For covers, `current_pos` maps to `CurrentPosition` (0 = closed, 100 = open) and `state` maps to `PositionState` (`opening` → increasing, `closing` → decreasing, otherwise stopped). An **uncalibrated** cover (`current_pos: null`) is still exposed but reports position `0` and logs a calibration warning.
+
 ---
 
 ## Dynamic accessories
 
-The bridge reacts to device registry events at runtime:
+The bridge reacts to source events at runtime:
 
-- **Device joined** — a new accessory is created and added to the bridge immediately.
-- **Device left** — the accessory is removed from the bridge.
-- **State change** — the accessory's characteristics are updated in real time so the Home app always shows the current state.
+- **Zigbee device joined** — a new accessory is created and added to the bridge immediately.
+- **Zigbee device left** — the accessory is removed from the bridge.
+- **Zigbee state change** — the accessory's characteristics are updated in real time so the Home app always shows the current state.
+- **Shelly device registered** — an accessory is created as soon as `shelly.register(...)` is called, even after the bridge has started.
+- **Shelly state refresh** — a global HTTP polling loop (`pollIntervalMs`) refreshes each Shelly accessory so physical button/switch presses appear in the Home app within one interval. A device that is unreachable during a poll tick is skipped without aborting the tick for other devices.
 
 ---
 
@@ -111,14 +175,14 @@ If you run multiple engine instances on the same network, each bridge **must** h
 
 ```ts
 // Instance A
-new HomekitService(mqtt, logger, registry, {
+new HomekitService(mqtt, logger, registry, shelly, {
   pinCode: "031-45-154",
   username: "CC:22:3D:E3:CE:F8",
   port: 47128,
 });
 
 // Instance B — different username and port
-new HomekitService(mqtt, logger, registry, {
+new HomekitService(mqtt, logger, registry, shelly, {
   pinCode: "031-45-155",
   username: "DD:33:4E:F4:DF:A9",
   port: 47129,
@@ -246,7 +310,7 @@ network.  This approach is more complex and not covered here.
 For production deployments it is recommended to mount a dedicated volume and use an absolute path explicitly:
 
 ```ts
-new HomekitService(mqtt, logger, registry, {
+new HomekitService(mqtt, logger, registry, shelly, {
   pinCode: "031-45-154",
   persistPath: "/data/homekit-persist",
 });
