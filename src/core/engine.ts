@@ -39,11 +39,11 @@ export type ServiceFactory<T> = (http: HttpClient, logger: Logger) => T;
  * Dependency context passed to a `HomekitServiceFactory`.
  *
  * Carries every dependency HomeKit may need — the shared `HttpClient`, a scoped
- * `Logger`, the `MqttService`, the optional Zigbee `DeviceRegistry`, and the
- * optional `ShellyService`. All are constructed synchronously inside
- * `createEngine()` before the factory is called, so there is no circular
- * reference. Using a single context object keeps future cross-device
- * integrations additive with no further signature churn.
+ * `Logger`, the `MqttService`, the optional Zigbee `DeviceRegistry`, the
+ * optional `ShellyService`, and the shared `StateManager`. All are constructed
+ * synchronously inside `createEngine()` before the factory is called, so there
+ * is no circular reference. Using a single context object keeps future
+ * cross-device integrations additive with no further signature churn.
  */
 export interface HomekitServiceContext {
   http: HttpClient;
@@ -51,6 +51,7 @@ export interface HomekitServiceContext {
   mqtt: MqttService;
   deviceRegistry: DeviceRegistry | null;
   shelly: ShellyService | null;
+  state: StateManager;
 }
 
 /**
@@ -61,8 +62,8 @@ export interface HomekitServiceContext {
  *
  * @example
  * ```ts
- * homekit: ({ logger, mqtt, deviceRegistry, shelly }) =>
- *   new HomekitService(mqtt, logger, deviceRegistry, shelly, {
+ * homekit: ({ logger, mqtt, deviceRegistry, shelly, state }) =>
+ *   new HomekitService(mqtt, logger, deviceRegistry, shelly, state, {
  *     pinCode: "031-45-154",
  *   }),
  * ```
@@ -357,10 +358,11 @@ export function createEngine(options: EngineOptions): Engine {
     );
   }
 
-  // HomekitService needs mqtt, deviceRegistry, and shelly in addition to the
-  // standard (http, logger) pair, so it cannot use the generic resolveService
-  // helper. It is resolved here — after deviceRegistry and shellyService are
-  // constructed — via a single context object with no circular reference.
+  // HomekitService needs mqtt, deviceRegistry, shelly, and state in addition to
+  // the standard (http, logger) pair, so it cannot use the generic
+  // resolveService helper. It is resolved here — after deviceRegistry,
+  // shellyService, and stateManager are constructed — via a single context
+  // object with no circular reference.
   const homekitService =
     homekitValue === undefined
       ? null
@@ -371,6 +373,7 @@ export function createEngine(options: EngineOptions): Engine {
             mqtt,
             deviceRegistry,
             shelly: shellyService,
+            state: stateManager,
           })
         : homekitValue;
 

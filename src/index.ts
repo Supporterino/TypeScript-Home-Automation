@@ -47,6 +47,7 @@ export {
   HomekitService,
   type HomekitServiceOptions,
   type HomekitStatus,
+  type StateToggleConfig,
 } from "./core/services/homekit-service.js";
 export { type NanoleafDeviceConfig, NanoleafService } from "./core/services/nanoleaf-service.js";
 // Notification implementations
