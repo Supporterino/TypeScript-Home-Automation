@@ -3,6 +3,7 @@ import type { Bridge, HAPStorage, uuid as UuidModule } from "hap-nodejs";
 import type { Hono } from "hono";
 import type { Logger } from "pino";
 import type { MqttService } from "../mqtt/mqtt-service.js";
+import type { StateManager } from "../state/state-manager.js";
 import type { DeviceRegistry } from "../zigbee/device-registry.js";
 import type { CreatedAccessory } from "./homekit-accessory-factory.js";
 import type { AccessorySink, AccessorySource } from "./homekit-sources/accessory-source.js";
@@ -36,6 +37,16 @@ export interface HomekitStatus {
 }
 
 /**
+ * A boolean `StateManager` key exposed as a HomeKit switch toggle.
+ */
+export interface StateToggleConfig {
+  /** `StateManager` key to expose. */
+  stateKey: string;
+  /** Display name shown in the Home app. */
+  name: string;
+}
+
+/**
  * Configuration options for the `HomekitService`.
  *
  * @example
@@ -43,8 +54,8 @@ export interface HomekitStatus {
  * const engine = createEngine({
  *   automationsDir: "...",
  *   services: {
- *     homekit: ({ logger, mqtt, deviceRegistry, shelly }) =>
- *       new HomekitService(mqtt, logger, deviceRegistry, shelly, {
+ *     homekit: ({ logger, mqtt, deviceRegistry, shelly, state }) =>
+ *       new HomekitService(mqtt, logger, deviceRegistry, shelly, state, {
  *         pinCode: "031-45-154",
  *         persistPath: "./homekit-persist",
  *         bridgeName: "My Home Bridge",
@@ -132,6 +143,28 @@ export interface HomekitServiceOptions {
    * @default 10000
    */
   pollIntervalMs?: number;
+
+  /**
+   * Boolean `StateManager` keys to bridge as HomeKit switch toggles.
+   *
+   * Each entry creates one switch accessory whose `On` characteristic mirrors
+   * the state key's value bidirectionally: state changes (including deletes)
+   * update the accessory, and flipping the switch in the Home app writes a real
+   * boolean back via `StateManager.set`. Duplicate state keys are skipped with a
+   * warning. When the list is empty or omitted, no state accessories are
+   * created.
+   *
+   * @default []
+   *
+   * @example
+   * ```ts
+   * stateToggles: [
+   *   { stateKey: "night_mode", name: "Night Mode" },
+   *   { stateKey: "away_mode", name: "Away Mode" },
+   * ],
+   * ```
+   */
+  stateToggles?: StateToggleConfig[];
 }
 
 /**
@@ -139,18 +172,18 @@ export interface HomekitServiceOptions {
  *
  * It uses the `hap-nodejs` library to advertise a HAP bridge accessory, then
  * consumes one or more source-agnostic {@link AccessorySource}s (Zigbee2MQTT via
- * the `DeviceRegistry`, Shelly via HTTP polling) and bridges their accessories
- * into HomeKit.
+ * the `DeviceRegistry`, Shelly via HTTP polling, `StateManager` booleans via the
+ * state-toggle source) and bridges their accessories into HomeKit.
  *
  * `HomekitService` owns the HAP bridge lifecycle (publish/unpublish, persist
  * path, PIN/port/bind, the accessory map, the status endpoint). It knows nothing
- * about `ZigbeeDevice`, Zigbee2MQTT `exposes`, MQTT, or Shelly RPC — each source
- * owns its own discovery, freshness, and write-back.
+ * about `ZigbeeDevice`, Zigbee2MQTT `exposes`, MQTT, Shelly RPC, or state keys —
+ * each source owns its own discovery, freshness, and write-back.
  *
  * The Zigbee source requires `DEVICE_REGISTRY_ENABLED=true`. When the registry
  * is absent the Zigbee source is skipped (with a warning), but the bridge may
- * still start to serve the Shelly source. If no source is available a warning is
- * logged and startup is skipped.
+ * still start to serve the Shelly source or the state-toggle source. If no
+ * source is available a warning is logged and startup is skipped.
  *
  * Supported Zigbee device types:
  * - Lightbulb (on/off, brightness, colour temperature, colour)
@@ -171,8 +204,8 @@ export interface HomekitServiceOptions {
  * const engine = createEngine({
  *   automationsDir: "...",
  *   services: {
- *     homekit: ({ logger, mqtt, deviceRegistry, shelly }) =>
- *       new HomekitService(mqtt, logger, deviceRegistry, shelly, {
+ *     homekit: ({ logger, mqtt, deviceRegistry, shelly, state }) =>
+ *       new HomekitService(mqtt, logger, deviceRegistry, shelly, state, {
  *         pinCode: "031-45-154",
  *       }),
  *   },
@@ -197,6 +230,7 @@ export class HomekitService implements ServicePlugin {
     private readonly logger: Logger,
     private readonly registry: DeviceRegistry | null,
     private readonly shelly: ShellyService | null,
+    private readonly state: StateManager,
     private readonly options: HomekitServiceOptions,
   ) {}
 
@@ -233,9 +267,10 @@ export class HomekitService implements ServicePlugin {
   // ---------------------------------------------------------------------------
 
   async onStart(_ctx: CoreContext): Promise<void> {
-    if (!this.registry && !this.shelly) {
+    const hasStateToggles = (this.options.stateToggles?.length ?? 0) > 0;
+    if (!this.registry && !this.shelly && !hasStateToggles) {
       this.logger.warn(
-        "HomekitService has no accessory sources (no device registry, no Shelly service) — skipping startup",
+        "HomekitService has no accessory sources (no device registry, no Shelly service, no state toggles) — skipping startup",
       );
       return;
     }
@@ -387,6 +422,19 @@ export class HomekitService implements ServicePlugin {
         ),
       );
     }
+
+    // The state-toggle source is always available; with an empty toggle list it
+    // simply produces no accessories.
+    const { StateSource } = await import("./homekit-sources/state-source.js");
+    const { buildStateToggleAccessory } = await import("./homekit-state-factory.js");
+    sources.push(
+      new StateSource(
+        this.state,
+        this.options.stateToggles ?? [],
+        this.logger,
+        buildStateToggleAccessory,
+      ),
+    );
 
     return sources;
   }
