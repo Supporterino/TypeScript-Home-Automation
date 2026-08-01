@@ -1,6 +1,6 @@
 # HomeKit Bridge
 
-The built-in `HomekitService` runs a [HAP-NodeJS](https://github.com/homebridge/HAP-NodeJS) bridge inside the automation engine. It exposes devices from one or more **accessory sources** — Zigbee2MQTT devices (via the device registry) and Shelly devices (via HTTP polling) — as HomeKit accessories in real time. No separate Homebridge process required.
+The built-in `HomekitService` runs a [HAP-NodeJS](https://github.com/homebridge/HAP-NodeJS) bridge inside the automation engine. It exposes devices from one or more **accessory sources** — Zigbee2MQTT devices (via the device registry), Shelly devices (via HTTP polling), and boolean `StateManager` keys (as switch toggles) — as HomeKit accessories in real time. No separate Homebridge process required.
 
 The bridge itself is source-agnostic: it owns the HAP bridge lifecycle (publish/unpublish, pairing PIN, port, persist path, the accessory map, the status endpoint) while each source handles its own discovery, freshness, and write-back.
 
@@ -11,7 +11,8 @@ The bridge itself is source-agnostic: it owns the HAP bridge lifecycle (publish/
 - **At least one accessory source** must be available:
   - **Zigbee source** requires **`DEVICE_REGISTRY_ENABLED=true`** — it reads devices and their live state from the device registry. When the registry is absent this source is skipped with a warning.
   - **Shelly source** requires a registered `ShellyService`. When no `ShellyService` is provided this source is not created.
-- If **neither** source is available, the bridge logs a warning and skips startup.
+  - **State-toggle source** requires at least one entry in the `stateToggles` option. It exposes boolean `StateManager` keys as switches in the Home app.
+- If **none** of the sources are available, the bridge logs a warning and skips startup.
 - `hap-nodejs` is already bundled as a dependency of `ts-home-automation`. No additional installation is needed.
 
 ---
@@ -29,8 +30,8 @@ import { createEngine, HomekitService, HOMEKIT_SERVICE_KEY } from "ts-home-autom
 const engine = createEngine({
   automationsDir: "./src/automations",
   services: {
-    [HOMEKIT_SERVICE_KEY]: ({ logger, mqtt, deviceRegistry, shelly }) =>
-      new HomekitService(mqtt, logger, deviceRegistry, shelly, {
+    [HOMEKIT_SERVICE_KEY]: ({ logger, mqtt, deviceRegistry, shelly, state }) =>
+      new HomekitService(mqtt, logger, deviceRegistry, shelly, state, {
         pinCode: "031-45-154",
       }),
   },
@@ -42,13 +43,14 @@ await engine.start();
 > **Note:** `HomekitService` uses a dedicated `HomekitServiceFactory` type
 > `(ctx: HomekitServiceContext) => HomekitService` instead of the generic
 > `ServiceFactory<T>`. The context object contains `http`, `logger`, `mqtt`,
-> `deviceRegistry`, and `shelly`, all resolved by the engine before the factory
-> is called.
+> `deviceRegistry`, `shelly`, and `state`, all resolved by the engine before the
+> factory is called.
 >
 > **Breaking change:** earlier versions used a positional factory
 > `(http, logger, mqtt, deviceRegistry) => HomekitService` and a 4-argument
-> constructor. The constructor now takes a `shelly: ShellyService | null` handle:
-> `new HomekitService(mqtt, logger, deviceRegistry, shelly, options)`.
+> constructor. The constructor now takes a `shelly: ShellyService | null` and a
+> `state: StateManager` handle:
+> `new HomekitService(mqtt, logger, deviceRegistry, shelly, state, options)`.
 
 ### Bridging Shelly devices
 
@@ -84,12 +86,50 @@ for covers). Because automations register Shelly devices *after* services start,
 the bridge reacts to registration events, so devices registered at any time —
 including at runtime — are bridged automatically.
 
+### Bridging state toggles
+
+Automations already communicate through the shared `StateManager` (e.g.
+`night_mode`, `away_mode` booleans). The `stateToggles` option exposes any boolean
+state key as a switch in the Home app, giving automations a human-controllable
+interface without writing MQTT or HTTP glue:
+
+```ts
+import { createEngine, HomekitService } from "ts-home-automation";
+
+const engine = createEngine({
+  automationsDir: "./src/automations",
+  services: {
+    homekit: ({ logger, mqtt, deviceRegistry, shelly, state }) =>
+      new HomekitService(mqtt, logger, deviceRegistry, shelly, state, {
+        pinCode: "031-45-154",
+        stateToggles: [
+          { stateKey: "night_mode", name: "Night Mode" },
+          { stateKey: "away_mode", name: "Away Mode" },
+        ],
+      }),
+  },
+});
+```
+
+State toggles sync bidirectionally:
+
+- **State → Home app:** when an automation calls `state.set("night_mode", true)`
+  (or deletes the key), the corresponding switch's `On` characteristic updates
+  immediately. A missing key reads as OFF at startup.
+- **Home app → state:** flipping the switch writes a real boolean via
+  `StateManager.set(stateKey, value)`, which fires `state`-trigger automations.
+
+Each toggle's HomeKit UUID is seeded from its state key, so renaming the display
+`name` in configuration does not orphan the accessory in the Home app. Duplicate
+state keys are skipped with a warning. When `stateToggles` is empty or omitted,
+the state source creates no accessories and does not affect the bridge.
+
 ---
 
 ## Options
 
 ```ts
-new HomekitService(mqtt, logger, deviceRegistry, shelly, {
+new HomekitService(mqtt, logger, deviceRegistry, shelly, state, {
   pinCode: "031-45-154",        // required — shown in the Home app when pairing
   bridgeName: "My Home Bridge", // optional, default: "TS-Home-Automation"
   port: 47128,                  // optional, default: 47128
@@ -97,6 +137,9 @@ new HomekitService(mqtt, logger, deviceRegistry, shelly, {
   persistPath: "./homekit-persist", // optional, default: "./homekit-persist"
   bind: ["net1"],               // optional — restrict mDNS to specific interfaces
   pollIntervalMs: 10000,        // optional, default: 10000 — Shelly poll interval
+  stateToggles: [               // optional, default: [] — state keys bridged as switches
+    { stateKey: "night_mode", name: "Night Mode" },
+  ],
 })
 ```
 
@@ -109,6 +152,7 @@ new HomekitService(mqtt, logger, deviceRegistry, shelly, {
 | `persistPath` | `string` | `"./homekit-persist"` | Directory for HAP pairing data; created automatically if missing. Resolved to an absolute path at runtime. |
 | `bind` | `string \| string[]` | _(all interfaces)_ | Restrict mDNS advertisement to specific network interfaces or IPs. Interface names (e.g. `"eth0"`) are preferred over IPs because they survive address changes. For containers see below. |
 | `pollIntervalMs` | `number` | `10000` | Global interval (ms) for refreshing Shelly device state over HTTP. No effect when no Shelly source is active. |
+| `stateToggles` | `StateToggleConfig[]` | `[]` | Boolean `StateManager` keys exposed as switch toggles. Each entry is `{ stateKey, name }`; syncs bidirectionally and fires `state` triggers on write-back. |
 
 ---
 
@@ -155,6 +199,14 @@ The bridge maps a registered Shelly device's `type` (set via `shelly.register(na
 
 For covers, `current_pos` maps to `CurrentPosition` (0 = closed, 100 = open) and `state` maps to `PositionState` (`opening` → increasing, `closing` → decreasing, otherwise stopped). An **uncalibrated** cover (`current_pos: null`) is still exposed but reports position `0` and logs a calibration warning.
 
+### State toggles
+
+Each entry in `stateToggles` maps to a HomeKit switch:
+
+| `stateToggles` entry | HomeKit service |
+|---|---|
+| `{ stateKey, name }` | Switch — `On` mirrors the state key's value bidirectionally |
+
 ---
 
 ## Dynamic accessories
@@ -166,6 +218,8 @@ The bridge reacts to source events at runtime:
 - **Zigbee state change** — the accessory's characteristics are updated in real time so the Home app always shows the current state.
 - **Shelly device registered** — an accessory is created as soon as `shelly.register(...)` is called, even after the bridge has started.
 - **Shelly state refresh** — a global HTTP polling loop (`pollIntervalMs`) refreshes each Shelly accessory so physical button/switch presses appear in the Home app within one interval. A device that is unreachable during a poll tick is skipped without aborting the tick for other devices.
+- **State key change / delete** — the corresponding toggle's `On` characteristic updates immediately when `state.set(...)` or `state.delete(...)` runs.
+- **State toggle flipped** — HomeKit write-back calls `StateManager.set(stateKey, boolean)`, firing `state`-trigger automations.
 
 ---
 
@@ -175,14 +229,14 @@ If you run multiple engine instances on the same network, each bridge **must** h
 
 ```ts
 // Instance A
-new HomekitService(mqtt, logger, registry, shelly, {
+new HomekitService(mqtt, logger, registry, shelly, state, {
   pinCode: "031-45-154",
   username: "CC:22:3D:E3:CE:F8",
   port: 47128,
 });
 
 // Instance B — different username and port
-new HomekitService(mqtt, logger, registry, shelly, {
+new HomekitService(mqtt, logger, registry, shelly, state, {
   pinCode: "031-45-155",
   username: "DD:33:4E:F4:DF:A9",
   port: 47129,
@@ -310,7 +364,7 @@ network.  This approach is more complex and not covered here.
 For production deployments it is recommended to mount a dedicated volume and use an absolute path explicitly:
 
 ```ts
-new HomekitService(mqtt, logger, registry, shelly, {
+new HomekitService(mqtt, logger, registry, shelly, state, {
   pinCode: "031-45-154",
   persistPath: "/data/homekit-persist",
 });
