@@ -104,5 +104,6 @@
     "pino-pretty": {
       "optional": true
     }
-  }
+  },
+  "allowScripts": {}
 }
