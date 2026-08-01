@@ -169,6 +169,16 @@ describe("buildShellyAccessory", () => {
   describe("cover", () => {
     const device: ShellyDevice = { name: "blind", host: "1.2.3.4", type: "cover" };
 
+    it("seeds initial characteristic values at creation", () => {
+      const created = factory.buildShellyAccessory(device, () => {});
+      const svc = created?.accessory.getService(
+        WindowCoveringSvc,
+      ) as unknown as MockServiceInstance;
+      expect(svc.getCharacteristic(CurrentPositionChar).value).toBe(0);
+      expect(svc.getCharacteristic(TargetPositionChar).value).toBe(0);
+      expect(svc.getCharacteristic(PositionStateChar).value).toBe(POSITION_STATE_STOPPED);
+    });
+
     it("maps current_pos + stopped state", () => {
       const created = factory.buildShellyAccessory(device, () => {});
       const svc = created?.accessory.getService(
@@ -179,6 +189,20 @@ describe("buildShellyAccessory", () => {
         unknown
       >);
       expect(svc.getCharacteristic(CurrentPositionChar).value).toBe(40);
+      expect(svc.getCharacteristic(PositionStateChar).value).toBe(POSITION_STATE_STOPPED);
+      expect(svc.getCharacteristic(TargetPositionChar).value).toBe(40);
+    });
+
+    it("reconciles TargetPosition to CurrentPosition when idle and open", () => {
+      const created = factory.buildShellyAccessory(device, () => {});
+      const svc = created?.accessory.getService(
+        WindowCoveringSvc,
+      ) as unknown as MockServiceInstance;
+      created?.updateState({ current_pos: 75, state: "open" } as unknown as Record<
+        string,
+        unknown
+      >);
+      expect(svc.getCharacteristic(TargetPositionChar).value).toBe(75);
       expect(svc.getCharacteristic(PositionStateChar).value).toBe(POSITION_STATE_STOPPED);
     });
 
@@ -204,6 +228,33 @@ describe("buildShellyAccessory", () => {
         unknown
       >);
       expect(svc.getCharacteristic(PositionStateChar).value).toBe(POSITION_STATE_DECREASING);
+    });
+
+    it("sets TargetPosition to target_pos while moving", () => {
+      const created = factory.buildShellyAccessory(device, () => {});
+      const svc = created?.accessory.getService(
+        WindowCoveringSvc,
+      ) as unknown as MockServiceInstance;
+      created?.updateState({
+        current_pos: 10,
+        target_pos: 20,
+        state: "closing",
+      } as unknown as Record<string, unknown>);
+      expect(svc.getCharacteristic(TargetPositionChar).value).toBe(20);
+      expect(svc.getCharacteristic(PositionStateChar).value).toBe(POSITION_STATE_DECREASING);
+    });
+
+    it("falls back to CurrentPosition while moving without target_pos", () => {
+      const created = factory.buildShellyAccessory(device, () => {});
+      const svc = created?.accessory.getService(
+        WindowCoveringSvc,
+      ) as unknown as MockServiceInstance;
+      created?.updateState({ current_pos: 10, state: "opening" } as unknown as Record<
+        string,
+        unknown
+      >);
+      expect(svc.getCharacteristic(TargetPositionChar).value).toBe(10);
+      expect(svc.getCharacteristic(PositionStateChar).value).toBe(POSITION_STATE_INCREASING);
     });
 
     it("falls back to position 0 and warns for an uncalibrated cover", () => {
