@@ -103,6 +103,12 @@ function createShellySwitch(
  * Creates a WindowCovering accessory that maps `Cover.GetStatus`
  * (`current_pos` → CurrentPosition, `state` → PositionState) and routes
  * TargetPosition write-back to `onSet`.
+ *
+ * `TargetPosition` is reconciled against reality on every state update: it is
+ * set to `CurrentPosition` when the cover is idle and to the Shelly `target_pos`
+ * (falling back to `CurrentPosition`) while moving, so HomeKit tiles settle
+ * instead of wedging in a perpetual "Opening"/"Closing" state. Initial
+ * characteristic values are seeded at creation for the same reason.
  */
 function createShellyCover(
   device: ShellyDevice,
@@ -113,6 +119,12 @@ function createShellyCover(
   accessory.category = HAP_CATEGORY_WINDOW_COVERING;
 
   const service = accessory.addService(Service.WindowCovering);
+
+  // Seed initial characteristic values so the first controller read is never
+  // undefined (iOS would otherwise coerce the target to 0 and wedge the tile).
+  service.getCharacteristic(Characteristic.CurrentPosition).updateValue(0);
+  service.getCharacteristic(Characteristic.TargetPosition).updateValue(0);
+  service.getCharacteristic(Characteristic.PositionState).updateValue(POSITION_STATE_STOPPED);
 
   service.getCharacteristic(Characteristic.TargetPosition).onSet((value) => {
     onSet({ position: Number(value) });
@@ -149,6 +161,18 @@ function createShellyCover(
         break;
     }
     service.getCharacteristic(Characteristic.PositionState).updateValue(positionState);
+
+    // Reconcile TargetPosition so HomeKit sees the covering as "arrived" when
+    // idle and keeps the animation direction honest while moving.
+    let targetPosition: number;
+    if (positionState === POSITION_STATE_STOPPED) {
+      targetPosition = position;
+    } else if (typeof cover.target_pos === "number") {
+      targetPosition = Math.min(100, Math.max(0, Math.round(cover.target_pos)));
+    } else {
+      targetPosition = position;
+    }
+    service.getCharacteristic(Characteristic.TargetPosition).updateValue(targetPosition);
   };
 
   return { accessory, updateState };
