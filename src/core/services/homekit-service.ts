@@ -416,6 +416,7 @@ export class HomekitService implements ServicePlugin {
       sources.push(
         new ShellySource(
           this.shelly,
+          this.mqtt,
           this.logger,
           buildShellyAccessory,
           this.options.pollIntervalMs ?? 10000,

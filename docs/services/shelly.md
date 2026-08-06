@@ -1,10 +1,14 @@
 # Shelly Devices
 
-The built-in `ShellyService` controls Shelly Gen 2 devices (Plus Plug S, Plus 1PM Mini, Plus 2PM, etc.) over their local HTTP RPC API. No cloud account or internet connection required.
+The built-in `ShellyService` controls Shelly Gen 2 devices (Plus Plug S, Plus 1PM Mini, Plus 2PM, etc.) over either their local HTTP RPC API or their native RPC-over-MQTT channel. No cloud account or internet connection required.
+
+> **Breaking change:** `ShellyService`'s constructor now takes `(http, mqtt, logger)` instead of `(http, logger)`, and its engine service-factory signature changed from `(http, logger) => ShellyService` to a single context object `(ctx: ShellyServiceContext) => ShellyService` where `ctx = { http, mqtt, logger }` — mirroring the existing `homekit` factory pattern. Update any code constructing `ShellyService` directly or registering it as a factory-form engine service.
 
 ---
 
 ## Registering devices
+
+### HTTP transport
 
 Register devices in a factory function passed to `services.shelly` in your entry point:
 
@@ -14,8 +18,8 @@ import { createEngine, ShellyService } from "ts-home-automation";
 const engine = createEngine({
   automationsDir: "./src/automations",
   services: {
-    shelly: (http, logger) => {
-      const svc = new ShellyService(http, logger);
+    shelly: ({ http, mqtt, logger }) => {
+      const svc = new ShellyService(http, mqtt, logger);
       svc.registerMany({
         "living_room_plug": "192.168.1.50",
         "tv_plug":          "shelly-tv.local",          // mDNS hostnames work
@@ -38,8 +42,8 @@ import { createEngine, ShellyService } from "ts-home-automation";
 const engine = createEngine({
   automationsDir: "./src/automations",
   services: {
-    shelly: (http, logger) => {
-      const svc = new ShellyService(http, logger);
+    shelly: ({ http, mqtt, logger }) => {
+      const svc = new ShellyService(http, mqtt, logger);
       svc.register("kitchen_plug", "192.168.1.55");
       return svc;
     },
@@ -48,6 +52,76 @@ const engine = createEngine({
 
 await engine.start();
 ```
+
+### MQTT transport
+
+Shelly Gen2 devices also expose a native JSON-RPC channel over MQTT: commands are published to `<topicPrefix>/rpc`, responses come back on a single shared response topic, status changes push instantly via `NotifyStatus` (instead of being polled), and presence is tracked via an `online` LWT topic. This is useful when devices aren't reliably reachable by IP, or when you want instant (rather than polled) status updates in HomeKit.
+
+Register an MQTT-transport device with the object-form overload, using the device's MQTT topic prefix (e.g. `"shellyplus1-a8032abe54dc"`) instead of a host:
+
+```ts
+import { createEngine, ShellyService } from "ts-home-automation";
+
+const engine = createEngine({
+  automationsDir: "./src/automations",
+  services: {
+    shelly: ({ http, mqtt, logger }) => {
+      const svc = new ShellyService(http, mqtt, logger);
+      // HTTP and MQTT devices can be mixed on the same ShellyService instance.
+      svc.register("living_room_plug", "192.168.1.50");
+      svc.register("garage_plug", {
+        transport: "mqtt",
+        topicPrefix: "shellyplus1-a8032abe54dc",
+        type: "switch",
+      });
+      return svc;
+    },
+  },
+});
+
+await engine.start();
+```
+
+`registerMany()` also accepts mixed HTTP/MQTT entries in array form:
+
+```ts
+svc.registerMany([
+  { name: "living_room_plug", host: "192.168.1.50" },
+  { name: "garage_plug", transport: "mqtt", topicPrefix: "shellyplus1-a8032abe54dc" },
+]);
+```
+
+A device's transport is fixed at registration — there is no per-call override and no automatic fallback between transports. If an MQTT call fails or times out, it is **not** retried over HTTP, and vice versa.
+
+#### Required on-device setup
+
+Before registering a device with `transport: "mqtt"`, enable MQTT + RPC-over-MQTT on the device itself (via its web UI or `MQTT.SetConfig`):
+
+- `enable: true` — enable the MQTT client
+- `server: "<broker-host>:1883"` — your MQTT broker address
+- `enable_rpc: true` — enable the RPC-over-MQTT channel
+- `rpc_ntf: true` — enable `NotifyStatus`/`NotifyEvent` push notifications
+- `status_ntf: true` — include full component status in notifications
+
+#### The MQTT RPC `src` identifier
+
+Every MQTT RPC request carries a `src` value that the device echoes back on the shared `<src>/rpc` response topic, so the application knows which response subscription is "ours". This value is configurable via the `MQTT_SHELLY_RPC_SRC` environment variable (default: `"ts-home-automation"`). **If multiple application instances share one broker, give each a distinct `src`** — otherwise, one instance may receive another's RPC responses.
+
+```ts
+import { createEngine, loadConfig, ShellyService } from "ts-home-automation";
+
+const config = loadConfig();
+
+const engine = createEngine({
+  automationsDir: "./src/automations",
+  services: {
+    shelly: ({ http, mqtt, logger }) =>
+      new ShellyService(http, mqtt, logger, config.mqtt.shellyRpcSrc),
+  },
+});
+```
+
+MQTT RPC requests have a fixed 5-second timeout (not configurable) — if a device doesn't respond within that window, the call rejects with a descriptive error naming the device, topic prefix, method, and timeout duration.
 
 ---
 

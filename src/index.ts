@@ -67,7 +67,13 @@ export type {
   ServicePlugin,
 } from "./core/services/service-plugin.js";
 export { ServiceRegistry } from "./core/services/service-registry.js";
-export { type ShellyDevice, ShellyService } from "./core/services/shelly-service.js";
+export {
+  type ShellyDevice,
+  type ShellyMqttRegisterOptions,
+  ShellyService,
+  type ShellyServiceContext,
+  type ShellyServiceFactory,
+} from "./core/services/shelly-service.js";
 // State management
 export {
   type StateChangeHandler,

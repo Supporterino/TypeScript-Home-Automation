@@ -270,6 +270,57 @@ export interface ShellyCoverConfig {
 }
 
 // ---------------------------------------------------------------------------
+// MQTT RPC transport (Shelly Gen2 RPC-over-MQTT)
+// ---------------------------------------------------------------------------
+
+/**
+ * A JSON-RPC 2.0 request frame published to `<topicPrefix>/rpc`.
+ *
+ * @see https://shelly-api-docs.shelly.cloud/gen2/General/RPCProtocol/
+ */
+export interface ShellyMqttRpcRequest {
+  /** Monotonically increasing request id, unique across all in-flight requests. */
+  id: number;
+  /** Response destination — the caller's configured MQTT RPC `src` identifier. */
+  src: string;
+  /** RPC method name (e.g. "Switch.Set", "Cover.GetStatus"). */
+  method: string;
+  /** Method parameters, if any. */
+  params?: Record<string, unknown>;
+}
+
+/**
+ * A JSON-RPC 2.0 response frame received on the shared `<src>/rpc`
+ * subscription. Exactly one of `result`/`error` is present.
+ */
+export interface ShellyMqttRpcResponse {
+  /** Echoes the request `id` this response correlates to. */
+  id: number;
+  /** The responding device's identifier. */
+  src?: string;
+  /** The original `src` the request was sent to (our configured src). */
+  dst?: string;
+  /** Present on success. */
+  result?: unknown;
+  /** Present on failure. */
+  error?: { code: number; message: string };
+}
+
+/**
+ * A push notification frame received on `<topicPrefix>/events/rpc`
+ * (e.g. `NotifyStatus`, `NotifyEvent`).
+ */
+export interface ShellyMqttNotification {
+  /** The publishing device's identifier. */
+  src?: string;
+  dst?: string;
+  /** Notification method (e.g. "NotifyStatus", "NotifyEvent"). */
+  method: string;
+  /** Notification payload — for `NotifyStatus`, keyed by component (e.g. "switch:0"). */
+  params?: Record<string, unknown>;
+}
+
+// ---------------------------------------------------------------------------
 // System component (Sys.GetStatus)
 // ---------------------------------------------------------------------------
 

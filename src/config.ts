@@ -33,6 +33,13 @@ const configSchema = z.object({
     username: z.string().default(""),
     /** Password for MQTT broker authentication. */
     password: z.string().default(""),
+    /**
+     * The `src` identifier used in every Shelly MQTT RPC request
+     * (`ShellyService`'s MQTT transport). Multiple application instances
+     * sharing one broker must use distinct values to avoid receiving each
+     * other's RPC responses.
+     */
+    shellyRpcSrc: z.string().default("ts-home-automation"),
   }),
   zigbee2mqttPrefix: z.string().default("zigbee2mqtt"),
   logLevel: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info"),
@@ -90,6 +97,7 @@ export function loadConfig(): Config {
       port: process.env.MQTT_PORT,
       username: process.env.MQTT_USERNAME,
       password: process.env.MQTT_PASSWORD,
+      shellyRpcSrc: process.env.MQTT_SHELLY_RPC_SRC,
     },
     zigbee2mqttPrefix: process.env.ZIGBEE2MQTT_PREFIX,
     logLevel: process.env.LOG_LEVEL,
