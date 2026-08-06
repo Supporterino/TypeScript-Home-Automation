@@ -13,7 +13,11 @@ import type { NanoleafService } from "./services/nanoleaf-service.js";
 import type { PrometheusMetricsService } from "./services/prometheus-metrics-service";
 import type { CoreContext } from "./services/service-plugin.js";
 import { ServiceRegistry } from "./services/service-registry.js";
-import type { ShellyService } from "./services/shelly-service.js";
+import type {
+  ShellyService,
+  ShellyServiceContext,
+  ShellyServiceFactory,
+} from "./services/shelly-service.js";
 import { StateManager, type StateManagerOptions } from "./state/state-manager.js";
 import {
   type DeviceNiceNames,
@@ -179,8 +183,8 @@ export interface EngineOptions {
    * const engine = createEngine({
    *   automationsDir: "...",
    *   services: {
-   *     shelly: (http, logger) => {
-   *       const shelly = new ShellyService(http, logger);
+   *     shelly: ({ http, mqtt, logger }) => {
+   *       const shelly = new ShellyService(http, mqtt, logger);
    *       shelly.register("living_room_plug", "192.168.1.50");
    *       return shelly;
    *     },
@@ -195,7 +199,7 @@ export interface EngineOptions {
   services?: {
     notifications?: NotificationService | ServiceFactory<NotificationService>;
     weather?: WeatherService | ServiceFactory<WeatherService>;
-    shelly?: ShellyService | ServiceFactory<ShellyService>;
+    shelly?: ShellyService | ShellyServiceFactory;
     nanoleaf?: NanoleafService | ServiceFactory<NanoleafService>;
     metrics?: PrometheusMetricsService | ServiceFactory<PrometheusMetricsService>;
     homekit?: HomekitService | HomekitServiceFactory;
@@ -325,9 +329,23 @@ export function createEngine(options: EngineOptions): Engine {
 
   const notificationService = resolveService(notificationsValue, "notifications");
   const weatherService = resolveService(weatherValue, "weather");
-  const shellyService = resolveService(shellyValue, "shelly");
   const nanoleafService = resolveService(nanoleafValue, "nanoleaf");
   const metricsService = resolveService(metricsValue, "metrics");
+
+  // ShellyService needs mqtt in addition to the standard (http, logger) pair,
+  // so it cannot use the generic resolveService helper. mqtt is constructed
+  // above, so this can resolve eagerly (unlike homekit, which additionally
+  // depends on deviceRegistry/shelly/state constructed further down).
+  const shellyService: ShellyService | null =
+    shellyValue === undefined
+      ? null
+      : typeof shellyValue === "function"
+        ? (shellyValue as ShellyServiceFactory)({
+            http,
+            mqtt,
+            logger: logger.child({ service: "shelly" }),
+          } satisfies ShellyServiceContext)
+        : shellyValue;
 
   if (notificationService) serviceRegistry.register("notifications", notificationService);
   if (weatherService) serviceRegistry.register("weather", weatherService);

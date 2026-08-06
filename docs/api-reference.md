@@ -44,7 +44,7 @@ function createEngine(options: EngineOptions): Engine
 |---|---|---|
 | `notifications` | `NotificationService \| ServiceFactory<NotificationService>` | Push notification service |
 | `weather` | `WeatherService \| ServiceFactory<WeatherService>` | Weather data service |
-| `shelly` | `ShellyService \| ServiceFactory<ShellyService>` | Shelly device service |
+| `shelly` | `ShellyService \| ShellyServiceFactory` | Shelly device service |
 | `nanoleaf` | `NanoleafService \| ServiceFactory<NanoleafService>` | Nanoleaf panel service |
 | `homekit` | `HomekitServiceFactory` | HomeKit bridge factory |
 | `[key: string]` | `unknown` | Any custom service |
@@ -72,6 +72,20 @@ type HomekitServiceFactory = (ctx: HomekitServiceContext) => HomekitService;
 ```
 
 Dedicated factory for the HomeKit bridge. It receives a single `HomekitServiceContext` object carrying the shared HTTP client, a scoped logger, the MQTT service, the optional device registry, and the optional Shelly service. All are resolved by the engine before the factory is called.
+
+#### `ShellyServiceFactory`
+
+```ts
+interface ShellyServiceContext {
+  http: HttpClient;
+  mqtt: MqttService;
+  logger: Logger;
+}
+
+type ShellyServiceFactory = (ctx: ShellyServiceContext) => ShellyService;
+```
+
+Dedicated factory for `ShellyService`, mirroring `HomekitServiceFactory`. It receives a single `ShellyServiceContext` object carrying the shared HTTP client, the MQTT service (needed for MQTT-transport devices), and a scoped logger. **Breaking change:** replaces the previous `(http, logger) => ShellyService` factory signature, and `ShellyService`'s own constructor now takes `(http, mqtt, logger)` instead of `(http, logger)`. See [Shelly Devices](services/shelly.md) for MQTT-transport registration.
 
 #### `Engine`
 

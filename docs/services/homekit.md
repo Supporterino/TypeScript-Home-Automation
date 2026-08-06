@@ -63,28 +63,35 @@ import { createEngine, HomekitService, ShellyService } from "ts-home-automation"
 const engine = createEngine({
   automationsDir: "./src/automations",
   services: {
-    shelly: (http, logger) => {
-      const shelly = new ShellyService(http, logger);
+    shelly: ({ http, mqtt, logger }) => {
+      const shelly = new ShellyService(http, mqtt, logger);
       shelly.register("living_room_plug", "192.168.1.50");          // type defaults to "switch"
       shelly.register("kitchen_outlet", "192.168.1.51", "outlet");
       shelly.register("bedroom_blind", "192.168.1.60", "cover");
+      // MQTT-transport devices are bridged via push status instead of polling:
+      shelly.register("garage_plug", { transport: "mqtt", topicPrefix: "shellyplus1-a8032abe54dc" });
       return shelly;
     },
     homekit: ({ logger, mqtt, deviceRegistry, shelly }) =>
       new HomekitService(mqtt, logger, deviceRegistry, shelly, {
         pinCode: "031-45-154",
-        pollIntervalMs: 10000, // how often Shelly state is refreshed over HTTP
+        pollIntervalMs: 10000, // how often HTTP-transport Shelly state is refreshed
       }),
   },
 });
 ```
 
-Shelly devices are HTTP-only (no MQTT). The bridge keeps their state fresh with a
-single global polling loop and routes HomeKit write-back to `ShellyService`
-methods (`turnOn`/`turnOff` for switches/outlets, `coverGoToPosition`/`coverStop`
-for covers). Because automations register Shelly devices *after* services start,
-the bridge reacts to registration events, so devices registered at any time —
-including at runtime — are bridged automatically.
+The bridge keeps HTTP-transport devices' state fresh with a single global polling
+loop, and routes HomeKit write-back to `ShellyService` methods (`turnOn`/`turnOff`
+for switches/outlets, `coverGoToPosition`/`coverStop` for covers) regardless of
+transport. MQTT-transport devices are excluded from the poll loop — instead, the
+bridge subscribes to each device's `<topicPrefix>/events/rpc` for instant
+`NotifyStatus` push updates and `<topicPrefix>/online` to track reachability from
+its LWT presence topic. Because automations register Shelly devices *after*
+services start, the bridge reacts to registration events, so devices registered
+at any time — including at runtime — are bridged automatically. See
+[Shelly Devices](shelly.md) for MQTT transport registration and required
+on-device setup.
 
 ### Bridging state toggles
 

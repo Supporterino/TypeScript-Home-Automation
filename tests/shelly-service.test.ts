@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
 import pino from "pino";
 import type { HttpClient, HttpResponse } from "../src/core/http/http-client.js";
+import type { MqttMessageHandler, MqttService } from "../src/core/mqtt/mqtt-service.js";
 import { ShellyService } from "../src/core/services/shelly-service.js";
 
 const logger = pino({ level: "silent" });
@@ -23,13 +24,45 @@ function createMockHttp(responseData: unknown = {}): HttpClient {
   } as unknown as HttpClient;
 }
 
+/** A minimal MqttService mock that records subscriptions/publishes and lets tests drive responses. */
+function createMockMqtt(): MqttService & {
+  publishedTopics: string[];
+  publishedPayloads: Record<string, unknown>[];
+  handlersByTopic: Map<string, MqttMessageHandler>;
+} {
+  const handlersByTopic = new Map<string, MqttMessageHandler>();
+  const publishedTopics: string[] = [];
+  const publishedPayloads: Record<string, unknown>[] = [];
+  return {
+    handlersByTopic,
+    publishedTopics,
+    publishedPayloads,
+    subscribe: mock((topic: string, handler: MqttMessageHandler) => {
+      handlersByTopic.set(topic, handler);
+    }),
+    unsubscribe: mock((topic: string) => {
+      handlersByTopic.delete(topic);
+    }),
+    publish: mock((topic: string, payload: Record<string, unknown>) => {
+      publishedTopics.push(topic);
+      publishedPayloads.push(payload);
+    }),
+  } as unknown as MqttService & {
+    publishedTopics: string[];
+    publishedPayloads: Record<string, unknown>[];
+    handlersByTopic: Map<string, MqttMessageHandler>;
+  };
+}
+
 describe("ShellyService", () => {
   let shelly: ShellyService;
   let http: ReturnType<typeof createMockHttp>;
+  let mqtt: ReturnType<typeof createMockMqtt>;
 
   beforeEach(() => {
     http = createMockHttp({ was_on: false });
-    shelly = new ShellyService(http, logger);
+    mqtt = createMockMqtt();
+    shelly = new ShellyService(http, mqtt, logger);
   });
 
   describe("device registration", () => {
@@ -127,9 +160,56 @@ describe("ShellyService", () => {
       const devices = shelly.getDevices();
       expect(devices).toHaveLength(2);
       const plug = devices.find((d) => d.name === "plug");
-      expect(plug).toEqual({ name: "plug", host: "192.168.1.50", type: "outlet" });
+      expect(plug).toEqual({
+        name: "plug",
+        host: "192.168.1.50",
+        type: "outlet",
+        transport: "http",
+      });
       const blind = devices.find((d) => d.name === "blind");
-      expect(blind).toEqual({ name: "blind", host: "192.168.1.60", type: "cover" });
+      expect(blind).toEqual({
+        name: "blind",
+        host: "192.168.1.60",
+        type: "cover",
+        transport: "http",
+      });
+    });
+  });
+
+  describe("MQTT device registration", () => {
+    it("registers an MQTT-transport device via the object-form overload", () => {
+      shelly.register("garage_plug", {
+        transport: "mqtt",
+        topicPrefix: "shellyplus1-a8032abe54dc",
+      });
+      const device = shelly.getDevices().find((d) => d.name === "garage_plug");
+      expect(device).toEqual({
+        name: "garage_plug",
+        type: "switch",
+        transport: "mqtt",
+        topicPrefix: "shellyplus1-a8032abe54dc",
+      });
+    });
+
+    it("stores an explicit type on the object-form overload", () => {
+      shelly.register("garage_cover", {
+        transport: "mqtt",
+        topicPrefix: "shellyplus2pm-abc",
+        type: "cover",
+      });
+      const device = shelly.getDevices().find((d) => d.name === "garage_cover");
+      expect(device?.type).toBe("cover");
+    });
+
+    it("registerMany accepts mixed HTTP/MQTT entries", () => {
+      shelly.registerMany([
+        { name: "http_plug", host: "192.168.1.50" },
+        { name: "mqtt_plug", transport: "mqtt", topicPrefix: "shellyplus1-abc" },
+      ]);
+      const devices = shelly.getDevices();
+      expect(devices.find((d) => d.name === "http_plug")?.transport).toBe("http");
+      expect(devices.find((d) => d.name === "mqtt_plug")?.transport).toBe("mqtt");
+      expect(devices.find((d) => d.name === "mqtt_plug")?.topicPrefix).toBe("shellyplus1-abc");
     });
   });
 
@@ -203,7 +283,7 @@ describe("ShellyService", () => {
   describe("status and info", () => {
     beforeEach(() => {
       http = createMockHttp({ output: true, apower: 42.5 });
-      shelly = new ShellyService(http, logger);
+      shelly = new ShellyService(http, mqtt, logger);
       shelly.register("plug", "192.168.1.50");
     });
 
@@ -244,7 +324,7 @@ describe("ShellyService", () => {
 
     it("isOn returns false when output is false", async () => {
       http = createMockHttp({ output: false, apower: 0 });
-      shelly = new ShellyService(http, logger);
+      shelly = new ShellyService(http, mqtt, logger);
       shelly.register("plug", "192.168.1.50");
       expect(await shelly.isOn("plug")).toBe(false);
     });
@@ -276,7 +356,7 @@ describe("ShellyService", () => {
   describe("cover control", () => {
     beforeEach(() => {
       http = createMockHttp({ state: "open", current_pos: 75, apower: 0 });
-      shelly = new ShellyService(http, logger);
+      shelly = new ShellyService(http, mqtt, logger);
       shelly.register("shutter", "192.168.1.60");
     });
 
@@ -351,7 +431,7 @@ describe("ShellyService", () => {
 
     it("getCoverPosition returns null when uncalibrated", async () => {
       http = createMockHttp({ state: "stopped", current_pos: null });
-      shelly = new ShellyService(http, logger);
+      shelly = new ShellyService(http, mqtt, logger);
       shelly.register("shutter", "192.168.1.60");
       const pos = await shelly.getCoverPosition("shutter");
       expect(pos).toBeNull();
@@ -376,7 +456,7 @@ describe("ShellyService", () => {
         ),
       } as unknown as HttpClient;
 
-      const s = new ShellyService(errorHttp, logger);
+      const s = new ShellyService(errorHttp, mqtt, logger);
       s.register("plug", "192.168.1.50");
       expect(s.turnOn("plug")).rejects.toThrow("HTTP 500");
     });
@@ -393,7 +473,7 @@ describe("ShellyService", () => {
         ),
       } as unknown as HttpClient;
 
-      const s = new ShellyService(errorHttp, logger);
+      const s = new ShellyService(errorHttp, mqtt, logger);
       s.register("plug", "192.168.1.50");
       expect(s.getStatus("plug")).rejects.toThrow(/returned an error/);
     });
@@ -410,9 +490,104 @@ describe("ShellyService", () => {
         ),
       } as unknown as HttpClient;
 
-      const s = new ShellyService(errorHttp, logger);
+      const s = new ShellyService(errorHttp, mqtt, logger);
       s.register("plug", "192.168.1.50");
       expect(s.getStatus("plug")).rejects.toThrow(/unexpected response body/);
+    });
+  });
+
+  describe("MQTT RPC transport", () => {
+    const SRC_TOPIC = "ts-home-automation/rpc";
+
+    beforeEach(() => {
+      shelly.register("garage_plug", { transport: "mqtt", topicPrefix: "shellyplus1-abc" });
+    });
+
+    it("publishes a JSON-RPC request to <topicPrefix>/rpc and makes no HTTP request", async () => {
+      const promise = shelly.turnOn("garage_plug");
+      expect(mqtt.publishedTopics[0]).toBe("shellyplus1-abc/rpc");
+      const request = mqtt.publishedPayloads[0] as { id: number; src: string; method: string };
+      expect(request.src).toBe("ts-home-automation");
+      expect(request.method).toBe("Switch.Set");
+      expect(http.get).not.toHaveBeenCalled();
+
+      mqtt.handlersByTopic.get(SRC_TOPIC)?.(SRC_TOPIC, {
+        id: request.id,
+        result: { was_on: false },
+      });
+      expect(await promise).toEqual({ was_on: false });
+    });
+
+    it("subscribes to the shared <src>/rpc topic only once across multiple calls", async () => {
+      const p1 = shelly.turnOn("garage_plug");
+      const id1 = (mqtt.publishedPayloads[0] as { id: number }).id;
+      mqtt.handlersByTopic.get(SRC_TOPIC)?.(SRC_TOPIC, { id: id1, result: { was_on: false } });
+      await p1;
+
+      const p2 = shelly.turnOff("garage_plug");
+      const id2 = (mqtt.publishedPayloads[1] as { id: number }).id;
+      mqtt.handlersByTopic.get(SRC_TOPIC)?.(SRC_TOPIC, { id: id2, result: { was_on: true } });
+      await p2;
+
+      const subscribeCalls = (mqtt.subscribe as ReturnType<typeof mock>).mock.calls.filter(
+        (call: unknown[]) => call[0] === SRC_TOPIC,
+      );
+      expect(subscribeCalls).toHaveLength(1);
+    });
+
+    it("rejects with a descriptive error on an error response", async () => {
+      const promise = shelly.turnOn("garage_plug");
+      const request = mqtt.publishedPayloads[0] as { id: number };
+      mqtt.handlersByTopic.get(SRC_TOPIC)?.(SRC_TOPIC, {
+        id: request.id,
+        error: { code: -32602, message: "Invalid params" },
+      });
+      expect(promise).rejects.toThrow(/returned an error/);
+    });
+
+    it("times out with a descriptive error naming device, topicPrefix, method, and duration", async () => {
+      const originalSetTimeout = globalThis.setTimeout;
+      // Fire the timeout callback synchronously instead of waiting 5s.
+      globalThis.setTimeout = ((fn: () => void) => {
+        fn();
+        return 0 as unknown as ReturnType<typeof setTimeout>;
+      }) as typeof setTimeout;
+      try {
+        await expect(shelly.turnOn("garage_plug")).rejects.toThrow(
+          /Switch\.Set.*garage_plug.*shellyplus1-abc.*timed out.*5000ms/,
+        );
+      } finally {
+        globalThis.setTimeout = originalSetTimeout;
+      }
+    });
+
+    it("correlates concurrent requests to different devices by id on the shared subscription", async () => {
+      shelly.register("garage_plug_2", { transport: "mqtt", topicPrefix: "shellyplus1-def" });
+
+      const promiseA = shelly.turnOn("garage_plug");
+      const promiseB = shelly.turnOn("garage_plug_2");
+
+      const idA = (mqtt.publishedPayloads[0] as { id: number }).id;
+      const idB = (mqtt.publishedPayloads[1] as { id: number }).id;
+      expect(idA).not.toBe(idB);
+
+      // Respond out of order — both must resolve to the correct pending call.
+      mqtt.handlersByTopic.get(SRC_TOPIC)?.(SRC_TOPIC, { id: idB, result: { was_on: true } });
+      mqtt.handlersByTopic.get(SRC_TOPIC)?.(SRC_TOPIC, { id: idA, result: { was_on: false } });
+
+      expect(await promiseA).toEqual({ was_on: false });
+      expect(await promiseB).toEqual({ was_on: true });
+    });
+
+    it("does not retry over HTTP when the MQTT call fails", async () => {
+      const promise = shelly.turnOn("garage_plug");
+      const request = mqtt.publishedPayloads[0] as { id: number };
+      mqtt.handlersByTopic.get(SRC_TOPIC)?.(SRC_TOPIC, {
+        id: request.id,
+        error: { code: -1, message: "boom" },
+      });
+      await expect(promise).rejects.toThrow();
+      expect(http.get).not.toHaveBeenCalled();
     });
   });
 });

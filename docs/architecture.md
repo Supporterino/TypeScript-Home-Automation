@@ -108,7 +108,7 @@ A `Bun.serve()`-based HTTP server handling:
 
 ### `ShellyService`
 
-Maintains a `Map<string, string>` of device name → host. Each method call constructs the appropriate Shelly RPC URL and makes an HTTP POST using the shared `HttpClient`. Typed response interfaces are provided for switch and cover status.
+Maintains a `Map<string, ShellyDevice>` of device name → registration (transport, host/topicPrefix, type). Each method routes to `httpRpc()` (HTTP GET against the device's `/rpc/<Method>` endpoint via the shared `HttpClient`) or `mqttRpc()` (JSON-RPC published to `<topicPrefix>/rpc`, correlated by request id on a single shared `<src>/rpc` subscription) based on the target device's fixed-at-registration `transport` field — no fallback between transports. Typed response interfaces are provided for switch and cover status.
 
 ### `NanoleafService`
 

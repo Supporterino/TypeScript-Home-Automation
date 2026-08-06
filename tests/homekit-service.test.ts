@@ -246,7 +246,7 @@ describe("HomekitService (source host)", () => {
   });
 
   it("bridges accessories added by the Shelly source through the sink", async () => {
-    const shelly = new ShellyService(createMockHttp(), logger);
+    const shelly = new ShellyService(createMockHttp(), mqtt, logger);
     shelly.register("plug", "192.168.1.50", "switch");
 
     // Large poll interval so the loop never fires during the test.
@@ -264,7 +264,7 @@ describe("HomekitService (source host)", () => {
   });
 
   it("bridges a device registered after start", async () => {
-    const shelly = new ShellyService(createMockHttp(), logger);
+    const shelly = new ShellyService(createMockHttp(), mqtt, logger);
     const svc = new HomekitService(mqtt, logger, null, shelly, state, {
       pinCode: "031-45-154",
       pollIntervalMs: 1_000_000,
@@ -280,7 +280,7 @@ describe("HomekitService (source host)", () => {
   });
 
   it("tears down started sources and resets state when publish() rejects", async () => {
-    const shelly = new ShellyService(createMockHttp(), logger);
+    const shelly = new ShellyService(createMockHttp(), mqtt, logger);
     shelly.register("plug", "192.168.1.50", "switch");
 
     const svc = new HomekitService(mqtt, logger, null, shelly, state, {
@@ -303,7 +303,7 @@ describe("HomekitService (source host)", () => {
   });
 
   it("clears accessories and unpublishes on stop", async () => {
-    const shelly = new ShellyService(createMockHttp(), logger);
+    const shelly = new ShellyService(createMockHttp(), mqtt, logger);
     shelly.register("plug", "192.168.1.50", "switch");
     const svc = new HomekitService(mqtt, logger, null, shelly, state, {
       pinCode: "031-45-154",
