@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, mock } from "bun:test";
 import pino from "pino";
+import { Automation, type Trigger } from "../src/core/automation.js";
 import { createEngine, type Engine } from "../src/core/engine.js";
 
 const logger = pino({ level: "silent" });
@@ -18,6 +19,11 @@ function createTestEngine(overrides: Record<string, unknown> = {}): Engine {
     logger,
     config: {
       httpServer: { port: 0, token: "", webUi: { enabled: false, path: "/status" } },
+      // State/device-registry persistence now defaults to true (design.md
+      // D6); disable it here so engine tests never write real files unless a
+      // test explicitly opts back in via `overrides`.
+      state: { persist: false, filePath: "./state.json", flushIntervalMs: 1000 },
+      deviceRegistry: { enabled: false, persist: false, filePath: "./device-registry.json" },
       ...overrides,
     },
   });
@@ -293,6 +299,425 @@ describe("createEngine", () => {
       engine = createTestEngine();
       // Port 0 means no HTTP server — we just confirm engine creates without error
       expect(engine.config.httpServer.port).toBe(0);
+    });
+  });
+
+  // ── Realtime event stream (group 5) ─────────────────────────────────────
+
+  describe("realtime event stream", () => {
+    it("constructs a stream-only logger distinct from the supplied logger (task 5.0b)", () => {
+      engine = createTestEngine();
+      expect(engine.streamLogger).toBeDefined();
+      expect(engine.streamLogger).not.toBe(engine.logger);
+    });
+
+    it("exposes a shared EventBus", () => {
+      engine = createTestEngine();
+      expect(engine.events).toBeDefined();
+      expect(typeof engine.events.subscribe).toBe("function");
+    });
+
+    it("emits a state category event for an ordinary key change", async () => {
+      engine = createTestEngine();
+      await engine.start();
+
+      const received: unknown[] = [];
+      engine.events.subscribe((e) => received.push(e));
+
+      engine.state.set("night_mode", true);
+
+      expect(received).toEqual([
+        { category: "state", key: "night_mode", value: true, previous: undefined },
+      ]);
+    });
+
+    it("emits only an automation category event for an enabled-flag change, not a state event (task 5.7)", async () => {
+      engine = createTestEngine();
+      await engine.start();
+
+      const received: unknown[] = [];
+      engine.events.subscribe((e) => received.push(e));
+
+      // The internal write path automations use — mirrors automation-manager's
+      // stop()/start(), without depending on a real automation file.
+      (
+        engine.state as unknown as { setInternal: (key: string, value: unknown) => void }
+      ).setInternal("$internal:automation-enabled:my-automation", false);
+
+      expect(received).toEqual([{ category: "automation", name: "my-automation", enabled: false }]);
+    });
+
+    it("emits a readiness category event when the engine finishes starting", async () => {
+      engine = createTestEngine();
+      // The mocked connect() never flips the real MqttService's internal
+      // `connected` flag, so readiness is exercised here by overriding
+      // `isConnected` directly, the same way `isConnected` would read true
+      // after a real broker connection.
+      Object.defineProperty(engine.mqtt, "isConnected", { get: () => true, configurable: true });
+
+      const received: unknown[] = [];
+      engine.events.subscribe((e) => received.push(e));
+
+      await engine.start();
+
+      expect(received).toEqual([{ category: "readiness", ready: true }]);
+    });
+
+    it("emits a readiness category event when the engine stops", async () => {
+      engine = createTestEngine();
+      Object.defineProperty(engine.mqtt, "isConnected", { get: () => true, configurable: true });
+      await engine.start();
+
+      const received: unknown[] = [];
+      engine.events.subscribe((e) => received.push(e));
+
+      await engine.stop();
+
+      expect(received).toEqual([{ category: "readiness", ready: false }]);
+    });
+  });
+
+  // ── Automation observability (group 8) ──────────────────────────────────
+
+  describe("automation execution observability", () => {
+    it("emits an automation_execution event naming the automation, trigger, duration, and outcome (task 8.7)", async () => {
+      engine = createTestEngine();
+      await engine.start();
+
+      class QuietAutomation extends Automation {
+        readonly name = "quiet-automation";
+        readonly triggers: Trigger[] = [];
+        async execute(): Promise<void> {}
+      }
+      await engine.manager.register(new QuietAutomation());
+
+      const received: unknown[] = [];
+      engine.events.subscribe((e) => received.push(e));
+
+      const result = await engine.manager.triggerAutomation("quiet-automation", {
+        type: "cron",
+        expression: "manual",
+        firedAt: new Date(),
+      });
+      expect(result).toBe("executed");
+
+      expect(received).toHaveLength(1);
+      expect(received[0]).toMatchObject({
+        category: "automation_execution",
+        automation: "quiet-automation",
+        outcome: "success",
+      });
+    });
+
+    it("exposes execution history and relationships through the manager (tasks 8.3, 8.5)", async () => {
+      engine = createTestEngine();
+      await engine.start();
+
+      class QuietAutomation extends Automation {
+        readonly name = "quiet-automation";
+        readonly triggers: Trigger[] = [{ type: "state", key: "night_mode" }];
+        async execute(): Promise<void> {
+          this.state.set("last_run_marker", true);
+        }
+      }
+      await engine.manager.register(new QuietAutomation());
+
+      expect(engine.manager.getHistory("quiet-automation")).toEqual([]);
+
+      await engine.manager.triggerAutomation("quiet-automation", {
+        type: "state",
+        key: "night_mode",
+        newValue: true,
+        oldValue: false,
+      });
+
+      const history = engine.manager.getHistory("quiet-automation");
+      expect(history).toHaveLength(1);
+      expect(history?.[0].outcome).toBe("success");
+
+      const relationships = engine.manager.getRelationships("quiet-automation");
+      expect(relationships?.declared.watchedStateKeys).toEqual(["night_mode"]);
+      expect(relationships?.observed.writtenStateKeys).toEqual(["last_run_marker"]);
+    });
+  });
+
+  // ── Unified device sources (group 6) ────────────────────────────────────
+
+  describe("unified device sources", () => {
+    it("always exposes engine.devices, even with no Shelly, Nanoleaf, or toggle configuration", () => {
+      engine = createTestEngine();
+      expect(engine.devices).toBeDefined();
+      expect(engine.devices.list()).toEqual([]);
+      expect(
+        engine.devices
+          .sources()
+          .map((s) => s.id)
+          .sort(),
+      ).toEqual(["nanoleaf", "shelly", "state", "zigbee"]);
+    });
+
+    it("reports the zigbee, shelly, and nanoleaf sources unavailable when unconfigured", () => {
+      engine = createTestEngine();
+      const statuses = new Map(engine.devices.sources().map((s) => [s.id, s.available]));
+      expect(statuses.get("zigbee")).toBe(false);
+      expect(statuses.get("shelly")).toBe(false);
+      expect(statuses.get("nanoleaf")).toBe(false);
+      // The state source is always available — its backing store is in-process.
+      expect(statuses.get("state")).toBe(true);
+    });
+
+    it("presents configured state toggles as devices through engine.devices", async () => {
+      engine = createEngine({
+        automationsDir: fixturesDir,
+        logger,
+        config: {
+          httpServer: { port: 0, token: "", webUi: { enabled: false, path: "/status" } },
+          state: { persist: false, filePath: "./state.json", flushIntervalMs: 1000 },
+          deviceRegistry: { enabled: false, persist: false, filePath: "./device-registry.json" },
+        },
+        stateToggles: [{ stateKey: "night_mode", name: "Night Mode" }],
+      });
+      (engine.mqtt as { connect: unknown }).connect = mock(() => Promise.resolve());
+      (engine.mqtt as { disconnect: unknown }).disconnect = mock(() => Promise.resolve());
+      await engine.start();
+
+      const devices = engine.devices.list();
+      expect(devices).toHaveLength(1);
+      expect(devices[0].qualifiedId).toBe("state:night_mode");
+    });
+
+    it("an automation's onStart() sees a populated device accessor (task 6.13a)", async () => {
+      // discoverAndRegister runs after deviceSources.start() (task 6.13a); an
+      // engine.devices populated with a configured state toggle proves the
+      // ordering, since automations register during discovery.
+      engine = createEngine({
+        automationsDir: fixturesDir,
+        logger,
+        config: {
+          httpServer: { port: 0, token: "", webUi: { enabled: false, path: "/status" } },
+          state: { persist: false, filePath: "./state.json", flushIntervalMs: 1000 },
+          deviceRegistry: { enabled: false, persist: false, filePath: "./device-registry.json" },
+        },
+        stateToggles: [{ stateKey: "night_mode", name: "Night Mode" }],
+      });
+      (engine.mqtt as { connect: unknown }).connect = mock(() => {
+        // At the point MQTT connects, device sources must already be running.
+        expect(engine.devices.list()).toHaveLength(1);
+        return Promise.resolve();
+      });
+      (engine.mqtt as { disconnect: unknown }).disconnect = mock(() => Promise.resolve());
+      await engine.start();
+      expect(engine.mqtt.connect as ReturnType<typeof mock>).toHaveBeenCalledTimes(1);
+    });
+
+    it("stops device sources during shutdown, releasing their subscriptions", async () => {
+      engine = createEngine({
+        automationsDir: fixturesDir,
+        logger,
+        config: {
+          httpServer: { port: 0, token: "", webUi: { enabled: false, path: "/status" } },
+          state: { persist: false, filePath: "./state.json", flushIntervalMs: 1000 },
+          deviceRegistry: { enabled: false, persist: false, filePath: "./device-registry.json" },
+        },
+        stateToggles: [{ stateKey: "night_mode", name: "Night Mode" }],
+      });
+      (engine.mqtt as { connect: unknown }).connect = mock(() => Promise.resolve());
+      (engine.mqtt as { disconnect: unknown }).disconnect = mock(() => Promise.resolve());
+      await engine.start();
+
+      const seen: unknown[] = [];
+      engine.devices.subscribe((d) => seen.push(d));
+      await engine.stop();
+
+      engine.state.set("night_mode", true);
+      expect(seen).toEqual([]);
+    });
+
+    it("stops device sources on startup rollback after a later failure", async () => {
+      engine = createTestEngine();
+      (engine.mqtt as { connect: unknown }).connect = mock(() =>
+        Promise.reject(new Error("connection refused")),
+      );
+
+      const stopSpy = mock(() => Promise.resolve());
+      (engine.devices as unknown as { stop: unknown }).stop = stopSpy;
+
+      await expect(engine.start()).rejects.toThrow("connection refused");
+      expect(stopSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it("keeps device sources running through an automation's onStop() (task 6.13c)", async () => {
+      engine = createEngine({
+        automationsDir: fixturesDir,
+        logger,
+        config: {
+          httpServer: { port: 0, token: "", webUi: { enabled: false, path: "/status" } },
+          state: { persist: false, filePath: "./state.json", flushIntervalMs: 1000 },
+          deviceRegistry: { enabled: false, persist: false, filePath: "./device-registry.json" },
+        },
+        stateToggles: [{ stateKey: "night_mode", name: "Night Mode" }],
+      });
+      (engine.mqtt as { connect: unknown }).connect = mock(() => Promise.resolve());
+      (engine.mqtt as { disconnect: unknown }).disconnect = mock(() => Promise.resolve());
+      await engine.start();
+
+      let dispatchedDuringStop: unknown = null;
+      const probe = new (class extends Automation {
+        readonly name = "device-sources-onstop-probe";
+        readonly triggers: Trigger[] = [];
+        async execute(): Promise<void> {}
+        async onStop(): Promise<void> {
+          dispatchedDuringStop = await engine.devices.command("state:night_mode", { on: true });
+        }
+      })();
+      await engine.manager.register(probe);
+
+      await engine.stop();
+
+      expect(dispatchedDuringStop).toEqual({ status: "ok" });
+    });
+
+    it("passes HomekitService a context exposing only http, logger, and devices (task 6.16b)", () => {
+      let receivedContext: Record<string, unknown> | null = null;
+      engine = createEngine({
+        automationsDir: fixturesDir,
+        logger,
+        config: {
+          httpServer: { port: 0, token: "", webUi: { enabled: false, path: "/status" } },
+          state: { persist: false, filePath: "./state.json", flushIntervalMs: 1000 },
+          deviceRegistry: { enabled: false, persist: false, filePath: "./device-registry.json" },
+        },
+        services: {
+          homekit: ((ctx: Record<string, unknown>) => {
+            receivedContext = ctx;
+            return { serviceKey: "homekit" };
+          }) as unknown as NonNullable<Parameters<typeof createEngine>[0]["services"]>["homekit"],
+        },
+      });
+
+      expect(receivedContext).not.toBeNull();
+      expect(Object.keys(receivedContext as Record<string, unknown>).sort()).toEqual([
+        "devices",
+        "http",
+        "logger",
+      ]);
+    });
+
+    it("no device source is registered in the ServiceRegistry (task 6.13d)", () => {
+      engine = createTestEngine();
+      const keys = engine.services.keys();
+      expect(keys).not.toContain("zigbee");
+      expect(keys).not.toContain("shelly-source");
+      expect(keys).not.toContain("nanoleaf-source");
+      expect(keys).not.toContain("state-source");
+      expect(keys).not.toContain("devices");
+    });
+  });
+
+  // ── Rooms (group 9) ───────────────────────────────────────────────────────
+
+  describe("rooms", () => {
+    it("always exposes engine.rooms", () => {
+      engine = createTestEngine();
+      expect(engine.rooms).toBeDefined();
+      expect(typeof engine.rooms.createRoom).toBe("function");
+    });
+
+    it("emits a room category event, not a state event, when a room is created (task 9.7)", async () => {
+      engine = createTestEngine();
+      await engine.start();
+
+      const received: unknown[] = [];
+      engine.events.subscribe((e) => received.push(e));
+
+      const result = engine.rooms.createRoom("Kitchen");
+      if (result.status !== "ok") throw new Error("unreachable");
+
+      expect(received).toEqual([
+        { category: "room", id: result.room.id, room: { id: result.room.id, name: "Kitchen" } },
+      ]);
+    });
+
+    it("emits only a room_membership delta for one device, not a full room list, on assignment (task 9.7)", async () => {
+      engine = createTestEngine();
+      await engine.start();
+
+      const created = engine.rooms.createRoom("Kitchen");
+      if (created.status !== "ok") throw new Error("unreachable");
+
+      const received: unknown[] = [];
+      engine.events.subscribe((e) => received.push(e));
+
+      engine.rooms.assignDevice("zigbee:0xaaa", created.room.id);
+
+      expect(received).toEqual([
+        { category: "room_membership", qualifiedId: "zigbee:0xaaa", roomId: created.room.id },
+      ]);
+      // No "room" event was resent, and no room's full membership was carried —
+      // the delta names only the one device and its new room.
+      expect(
+        received.every((e) => (e as { category: string }).category === "room_membership"),
+      ).toBe(true);
+    });
+
+    it("emits a room_membership event with roomId: null on unassignment", async () => {
+      engine = createTestEngine();
+      await engine.start();
+
+      const created = engine.rooms.createRoom("Kitchen");
+      if (created.status !== "ok") throw new Error("unreachable");
+      engine.rooms.assignDevice("zigbee:0xaaa", created.room.id);
+
+      const received: unknown[] = [];
+      engine.events.subscribe((e) => received.push(e));
+
+      engine.rooms.unassignDevice("zigbee:0xaaa");
+
+      expect(received).toEqual([
+        { category: "room_membership", qualifiedId: "zigbee:0xaaa", roomId: null },
+      ]);
+    });
+
+    it("emits a room event with room: null when a room is deleted", async () => {
+      engine = createTestEngine();
+      await engine.start();
+      const created = engine.rooms.createRoom("Kitchen");
+      if (created.status !== "ok") throw new Error("unreachable");
+
+      const received: unknown[] = [];
+      engine.events.subscribe((e) => received.push(e));
+
+      engine.rooms.deleteRoom(created.room.id);
+
+      expect(received).toEqual([{ category: "room", id: created.room.id, room: null }]);
+    });
+
+    it("rooms span every unified device source, including state toggles", async () => {
+      engine = createEngine({
+        automationsDir: fixturesDir,
+        logger,
+        config: {
+          httpServer: { port: 0, token: "", webUi: { enabled: false, path: "/status" } },
+          state: { persist: false, filePath: "./state.json", flushIntervalMs: 1000 },
+          deviceRegistry: { enabled: false, persist: false, filePath: "./device-registry.json" },
+        },
+        stateToggles: [{ stateKey: "night_mode", name: "Night Mode" }],
+      });
+      (engine.mqtt as { connect: unknown }).connect = mock(() => Promise.resolve());
+      (engine.mqtt as { disconnect: unknown }).disconnect = mock(() => Promise.resolve());
+      await engine.start();
+
+      const created = engine.rooms.createRoom("Whole House");
+      if (created.status !== "ok") throw new Error("unreachable");
+
+      const toggle = engine.devices.list().find((d) => d.source === "state");
+      if (!toggle) throw new Error("expected a state toggle device");
+      const result = engine.rooms.assignDevice(toggle.qualifiedId, created.room.id);
+      expect(result).toBe("ok");
+
+      const listed = engine.rooms.listRooms();
+      expect(listed[0].members[0].qualifiedId).toBe(toggle.qualifiedId);
+      expect(listed[0].members[0].available).toBe(true);
     });
   });
 });
