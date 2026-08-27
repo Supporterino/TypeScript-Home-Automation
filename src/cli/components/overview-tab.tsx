@@ -49,8 +49,9 @@ export function OverviewTab({ data }: { data: DashboardData }) {
         ) : (
           automations.automations.map((a) => (
             <box key={a.name} flexDirection="row">
-              <text fg={COLORS.cyan} width={keyWidth}>
+              <text fg={a.enabled ? COLORS.cyan : COLORS.comment} width={keyWidth}>
                 {a.name}
+                {a.enabled ? "" : " (disabled)"}
               </text>
               <text fg={COLORS.comment}>{summarizeTriggers(a.triggers)}</text>
             </box>

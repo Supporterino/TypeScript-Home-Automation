@@ -55,16 +55,43 @@ export class DebugClient {
   }
 
   async listAutomations(): Promise<{
-    automations: { name: string; triggers: { type: string; [key: string]: unknown }[] }[];
+    automations: {
+      name: string;
+      enabled: boolean;
+      triggers: { type: string; [key: string]: unknown }[];
+    }[];
     count: number;
   }> {
     return this.get("/api/automations");
   }
 
-  async getAutomation(
-    name: string,
-  ): Promise<{ name: string; triggers: { type: string; [key: string]: unknown }[] }> {
+  async getAutomation(name: string): Promise<{
+    name: string;
+    enabled: boolean;
+    triggers: { type: string; [key: string]: unknown }[];
+  }> {
     return this.get(`/api/automations/${encodeURIComponent(name)}`);
+  }
+
+  /** Enable or disable a single automation by name. */
+  async setAutomationEnabled(
+    name: string,
+    enabled: boolean,
+  ): Promise<{
+    name: string;
+    enabled: boolean;
+    triggers: { type: string; [key: string]: unknown }[];
+  }> {
+    return this.request(`/api/automations/${encodeURIComponent(name)}/enabled`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...this.authHeaders() },
+      body: JSON.stringify({ enabled }),
+    });
+  }
+
+  /** Read the current contents of the file an automation was loaded from. */
+  async getAutomationSource(name: string): Promise<{ name: string; source: string }> {
+    return this.get(`/api/automations/${encodeURIComponent(name)}/source`);
   }
 
   // -------------------------------------------------------------------------
