@@ -8,6 +8,9 @@ export type MqttMessageHandler = (
   payload: Record<string, unknown>,
 ) => void | Promise<void>;
 
+/** Callback for MQTT broker connection state changes. See `MqttService.onConnectionChange`. */
+export type ConnectionChangeHandler = (connected: boolean) => void;
+
 /**
  * A subscription to an exact (non-wildcard) topic.
  */
@@ -52,10 +55,34 @@ export class MqttService {
   private readonly wildcardHandlers: WildcardSubscription[] = [];
   /** All subscription topics (for re-subscribe on reconnect + broker unsubscribe logic). */
   private readonly allTopics: Map<string, number> = new Map();
+  /** Listeners notified when the broker connection state changes. */
+  private readonly connectionChangeListeners: Set<ConnectionChangeHandler> = new Set();
 
   /** Whether the MQTT client is currently connected to the broker. */
   get isConnected(): boolean {
     return this.connected;
+  }
+
+  /**
+   * Subscribe to broker connection state changes (connected on `connect`,
+   * disconnected on `offline`). Used to drive the event stream's readiness
+   * category. Returns an unsubscribe function.
+   */
+  onConnectionChange(handler: ConnectionChangeHandler): () => void {
+    this.connectionChangeListeners.add(handler);
+    return () => {
+      this.connectionChangeListeners.delete(handler);
+    };
+  }
+
+  private notifyConnectionChange(connected: boolean): void {
+    for (const handler of this.connectionChangeListeners) {
+      try {
+        handler(connected);
+      } catch (err) {
+        this.logger.error({ err }, "MQTT connection-change listener threw");
+      }
+    }
   }
 
   constructor(
@@ -90,6 +117,7 @@ export class MqttService {
       // Single connect handler: resubscribe exactly once per connect event and
       // distinguish the initial connection from a subsequent reconnection.
       this.client.on("connect", () => {
+        const wasConnected = this.connected;
         this.connected = true;
         this.resubscribeAll();
         if (!this.hasConnectedOnce) {
@@ -99,6 +127,7 @@ export class MqttService {
         } else {
           this.logger.info("Reconnected to MQTT broker");
         }
+        if (!wasConnected) this.notifyConnectionChange(true);
       });
 
       this.client.on("reconnect", () => {
@@ -120,8 +149,10 @@ export class MqttService {
       });
 
       this.client.on("offline", () => {
+        const wasConnected = this.connected;
         this.connected = false;
         this.logger.warn("MQTT client offline");
+        if (wasConnected) this.notifyConnectionChange(false);
       });
 
       this.client.on("message", (topic, message) => {

@@ -399,4 +399,78 @@ describe("MqttService connect lifecycle", () => {
     await expect(service.disconnect()).resolves.toBeUndefined();
     expect(fakeClient.endCalls).toBe(1);
   });
+
+  // ── onConnectionChange (drives the event stream's readiness category) ────
+
+  describe("onConnectionChange", () => {
+    it("notifies true on the initial connect", async () => {
+      const service = makeService();
+      const changes: boolean[] = [];
+      service.onConnectionChange((connected) => changes.push(connected));
+
+      const connectPromise = service.connect();
+      fakeClient.emit("connect");
+      await connectPromise;
+
+      expect(changes).toEqual([true]);
+    });
+
+    it("notifies false when the client goes offline", async () => {
+      const service = makeService();
+      const changes: boolean[] = [];
+
+      const connectPromise = service.connect();
+      fakeClient.emit("connect");
+      await connectPromise;
+
+      service.onConnectionChange((connected) => changes.push(connected));
+      fakeClient.emit("offline");
+
+      expect(changes).toEqual([false]);
+    });
+
+    it("does not notify again on a reconnect that was already connected", async () => {
+      const service = makeService();
+      const changes: boolean[] = [];
+
+      const connectPromise = service.connect();
+      fakeClient.emit("connect");
+      await connectPromise;
+
+      service.onConnectionChange((connected) => changes.push(connected));
+      // A second "connect" without an intervening "offline" is a resubscribe,
+      // not a state transition — isConnected was already true.
+      fakeClient.emit("connect");
+
+      expect(changes).toEqual([]);
+    });
+
+    it("stops notifying once unsubscribed", async () => {
+      const service = makeService();
+      const changes: boolean[] = [];
+      const unsubscribe = service.onConnectionChange((connected) => changes.push(connected));
+      unsubscribe();
+
+      const connectPromise = service.connect();
+      fakeClient.emit("connect");
+      await connectPromise;
+
+      expect(changes).toEqual([]);
+    });
+
+    it("isolates a throwing listener from the others", async () => {
+      const service = makeService();
+      const changes: boolean[] = [];
+      service.onConnectionChange(() => {
+        throw new Error("boom");
+      });
+      service.onConnectionChange((connected) => changes.push(connected));
+
+      const connectPromise = service.connect();
+      expect(() => fakeClient.emit("connect")).not.toThrow();
+      await connectPromise;
+
+      expect(changes).toEqual([true]);
+    });
+  });
 });

@@ -10,6 +10,12 @@ export interface LogEntry {
 }
 
 /**
+ * Callback for newly-stored log entries. See {@link LogBuffer.subscribe}.
+ * @internal
+ */
+export type LogBufferListener = (entry: LogEntry) => void;
+
+/**
  * Query options for filtering log entries.
  * @internal
  */
@@ -36,6 +42,8 @@ export class LogBuffer {
   private writeIndex = 0;
   private count = 0;
   private readonly capacity: number;
+  /** Subscribers notified of each newly-stored entry (design.md D32; task 5.0). */
+  private readonly listeners: Set<LogBufferListener> = new Set();
 
   constructor(capacity = 1000) {
     this.capacity = capacity;
@@ -48,8 +56,16 @@ export class LogBuffer {
    * A single chunk may contain multiple newline-delimited JSON objects (as pino
    * may deliver batched writes). Each non-empty line is parsed independently and
    * stored; a single malformed line is skipped without dropping the others.
+   *
+   * Newly-stored entries are announced to subscribers (see {@link subscribe}),
+   * but never synchronously: notification is deferred to a later turn of the
+   * event loop (design.md D32, R9; task 5.0a), so `write()` — which every
+   * `logger.*` call in the engine reaches via pino's sink — always returns
+   * before any listener runs. This keeps whatever a listener does (including
+   * fanning out to network connections) off the hot, synchronous logging path.
    */
   write(chunk: string): boolean {
+    const newEntries: LogEntry[] = [];
     for (const line of chunk.split("\n")) {
       if (line.length === 0) continue;
       try {
@@ -57,11 +73,52 @@ export class LogBuffer {
         this.buffer[this.writeIndex] = entry;
         this.writeIndex = (this.writeIndex + 1) % this.capacity;
         if (this.count < this.capacity) this.count++;
+        newEntries.push(entry);
       } catch {
         // Ignore unparseable lines; other valid lines in the chunk still store.
       }
     }
+
+    if (newEntries.length > 0 && this.listeners.size > 0) {
+      setImmediate(() => {
+        for (const entry of newEntries) {
+          this.notify(entry);
+        }
+      });
+    }
+
     return true;
+  }
+
+  /**
+   * Subscribe to newly-stored log entries.
+   *
+   * Returns an unsubscribe function that releases the listener and retains no
+   * reference to it. A listener that throws does not prevent storage (storage
+   * already happened by the time listeners run) and does not stop the
+   * remaining listeners from being notified.
+   */
+  subscribe(listener: LogBufferListener): () => void {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
+
+  /** Notify every subscriber of one entry, isolating a throwing listener. */
+  private notify(entry: LogEntry): void {
+    for (const listener of this.listeners) {
+      try {
+        listener(entry);
+      } catch {
+        // A throwing listener must not prevent storage (already done above)
+        // or stop delivery to the other listeners. Deliberately not logged
+        // here: LogBuffer has no logger, and giving it one would risk
+        // reopening exactly the log-feeds-itself cycle design.md D32 exists
+        // to cut — that boundary belongs to the delivery path that consumes
+        // this subscription, not to the buffer itself.
+      }
+    }
   }
 
   /**
