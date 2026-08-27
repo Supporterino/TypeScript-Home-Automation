@@ -178,8 +178,16 @@ beforeAll(async () => {
 // Test helpers
 // ---------------------------------------------------------------------------
 
+import { mapZ2MExposes } from "../src/types/capabilities.js";
 import type { ZigbeeDevice, ZigbeeDeviceDefinition } from "../src/types/zigbee/bridge.js";
 
+/**
+ * Builds a test device from Zigbee2MQTT-shaped `exposes` fixtures (the same
+ * fixtures this file has always used), mapping them into the capability
+ * vocabulary the way the device registry does before `detectCapabilities`
+ * ever sees them (design.md D22) — `ZigbeeDevice.definition.exposes` is
+ * always already-mapped in production.
+ */
 function makeDevice(exposes: unknown[], overrides: Partial<ZigbeeDevice> = {}): ZigbeeDevice {
   return {
     ieee_address: "0x0000000000000001",
@@ -193,7 +201,7 @@ function makeDevice(exposes: unknown[], overrides: Partial<ZigbeeDevice> = {}): 
       vendor: "TestCo",
       description: "Test device",
       source: "native",
-      exposes,
+      exposes: mapZ2MExposes(exposes),
       options: [],
     } as ZigbeeDeviceDefinition,
     ...overrides,

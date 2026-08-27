@@ -1,5 +1,11 @@
 import { Accessory, Characteristic, Service, uuid } from "hap-nodejs";
 import type { ZigbeeDevice } from "../../types/zigbee/bridge.js";
+import {
+  type DeviceCapabilities,
+  detectCapabilities as detectCapabilitiesFromVocabulary,
+} from "./capability-detection.js";
+
+export type { DeviceCapabilities } from "./capability-detection.js";
 
 // ---------------------------------------------------------------------------
 // HAP category constants
@@ -12,109 +18,38 @@ export const HAP_CATEGORY_OTHER = 1;
 export const HAP_CATEGORY_BRIDGE = 2;
 export const HAP_CATEGORY_LIGHTBULB = 5;
 export const HAP_CATEGORY_SWITCH = 8;
-export const HAP_CATEGORY_SENSOR = 10;
 
-// ---------------------------------------------------------------------------
-// Internal Zigbee2MQTT exposes types
-// ---------------------------------------------------------------------------
-
-interface Z2MExpose {
-  type: string;
-  name?: string;
-  property?: string;
-  features?: Z2MExpose[];
+/**
+ * The seed string hashed into a Zigbee accessory's stable HomeKit UUID.
+ *
+ * Extracted as its own named, hap-nodejs-independent function so a
+ * characterisation test (task 6.15) can freeze it without importing
+ * `hap-nodejs` — a pairing-critical value that must survive any refactor of
+ * this factory unchanged. The IEEE address alone, never the friendly name,
+ * so a rename in Zigbee2MQTT does not orphan the paired accessory.
+ */
+export function zigbeeAccessoryUuidSeed(device: ZigbeeDevice): string {
+  return device.ieee_address;
 }
+export const HAP_CATEGORY_SENSOR = 10;
 
 // ---------------------------------------------------------------------------
 // Device capability detection
 // ---------------------------------------------------------------------------
-
-interface DeviceCapabilities {
-  /** Device has a controllable on/off state and brightness → Lightbulb */
-  isLight: boolean;
-  hasBrightness: boolean;
-  hasColorTemp: boolean;
-  /** Device exposes CIE xy color (reported as color.x / color.y) */
-  hasColorXY: boolean;
-  /** Device exposes hue/saturation color (reported as color.hue / color.saturation) */
-  hasColorHS: boolean;
-  /** Device is a switch or outlet (on/off only, no brightness) */
-  isSwitch: boolean;
-  hasOccupancy: boolean;
-  hasContact: boolean;
-  hasWaterLeak: boolean;
-  hasTemperature: boolean;
-  hasHumidity: boolean;
-  hasBattery: boolean;
-}
+//
+// The actual detection logic lives in `capability-detection.ts`, expressed
+// purely in terms of the source-neutral capability vocabulary (design.md
+// D22). This wrapper is the only place that still knows about `ZigbeeDevice`:
+// it extracts the device's (already-mapped) capability schema and hands it
+// to the neutral detector.
 
 /**
- * Extracts device capabilities by inspecting the Zigbee2MQTT `exposes` array.
+ * Extracts device capabilities from a Zigbee device's capability schema.
  * Returns null when the device has no `definition` (unsupported/unrecognised device).
  */
 export function detectCapabilities(device: ZigbeeDevice): DeviceCapabilities | null {
   if (!device.definition) return null;
-
-  const exposes = device.definition.exposes as Z2MExpose[];
-  const caps: DeviceCapabilities = {
-    isLight: false,
-    hasBrightness: false,
-    hasColorTemp: false,
-    hasColorXY: false,
-    hasColorHS: false,
-    isSwitch: false,
-    hasOccupancy: false,
-    hasContact: false,
-    hasWaterLeak: false,
-    hasTemperature: false,
-    hasHumidity: false,
-    hasBattery: false,
-  };
-
-  for (const expose of exposes) {
-    switch (expose.type) {
-      case "light": {
-        caps.isLight = true;
-        for (const feature of expose.features ?? []) {
-          if (feature.name === "brightness") caps.hasBrightness = true;
-          if (feature.name === "color_temp") caps.hasColorTemp = true;
-          if (feature.name === "color_xy") caps.hasColorXY = true;
-          if (feature.name === "color_hs") caps.hasColorHS = true;
-        }
-        break;
-      }
-      case "switch":
-      case "outlet": {
-        caps.isSwitch = true;
-        break;
-      }
-      default: {
-        // Scalar/binary exposes at the top level
-        switch (expose.name) {
-          case "occupancy":
-            caps.hasOccupancy = true;
-            break;
-          case "contact":
-            caps.hasContact = true;
-            break;
-          case "water_leak":
-            caps.hasWaterLeak = true;
-            break;
-          case "temperature":
-            caps.hasTemperature = true;
-            break;
-          case "humidity":
-            caps.hasHumidity = true;
-            break;
-          case "battery":
-            caps.hasBattery = true;
-            break;
-        }
-      }
-    }
-  }
-
-  return caps;
+  return detectCapabilitiesFromVocabulary(device.definition.exposes);
 }
 
 // ---------------------------------------------------------------------------
@@ -368,7 +303,7 @@ export function createAccessory(
   if (!caps) return null;
 
   const { friendly_name } = device;
-  const accessoryUuid = uuid.generate(device.ieee_address);
+  const accessoryUuid = uuid.generate(zigbeeAccessoryUuidSeed(device));
 
   let category: number = HAP_CATEGORY_OTHER;
   let accessory: Accessory;
