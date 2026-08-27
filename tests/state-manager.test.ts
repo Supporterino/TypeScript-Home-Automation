@@ -1,7 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
 import { access, readFile, unlink, writeFile } from "node:fs/promises";
 import pino from "pino";
-import { StateManager } from "../src/core/state/state-manager.js";
+import { isReservedStateKey, StateManager } from "../src/core/state/state-manager.js";
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 const logger = pino({ level: "silent" });
 const TEST_STATE_FILE = "./test-state.json";
@@ -10,7 +14,7 @@ describe("StateManager", () => {
   let state: StateManager;
 
   beforeEach(() => {
-    state = new StateManager(logger);
+    state = new StateManager(logger, { persist: false });
   });
 
   describe("get / set / delete / has / keys", () => {
@@ -184,7 +188,10 @@ describe("StateManager", () => {
       });
       s1.set("night_mode", true);
       s1.set("count", 42);
-      await s1.save();
+      // flush() (not save()) also cancels the pending coalesced-save timer
+      // that set() just scheduled, so it cannot fire again later and race a
+      // subsequent test that reuses TEST_STATE_FILE.
+      await s1.flush();
 
       const s2 = new StateManager(logger, {
         persist: true,
@@ -229,7 +236,7 @@ describe("StateManager", () => {
       s1.set("good_a", 1);
       s1.set("bad", circular);
       s1.set("good_b", "two");
-      await s1.save();
+      await s1.flush();
 
       const s2 = new StateManager(logger, {
         persist: true,
@@ -247,10 +254,10 @@ describe("StateManager", () => {
         filePath: TEST_STATE_FILE,
       });
       s.set("value", "first");
-      await s.save();
+      await s.flush();
 
       s.set("value", "second");
-      await s.save();
+      await s.flush();
 
       const backup = JSON.parse(await readFile(`${TEST_STATE_FILE}.bak`, "utf-8"));
       expect(backup.value).toBe("first");
@@ -288,9 +295,205 @@ describe("StateManager", () => {
         filePath: TEST_STATE_FILE,
       });
       s.set("key", "value");
-      await s.save();
+      await s.flush();
 
       expect(await fileExists(`${TEST_STATE_FILE}.tmp`)).toBe(false);
+    });
+  });
+
+  // ── Write-behind persistence (2.1-2.5) ─────────────────────────────────
+
+  describe("write-behind flush scheduling", () => {
+    afterEach(async () => {
+      for (const path of [TEST_STATE_FILE, `${TEST_STATE_FILE}.bak`, `${TEST_STATE_FILE}.tmp`]) {
+        try {
+          await unlink(path);
+        } catch {
+          // ignore if file doesn't exist
+        }
+      }
+    });
+
+    it("coalesces many writes within one interval into exactly one save", async () => {
+      let saveCount = 0;
+      const s = new StateManager(logger, {
+        persist: true,
+        filePath: TEST_STATE_FILE,
+        flushIntervalMs: 30,
+      });
+      const originalSave = s.save.bind(s);
+      s.save = (async () => {
+        saveCount++;
+        return originalSave();
+      }) as typeof s.save;
+
+      for (let i = 0; i < 20; i++) {
+        s.set(`key${i}`, i);
+      }
+
+      await sleep(80);
+      expect(saveCount).toBe(1);
+      await s.flush();
+    });
+
+    it("flushes a pending save immediately on flush() before the interval elapses", async () => {
+      const s = new StateManager(logger, {
+        persist: true,
+        filePath: TEST_STATE_FILE,
+        flushIntervalMs: 10_000,
+      });
+      s.set("urgent", "value");
+      await s.flush();
+
+      const onDisk = JSON.parse(await readFile(TEST_STATE_FILE, "utf-8"));
+      expect(onDisk.urgent).toBe("value");
+    });
+
+    it("flushIntervalMs: 0 saves on every mutation", async () => {
+      let saveCount = 0;
+      const s = new StateManager(logger, {
+        persist: true,
+        filePath: TEST_STATE_FILE,
+        flushIntervalMs: 0,
+      });
+      const originalSave = s.save.bind(s);
+      s.save = (async () => {
+        saveCount++;
+        return originalSave();
+      }) as typeof s.save;
+
+      s.set("a", 1);
+      s.set("b", 2);
+      s.set("c", 3);
+      // Immediate-mode saves are fired without being awaited by set(); give
+      // them a turn to run.
+      await sleep(10);
+
+      expect(saveCount).toBe(3);
+    });
+
+    it("schedules no save when persist is false", async () => {
+      const s = new StateManager(logger, { persist: false, filePath: TEST_STATE_FILE });
+      let saveCalled = false;
+      const originalSave = s.save.bind(s);
+      s.save = (async () => {
+        saveCalled = true;
+        return originalSave();
+      }) as typeof s.save;
+
+      s.set("key", "value");
+      await sleep(30);
+
+      expect(saveCalled).toBe(false);
+    });
+
+    it("logs a failed scheduled save without preventing the next mutation from persisting", async () => {
+      // Force the first save to fail: the file's parent "directory" is
+      // actually a plain file, so mkdir(dirname(filePath)) fails with
+      // ENOTDIR. Removing the blocker file lets the next save succeed.
+      const blockerPath = "./test-state-blocker";
+      const nestedFilePath = `${blockerPath}/state.json`;
+
+      const { rm } = await import("node:fs/promises");
+      await rm(blockerPath, { recursive: true, force: true });
+      await writeFile(blockerPath, "not a directory", "utf-8");
+
+      const s = new StateManager(logger, {
+        persist: true,
+        filePath: nestedFilePath,
+        flushIntervalMs: 10,
+      });
+
+      try {
+        s.set("first", 1);
+        await sleep(30); // first scheduled save fails and is logged, not thrown
+
+        await rm(blockerPath, { recursive: true, force: true });
+        s.set("second", 2);
+        await s.flush(); // second save must still succeed
+
+        const onDisk = JSON.parse(await readFile(nestedFilePath, "utf-8"));
+        expect(onDisk.second).toBe(2);
+      } finally {
+        await rm(blockerPath, { recursive: true, force: true });
+      }
+    });
+  });
+
+  // ── Reserved internal namespace (2.9-2.13) ─────────────────────────────
+
+  describe("reserved internal namespace", () => {
+    it("isReservedStateKey identifies the sigil prefix", () => {
+      expect(isReservedStateKey("$internal:rooms")).toBe(true);
+      expect(isReservedStateKey("night_mode")).toBe(false);
+      expect(isReservedStateKey("motion-light:lights_on")).toBe(false);
+    });
+
+    it("an automation named to imitate the prefix cannot fall inside the namespace", () => {
+      // Automation-scoped keys are `<automation-name>:<key>`; automation names
+      // derive from kebab-case filenames and cannot begin with `$`.
+      const impersonating = "internal:rooms"; // no leading "$" — not a valid automation-scoped key match either
+      expect(isReservedStateKey(impersonating)).toBe(false);
+      expect(isReservedStateKey(`$${impersonating}`)).toBe(true);
+    });
+
+    it("set() throws for a reserved key and leaves the store unchanged", () => {
+      expect(() => state.set("$internal:rooms", { a: [] })).toThrow();
+      expect(state.has("$internal:rooms")).toBe(false);
+    });
+
+    it("delete() throws for a reserved key and leaves the store unchanged", () => {
+      state.setInternal("$internal:rooms", { a: [] });
+      expect(() => state.delete("$internal:rooms")).toThrow();
+      expect(state.get("$internal:rooms")).toEqual({ a: [] });
+    });
+
+    it("setInternal() writes a reserved key successfully", () => {
+      state.setInternal("$internal:automation:foo:enabled", false);
+      expect(state.get("$internal:automation:foo:enabled")).toBe(false);
+    });
+
+    it("setInternal() throws when given a non-reserved key", () => {
+      expect(() => state.setInternal("not-reserved", 1)).toThrow();
+    });
+
+    it("deleteInternal() throws when given a non-reserved key", () => {
+      expect(() => state.deleteInternal("not-reserved")).toThrow();
+    });
+
+    it("deleteInternal() removes a reserved key", () => {
+      state.setInternal("$internal:rooms", { a: [] });
+      expect(state.deleteInternal("$internal:rooms")).toBe(true);
+      expect(state.has("$internal:rooms")).toBe(false);
+    });
+
+    it("an internal write survives a restart and reaches a registered listener", async () => {
+      const s1 = new StateManager(logger, { persist: true, filePath: TEST_STATE_FILE });
+      let observed: unknown;
+      s1.onChange("$internal:rooms", (_key, newValue) => {
+        observed = newValue;
+      });
+      s1.setInternal("$internal:rooms", { kitchen: ["lamp"] });
+      expect(observed).toEqual({ kitchen: ["lamp"] });
+      await s1.flush();
+
+      const s2 = new StateManager(logger, { persist: true, filePath: TEST_STATE_FILE });
+      await s2.load();
+      expect(s2.get("$internal:rooms")).toEqual({ kitchen: ["lamp"] });
+
+      for (const path of [TEST_STATE_FILE, `${TEST_STATE_FILE}.bak`, `${TEST_STATE_FILE}.tmp`]) {
+        try {
+          await unlink(path);
+        } catch {
+          // ignore
+        }
+      }
+    });
+
+    it("keys() excludes reserved keys from enumeration", () => {
+      state.set("visible", 1);
+      state.setInternal("$internal:rooms", { a: [] });
+      expect(state.keys()).toEqual(["visible"]);
     });
   });
 });
