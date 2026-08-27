@@ -1,6 +1,6 @@
 import type { Hono } from "hono";
 import type { Logger } from "pino";
-import { collectDefaultMetrics, Gauge, Registry } from "prom-client";
+import { Counter, collectDefaultMetrics, Gauge, Registry } from "prom-client";
 import type { ZigbeeDevice } from "../../types/zigbee/bridge.js";
 import type { DeviceRegistry, DeviceStateChangeHandler } from "../zigbee/device-registry.js";
 import type { CoreContext, ServicePlugin } from "./service-plugin.js";
@@ -46,6 +46,15 @@ export class PrometheusMetricsService implements ServicePlugin {
   private onDeviceAddedCb: ((device: ZigbeeDevice) => void) | null = null;
   private onDeviceRemovedCb: ((device: ZigbeeDevice) => void) | null = null;
   private deviceRegistry: DeviceRegistry | null = null;
+
+  // Unsubscribes from the execution recorder's completion broadcasts
+  // (design.md D18; task 8.8), set in onStart() and cleared in onStop().
+  private unsubscribeFromExecutions: (() => void) | null = null;
+
+  // ── Automation execution counters (design.md D18; task 8.8) ──────────────
+
+  private readonly automationExecutionsCounter: Counter<"automation">;
+  private readonly automationFailuresCounter: Counter<"automation">;
 
   // ── Info ──────────────────────────────────────────────────────────────────
 
@@ -301,11 +310,39 @@ export class PrometheusMetricsService implements ServicePlugin {
       this.ledEnableGauge,
       this.triggerCountGauge,
     ];
+
+    // Automation execution counters (design.md D18; task 8.8). Labelled by
+    // automation name only — cardinality is bounded by the number of
+    // registered automations, and no label is ever derived from a trigger
+    // payload, device name, or state value.
+    this.automationExecutionsCounter = new Counter({
+      name: "automation_executions_total",
+      help: "Total number of automation executions",
+      labelNames: ["automation"],
+      registers: [this.register],
+    });
+    this.automationFailuresCounter = new Counter({
+      name: "automation_failures_total",
+      help: "Total number of automation executions that raised an error",
+      labelNames: ["automation"],
+      registers: [this.register],
+    });
   }
 
   // ── Lifecycle ────────────────────────────────────────────────────────────
 
   async onStart(ctx: CoreContext): Promise<void> {
+    // Wired unconditionally — automation execution counters do not depend
+    // on the device registry (design.md D18; task 8.8).
+    this.unsubscribeFromExecutions = ctx.executionRecorder.onCompletion(
+      ({ automation, outcome }) => {
+        this.automationExecutionsCounter.inc({ automation });
+        if (outcome === "failure") {
+          this.automationFailuresCounter.inc({ automation });
+        }
+      },
+    );
+
     this.deviceRegistry = ctx.deviceRegistry;
     if (!this.deviceRegistry) {
       this.logger.info(
@@ -332,6 +369,9 @@ export class PrometheusMetricsService implements ServicePlugin {
   }
 
   async onStop(): Promise<void> {
+    this.unsubscribeFromExecutions?.();
+    this.unsubscribeFromExecutions = null;
+
     if (this.deviceRegistry) {
       if (this.onDeviceAddedCb) {
         this.deviceRegistry.offDeviceAdded(this.onDeviceAddedCb);

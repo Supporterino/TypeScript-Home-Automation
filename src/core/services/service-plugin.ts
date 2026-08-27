@@ -1,6 +1,7 @@
 import type { Hono } from "hono";
 import type { Logger } from "pino";
 import type { HttpClient } from "../http/http-client.js";
+import type { ExecutionRecorder } from "../observability/execution-recorder.js";
 import type { DeviceRegistry } from "../zigbee/device-registry.js";
 
 /**
@@ -19,6 +20,13 @@ export interface CoreContext {
    * `null` when `DEVICE_REGISTRY_ENABLED` is `false`.
    */
   deviceRegistry: DeviceRegistry | null;
+  /**
+   * Records automation execution history and broadcasts completions.
+   * `PrometheusMetricsService` subscribes here to export the per-automation
+   * execution/failure counters from the same recording path that populates
+   * the history (design.md D18; task 8.8). Always present.
+   */
+  executionRecorder: ExecutionRecorder;
 }
 
 /**
