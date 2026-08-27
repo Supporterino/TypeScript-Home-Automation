@@ -1,7 +1,13 @@
 #!/usr/bin/env bun
 
 import { DebugClient } from "./client.js";
-import { getAutomation, listAutomations, triggerAutomation } from "./commands/automations.js";
+import {
+  getAutomation,
+  getAutomationSource,
+  listAutomations,
+  setAutomationEnabled,
+  triggerAutomation,
+} from "./commands/automations.js";
 import { addConfig, listConfig, removeConfig, switchConfig } from "./commands/config.js";
 import { runDashboard } from "./commands/dashboard.js";
 import { getDevice, listDevices } from "./commands/devices.js";
@@ -20,6 +26,9 @@ Commands:
   automations list                    List all registered automations
   automations get <name>              Get details for a specific automation
   automations trigger <name> <ctx>    Manually trigger an automation
+  automations enable <name>           Enable a disabled automation
+  automations disable <name>          Disable an automation (full stop)
+  automations source <name>           Print the automation's source file
 
   devices list                        List all tracked Zigbee2MQTT devices
   devices get <friendly_name>         Get full detail for a single device
@@ -245,9 +254,23 @@ async function main(): Promise<void> {
           process.exit(1);
         }
         await triggerAutomation(client, name, contextJson, json);
+      } else if (subcommand === "enable" || subcommand === "disable") {
+        const name = args[0];
+        if (!name) {
+          console.error(`Usage: ts-ha automations ${subcommand} <name>`);
+          process.exit(1);
+        }
+        await setAutomationEnabled(client, name, subcommand === "enable", json);
+      } else if (subcommand === "source") {
+        const name = args[0];
+        if (!name) {
+          console.error("Usage: ts-ha automations source <name>");
+          process.exit(1);
+        }
+        await getAutomationSource(client, name, json);
       } else {
         console.error(`Unknown subcommand: automations ${subcommand}`);
-        console.error("Available: list, get, trigger");
+        console.error("Available: list, get, trigger, enable, disable, source");
         process.exit(1);
       }
     } else if (command === "devices" || command === "dv") {
