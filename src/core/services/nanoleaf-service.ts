@@ -79,6 +79,31 @@ export class NanoleafService {
     }
   }
 
+  /**
+   * Return the friendly names of every currently registered device.
+   *
+   * Only names are returned — the auth token embedded in each device's
+   * `baseUrl` is never exposed through this or any other public method.
+   */
+  getDevices(): string[] {
+    return Array.from(this.devices.keys());
+  }
+
+  /**
+   * Check whether a registered device currently responds, without throwing.
+   *
+   * Performs a lightweight device-info request; any failure (network error,
+   * non-2xx response) is treated as unreachable rather than propagated.
+   */
+  async isReachable(name: string): Promise<boolean> {
+    try {
+      await this.getDeviceInfo(name);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   // -------------------------------------------------------------------------
   // Power control
   // -------------------------------------------------------------------------

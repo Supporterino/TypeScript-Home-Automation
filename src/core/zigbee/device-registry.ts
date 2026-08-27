@@ -2,6 +2,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import type { Logger } from "pino";
 import type { Config } from "../../config.js";
+import { mapZ2MExposes } from "../../types/capabilities.js";
 import type { BridgeEventPayload, ZigbeeDevice } from "../../types/zigbee/bridge.js";
 import type { MqttMessageHandler, MqttService } from "../mqtt/mqtt-service.js";
 
@@ -18,7 +19,7 @@ export interface DeviceRegistryPersistenceOptions {
    * Whether to persist the device list and state to disk on shutdown
    * and restore them on startup.
    *
-   * @default false
+   * @default true
    */
   persist?: boolean;
 
@@ -126,7 +127,7 @@ export class DeviceRegistry {
     private readonly niceNames: DeviceNiceNames = {},
     persistenceOptions: DeviceRegistryPersistenceOptions = {},
   ) {
-    this.persist = persistenceOptions.persist ?? false;
+    this.persist = persistenceOptions.persist ?? true;
     this.filePath = persistenceOptions.filePath ?? "./device-registry.json";
   }
 
@@ -366,6 +367,23 @@ export class DeviceRegistry {
   // ---------------------------------------------------------------------------
 
   /**
+   * Maps a device's `definition.exposes` from the raw Zigbee2MQTT shape into
+   * the source-neutral capability vocabulary (design.md D22). Returns a new
+   * device object; the incoming object (and its raw `exposes` payload as
+   * published on the wire) is left untouched.
+   */
+  private mapExposes(device: ZigbeeDevice): ZigbeeDevice {
+    if (!device.definition) return device;
+    return {
+      ...device,
+      definition: {
+        ...device.definition,
+        exposes: mapZ2MExposes(device.definition.exposes as unknown),
+      },
+    };
+  }
+
+  /**
    * Handle a payload from `{prefix}/bridge/devices`.
    * Diffs the incoming list against the current registry and subscribes /
    * unsubscribes per-device topics as needed.
@@ -384,7 +402,7 @@ export class DeviceRegistry {
         continue;
       }
       if (device.type === "Coordinator") continue;
-      incomingMap.set(device.friendly_name, device);
+      incomingMap.set(device.friendly_name, this.mapExposes(device));
     }
 
     // Detect removals — devices in current registry but not in the new list
