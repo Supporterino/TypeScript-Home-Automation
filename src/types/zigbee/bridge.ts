@@ -1,3 +1,5 @@
+import type { Capability } from "../capabilities.js";
+
 // ---------------------------------------------------------------------------
 // Bridge state
 // ---------------------------------------------------------------------------
@@ -17,13 +19,19 @@ export type ZigbeeDeviceType = "Coordinator" | "Router" | "EndDevice";
 /** Interview state as reported by Zigbee2MQTT. */
 export type ZigbeeInterviewState = "PENDING" | "IN_PROGRESS" | "SUCCESSFUL" | "FAILED";
 
-/** Device definition from Zigbee2MQTT — present when `supported` is `true`. */
+/**
+ * Device definition from Zigbee2MQTT — present when `supported` is `true`.
+ *
+ * `exposes` is the bridge's published capability description mapped into the
+ * source-neutral capability vocabulary by the device registry — it is no
+ * longer Zigbee2MQTT's raw `exposes` shape (design.md D22).
+ */
 export interface ZigbeeDeviceDefinition {
   model: string;
   vendor: string;
   description: string;
   source: "native" | "generated" | "external";
-  exposes: unknown[];
+  exposes: Capability[];
   options: unknown[];
 }
 
