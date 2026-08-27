@@ -98,18 +98,33 @@ describe("registerWebUiRoutes — no auth", () => {
       expect(html).toContain('<div id="app">');
     });
 
-    it("HTML includes inlined JavaScript module", async () => {
+    it("HTML references the JS bundle by content-addressed URL rather than inlining it", async () => {
       const server = await makeServer();
       const res = await req(server, "/status");
       const html = await res.text();
-      expect(html).toContain('<script type="module">');
+      expect(html).toMatch(/<script type="module" src="\/status\/assets\/[^"]+\.js"><\/script>/);
     });
 
-    it("HTML includes inlined CSS", async () => {
+    it("HTML references the CSS bundle by content-addressed URL rather than inlining it", async () => {
       const server = await makeServer();
       const res = await req(server, "/status");
       const html = await res.text();
-      expect(html).toContain("<style>");
+      expect(html).toMatch(/<link rel="stylesheet" href="\/status\/assets\/[^"]+\.css" \/>/);
+    });
+
+    it("shell response does not contain bundle content and is small", async () => {
+      const server = await makeServer();
+      const res = await req(server, "/status");
+      const html = await res.text();
+      // Well under any plausible bundle size — the shell references assets,
+      // it does not carry their content.
+      expect(html.length).toBeLessThan(4000);
+    });
+
+    it("is served with a no-store cache directive", async () => {
+      const server = await makeServer();
+      const res = await req(server, "/status");
+      expect(res.headers.get("cache-control")).toBe("no-store");
     });
   });
 
@@ -120,6 +135,77 @@ describe("registerWebUiRoutes — no auth", () => {
       // Hono issues a 302 for programmatic redirects
       expect(res.status).toBe(302);
       expect(res.headers.get("location")).toBe("/status");
+    });
+  });
+});
+
+// ── View segment routing (design.md D7; task 10.1) ────────────────────────
+
+describe("registerWebUiRoutes — view segment allowlist", () => {
+  describe("deep links serve the shell", () => {
+    it.each([
+      "/status/rooms",
+      "/status/rooms/some-room-id",
+      "/status/devices",
+      "/status/devices/zigbee%3A0xabc123",
+      "/status/automations",
+      "/status/automations/my-automation",
+      "/status/state",
+      "/status/logs",
+      "/status/homekit",
+    ])("GET %s serves the dashboard shell", async (path) => {
+      const server = await makeServer();
+      const res = await req(server, path);
+      expect(res.status).toBe(200);
+      expect(res.headers.get("content-type")).toContain("text/html");
+      const html = await res.text();
+      expect(html).toContain('<div id="app">');
+    });
+  });
+
+  describe("an unregistered top-level segment is not the shell", () => {
+    it.each([
+      "/status/nonexistent",
+      "/status/not-a-real-view",
+    ])("GET %s returns a 404, not the dashboard shell", async (path) => {
+      const server = await makeServer();
+      const res = await req(server, path);
+      expect(res.status).toBe(404);
+    });
+  });
+
+  describe("a nested path beneath a registered segment still serves the shell", () => {
+    // Per the Routes requirement, `GET {path}/<ui-segment>/*` matches any
+    // depth beneath a registered top-level segment — the client router, not
+    // the server, decides whether a specific nested path is a view it
+    // recognises. The server's job is only to keep unregistered *top-level*
+    // segments out.
+    it("GET /status/devices/x/y/z/nonexistent-nested still serves the shell", async () => {
+      const server = await makeServer();
+      const res = await req(server, "/status/devices/x/y/z/nonexistent-nested");
+      expect(res.status).toBe(200);
+      expect(res.headers.get("content-type")).toContain("text/html");
+    });
+  });
+
+  describe("root mount does not shadow health probes or webhooks", () => {
+    it("does not shadow a registered webhook when the UI is mounted at /", async () => {
+      const server = await makeServer({ path: "/" });
+      server.registerWebhook("my-hook", ["POST"], async () => {});
+      const res = await server.fetch(
+        new Request("http://localhost/webhook/my-hook", { method: "POST" }),
+      );
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { status: string };
+      expect(body.status).toBe("ok");
+    });
+
+    it("does not serve the shell for a view segment nested beneath a webhook path", async () => {
+      // Sanity check that the view-segment allowlist and /webhook/* never
+      // collide: none of the registered UI segments is named "webhook".
+      const server = await makeServer({ path: "/" });
+      const res = await req(server, "/webhook/rooms");
+      expect(res.headers.get("content-type")).not.toContain("text/html");
     });
   });
 });
