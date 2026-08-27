@@ -11,6 +11,7 @@ export interface ReadinessData {
 
 export interface AutomationInfo {
   name: string;
+  enabled: boolean;
   triggers: { type: string; [key: string]: unknown }[];
 }
 

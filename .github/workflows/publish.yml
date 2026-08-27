@@ -32,6 +32,9 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Build web UI (generates the git-ignored asset manifest typecheck depends on)
+        run: bun run build:web-ui
+
       - name: Typecheck
         run: bun run typecheck
 

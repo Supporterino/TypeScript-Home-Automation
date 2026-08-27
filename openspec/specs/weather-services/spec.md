@@ -6,7 +6,7 @@ Retrieve current weather conditions and forecasts from external weather APIs. Tw
 
 ## Requirements
 
-### Weather Service Interface
+### Requirement: Weather Service Interface
 
 ```ts
 interface WeatherService {
@@ -45,11 +45,11 @@ interface WindData {
 }
 ```
 
-### Caching
+### Requirement: Caching
 
 Both implementations MUST cache responses in-memory with a 5-minute TTL per unique location (latitude/longitude). Cache keys are derived from coordinates rounded to a reasonable precision.
 
-### Open-Meteo Implementation
+### Requirement: Open-Meteo Implementation
 
 **`OpenMeteoService`** MUST:
 - Use the free Open-Meteo API (`https://api.open-meteo.com`)
@@ -63,7 +63,7 @@ interface OpenMeteoConfig {
 }
 ```
 
-### OpenWeatherMap Implementation
+### Requirement: OpenWeatherMap Implementation
 
 **`OpenWeatherMapService`** MUST:
 - Use the One Call API 3.0 (`https://api.openweathermap.org/data/3.0/onecall`)
@@ -78,15 +78,15 @@ interface OpenWeatherMapConfig {
 }
 ```
 
-### Weather Condition Mapping
+### Requirement: Weather Condition Mapping
 
 Both implementations MUST map their API-specific condition codes to a unified `WeatherCondition` union type. The type covers: clear, partly-cloudy, cloudy, overcast, fog, rain (light/moderate/heavy), snow (light/moderate/heavy), thunderstorm, and others.
 
-### Engine Integration
+### Requirement: Engine Integration
 
 The engine registers a weather service under the `"weather"` key in the `ServiceRegistry`. Automations access it via `this.services.get<WeatherService>("weather")`.
 
-### Error Handling
+### Requirement: Error Handling
 
 Both implementations MUST:
 - Log errors on API failures

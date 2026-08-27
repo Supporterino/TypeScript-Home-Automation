@@ -16,7 +16,38 @@ export {
   type Trigger,
   type TriggerContext,
 } from "./core/automation.js";
-export { AutomationManager } from "./core/automation-manager.js";
+export {
+  AutomationManager,
+  type AutomationRelationships,
+  type RequiredServiceStatus,
+} from "./core/automation-manager.js";
+// Unified device sources (design.md D2; task 6.13d) — DeviceSource is
+// exported for inspection and testing; the source set itself is fixed at
+// four and is not a ServiceRegistry registration point.
+export { AggregateDeviceSource, type DeviceSourceStatus } from "./core/device-sources/aggregate.js";
+export {
+  type CommandValidationResult,
+  validateCommand,
+} from "./core/device-sources/command-validation.js";
+export { wireDeviceEvents } from "./core/device-sources/device-event-bridge.js";
+export type {
+  DeviceChangeListener,
+  DeviceCommandOutcome,
+  DeviceDescriptor,
+  DeviceObservation,
+  DeviceSource,
+  ObservationMode,
+} from "./core/device-sources/device-source.js";
+export { NanoleafDeviceSource } from "./core/device-sources/nanoleaf-source.js";
+export {
+  formatQualifiedId,
+  type ParsedQualifiedId,
+  parseQualifiedId,
+  QUALIFIED_ID_DELIMITER,
+} from "./core/device-sources/qualified-id.js";
+export { ShellyDeviceSource } from "./core/device-sources/shelly-source.js";
+export { StateDeviceSource, type StateToggleConfig } from "./core/device-sources/state-source.js";
+export { ZigbeeDeviceSource } from "./core/device-sources/zigbee-source.js";
 // Automation base classes and trigger types
 export { AqaraH1Automation } from "./core/devices/aqara-h1-automation.js";
 export { IkeaRodretAutomation } from "./core/devices/ikea-rodret-automation.js";
@@ -24,12 +55,36 @@ export { IkeaStyrbarAutomation } from "./core/devices/ikea-styrbar-automation.js
 // Engine factory
 export {
   createEngine,
+  createStreamOnlyLogger,
   type Engine,
   type EngineOptions,
   type HomekitServiceContext,
   type HomekitServiceFactory,
   type ServiceFactory,
 } from "./core/engine.js";
+// Realtime event stream
+export {
+  type AutomationEnabledEvent,
+  type AutomationExecutionCompletedEvent,
+  type DeviceAppearedEvent,
+  type DeviceDisappearedEvent,
+  type DeviceReachabilityChangedEvent,
+  type DeviceStateChangedEvent,
+  EventBus,
+  type FellBehindEvent,
+  type LogEntryEvent,
+  type ReadinessChangedEvent,
+  type RoomChangedEvent,
+  type RoomMembershipChangedEvent,
+  type StateChangedEvent,
+  type StreamEvent,
+  type StreamEventListener,
+} from "./core/events/event-bus.js";
+export {
+  DEFAULT_CONNECTION_BUFFER_CAPACITY,
+  DEFAULT_KEEPALIVE_MS,
+  EventStreamHub,
+} from "./core/http/event-stream.js";
 export {
   HttpClient,
   type HttpRequestOptions,
@@ -40,6 +95,27 @@ export { HttpServer, type WebhookHandler } from "./core/http/http-server.js";
 export { LogBuffer, type LogEntry, type LogQuery } from "./core/logging/log-buffer.js";
 // Core services (exposed for advanced usage)
 export { type MqttMessageHandler, MqttService } from "./core/mqtt/mqtt-service.js";
+// Automation execution observability (design.md D11; task 8.x)
+export { currentAutomationName } from "./core/observability/execution-context.js";
+export {
+  type ExecutionCompletionEvent,
+  type ExecutionCompletionListener,
+  type ExecutionOutcome,
+  type ExecutionRecord,
+  ExecutionRecorder,
+  type ObservedWrites,
+} from "./core/observability/execution-recorder.js";
+// User-defined rooms spanning every unified device source (design.md D14)
+export {
+  type AssignDeviceResult,
+  type CreateRoomResult,
+  type DeleteRoomResult,
+  type RenameRoomResult,
+  type Room,
+  RoomManager,
+  type RoomMember,
+  type RoomWithMembers,
+} from "./core/room-manager.js";
 export { CronScheduler } from "./core/scheduling/cron-scheduler.js";
 // HomeKit bridge service
 export {
@@ -47,7 +123,6 @@ export {
   HomekitService,
   type HomekitServiceOptions,
   type HomekitStatus,
-  type StateToggleConfig,
 } from "./core/services/homekit-service.js";
 export { type NanoleafDeviceConfig, NanoleafService } from "./core/services/nanoleaf-service.js";
 // Notification implementations
@@ -89,6 +164,15 @@ export {
   type DeviceRemovedHandler,
   type DeviceStateChangeHandler,
 } from "./core/zigbee/device-registry.js";
+// Source-neutral device capability vocabulary
+export {
+  type Capability,
+  type CapabilityAccess,
+  type CapabilityRange,
+  type CapabilityValueType,
+  mapZ2MExpose,
+  mapZ2MExposes,
+} from "./types/capabilities.js";
 // Nanoleaf types
 export type {
   NanoleafAnimType,

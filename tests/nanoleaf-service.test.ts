@@ -54,6 +54,49 @@ describe("NanoleafService", () => {
     });
   });
 
+  describe("getDevices", () => {
+    it("returns an empty array when no devices are registered", () => {
+      expect(nanoleaf.getDevices()).toEqual([]);
+    });
+
+    it("enumerates registered device names without exposing tokens", () => {
+      nanoleaf.registerMany({
+        a: { host: "192.168.1.60", token: "super-secret-token" },
+        b: { host: "192.168.1.61", token: "bbb" },
+      });
+
+      const devices = nanoleaf.getDevices();
+      expect(devices.sort()).toEqual(["a", "b"]);
+      expect(devices.every((d) => typeof d === "string")).toBe(true);
+
+      // No returned value contains the token, in any form.
+      const serialized = JSON.stringify(devices);
+      expect(serialized).not.toContain("super-secret-token");
+      expect(serialized).not.toContain("bbb");
+    });
+  });
+
+  describe("isReachable", () => {
+    it("returns true when the device responds", async () => {
+      nanoleaf.register("panels", { host: "192.168.1.60", token: "abc123" });
+      expect(await nanoleaf.isReachable("panels")).toBe(true);
+    });
+
+    it("returns false rather than throwing when the device does not respond", async () => {
+      const failingHttp = createMockHttp();
+      (failingHttp.get as ReturnType<typeof mock>).mockImplementation(() =>
+        Promise.resolve({ status: 500, ok: false, headers: new Headers(), data: null }),
+      );
+      const failingNanoleaf = new NanoleafService(failingHttp, logger);
+      failingNanoleaf.register("panels", { host: "192.168.1.60", token: "abc123" });
+      expect(await failingNanoleaf.isReachable("panels")).toBe(false);
+    });
+
+    it("returns false for an unregistered device rather than throwing", async () => {
+      expect(await nanoleaf.isReachable("unknown")).toBe(false);
+    });
+  });
+
   describe("host normalization", () => {
     it("strips http:// scheme", async () => {
       nanoleaf.register("p", { host: "http://192.168.1.60", token: "t" });

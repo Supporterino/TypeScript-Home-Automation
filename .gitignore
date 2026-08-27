@@ -15,6 +15,9 @@ docs/.cache
 # Persisted state
 state.json
 
+# Generated web UI asset manifest (rebuilt by `bun run build:web-ui`)
+src/core/web-ui/assets/manifest.ts
+
 # Environment variables
 .env
 .env.*

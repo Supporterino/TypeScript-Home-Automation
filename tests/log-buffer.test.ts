@@ -169,4 +169,83 @@ describe("LogBuffer", () => {
       expect(buffer.query({ automation: "test", level: 30, limit: 10 })).toHaveLength(0);
     });
   });
+
+  // ---------------------------------------------------------------------------
+  // Subscription (design.md D32, R9; tasks 5.0, 5.0a)
+  // ---------------------------------------------------------------------------
+
+  describe("subscribe", () => {
+    it("delivers each newly-stored entry to a subscriber", async () => {
+      const received: string[] = [];
+      buffer.subscribe((e) => received.push(e.msg));
+
+      buffer.write(entry({ msg: "hello" }));
+      // Notification is deferred past write() (5.0a) — give the event loop a
+      // turn to run it.
+      await new Promise((resolve) => setImmediate(resolve));
+
+      expect(received).toEqual(["hello"]);
+    });
+
+    it("delivers every entry from a multi-line chunk", async () => {
+      const received: string[] = [];
+      buffer.subscribe((e) => received.push(e.msg));
+
+      buffer.write(`${entry({ msg: "a" })}\n${entry({ msg: "b" })}\n`);
+      await new Promise((resolve) => setImmediate(resolve));
+
+      expect(received).toEqual(["a", "b"]);
+    });
+
+    it("write() returns before any listener is invoked", () => {
+      let invoked = false;
+      buffer.subscribe(() => {
+        invoked = true;
+      });
+
+      buffer.write(entry());
+      // Listener runs on a later turn (setImmediate), so it must not have
+      // fired synchronously by the time write() has returned.
+      expect(invoked).toBe(false);
+    });
+
+    it("releasing the subscription stops delivery and retains no reference", async () => {
+      const received: string[] = [];
+      const unsubscribe = buffer.subscribe((e) => received.push(e.msg));
+
+      buffer.write(entry({ msg: "before" }));
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(received).toEqual(["before"]);
+
+      unsubscribe();
+      buffer.write(entry({ msg: "after" }));
+      await new Promise((resolve) => setImmediate(resolve));
+
+      // Nothing further delivered.
+      expect(received).toEqual(["before"]);
+    });
+
+    it("a throwing listener does not prevent storage or the other listeners' delivery", async () => {
+      const received: string[] = [];
+      buffer.subscribe(() => {
+        throw new Error("listener boom");
+      });
+      buffer.subscribe((e) => received.push(e.msg));
+
+      buffer.write(entry({ msg: "hello" }));
+      await new Promise((resolve) => setImmediate(resolve));
+
+      // Storage unaffected.
+      expect(buffer.query()).toHaveLength(1);
+      // The other, non-throwing listener still received it.
+      expect(received).toEqual(["hello"]);
+    });
+
+    it("does not schedule notification when there are no subscribers", () => {
+      // No assertion beyond "does not throw" — this exercises the
+      // `listeners.size > 0` guard so a busy logger with nobody watching
+      // does not pay for a setImmediate per write.
+      expect(() => buffer.write(entry())).not.toThrow();
+    });
+  });
 });

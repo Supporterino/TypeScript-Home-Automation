@@ -6,7 +6,7 @@ Push notification delivery via ntfy.sh (public or self-hosted). Automations call
 
 ## Requirements
 
-### Notification Service Interface
+### Requirement: Notification Service Interface
 
 The system MUST define a `NotificationService` interface:
 ```ts
@@ -15,7 +15,7 @@ interface NotificationService {
 }
 ```
 
-### Notification Options
+### Requirement: Notification Options
 
 ```ts
 interface NotificationOptions {
@@ -29,7 +29,7 @@ interface NotificationOptions {
 type NotificationPriority = "min" | "low" | "default" | "high" | "urgent";
 ```
 
-### ntfy.sh Implementation
+### Requirement: ntfy.sh Implementation
 
 The `NtfyNotificationService` MUST implement `NotificationService`.
 
@@ -63,7 +63,7 @@ interface NtfyConfig {
 4. Log info on success, error on non-OK, error on network failure
 5. Never throw — all failures are caught and logged
 
-### Automation Convenience
+### Requirement: Automation Convenience
 
 The `Automation` base class MUST provide:
 ```ts
@@ -74,6 +74,6 @@ This method:
 - Logs a warning and no-ops if no service is configured
 - Delegates to `service.send()` otherwise
 
-### Engine Integration
+### Requirement: Engine Integration
 
 The engine registers the notification service under the `"notifications"` key in the `ServiceRegistry`. It is exposed as `engine.notifications` (nullable getter) for external access.

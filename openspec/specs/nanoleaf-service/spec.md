@@ -6,7 +6,7 @@ Controls Nanoleaf devices (Light Panels, Canvas, Shapes, Elements, Lines) over t
 
 ## Requirements
 
-### Device Registration
+### Requirement: Device Registration
 
 `register(name, config)` MUST:
 - Accept `NanoleafDeviceConfig`: `{ host: string; token: string; port?: number }`
@@ -23,7 +23,7 @@ Controls Nanoleaf devices (Light Panels, Canvas, Shapes, Elements, Lines) over t
 `registerMany(devices: Record<string, NanoleafDeviceConfig>)` MUST:
 - Call `register()` for each entry
 
-### Response Validation
+### Requirement: Response Validation
 
 Before dereferencing fields of a parsed Nanoleaf response, the system MUST validate that the response body is a non-null object with the expected shape for the operation (e.g. a state query returns a `state` object with `on.value`, `brightness`, etc.). If the body is missing or malformed, the system MUST throw a descriptive `Error` (including the device name) rather than dereferencing `undefined` (which would throw an opaque `TypeError`).
 
@@ -37,7 +37,7 @@ Before dereferencing fields of a parsed Nanoleaf response, the system MUST valid
 - **WHEN** `toggle()` reads a state response whose `on.value` is absent
 - **THEN** the system throws a descriptive error instead of a `cannot read property 'value' of undefined` crash
 
-### Power Control
+### Requirement: Power Control
 
 **`turnOn(name)`** — Set `on.value = true`
 
@@ -45,23 +45,23 @@ Before dereferencing fields of a parsed Nanoleaf response, the system MUST valid
 
 **`toggle(name)`** — Read current state, invert `on.value`
 
-### Brightness
+### Requirement: Brightness
 
 **`setBrightness(name, value, duration?)`** — Set brightness 0–100. Optional duration (seconds) for smooth transition. Clamped to valid range with warning.
 
-### Color
+### Requirement: Color
 
 **`setColor(name, hue, saturation)`** — Set hue (0–360) and saturation (0–100). Both clamped.
 
 **`setColorTemp(name, value)`** — Set color temperature in Kelvin (1200–6500). Clamped.
 
-### State
+### Requirement: State
 
 **`setState(name, state: NanoleafStateSet)`** — Set arbitrary state properties via PUT `/state`.
 
 **`getState(name)`** — Get full device state including power, brightness, hue, sat, ct, colorMode.
 
-### Effects
+### Requirement: Effects
 
 **`getEffects(name)`** — List available effect names. Returns `string[]`.
 
@@ -69,7 +69,7 @@ Before dereferencing fields of a parsed Nanoleaf response, the system MUST valid
 
 **`setEffect(name, effectName)`** — Activate an effect by name.
 
-### Device Info
+### Requirement: Device Info
 
 **`getDeviceInfo(name)`** — Full device info (name, serialNo, manufacturer, model, firmware, effects list, panelLayout).
 
@@ -77,7 +77,7 @@ Before dereferencing fields of a parsed Nanoleaf response, the system MUST valid
 
 **`identify(name)`** — Flash the panels for physical identification.
 
-### Communication
+### Requirement: Communication
 
 All requests use the Nanoleaf OpenAPI:
 - **State changes**: `PUT /api/v1/{token}/state`
@@ -86,12 +86,12 @@ All requests use the Nanoleaf OpenAPI:
 
 The system MUST throw `Error` on non-OK responses with device name, path, and HTTP status.
 
-### Error Handling
+### Requirement: Error Handling
 
 - Unregistered device → throw: `Nanoleaf device "X" is not registered. Call nanoleaf.register("X", { host, token }) first.`
 - HTTP failure → throw with device name, path, and status
 
-### Types
+### Requirement: Types
 
 The service uses typed interfaces from `src/types/nanoleaf.ts`:
 - `NanoleafState` — on, brightness, hue, sat, ct, colorMode
@@ -100,3 +100,52 @@ The service uses typed interfaces from `src/types/nanoleaf.ts`:
 - `NanoleafPanelLayout` — numPanels, sideLength, positionData
 - `NanoleafEffect` — name, animation type, palette, etc.
 - `NanoleafColorMode` — "effect" | "ct" | "hs"
+
+### Requirement: Device Inventory Read Access
+
+The service MUST expose read access to its registered device inventory, so that
+consumers can enumerate Nanoleaf devices without holding a reference to the
+registration call site.
+
+Enumeration MUST return each registered device's name and MUST NOT expose the
+device's access token, either directly or through a constructed URL that embeds
+it. Consumers that need to address a device do so by name through the service's
+existing methods.
+
+Enumeration MUST return an empty result rather than failing when no devices are
+registered.
+
+#### Scenario: Registered devices are enumerable
+
+- **WHEN** two Nanoleaf devices have been registered and the inventory is read
+- **THEN** both device names are returned
+
+#### Scenario: Token is not exposed by enumeration
+
+- **WHEN** the device inventory is read
+- **THEN** no returned value contains the device's access token
+
+#### Scenario: Empty inventory is not an error
+
+- **WHEN** the inventory is read before any device has been registered
+- **THEN** an empty result is returned and no error is raised
+
+### Requirement: Reachability Reporting
+
+The service MUST allow a consumer to determine whether a registered device is
+currently reachable, without that determination throwing when the device is
+offline.
+
+A device that cannot be reached MUST be reported as unreachable. Determining one
+device's reachability MUST NOT affect any other device.
+
+#### Scenario: Offline device is reported, not thrown
+
+- **WHEN** reachability is checked for a device that does not respond
+- **THEN** the device is reported unreachable and no error propagates to the
+  caller
+
+#### Scenario: One offline device does not affect others
+
+- **WHEN** reachability is checked across several devices and one is offline
+- **THEN** the remaining devices are still reported accurately

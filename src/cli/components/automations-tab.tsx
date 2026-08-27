@@ -99,8 +99,9 @@ export function AutomationsTab({
                 <text fg={COLORS.purple} width={2}>
                   {isSelected ? ">" : " "}
                 </text>
-                <text fg={COLORS.cyan} width={nameWidth}>
+                <text fg={auto.enabled ? COLORS.cyan : COLORS.comment} width={nameWidth}>
                   {auto.name}
+                  {auto.enabled ? "" : " (disabled)"}
                 </text>
                 <text fg={COLORS.comment}>{summarizeTriggers(auto.triggers)}</text>
               </box>

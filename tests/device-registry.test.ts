@@ -35,6 +35,26 @@ function makeDevice(friendlyName: string, type: ZigbeeDevice["type"] = "Router")
   };
 }
 
+/**
+ * A device fixture whose `definition.exposes` holds the *raw* Zigbee2MQTT
+ * shape, exactly as it arrives over MQTT — before the registry maps it into
+ * the capability vocabulary. Cast through `unknown` because `ZigbeeDevice`'s
+ * type now declares the already-mapped shape (design.md D22).
+ */
+function makeDeviceWithRawExposes(friendlyName: string, rawExposes: unknown[]): ZigbeeDevice {
+  return {
+    ...makeDevice(friendlyName),
+    definition: {
+      model: "TEST-01",
+      vendor: "TestCo",
+      description: "Test device",
+      source: "native",
+      exposes: rawExposes,
+      options: [],
+    },
+  } as unknown as ZigbeeDevice;
+}
+
 /** Create a mock MqttService that captures all subscribe/unsubscribe/publish calls. */
 function createMockMqtt() {
   const subscriptions: { topic: string; handler: MqttMessageHandler }[] = [];
@@ -227,6 +247,78 @@ describe("DeviceRegistry", () => {
 
       expect(registry.hasDevice("sensor")).toBe(true);
       expect(registry.hasDevice("bulb")).toBe(false);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Capability schema mapping (design.md D22; tasks 4.1b, 4.2)
+  // ---------------------------------------------------------------------------
+
+  describe("capability schema", () => {
+    beforeEach(() => {
+      registry.start();
+    });
+
+    it("maps a device's raw exposes into the capability vocabulary on arrival", () => {
+      const device = makeDeviceWithRawExposes("bulb", [
+        {
+          type: "light",
+          features: [
+            { type: "binary", name: "state", property: "state", access: 7 },
+            {
+              type: "numeric",
+              name: "brightness",
+              property: "brightness",
+              access: 7,
+              value_min: 0,
+              value_max: 254,
+            },
+          ],
+        },
+      ]);
+      mqttMock.emit("zigbee2mqtt/bridge/devices", [device] as unknown as Record<string, unknown>);
+
+      const stored = registry.getDevice("bulb");
+      const exposes = stored?.definition?.exposes;
+      expect(exposes).toHaveLength(1);
+      expect(exposes?.[0].kind).toBe("light");
+      expect(exposes?.[0].valueType).toBe("composite");
+      expect(exposes?.[0].features).toHaveLength(2);
+      expect(exposes?.[0].features?.[1].range).toEqual({ min: 0, max: 254 });
+    });
+
+    it("describes a device published with no exposes as having an empty schema", () => {
+      mqttMock.emit("zigbee2mqtt/bridge/devices", [makeDevice("sensor")] as unknown as Record<
+        string,
+        unknown
+      >);
+
+      // makeDevice() has `definition: null` — no schema published at all.
+      expect(registry.getDevice("sensor")?.definition).toBeNull();
+    });
+
+    it("preserves an unrecognised capability entry rather than discarding it", () => {
+      const device = makeDeviceWithRawExposes("mystery", [
+        { type: "some-future-kind", name: "widget", access: 1 },
+      ]);
+      mqttMock.emit("zigbee2mqtt/bridge/devices", [device] as unknown as Record<string, unknown>);
+
+      const exposes = registry.getDevice("mystery")?.definition?.exposes;
+      expect(exposes).toHaveLength(1);
+      expect(exposes?.[0].kind).toBe("some-future-kind");
+      expect(exposes?.[0].raw).toEqual({ type: "some-future-kind", name: "widget", access: 1 });
+    });
+
+    it("re-maps exposes on a definition update", () => {
+      const first = makeDeviceWithRawExposes("bulb", [{ type: "switch", features: [] }]);
+      mqttMock.emit("zigbee2mqtt/bridge/devices", [first] as unknown as Record<string, unknown>);
+      expect(registry.getDevice("bulb")?.definition?.exposes[0].kind).toBe("switch");
+
+      const second = makeDeviceWithRawExposes("bulb", [
+        { type: "numeric", name: "battery", property: "battery", access: 1 },
+      ]);
+      mqttMock.emit("zigbee2mqtt/bridge/devices", [second] as unknown as Record<string, unknown>);
+      expect(registry.getDevice("bulb")?.definition?.exposes[0].kind).toBe("numeric");
     });
   });
 
@@ -699,6 +791,25 @@ describe("DeviceRegistry", () => {
       );
     }
 
+    it("defaults persist to true when no persistence options are given", async () => {
+      // No `persistenceOptions` argument at all — exercises the class's own
+      // default (design.md D6; task 2.7), not merely config.ts's default.
+      const tmpFile = `/tmp/ts-ha-test-default-persist-${Date.now()}.json`;
+      const { writeFile: wf, mkdir: mk } = await import("node:fs/promises");
+      const { dirname: dn } = await import("node:path");
+      await mk(dn(tmpFile), { recursive: true });
+      await wf(tmpFile, JSON.stringify({ devices: [makeDevice("lamp")], states: {} }), "utf-8");
+
+      const registry = new DeviceRegistry(mqttMock.mqtt, config, logger, {}, { filePath: tmpFile });
+      await registry.load();
+      // If persist defaulted to false, load() would be a no-op and the
+      // seeded device would not appear.
+      expect(registry.getDevices().some((d) => d.friendly_name === "lamp")).toBe(true);
+
+      const { unlink } = await import("node:fs/promises");
+      await unlink(tmpFile).catch(() => {});
+    });
+
     it("load() is a no-op when persist is false", async () => {
       const registry = makePersistedRegistry({ persist: false });
       // Should not throw and should leave maps empty
@@ -786,6 +897,45 @@ describe("DeviceRegistry", () => {
       expect(regB.getDevice("sensor")?.friendly_name).toBe("sensor");
       expect(regB.getDeviceState("bulb")).toEqual({ state: "ON", brightness: 200 });
       expect(regB.getDeviceState("sensor")).toEqual({ contact: false, battery: 88 });
+    });
+
+    it("restores a device's mapped capability schema from a snapshot before the bridge republishes", async () => {
+      const tmpFile = `/tmp/ts-ha-test-capability-roundtrip-${Date.now()}.json`;
+
+      const freshMqtt = createMockMqtt();
+      const regA = new DeviceRegistry(
+        freshMqtt.mqtt,
+        { ...config, deviceRegistry: { enabled: true, persist: true, filePath: tmpFile } },
+        logger,
+        {},
+        { persist: true, filePath: tmpFile },
+      );
+      regA.start();
+      const device = makeDeviceWithRawExposes("bulb", [
+        { type: "numeric", name: "brightness", property: "brightness", access: 7, value_max: 254 },
+      ]);
+      freshMqtt.emit("zigbee2mqtt/bridge/devices", [device] as unknown as Record<string, unknown>);
+      await regA.save();
+
+      // A brand-new registry, loaded from disk — simulating a restart before
+      // the bridge has republished anything.
+      const regB = new DeviceRegistry(
+        createMockMqtt().mqtt,
+        { ...config, deviceRegistry: { enabled: true, persist: true, filePath: tmpFile } },
+        logger,
+        {},
+        { persist: true, filePath: tmpFile },
+      );
+      await regB.load();
+
+      const exposes = regB.getDevice("bulb")?.definition?.exposes;
+      expect(exposes).toHaveLength(1);
+      expect(exposes?.[0].kind).toBe("numeric");
+      expect(exposes?.[0].property).toBe("brightness");
+      expect(exposes?.[0].range).toEqual({ min: undefined, max: 254 });
+
+      const { unlink } = await import("node:fs/promises");
+      await unlink(tmpFile).catch(() => {});
     });
 
     it("load() filters out Coordinator from persisted device list", async () => {

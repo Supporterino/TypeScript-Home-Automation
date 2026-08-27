@@ -2,11 +2,19 @@ import pino, { type Logger, multistream } from "pino";
 import { type Config, loadConfig } from "../config.js";
 import type { NotificationService } from "../types/notification.js";
 import type { WeatherService } from "../types/weather.js";
-import { AutomationManager } from "./automation-manager.js";
+import { AUTOMATION_ENABLED_PREFIX, AutomationManager } from "./automation-manager.js";
+import { AggregateDeviceSource } from "./device-sources/aggregate.js";
+import { wireDeviceEvents } from "./device-sources/device-event-bridge.js";
+import { NanoleafDeviceSource } from "./device-sources/nanoleaf-source.js";
+import { ShellyDeviceSource } from "./device-sources/shelly-source.js";
+import { StateDeviceSource, type StateToggleConfig } from "./device-sources/state-source.js";
+import { ZigbeeDeviceSource } from "./device-sources/zigbee-source.js";
+import { EventBus } from "./events/event-bus.js";
 import { HttpClient } from "./http/http-client.js";
 import { HttpServer } from "./http/http-server.js";
 import { LogBuffer } from "./logging/log-buffer.js";
 import { MqttService } from "./mqtt/mqtt-service.js";
+import { ROOM_ASSIGNMENT_PREFIX, ROOM_PREFIX, type Room, RoomManager } from "./room-manager.js";
 import { CronScheduler } from "./scheduling/cron-scheduler.js";
 import type { HomekitService } from "./services/homekit-service.js";
 import type { NanoleafService } from "./services/nanoleaf-service.js";
@@ -18,12 +26,33 @@ import type {
   ShellyServiceContext,
   ShellyServiceFactory,
 } from "./services/shelly-service.js";
-import { StateManager, type StateManagerOptions } from "./state/state-manager.js";
+import {
+  isReservedStateKey,
+  StateManager,
+  type StateManagerOptions,
+} from "./state/state-manager.js";
 import {
   type DeviceNiceNames,
   DeviceRegistry,
   type DeviceRegistryPersistenceOptions,
 } from "./zigbee/device-registry.js";
+
+/**
+ * Construct the stdout-only logger used exclusively by the event stream's
+ * delivery path (design.md D32; tasks 5.0b, 5.0c).
+ *
+ * A pino child inherits its parent's destination set, so
+ * `logger.child(...)` would still write to the `LogBuffer` — which is exactly
+ * the cycle D32 exists to cut, since the delivery path itself logs (fan-out
+ * failures, per-connection overflow, the fell-behind signal). This is
+ * therefore always a second, independently constructed pino instance, built
+ * unconditionally — even when the caller supplies their own `options.logger`
+ * — because the engine cannot know whether a caller-supplied logger writes to
+ * the buffer either.
+ */
+export function createStreamOnlyLogger(logLevel: Config["logLevel"]): Logger {
+  return pino({ level: logLevel });
+}
 
 /**
  * Factory function type for optional services.
@@ -42,20 +71,17 @@ export type ServiceFactory<T> = (http: HttpClient, logger: Logger) => T;
 /**
  * Dependency context passed to a `HomekitServiceFactory`.
  *
- * Carries every dependency HomeKit may need — the shared `HttpClient`, a scoped
- * `Logger`, the `MqttService`, the optional Zigbee `DeviceRegistry`, the
- * optional `ShellyService`, and the shared `StateManager`. All are constructed
- * synchronously inside `createEngine()` before the factory is called, so there
- * is no circular reference. Using a single context object keeps future
- * cross-device integrations additive with no further signature churn.
+ * Narrowed to `http`, `logger`, and the aggregate device accessor (task
+ * 6.16b) — `HomekitService` reads every device family through
+ * `AggregateDeviceSource` now, so it no longer needs `MqttService`, the
+ * Zigbee `DeviceRegistry`, or `ShellyService` directly. **BREAKING** for any
+ * deployment supplying its own HomeKit factory built against the previous
+ * five-field context.
  */
 export interface HomekitServiceContext {
   http: HttpClient;
   logger: Logger;
-  mqtt: MqttService;
-  deviceRegistry: DeviceRegistry | null;
-  shelly: ShellyService | null;
-  state: StateManager;
+  devices: AggregateDeviceSource;
 }
 
 /**
@@ -66,8 +92,8 @@ export interface HomekitServiceContext {
  *
  * @example
  * ```ts
- * homekit: ({ logger, mqtt, deviceRegistry, shelly, state }) =>
- *   new HomekitService(mqtt, logger, deviceRegistry, shelly, state, {
+ * homekit: ({ logger, devices }) =>
+ *   new HomekitService(logger, devices, {
  *     pinCode: "031-45-154",
  *   }),
  * ```
@@ -165,6 +191,33 @@ export interface EngineOptions {
   };
 
   /**
+   * Boolean `StateManager` keys to present as devices through the unified
+   * device source layer, controllable from the web UI and the HomeKit
+   * bridge alike.
+   *
+   * This is engine-level configuration rather than a `HomekitService`
+   * option (design.md D19): a source consumed by more than one sink cannot
+   * live inside one of them, or state toggles would disappear from the web
+   * UI whenever HomeKit is disabled. Passing `stateToggles` under
+   * `services.homekit`'s options is rejected — see
+   * `HomekitServiceOptions.stateToggles`.
+   *
+   * @default []
+   *
+   * @example
+   * ```ts
+   * const engine = createEngine({
+   *   automationsDir: "...",
+   *   stateToggles: [
+   *     { stateKey: "night_mode", name: "Night Mode" },
+   *     { stateKey: "away_mode", name: "Away Mode" },
+   *   ],
+   * });
+   * ```
+   */
+  stateToggles?: StateToggleConfig[];
+
+  /**
    * Optional services to register with the engine.
    *
    * Well-known service keys (`notifications`, `weather`, `shelly`, `nanoleaf`)
@@ -224,6 +277,17 @@ export interface Engine {
   /** The logger instance. */
   readonly logger: Logger;
 
+  /**
+   * A second, independently-constructed pino instance that writes to stdout
+   * only, bypassing the log buffer entirely (design.md D32). Used solely by
+   * the realtime event stream's delivery path, so that path's own logging
+   * can never feed back into the log category it delivers (task 5.0c).
+   */
+  readonly streamLogger: Logger;
+
+  /** The realtime event stream's shared publish/subscribe hub. */
+  readonly events: EventBus;
+
   /** The MQTT service (for advanced usage). */
   readonly mqtt: MqttService;
 
@@ -247,6 +311,20 @@ export interface Engine {
    * `null` when `DEVICE_REGISTRY_ENABLED` is `false` (the default).
    */
   readonly deviceRegistry: DeviceRegistry | null;
+
+  /**
+   * The aggregate device accessor spanning every unified device source
+   * (Zigbee, Shelly, Nanoleaf, state toggles). Always present — an
+   * unconfigured or disabled source is reported unavailable rather than
+   * making this `null` (design.md D2; task 6.13a).
+   */
+  readonly devices: AggregateDeviceSource;
+
+  /**
+   * User-defined rooms grouping devices across every unified device source
+   * (design.md D14). Always present, like `devices`.
+   */
+  readonly rooms: RoomManager;
 }
 
 /**
@@ -292,6 +370,21 @@ export function createEngine(options: EngineOptions): Engine {
       return pino({ level: config.logLevel }, streams);
     })();
 
+  // A second, independently-constructed instance — never a child of `logger`
+  // — so the event stream's delivery path cannot feed back into the log
+  // category it delivers (design.md D32; tasks 5.0b, 5.0c). Constructed
+  // unconditionally, even when `options.logger` was supplied.
+  const streamLogger = createStreamOnlyLogger(config.logLevel);
+
+  // The realtime event stream's shared publish/subscribe hub (task 5.1).
+  const eventBus = new EventBus();
+
+  // Log category: relay every newly-stored entry (design.md D32; consumes
+  // the 5.0 subscription, deferred past LogBuffer.write() per 5.0a).
+  logBuffer.subscribe((entry) => {
+    eventBus.emit({ category: "log", entry });
+  });
+
   // Initialize core services
   const mqtt = new MqttService(config, logger.child({ service: "mqtt" }));
   const cron = new CronScheduler(logger.child({ service: "cron" }));
@@ -299,7 +392,53 @@ export function createEngine(options: EngineOptions): Engine {
   const stateManager = new StateManager(logger.child({ service: "state" }), {
     persist: options.state?.persist ?? config.state.persist,
     filePath: options.state?.filePath ?? config.state.filePath,
+    flushIntervalMs: options.state?.flushIntervalMs ?? config.state.flushIntervalMs,
   });
+
+  // State/automation/room categories: every state mutation is routed to
+  // exactly one typed category. Reserved keys under the automation-enabled
+  // namespace become "automation" events; reserved keys under the room
+  // namespaces become "room"/"room_membership" deltas; every other reserved
+  // key is excluded from the stream entirely (design.md D20; task 5.7).
+  // Everything else is an ordinary "state" event.
+  stateManager.onAnyChange((key, newValue, oldValue) => {
+    if (key.startsWith(AUTOMATION_ENABLED_PREFIX)) {
+      const name = key.slice(AUTOMATION_ENABLED_PREFIX.length);
+      eventBus.emit({ category: "automation", name, enabled: Boolean(newValue) });
+      return;
+    }
+    if (key.startsWith(ROOM_PREFIX)) {
+      const id = key.slice(ROOM_PREFIX.length);
+      eventBus.emit({ category: "room", id, room: (newValue as Room | undefined) ?? null });
+      return;
+    }
+    if (key.startsWith(ROOM_ASSIGNMENT_PREFIX)) {
+      const qualifiedId = key.slice(ROOM_ASSIGNMENT_PREFIX.length);
+      eventBus.emit({
+        category: "room_membership",
+        qualifiedId,
+        roomId: (newValue as string | undefined) ?? null,
+      });
+      return;
+    }
+    if (isReservedStateKey(key)) {
+      return;
+    }
+    eventBus.emit({ category: "state", key, value: newValue, previous: oldValue });
+  });
+
+  // Readiness category: recomputed from MQTT connectivity and whether the
+  // engine has finished starting, and emitted only when it actually changes.
+  let lastReadiness: boolean | null = null;
+  const engineStartedRef = { started: false };
+  const emitReadinessIfChanged = (): void => {
+    const ready = mqtt.isConnected && engineStartedRef.started;
+    if (ready !== lastReadiness) {
+      lastReadiness = ready;
+      eventBus.emit({ category: "readiness", ready });
+    }
+  };
+  mqtt.onConnectionChange(() => emitReadinessIfChanged());
 
   // ── Service registry ──────────────────────────────────────────────────────
 
@@ -376,11 +515,55 @@ export function createEngine(options: EngineOptions): Engine {
     );
   }
 
-  // HomekitService needs mqtt, deviceRegistry, shelly, and state in addition to
-  // the standard (http, logger) pair, so it cannot use the generic
-  // resolveService helper. It is resolved here — after deviceRegistry,
-  // shellyService, and stateManager are constructed — via a single context
-  // object with no circular reference.
+  // ── Unified device sources ────────────────────────────────────────────────
+  //
+  // Constructed here — after the device registry and every optional service
+  // above it, before HomekitService, the HTTP server, and automation
+  // discovery — so no automation's onStart() ever observes a partially
+  // constructed device surface (design.md D2; task 6.13a), and so
+  // HomekitService (below) can be given the aggregate accessor rather than
+  // the individual services it used to depend on (task 6.16b). The source
+  // set is fixed at four and is not a ServiceRegistry registration point
+  // (task 6.13d): `deviceSources` is started/stopped directly by the engine,
+  // symmetrically with `deviceRegistry`.
+  const deviceSources = new AggregateDeviceSource(
+    [
+      new ZigbeeDeviceSource(deviceRegistry, mqtt, logger.child({ service: "devices-zigbee" })),
+      new ShellyDeviceSource(
+        shellyService,
+        mqtt,
+        logger.child({ service: "devices-shelly" }),
+        config.devices.shellyPollMs,
+      ),
+      new NanoleafDeviceSource(
+        nanoleafService,
+        logger.child({ service: "devices-nanoleaf" }),
+        config.devices.nanoleafPollMs,
+      ),
+      new StateDeviceSource(
+        stateManager,
+        options.stateToggles ?? [],
+        logger.child({ service: "devices-state" }),
+      ),
+    ],
+    logger.child({ service: "devices" }),
+  );
+
+  // User-defined rooms span every unified device source, so they are
+  // constructed right after `deviceSources` — before HomekitService, the
+  // HTTP server, and automation discovery — for the same reason
+  // `deviceSources` itself is constructed here (design.md D14; task 9.1).
+  const roomManager = new RoomManager(
+    stateManager,
+    deviceSources,
+    logger.child({ service: "rooms" }),
+  );
+
+  // HomekitService reads every device family through `deviceSources` now
+  // (task 6.16b) — it no longer needs mqtt, deviceRegistry, shelly, or state
+  // directly, so it cannot use the generic resolveService helper only
+  // because of its distinct context shape, not because of a dependency
+  // ordering constraint.
   const homekitService =
     homekitValue === undefined
       ? null
@@ -388,10 +571,7 @@ export function createEngine(options: EngineOptions): Engine {
         ? homekitValue({
             http,
             logger: logger.child({ service: "homekit" }),
-            mqtt,
-            deviceRegistry,
-            shelly: shellyService,
-            state: stateManager,
+            devices: deviceSources,
           })
         : homekitValue;
 
@@ -449,11 +629,20 @@ export function createEngine(options: EngineOptions): Engine {
     deviceRegistry,
   );
 
+  // Broadcasts the automation_execution category, derived from the same
+  // ExecutionRecorder.run() call that populates execution history, so the
+  // two can never disagree (design.md D11, D18; task 8.7).
+  manager.getExecutionRecorder().onCompletion(({ automation, trigger, durationMs, outcome }) => {
+    eventBus.emit({ category: "automation_execution", automation, trigger, durationMs, outcome });
+  });
+
   let started = false;
 
   return {
     config,
     logger,
+    streamLogger,
+    events: eventBus,
     mqtt,
     http,
     state: stateManager,
@@ -463,6 +652,8 @@ export function createEngine(options: EngineOptions): Engine {
     services: serviceRegistry,
     manager,
     deviceRegistry,
+    devices: deviceSources,
+    rooms: roomManager,
 
     async start(): Promise<void> {
       if (started) {
@@ -482,7 +673,9 @@ export function createEngine(options: EngineOptions): Engine {
 
       try {
         httpServer?.setManagers(stateManager, manager, logBuffer);
-        httpServer?.setDeviceRegistry(deviceRegistry);
+        httpServer?.setDeviceSources(deviceSources);
+        httpServer?.setRoomManager(roomManager);
+        httpServer?.setEventStream(eventBus, streamLogger);
 
         // Mount routes from service plugins before the server starts listening.
         if (httpServer) {
@@ -501,8 +694,25 @@ export function createEngine(options: EngineOptions): Engine {
         await deviceRegistry?.load();
 
         // Run onStart() lifecycle hooks for all registered ServicePlugins.
-        const coreCtx: CoreContext = { http, logger, deviceRegistry };
+        const coreCtx: CoreContext = {
+          http,
+          logger,
+          deviceRegistry,
+          executionRecorder: manager.getExecutionRecorder(),
+        };
         await serviceRegistry.startAll(coreCtx);
+
+        // Started before automation discovery, so no automation's onStart()
+        // ever observes a partially constructed device surface (task 6.13a).
+        await deviceSources.start();
+
+        // Bridges device changes onto the event stream's device categories
+        // (design.md D1; tasks 7.4, 7.5). Re-wired on every start() since
+        // `deviceSources.stop()` clears its listener set; seeding from
+        // `list()` here means whatever's already known at this point in
+        // startup (typically nothing yet, since MQTT has not connected)
+        // never itself emits a spurious `device_appeared`.
+        wireDeviceEvents(deviceSources, eventBus);
 
         await mqtt.connect();
         deviceRegistry?.start();
@@ -510,6 +720,8 @@ export function createEngine(options: EngineOptions): Engine {
         await manager.discoverAndRegister(options.automationsDir, recursive);
         started = true;
         httpServer?.setEngineStarted(true);
+        engineStartedRef.started = true;
+        emitReadinessIfChanged();
         logger.info(
           {
             automations: manager.listAutomations().length,
@@ -536,6 +748,11 @@ export function createEngine(options: EngineOptions): Engine {
           /* swallow */
         }
         try {
+          await deviceSources.stop();
+        } catch {
+          /* swallow */
+        }
+        try {
           await serviceRegistry.stopAll();
         } catch {
           /* swallow */
@@ -556,6 +773,8 @@ export function createEngine(options: EngineOptions): Engine {
           /* swallow */
         }
         started = false;
+        engineStartedRef.started = false;
+        emitReadinessIfChanged();
         throw err;
       }
     },
@@ -580,13 +799,18 @@ export function createEngine(options: EngineOptions): Engine {
 
       try {
         await safe(() => httpServer?.setEngineStarted(false), "unmark-http-started");
+        engineStartedRef.started = false;
+        emitReadinessIfChanged();
         await safe(() => manager.stopAll(), "stop-automations");
         await safe(() => cron.stopAll(), "stop-cron");
+        await safe(() => deviceSources.stop(), "stop-device-sources");
         // Run onStop() lifecycle hooks for all registered ServicePlugins.
         await safe(() => serviceRegistry.stopAll(), "stop-service-plugins");
         await safe(() => deviceRegistry?.save(), "save-device-registry");
         await safe(() => deviceRegistry?.stop(), "stop-device-registry");
-        await safe(() => stateManager.save(), "save-state");
+        // flush() (not save()) so a pending coalesced write from the current
+        // debounce window is not lost on shutdown (design.md D6; task 2.3).
+        await safe(() => stateManager.flush(), "save-state");
         await safe(() => mqtt.disconnect(), "disconnect-mqtt");
         await safe(() => httpServer?.stop(), "stop-http");
       } finally {

@@ -28,6 +28,7 @@ function createEngine(options: EngineOptions): Engine
 | `logger` | `Logger` | _(auto)_ | Provide a custom pino logger |
 | `state` | `StateManagerOptions` | _(from env)_ | State persistence options |
 | `deviceRegistry` | `object` | _(from env)_ | Device registry options (see below) |
+| `stateToggles` | `StateToggleConfig[]` | `[]` | Boolean `StateManager` keys presented as devices through the unified device layer (Zigbee/Shelly/Nanoleaf/state toggles) — controllable from the web UI and HomeKit alike |
 | `services` | `object` | `{}` | Optional service instances or factories |
 
 `deviceRegistry` sub-options:
@@ -63,15 +64,13 @@ A factory function that receives the engine's shared HTTP client and a scoped lo
 interface HomekitServiceContext {
   http: HttpClient;
   logger: Logger;
-  mqtt: MqttService;
-  deviceRegistry: DeviceRegistry | null;
-  shelly: ShellyService | null;
+  devices: AggregateDeviceSource;
 }
 
 type HomekitServiceFactory = (ctx: HomekitServiceContext) => HomekitService;
 ```
 
-Dedicated factory for the HomeKit bridge. It receives a single `HomekitServiceContext` object carrying the shared HTTP client, a scoped logger, the MQTT service, the optional device registry, and the optional Shelly service. All are resolved by the engine before the factory is called.
+Dedicated factory for the HomeKit bridge. It receives a single `HomekitServiceContext` object carrying the shared HTTP client, a scoped logger, and the engine's aggregate device accessor. All are resolved by the engine before the factory is called. **Breaking change (task 6.16b):** the context previously also carried `mqtt`, `deviceRegistry`, `shelly`, and `state` directly; `HomekitService` now reads every device family through `devices` instead, since it consumes the shared device-source layer rather than talking to Zigbee2MQTT, MQTT, or Shelly RPC itself.
 
 #### `ShellyServiceFactory`
 
@@ -396,16 +395,59 @@ type WebhookHandler = (context: {
 | `GET` | `/api/status` | Yes | Engine + MQTT readiness |
 | `GET` | `/api/automations` | Yes | List all automations |
 | `GET` | `/api/automations/:name` | Yes | Single automation details |
-| `POST` | `/api/automations/:name/trigger` | Yes | Manually trigger an automation |
+| `PUT` | `/api/automations/:name/enabled` | Yes | Enable or disable an automation |
+| `GET` | `/api/automations/:name/source` | Yes | Read the automation's source file |
+| `GET` | `/api/automations/:name/history` | Yes | Recent execution history (newest first) |
+| `GET` | `/api/automations/:name/relationships` | Yes | Declared and observed relationships |
+| `POST` | `/api/automations/:name/trigger` | Yes | Manually trigger an automation. Returns `404` if the automation does not exist, or `409` if it exists but is currently disabled — a disabled automation is not run, since manual triggering would otherwise be a second, undocumented way to bypass the "off" switch (design.md D27). |
 | `GET` | `/api/state` | Yes | All state keys and values |
 | `GET` | `/api/state/:key` | Yes | Single state value |
 | `PUT` | `/api/state/:key` | Yes | Set a state value |
 | `DELETE` | `/api/state/:key` | Yes | Delete a state key |
 | `GET` | `/api/logs` | Yes | Query log buffer (`?automation=&level=&limit=`) |
-| `GET` | `/api/devices` | Yes | List all tracked Zigbee devices |
-| `GET` | `/api/devices/:friendlyName` | Yes | Single device with merged state |
+| `GET` | `/api/device-catalog` | Yes | List devices from every available source |
+| `GET` | `/api/device-catalog/:qualifiedId` | Yes | Single device by qualified identifier |
+| `POST` | `/api/device-catalog/:qualifiedId/command` | Yes | Issue a validated command to a device |
+| `PUT` | `/api/device-catalog/:qualifiedId/room` | Yes | Assign a device to a room (`{ roomId }`) |
+| `DELETE` | `/api/device-catalog/:qualifiedId/room` | Yes | Clear a device's room assignment |
+| `GET` | `/api/rooms` | Yes | List rooms with membership (including unavailable members) |
+| `GET` | `/api/rooms/unassigned` | Yes | Present devices belonging to no room |
+| `POST` | `/api/rooms` | Yes | Create a room (`{ name }`) |
+| `PUT` | `/api/rooms/:id` | Yes | Rename a room (`{ name }`) |
+| `DELETE` | `/api/rooms/:id` | Yes | Delete a room — its devices become unassigned |
+| `GET` | `/api/events` | Yes | Realtime server-sent event stream |
 
-Authentication uses `Authorization: Bearer <token>` header or a session cookie. Set `HTTP_TOKEN` to enable; leave empty for no authentication.
+`GET /api/devices` and `GET /api/devices/:friendlyName` (Zigbee-only) are removed — they return `410`. Use `/api/device-catalog`, which spans every device source (Zigbee, Shelly, Nanoleaf, and state toggles), addressed by [qualified identifier](#qualified-device-identifier) (design.md R13).
+
+`PUT /api/state/:key` and `DELETE /api/state/:key` return `400` when `key` falls inside the reserved internal namespace (the `$internal:` prefix — rooms, automation enabled flags). `GET /api/state` never lists a reserved key, in either the returned map or its `count`. See [State Management](state.md#reserved-internal-namespace) (design.md D20).
+
+Room creation and rename return `409` for a name already in use. Unknown room or unknown device-room assignment target returns `404`. Rooms are user-defined groupings that span every device source; a device belongs to at most one room, and an absent member (unpaired, or its source disabled) is retained and reported unavailable rather than dropped (design.md D14).
+
+Authentication uses `Authorization: Bearer <token>` header or a session cookie (`ts-ha-session`, `HttpOnly`, `SameSite=Strict`) named identically to the web UI's session cookie — the two share one `HTTP_TOKEN` secret. Set `HTTP_TOKEN` to enable; leave empty for no authentication. When empty, every route above — including `GET /api/automations/:name/source` — is reachable with no authentication; see [Configuration](configuration.md#security-note-automation-source-is-readable-without-authentication) (design.md D10, R4).
+
+### Qualified device identifier
+
+`/api/device-catalog/:qualifiedId` and `/api/device-catalog/:qualifiedId/*`
+address a single device across any source with **one percent-encoded path
+segment**, formed by joining the source identifier and the device's own
+identifier with a single `:` delimiter (design.md D29):
+
+```
+zigbee  + 0x00124b0022a1b2c3     →  zigbee:0x00124b0022a1b2c3
+shelly  + office_plug            →  shelly:office_plug
+nanoleaf + panels                →  nanoleaf:panels
+state   + motion-light:lights_on →  state:motion-light:lights_on
+```
+
+Parsing splits on the **first** occurrence of `:` only — everything after it
+belongs to the device identifier. This matters because a state toggle's
+identity is itself a state key, and state keys are already colon-scoped
+(`<automation-name>:<key>`), so the device identifier can legitimately
+contain further delimiters. A source identifier itself never contains `:`,
+which is what makes the first-occurrence split total rather than heuristic.
+Callers must percent-encode the whole identifier as one path segment (e.g.
+`encodeURIComponent("state:motion-light:lights_on")`), not split it across
+multiple segments.
 
 ---
 
@@ -421,8 +463,9 @@ import type { StateManager, StateManagerOptions, StateChangeHandler } from "ts-h
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `persist` | `boolean` | `false` | Save state to disk on shutdown, restore on startup |
+| `persist` | `boolean` | `true` | Save state (debounced write-behind) and restore on startup. Defaults on because the store holds room definitions and automation enabled flags, which must survive a restart (breaking default change — design.md D6, R14). |
 | `filePath` | `string` | `"./state.json"` | Path to the persistence file |
+| `flushIntervalMs` | `number` | `1000` | Milliseconds between coalesced saves (write-behind debounce). `0` saves on every mutation instead of scheduling. |
 
 ### `StateChangeHandler<T>`
 
@@ -435,10 +478,10 @@ type StateChangeHandler<T> = (key: string, newValue: T | undefined, oldValue: T 
 | Method | Signature | Description |
 |---|---|---|
 | `get<T>` | `(key: string, defaultValue?: T) => T \| undefined` | Read a value with optional default |
-| `set<T>` | `(key: string, value: T) => void` | Write a value; fires listeners only if the value changed |
-| `delete` | `(key: string) => boolean` | Remove a key; fires listeners with `newValue = undefined` |
+| `set<T>` | `(key: string, value: T) => void` | Write a value; fires listeners only if the value changed. Throws if `key` falls inside the reserved `$internal:` namespace (design.md D20). |
+| `delete` | `(key: string) => boolean` | Remove a key; fires listeners with `newValue = undefined`. Throws if `key` falls inside the reserved `$internal:` namespace. |
 | `has` | `(key: string) => boolean` | Check if a key exists |
-| `keys` | `() => string[]` | Get all keys |
+| `keys` | `() => string[]` | Get all keys, excluding reserved internal keys |
 | `onChange<T>` | `(key: string, handler: StateChangeHandler<T>) => void` | Subscribe to a specific key |
 | `offChange<T>` | `(key: string, handler: StateChangeHandler<T>) => void` | Unsubscribe from a key |
 | `onAnyChange` | `(handler: StateChangeHandler) => void` | Subscribe to all key changes |
@@ -540,6 +583,13 @@ interface LogEntry {
 | `automation` | `string` | _(none)_ | Filter by automation name |
 | `level` | `number` | _(none)_ | Minimum log level |
 | `limit` | `number` | `50` | Maximum entries returned |
+
+### Methods
+
+| Method | Signature | Description |
+|---|---|---|
+| `query` | `(options?: LogQuery) => LogEntry[]` | Entries matching the filter, oldest first |
+| `subscribe` | `(listener: (entry: LogEntry) => void) => () => void` | Register a listener notified of each newly-stored entry; returns an unsubscribe function. Notification is deferred off the synchronous write path (design.md D32) — see [Architecture: `LogBuffer`](architecture.md#logbuffer). |
 
 ---
 

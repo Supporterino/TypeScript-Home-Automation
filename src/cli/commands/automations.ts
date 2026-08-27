@@ -14,8 +14,12 @@ export async function listAutomations(client: DebugClient, json: boolean): Promi
     return;
   }
 
-  const rows = result.automations.map((a) => [a.name, summarizeTriggers(a.triggers)]);
-  console.log(formatTable(["NAME", "TRIGGERS"], rows));
+  const rows = result.automations.map((a) => [
+    a.name,
+    a.enabled ? "enabled" : "disabled",
+    summarizeTriggers(a.triggers),
+  ]);
+  console.log(formatTable(["NAME", "ENABLED", "TRIGGERS"], rows));
   console.log(`\n${result.count} automation(s)`);
 }
 
@@ -32,6 +36,7 @@ export async function getAutomation(
   }
 
   console.log(`Name:     ${result.name}`);
+  console.log(`Enabled:  ${result.enabled}`);
   console.log("Triggers:");
 
   if (result.triggers.length === 0) {
@@ -68,4 +73,35 @@ export async function triggerAutomation(
   }
 
   console.log(`Triggered "${result.automation}" with ${result.type} context`);
+}
+
+export async function setAutomationEnabled(
+  client: DebugClient,
+  name: string,
+  enabled: boolean,
+  json: boolean,
+): Promise<void> {
+  const result = await client.setAutomationEnabled(name, enabled);
+
+  if (json) {
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+
+  console.log(`"${result.name}" is now ${result.enabled ? "enabled" : "disabled"}`);
+}
+
+export async function getAutomationSource(
+  client: DebugClient,
+  name: string,
+  json: boolean,
+): Promise<void> {
+  const result = await client.getAutomationSource(name);
+
+  if (json) {
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+
+  console.log(result.source);
 }

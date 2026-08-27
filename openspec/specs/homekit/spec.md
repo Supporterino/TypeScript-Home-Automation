@@ -6,7 +6,7 @@ Runs a HAP (HomeKit Accessory Protocol) bridge inside the engine process using `
 
 ## Requirements
 
-### Configuration
+### Requirement: Configuration
 
 The `HomekitService` MUST accept `HomekitServiceOptions`:
 
@@ -67,52 +67,98 @@ type HomekitServiceFactory = (ctx: HomekitServiceContext) => HomekitService;
 - **THEN** the state-toggle source is created with no accessories and does not
   affect the bridge
 
-### Accessory Source Abstraction
+### Requirement: Accessory Source Abstraction
 
-The HomeKit bridge MUST consume devices through a source-agnostic
-`AccessorySource` interface rather than reading device families directly. Each
-source is responsible for its own discovery, freshness, and write-back, and
-interacts with the bridge only through an `AccessorySink`.
-
-```ts
-interface AccessorySource {
-  readonly name: string;                       // e.g. "zigbee" | "shelly"
-  start(sink: AccessorySink): Promise<void> | void;
-  stop(): Promise<void> | void;
-}
-
-interface AccessorySink {
-  add(id: string, accessory: CreatedAccessory): void;
-  remove(id: string): void;
-}
-```
+The HomeKit bridge MUST consume devices through the shared `device-sources`
+capability rather than reading device families directly or maintaining its own
+parallel source implementations. Device discovery, freshness, and command
+dispatch for Zigbee, Shelly, Nanoleaf, and configured state toggles are owned by
+that capability and are shared with other consumers. The bridge MUST NOT retain
+any accessory source of its own.
 
 `HomekitService` MUST own the HAP bridge lifecycle (publish/unpublish, persist
 path, PIN/port/bind, status endpoint, accessory map) and MUST NOT reference
-`ZigbeeDevice`, Zigbee2MQTT `exposes`, MQTT, or Shelly RPC directly. Accessory
-IDs passed to the sink MUST be unique across sources (e.g. prefixed by source
-name).
+`ZigbeeDevice`, Zigbee2MQTT `exposes`, MQTT, or Shelly RPC directly.
+
+Because the shared device descriptor is deliberately richer than the HomeKit
+model, `HomekitService` MUST narrow it to HAP services and characteristics at
+its own boundary. The shared descriptor MUST NOT be reduced to the HomeKit
+subset for the benefit of other consumers.
+
+Accessory identifiers MUST remain unique across sources, namespaced by source
+name.
+
+Observable HomeKit behaviour MUST be unchanged by this consolidation. In
+particular, accessory UUID derivation and the bridge UUID derivation MUST be
+preserved exactly, so that an existing paired bridge continues to work and no
+user is required to re-pair.
 
 #### Scenario: Bridge starts all sources
 
-- **WHEN** `HomekitService.onStart()` runs with one or more registered sources
-- **THEN** each source's `start(sink)` is called after the HAP bridge is created
-- **AND** accessories added via `sink.add(id, accessory)` are bridged with
-  `bridge.addBridgedAccessory`
+- **WHEN** `HomekitService.onStart()` runs with one or more device sources
+  available
+- **THEN** each source is started after the HAP bridge is created
+- **AND** devices yielded by a source are bridged as accessories
 
 #### Scenario: Bridge stops all sources
 
 - **WHEN** `HomekitService.onStop()` runs
-- **THEN** each source's `stop()` is called
+- **THEN** each source is stopped
 - **AND** the bridge is unpublished and the accessory map is cleared
 
 #### Scenario: Source-agnostic accessory IDs avoid collisions
 
-- **WHEN** two sources register devices that share a friendly name
+- **WHEN** two sources yield devices that share a friendly name
 - **THEN** the bridge keeps them as distinct accessories because IDs are
   namespaced per source
 
-### Zigbee Accessory Source
+#### Scenario: Existing pairing survives the consolidation
+
+- **WHEN** an engine with an already-paired HomeKit bridge is upgraded to consume
+  the shared device sources
+- **THEN** the bridge UUID and every accessory UUID are unchanged, and the Home
+  app continues to control the same accessories without re-pairing
+
+#### Scenario: HomeKit narrowing does not constrain other consumers
+
+- **WHEN** a device declares capabilities that have no HomeKit representation
+- **THEN** those capabilities are absent from the HAP accessory but remain
+  present in the shared device descriptor for other consumers
+
+#### Scenario: One device family is bridged only once
+
+- **WHEN** both the HomeKit bridge and another consumer are reading the same
+  device source
+- **THEN** the source performs discovery and refresh once, and both consumers
+  observe the same device state
+
+### Requirement: State Toggle Configuration
+
+State toggles MUST be configured at engine level rather than as an option of the
+HomeKit service, because they are consumed by every device source consumer and
+not only by the HomeKit bridge.
+
+Configuring a state toggle MUST NOT require the HomeKit bridge to be enabled, and
+disabling the bridge MUST NOT remove a toggle from any other consumer.
+
+The bridge MUST continue to present configured toggles as HomeKit switches with
+the same accessory identifiers as before the relocation, so that an existing
+pairing is unaffected.
+
+#### Scenario: Toggles survive HomeKit being disabled
+
+- **WHEN** state toggles are configured and the HomeKit bridge is disabled
+- **THEN** the toggles remain enumerable and controllable through the shared
+  device sources
+
+#### Scenario: Relocation does not disturb existing accessories
+
+- **WHEN** an engine with an already-paired bridge is upgraded and its state
+  toggles are moved to engine-level configuration
+- **THEN** the corresponding switch accessories keep their identifiers and the
+  Home app continues to control them without re-pairing
+
+### Requirement: Zigbee Accessory Source
 
 Zigbee bridging MUST be provided by a `ZigbeeSource` implementing
 `AccessorySource`, preserving the previous behavior. On `start(sink)` it MUST
@@ -134,7 +180,7 @@ listeners.
 - **THEN** `onDeviceAdded` / `onDeviceRemoved` create or remove the accessory
   through the sink
 
-### Shelly Accessory Source
+### Requirement: Shelly Accessory Source
 
 Shelly bridging MUST be provided by a `ShellySource` implementing
 `AccessorySource`. On `start(sink)` it MUST replay `ShellyService.getDevices()`,
@@ -186,7 +232,7 @@ start-time snapshot, so devices registered at any time are bridged.
 - **THEN** their per-device MQTT status and presence subscriptions are removed
   in addition to clearing the HTTP poll interval
 
-### Shelly State Polling
+### Requirement: Shelly State Polling
 
 `ShellySource` MUST keep HTTP-transport devices' HomeKit characteristics fresh
 via a single global polling loop over HTTP. The interval MUST be configurable
@@ -223,7 +269,7 @@ and skipped. MQTT-transport devices MUST NOT be included in the poll loop.
 - **THEN** only the HTTP-transport devices are queried over HTTP; MQTT-transport
   devices are not polled
 
-### Shelly MQTT Push Status
+### Requirement: Shelly MQTT Push Status
 
 For each MQTT-transport Shelly device, `ShellySource` MUST subscribe to that
 device's `<topicPrefix>/events/rpc` topic and, on receiving a `NotifyStatus`
@@ -246,7 +292,7 @@ event-driven instead of interval-driven.
 - **THEN** the notification is logged and skipped without affecting other
   devices or crashing the source
 
-### Shelly MQTT Presence
+### Requirement: Shelly MQTT Presence
 
 For each MQTT-transport Shelly device, `ShellySource` MUST subscribe to that
 device's `<topicPrefix>/online` topic (the device's LWT-backed presence
@@ -265,7 +311,7 @@ its `true`/`false` payload.
   after having been marked unreachable
 - **THEN** `ShellySource` marks the corresponding accessory as reachable again
 
-### Shelly Accessory Factory
+### Requirement: Shelly Accessory Factory
 
 A Shelly-specific accessory factory MUST build HAP accessories from a
 `ShellyDevice` and its `type`:
@@ -287,7 +333,7 @@ contract and MUST generate a stable accessory UUID per device.
 - **WHEN** a device has no recognized Shelly type mapping
 - **THEN** the factory returns null and the source skips it with a log
 
-### WindowCovering Support
+### Requirement: WindowCovering Support
 
 The system MUST support Shelly 2PM covers as HAP `WindowCovering` accessories.
 State translation MUST be:
@@ -349,7 +395,7 @@ the accessory.
 - **WHEN** `Cover.GetStatus` reports `current_pos: null`
 - **THEN** `CurrentPosition` is reported as 0 and a calibration warning is logged
 
-### Requirements
+### Requirement: Requirements
 
 The system MUST start the HomeKit bridge when at least one accessory source is
 available. The Zigbee source requires `DEVICE_REGISTRY_ENABLED=true`; when the
@@ -377,7 +423,7 @@ skip startup.
   available
 - **THEN** the service logs a warning and skips startup
 
-### ServicePlugin Implementation
+### Requirement: ServicePlugin Implementation
 
 The service MUST implement `ServicePlugin`:
 - `readonly serviceKey = "homekit"`
@@ -385,7 +431,7 @@ The service MUST implement `ServicePlugin`:
 - `onStop()` — Unpublish bridge, detach listeners, clear accessories
 - `registerRoutes(app: Hono)` — Mount `GET /api/homekit/status`
 
-### Startup Behavior
+### Requirement: Startup Behavior
 
 `onStart()` MUST:
 
@@ -414,7 +460,7 @@ If `bridge.publish()` fails (throws or rejects), `onStart()` MUST tear down any 
 - **WHEN** `bridge.publish()` throws or rejects after sources were started
 - **THEN** each started source's `stop()` is called, `published` is `false`, `bridge` is cleared, and no poll interval or registry listener remains active
 
-### Accessory Creation
+### Requirement: Accessory Creation
 
 For each Zigbee device, the accessory factory MUST:
 
@@ -435,7 +481,7 @@ For each Zigbee device, the accessory factory MUST:
 
 5. **Skip unsupported devices** — If a device has no recognized capability, skip with a debug log
 
-### Dynamic Device Management
+### Requirement: Dynamic Device Management
 
 When a new device joins the network:
 - `onDeviceAdded` fires → `addAccessory(device)` creates and bridges the accessory
@@ -443,7 +489,7 @@ When a new device joins the network:
 When a device leaves the network:
 - `onDeviceRemoved` fires → `removeAccessory(device)` removes the accessory and detaches listeners
 
-### Shutdown
+### Requirement: Shutdown
 
 `onStop()` MUST:
 
@@ -458,7 +504,7 @@ When a device leaves the network:
 - **WHEN** `onStop()` runs while a Shelly poll loop is active
 - **THEN** the poll interval is cleared and no further HTTP polls occur
 
-### Status API
+### Requirement: Status API
 
 `getStatus(): HomekitStatus` MUST return:
 ```ts
@@ -475,10 +521,10 @@ When a device leaves the network:
 
 `GET /api/homekit/status` MUST return this status (protected by `/api/*` auth middleware).
 
-### Crypto Polyfill
+### Requirement: Crypto Polyfill
 
 The system MUST load a crypto polyfill for Bun compatibility before importing `hap-nodejs`, because Bun does not support the `chacha20-poly1305` cipher used by HAP.
 
-### Color Conversion
+### Requirement: Color Conversion
 
 The factory MUST convert CIE xy color space (used by HomeKit) to hue/saturation (used by Zigbee2MQTT) and vice versa, enabling color light control through the Home app.

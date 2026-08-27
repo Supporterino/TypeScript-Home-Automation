@@ -6,7 +6,7 @@ Wraps the `mqtt` npm package to provide a single persistent connection to an MQT
 
 ## Requirements
 
-### Connection Management
+### Requirement: Connection Management
 
 The system MUST connect to the MQTT broker using the configured `host` and `port`.
 
@@ -19,7 +19,7 @@ The system MUST support:
 
 The `connect()` method MUST return a `Promise<void>` that resolves on initial connection or rejects on connection error before the first connect.
 
-### Connection State
+### Requirement: Connection State
 
 The system MUST expose `isConnected: boolean` reflecting current connection state.
 
@@ -48,7 +48,7 @@ When the `error` event fires before the first successful connection (rejecting t
 - **WHEN** the `error` event fires before the first connect and the `connect()` promise rejects
 - **THEN** the underlying MQTT client is ended so it does not continue attempting to reconnect in the background
 
-### Message Dispatch
+### Requirement: Message Dispatch
 
 The system MUST use an optimized two-tier dispatch strategy:
 
@@ -57,7 +57,7 @@ The system MUST use an optimized two-tier dispatch strategy:
 
 JSON parsing MUST be deferred until at least one handler matches the topic. Messages with no matching handlers are silently dropped without parsing.
 
-### Subscribe / Unsubscribe
+### Requirement: Subscribe / Unsubscribe
 
 `subscribe(topic, handler)` MUST:
 - Classify as exact or wildcard based on presence of `+` or `#`
@@ -71,7 +71,7 @@ JSON parsing MUST be deferred until at least one handler matches the topic. Mess
 - Decrement the reference count
 - Unsubscribe from the broker only when the reference count reaches zero
 
-### Publish
+### Requirement: Publish
 
 `publish(topic, payload)` MUST:
 - JSON-stringify the payload
@@ -85,14 +85,14 @@ JSON parsing MUST be deferred until at least one handler matches the topic. Mess
 `deviceTopic(friendlyName)` MUST:
 - Return `{zigbee2mqttPrefix}/{friendlyName}` without `/set`
 
-### Disconnect
+### Requirement: Disconnect
 
 `disconnect()` MUST:
 - Call `client.endAsync()`
 - Set `client = null` and `connected = false`
 - No-op if already disconnected
 
-### Wildcard Matching
+### Requirement: Wildcard Matching
 
 The system MUST use a custom wildcard matching implementation (not the mqtt library's built-in matcher). The internal `mqtt-utils.ts` provides:
 - `hasWildcard(topic)` — returns `true` if topic contains `+` or `#`
@@ -103,6 +103,6 @@ Pattern matching MUST follow MQTT wildcard rules:
 - `+` matches exactly one topic level
 - `#` matches any number of remaining levels (must be the last character)
 
-### Error Handling
+### Requirement: Error Handling
 
 The system MUST catch errors from message handlers and log them without affecting other handlers or the MQTT connection.

@@ -1,7 +1,9 @@
 import { describe, expect, it, mock } from "bun:test";
 import pino from "pino";
+import { EventBus } from "../src/core/events/event-bus.js";
 import { HttpServer } from "../src/core/http/http-server.js";
 import { LogBuffer } from "../src/core/logging/log-buffer.js";
+import { RoomManager } from "../src/core/room-manager.js";
 import { StateManager } from "../src/core/state/state-manager.js";
 
 const logger = pino({ level: "silent" });
@@ -15,12 +17,55 @@ function createMockMqtt(connected = true) {
 }
 
 function createMockAutomationManager(
-  automations: Array<{ name: string; triggers?: unknown[] }> = [],
+  automations: Array<{
+    name: string;
+    enabled?: boolean;
+    triggers?: unknown[];
+    history?: unknown[];
+    relationships?: unknown;
+  }> = [],
 ) {
   return {
     listAutomations: mock(() => automations),
     getAutomation: mock((name: string) => automations.find((a) => a.name === name) ?? null),
-    triggerAutomation: mock(async (name: string) => automations.some((a) => a.name === name)),
+    triggerAutomation: mock(async (name: string) => {
+      const auto = automations.find((a) => a.name === name);
+      if (!auto) return "not_found";
+      if (auto.enabled === false) return "disabled";
+      return "executed";
+    }),
+    start: mock(async (name: string) => {
+      const auto = automations.find((a) => a.name === name);
+      if (!auto) return { status: "not_found" };
+      auto.enabled = true;
+      return { status: "started" };
+    }),
+    stop: mock(async (name: string) => {
+      const auto = automations.find((a) => a.name === name);
+      if (!auto) return "not_found";
+      auto.enabled = false;
+      return "stopped";
+    }),
+    getSource: mock(async (name: string) => {
+      const auto = automations.find((a) => a.name === name);
+      if (!auto) return { status: "not_found" };
+      return { status: "found", source: `// source for ${name}` };
+    }),
+    getHistory: mock((name: string) => {
+      const auto = automations.find((a) => a.name === name);
+      if (!auto) return null;
+      return auto.history ?? [];
+    }),
+    getRelationships: mock((name: string) => {
+      const auto = automations.find((a) => a.name === name);
+      if (!auto) return null;
+      return (
+        auto.relationships ?? {
+          declared: { requiredServices: [], relatedDevices: [], watchedStateKeys: [] },
+          observed: { writtenStateKeys: [], truncated: false },
+        }
+      );
+    }),
   } as unknown as import("../src/core/automation-manager.js").AutomationManager;
 }
 
@@ -29,14 +74,23 @@ function makeServer({
   automations = [] as Array<{ name: string; triggers?: unknown[] }>,
   mqttConnected = true,
   engineStarted = true,
-  state = new StateManager(logger),
+  state = new StateManager(logger, { persist: false }),
   logBuffer = new LogBuffer(100),
+  eventBus,
+}: {
+  token?: string;
+  automations?: Array<{ name: string; triggers?: unknown[] }>;
+  mqttConnected?: boolean;
+  engineStarted?: boolean;
+  state?: StateManager;
+  logBuffer?: LogBuffer;
+  eventBus?: EventBus;
 } = {}) {
   const mqtt = createMockMqtt(mqttConnected);
   const server = new HttpServer(8080, mqtt, token, logger);
   const automationManager = createMockAutomationManager(automations);
   server.setManagers(state, automationManager, logBuffer);
-  server.setDeviceRegistry(null);
+  if (eventBus) server.setEventStream(eventBus, logger);
   if (engineStarted) server.setEngineStarted(true);
   return server;
 }
@@ -239,6 +293,84 @@ describe("HttpServer — /api/automations", () => {
     });
   });
 
+  describe("GET /api/automations/:name/history (task 8.6)", () => {
+    it("returns 404 for an unknown automation", async () => {
+      const server = makeServer({ automations: [] });
+      const res = await req(server, "/api/automations/nonexistent/history");
+      expect(res.status).toBe(404);
+    });
+
+    it("returns an empty history for an automation that has never run", async () => {
+      const server = makeServer({ automations: [{ name: "idle" }] });
+      const res = await req(server, "/api/automations/idle/history");
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.name).toBe("idle");
+      expect(body.history).toEqual([]);
+    });
+
+    it("returns the retained records", async () => {
+      const record = {
+        startedAt: 1000,
+        trigger: { type: "cron", expression: "0 7 * * *" },
+        durationMs: 5,
+        outcome: "success",
+      };
+      const server = makeServer({
+        automations: [{ name: "test-auto", history: [record] }],
+      });
+      const res = await req(server, "/api/automations/test-auto/history");
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.history).toEqual([record]);
+    });
+  });
+
+  describe("GET /api/automations/:name/relationships (task 8.6)", () => {
+    it("returns 404 for an unknown automation", async () => {
+      const server = makeServer({ automations: [] });
+      const res = await req(server, "/api/automations/nonexistent/relationships");
+      expect(res.status).toBe(404);
+    });
+
+    it("distinguishes declared relationships from observed ones", async () => {
+      const relationships = {
+        declared: {
+          requiredServices: [{ name: "shelly", registered: false }],
+          relatedDevices: ["hallway_sensor"],
+          watchedStateKeys: ["night_mode"],
+        },
+        observed: { writtenStateKeys: ["lights_on"], truncated: false },
+      };
+      const server = makeServer({
+        automations: [{ name: "test-auto", relationships }],
+      });
+      const res = await req(server, "/api/automations/test-auto/relationships");
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.name).toBe("test-auto");
+      expect(body.declared).toEqual(relationships.declared);
+      expect(body.observed).toEqual(relationships.observed);
+    });
+
+    it("reports an unregistered required service as unavailable", async () => {
+      const relationships = {
+        declared: {
+          requiredServices: [{ name: "nanoleaf", registered: false }],
+          relatedDevices: [],
+          watchedStateKeys: [],
+        },
+        observed: { writtenStateKeys: [], truncated: false },
+      };
+      const server = makeServer({
+        automations: [{ name: "test-auto", relationships }],
+      });
+      const res = await req(server, "/api/automations/test-auto/relationships");
+      const body = await res.json();
+      expect(body.declared.requiredServices).toEqual([{ name: "nanoleaf", registered: false }]);
+    });
+  });
+
   describe("POST /api/automations/:name/trigger", () => {
     it("returns 400 when body is not JSON", async () => {
       const server = makeServer({ automations: [{ name: "test-auto", triggers: [] }] });
@@ -345,7 +477,7 @@ describe("HttpServer — /api/state", () => {
     });
 
     it("returns state keys after setting values", async () => {
-      const state = new StateManager(logger);
+      const state = new StateManager(logger, { persist: false });
       state.set("night_mode", true);
       state.set("count", 42);
       const server = makeServer({ state });
@@ -355,11 +487,23 @@ describe("HttpServer — /api/state", () => {
       expect(body.state.night_mode).toBe(true);
       expect(body.state.count).toBe(42);
     });
+
+    it("omits reserved internal keys from both the map and the count", async () => {
+      const state = new StateManager(logger, { persist: false });
+      state.set("visible", 1);
+      state.setInternal("$internal:rooms", { kitchen: [] });
+      const server = makeServer({ state });
+      const res = await req(server, "/api/state");
+      const body = await res.json();
+      expect(body.count).toBe(1);
+      expect(body.state).toEqual({ visible: 1 });
+      expect(body.state["$internal:rooms"]).toBeUndefined();
+    });
   });
 
   describe("GET /api/state/:key", () => {
     it("returns key value and exists=true when key present", async () => {
-      const state = new StateManager(logger);
+      const state = new StateManager(logger, { persist: false });
       state.set("my-key", "hello");
       const server = makeServer({ state });
       const res = await req(server, "/api/state/my-key");
@@ -381,7 +525,7 @@ describe("HttpServer — /api/state", () => {
 
   describe("PUT /api/state/:key", () => {
     it("sets a state value", async () => {
-      const state = new StateManager(logger);
+      const state = new StateManager(logger, { persist: false });
       const server = makeServer({ state });
       const res = await req(server, "/api/state/my-key", {
         method: "PUT",
@@ -406,7 +550,7 @@ describe("HttpServer — /api/state", () => {
     });
 
     it("returns previous value in response", async () => {
-      const state = new StateManager(logger);
+      const state = new StateManager(logger, { persist: false });
       state.set("counter", 1);
       const server = makeServer({ state });
       const res = await req(server, "/api/state/counter", {
@@ -418,11 +562,23 @@ describe("HttpServer — /api/state", () => {
       expect(body.previous).toBe(1);
       expect(body.value).toBe(2);
     });
+
+    it("rejects a write to a reserved internal key without modifying the store", async () => {
+      const state = new StateManager(logger, { persist: false });
+      const server = makeServer({ state });
+      const res = await req(server, "/api/state/%24internal%3Arooms", {
+        method: "PUT",
+        body: JSON.stringify({ kitchen: [] }),
+        headers: { "content-type": "application/json" },
+      });
+      expect(res.status).toBe(400);
+      expect(state.has("$internal:rooms")).toBe(false);
+    });
   });
 
   describe("DELETE /api/state/:key", () => {
     it("deletes an existing key", async () => {
-      const state = new StateManager(logger);
+      const state = new StateManager(logger, { persist: false });
       state.set("to-delete", "value");
       const server = makeServer({ state });
       const res = await req(server, "/api/state/to-delete", { method: "DELETE" });
@@ -438,6 +594,15 @@ describe("HttpServer — /api/state", () => {
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(body.deleted).toBe(false);
+    });
+
+    it("rejects a delete of a reserved internal key without modifying the store", async () => {
+      const state = new StateManager(logger, { persist: false });
+      state.setInternal("$internal:rooms", { kitchen: [] });
+      const server = makeServer({ state });
+      const res = await req(server, "/api/state/%24internal%3Arooms", { method: "DELETE" });
+      expect(res.status).toBe(400);
+      expect(state.get("$internal:rooms")).toEqual({ kitchen: [] });
     });
   });
 });
@@ -476,21 +641,658 @@ describe("HttpServer — GET /api/logs", () => {
   });
 });
 
-// ── API: Devices ──────────────────────────────────────────────────────────
+// ── API: Realtime event stream ───────────────────────────────────────────
 
-describe("HttpServer — /api/devices", () => {
-  it("returns 503 when device registry is disabled", async () => {
+describe("HttpServer — GET /api/events", () => {
+  it("returns 503 when the event stream is not configured", async () => {
     const server = makeServer();
-    const res = await req(server, "/api/devices");
+    const res = await req(server, "/api/events");
     expect(res.status).toBe(503);
-    const body = await res.json();
-    expect(body.error).toContain("Device registry is disabled");
   });
 
-  it("returns 503 for single device when registry is disabled", async () => {
+  it("is subject to the same authorisation as other API endpoints (task 5.2)", async () => {
+    const server = makeServer({ token: "secret", eventBus: new EventBus() });
+    const res = await req(server, "/api/events");
+    expect(res.status).toBe(401);
+    await res.body?.cancel();
+  });
+
+  it("authorises from the session cookie alone, with no request header (task 5.3)", async () => {
+    const server = makeServer({ token: "secret", eventBus: new EventBus() });
+    const res = await req(server, "/api/events", {
+      headers: { Cookie: "ts-ha-session=secret" },
+    });
+    expect(res.status).toBe(200);
+    await res.body?.cancel();
+  });
+
+  it("is refused without the session cookie or a bearer token", async () => {
+    const server = makeServer({ token: "secret", eventBus: new EventBus() });
+    const res = await req(server, "/api/events", {
+      headers: { Cookie: "ts-ha-session=wrong" },
+    });
+    expect(res.status).toBe(401);
+  });
+
+  it("logs a connect and a disconnect retrievable through the log query API (task 5.0c)", async () => {
+    // The lifecycle logger writes into the same LogBuffer the log category
+    // (and /api/logs) reads from — unlike the delivery-path logger, which
+    // must not (design.md D32; asserted separately below).
+    const logBuffer = new LogBuffer(100);
+    const realLogger = pino({ level: "info" }, logBuffer);
+    const bus = new EventBus();
+
+    const mqtt = createMockMqtt(true);
+    const server = new HttpServer(8080, mqtt, "", realLogger);
+    server.setManagers(
+      new StateManager(realLogger, { persist: false }),
+      createMockAutomationManager(),
+      logBuffer,
+    );
+    server.setEventStream(bus, realLogger); // lifecycleLogger derives from realLogger too
+    server.setEngineStarted(true);
+
+    const res = await req(server, "/api/events");
+    const reader = res.body?.getReader();
+    await reader?.cancel();
+
+    const logsRes = await req(server, "/api/logs?limit=50");
+    const body = await logsRes.json();
+    const messages = (body.entries as Array<{ msg: string }>).map((e) => e.msg);
+    expect(messages.some((m) => m.includes("connected"))).toBe(true);
+    expect(messages.some((m) => m.includes("disconnected"))).toBe(true);
+  });
+
+  it("opens as an event-stream response and delivers a delta emitted after connecting", async () => {
+    const bus = new EventBus();
+    const server = makeServer({ eventBus: bus });
+    const res = await req(server, "/api/events");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toContain("text/event-stream");
+
+    const reader = res.body?.getReader();
+    if (!reader) throw new Error("no body");
+
+    bus.emit({ category: "state", key: "night_mode", value: true, previous: false });
+
+    const { value } = await reader.read();
+    const chunk = new TextDecoder().decode(value);
+    const payload = JSON.parse(chunk.replace(/^data: /, "").trim());
+    // Only the changed key is present — a delta, not a full state snapshot
+    // (task 5.4).
+    expect(payload).toEqual({
+      category: "state",
+      key: "night_mode",
+      value: true,
+      previous: false,
+    });
+
+    await reader.cancel();
+  });
+});
+
+// ── API: Devices (removed) ────────────────────────────────────────────────
+
+describe("HttpServer — removed Zigbee-only device endpoints", () => {
+  it("GET /api/devices is removed and carries no device payload", async () => {
+    const server = makeServer();
+    const res = await req(server, "/api/devices");
+    expect(res.status).toBeGreaterThanOrEqual(400);
+    const body = await res.json();
+    expect(body.devices).toBeUndefined();
+    expect(body.error).toBeDefined();
+  });
+
+  it("GET /api/devices/:friendlyName is removed and carries no device payload", async () => {
     const server = makeServer();
     const res = await req(server, "/api/devices/some-device");
+    expect(res.status).toBeGreaterThanOrEqual(400);
+    const body = await res.json();
+    expect(body.friendly_name).toBeUndefined();
+    expect(body.error).toBeDefined();
+  });
+});
+
+// ── API: Unified device catalog ───────────────────────────────────────────
+
+describe("HttpServer — /api/device-catalog", () => {
+  it("returns 503 when no device accessor is configured", async () => {
+    const server = makeServer();
+    const res = await req(server, "/api/device-catalog");
     expect(res.status).toBe(503);
+  });
+
+  it("returns 503 for a single device when no device accessor is configured", async () => {
+    const server = makeServer();
+    const res = await req(server, "/api/device-catalog/zigbee:0xaaa");
+    expect(res.status).toBe(503);
+  });
+
+  it("lists devices from all available sources with a count and source availability", async () => {
+    const server = makeServer();
+    const descriptor = {
+      source: "shelly",
+      id: "plug",
+      qualifiedId: "shelly:plug",
+      displayName: "plug",
+      state: { on: true },
+      capabilities: [],
+      reachable: true,
+      observation: { mode: "push", observedAt: Date.now() },
+    };
+    server.setDeviceSources({
+      list: mock(() => [descriptor]),
+      get: mock((qid: string) => (qid === "shelly:plug" ? descriptor : undefined)),
+      sources: mock(() => [
+        { id: "shelly", available: true },
+        { id: "zigbee", available: false },
+      ]),
+    } as unknown as import("../src/core/device-sources/aggregate.js").AggregateDeviceSource);
+
+    const res = await req(server, "/api/device-catalog");
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.count).toBe(1);
+    expect(body.devices).toEqual([descriptor]);
+    expect(body.sources).toEqual([
+      { id: "shelly", available: true },
+      { id: "zigbee", available: false },
+    ]);
+  });
+
+  it("reports the Zigbee source unavailable rather than failing the whole request", async () => {
+    const server = makeServer();
+    server.setDeviceSources({
+      list: mock(() => []),
+      get: mock(() => undefined),
+      sources: mock(() => [{ id: "zigbee", available: false }]),
+    } as unknown as import("../src/core/device-sources/aggregate.js").AggregateDeviceSource);
+
+    const res = await req(server, "/api/device-catalog");
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.devices).toEqual([]);
+    expect(body.sources).toEqual([{ id: "zigbee", available: false }]);
+  });
+
+  it("retrieves a single device by qualified identifier", async () => {
+    const server = makeServer();
+    const descriptor = {
+      source: "state",
+      id: "night_mode",
+      qualifiedId: "state:night_mode",
+      displayName: "Night Mode",
+      state: { on: false },
+      capabilities: [],
+      reachable: true,
+      observation: { mode: "push", observedAt: Date.now() },
+    };
+    server.setDeviceSources({
+      list: mock(() => [descriptor]),
+      get: mock((qid: string) => (qid === "state:night_mode" ? descriptor : undefined)),
+      sources: mock(() => []),
+    } as unknown as import("../src/core/device-sources/aggregate.js").AggregateDeviceSource);
+
+    const res = await req(server, "/api/device-catalog/state:night_mode");
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toEqual(descriptor);
+  });
+
+  it("returns 404 for an unknown qualified identifier", async () => {
+    const server = makeServer();
+    server.setDeviceSources({
+      list: mock(() => []),
+      get: mock(() => undefined),
+      sources: mock(() => []),
+    } as unknown as import("../src/core/device-sources/aggregate.js").AggregateDeviceSource);
+
+    const res = await req(server, "/api/device-catalog/zigbee:0xunknown");
+    expect(res.status).toBe(404);
+  });
+
+  it("resolves a qualified identifier whose device id itself contains the delimiter", async () => {
+    const server = makeServer();
+    const descriptor = {
+      source: "state",
+      id: "motion-light:lights_on",
+      qualifiedId: "state:motion-light:lights_on",
+      displayName: "Lights On",
+      state: { on: true },
+      capabilities: [],
+      reachable: true,
+      observation: { mode: "push", observedAt: Date.now() },
+    };
+    server.setDeviceSources({
+      list: mock(() => [descriptor]),
+      get: mock((qid: string) => (qid === "state:motion-light:lights_on" ? descriptor : undefined)),
+      sources: mock(() => []),
+    } as unknown as import("../src/core/device-sources/aggregate.js").AggregateDeviceSource);
+
+    const res = await req(
+      server,
+      `/api/device-catalog/${encodeURIComponent("state:motion-light:lights_on")}`,
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.id).toBe("motion-light:lights_on");
+  });
+
+  it("keeps a name collision distinct: two devices retrievable by their own qualified id", async () => {
+    const server = makeServer();
+    const zigbee = {
+      source: "zigbee",
+      id: "0xaaa",
+      qualifiedId: "zigbee:office_lamp",
+      displayName: "office_lamp",
+      state: {},
+      capabilities: [],
+      reachable: true,
+      observation: { mode: "push", observedAt: Date.now() },
+    };
+    const shelly = {
+      source: "shelly",
+      id: "office_lamp",
+      qualifiedId: "shelly:office_lamp",
+      displayName: "office_lamp",
+      state: {},
+      capabilities: [],
+      reachable: true,
+      observation: { mode: "push", observedAt: Date.now() },
+    };
+    server.setDeviceSources({
+      list: mock(() => [zigbee, shelly]),
+      get: mock((qid: string) =>
+        qid === "zigbee:office_lamp" ? zigbee : qid === "shelly:office_lamp" ? shelly : undefined,
+      ),
+      sources: mock(() => []),
+    } as unknown as import("../src/core/device-sources/aggregate.js").AggregateDeviceSource);
+
+    const resA = await req(server, "/api/device-catalog/zigbee:office_lamp");
+    const resB = await req(server, "/api/device-catalog/shelly:office_lamp");
+    expect((await resA.json()).source).toBe("zigbee");
+    expect((await resB.json()).source).toBe("shelly");
+  });
+
+  it("includes a device's capability schema, present and empty when it declares none", async () => {
+    const server = makeServer();
+    const noCaps = {
+      source: "shelly",
+      id: "plug",
+      qualifiedId: "shelly:plug",
+      displayName: "plug",
+      state: {},
+      capabilities: [],
+      reachable: true,
+      observation: { mode: "push", observedAt: Date.now() },
+    };
+    const withCaps = {
+      ...noCaps,
+      id: "lamp",
+      qualifiedId: "shelly:lamp",
+      capabilities: [
+        {
+          kind: "switch",
+          property: "on",
+          access: { readable: true, writable: true },
+          valueType: "boolean",
+        },
+      ],
+    };
+    server.setDeviceSources({
+      list: mock(() => [noCaps, withCaps]),
+      get: mock(() => undefined),
+      sources: mock(() => []),
+    } as unknown as import("../src/core/device-sources/aggregate.js").AggregateDeviceSource);
+
+    const res = await req(server, "/api/device-catalog");
+    const body = await res.json();
+    expect(body.devices[0].capabilities).toEqual([]);
+    expect(body.devices[1].capabilities).toHaveLength(1);
+  });
+});
+
+// ── API: Device command endpoint ───────────────────────────────────────────
+
+describe("HttpServer — POST /api/device-catalog/:qualifiedId/command", () => {
+  it("returns 503 when no device accessor is configured", async () => {
+    const server = makeServer();
+    const res = await req(server, "/api/device-catalog/shelly:plug/command", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ on: true }),
+    });
+    expect(res.status).toBe(503);
+  });
+
+  it("dispatches a valid command and returns ok", async () => {
+    const server = makeServer();
+    const command = mock(async (qualifiedId: string, properties: Record<string, unknown>) => {
+      expect(qualifiedId).toBe("shelly:plug");
+      expect(properties).toEqual({ on: true });
+      return { status: "ok" as const };
+    });
+    server.setDeviceSources({
+      command,
+    } as unknown as import("../src/core/device-sources/aggregate.js").AggregateDeviceSource);
+
+    const res = await req(server, "/api/device-catalog/shelly:plug/command", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ on: true }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.status).toBe("ok");
+    expect(command).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns 400 with a descriptive error and does not dispatch when validation fails", async () => {
+    const server = makeServer();
+    const command = mock(async () => ({
+      status: "invalid" as const,
+      error: 'Unknown property "brightness"',
+    }));
+    server.setDeviceSources({
+      command,
+    } as unknown as import("../src/core/device-sources/aggregate.js").AggregateDeviceSource);
+
+    const res = await req(server, "/api/device-catalog/state:night_mode/command", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ brightness: 100 }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/Unknown property/);
+  });
+
+  it("returns 404 for an unrecognised device identifier", async () => {
+    const server = makeServer();
+    server.setDeviceSources({
+      command: mock(async () => ({ status: "not_found" as const })),
+    } as unknown as import("../src/core/device-sources/aggregate.js").AggregateDeviceSource);
+
+    const res = await req(server, "/api/device-catalog/zigbee:0xunknown/command", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 503 when the owning source is unavailable", async () => {
+    const server = makeServer();
+    server.setDeviceSources({
+      command: mock(async () => ({ status: "unavailable" as const })),
+    } as unknown as import("../src/core/device-sources/aggregate.js").AggregateDeviceSource);
+
+    const res = await req(server, "/api/device-catalog/zigbee:0xaaa/command", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ state: "ON" }),
+    });
+    expect(res.status).toBe(503);
+  });
+
+  it("returns 400 for an invalid JSON body", async () => {
+    const server = makeServer();
+    server.setDeviceSources({
+      command: mock(async () => ({ status: "ok" as const })),
+    } as unknown as import("../src/core/device-sources/aggregate.js").AggregateDeviceSource);
+
+    const res = await req(server, "/api/device-catalog/zigbee:0xaaa/command", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "not json",
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 400 for a non-object JSON body", async () => {
+    const server = makeServer();
+    const command = mock(async () => ({ status: "ok" as const }));
+    server.setDeviceSources({
+      command,
+    } as unknown as import("../src/core/device-sources/aggregate.js").AggregateDeviceSource);
+
+    const res = await req(server, "/api/device-catalog/zigbee:0xaaa/command", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify([1, 2, 3]),
+    });
+    expect(res.status).toBe(400);
+    expect(command).not.toHaveBeenCalled();
+  });
+});
+
+// ── Rooms ─────────────────────────────────────────────────────────────────
+
+/** A real `RoomManager` over an in-memory `StateManager` and a stub aggregate device accessor. */
+function makeRoomManager(devices: Array<{ qualifiedId: string }> = []) {
+  const state = new StateManager(logger, { persist: false });
+  const aggregate = {
+    list: mock(() => devices),
+    get: mock((qid: string) => devices.find((d) => d.qualifiedId === qid)),
+  } as unknown as import("../src/core/device-sources/aggregate.js").AggregateDeviceSource;
+  return new RoomManager(state, aggregate, logger);
+}
+
+describe("HttpServer — /api/rooms", () => {
+  it("returns 503 when no room manager is configured", async () => {
+    const server = makeServer();
+    const res = await req(server, "/api/rooms");
+    expect(res.status).toBe(503);
+  });
+
+  it("lists rooms with an empty membership", async () => {
+    const server = makeServer();
+    const rooms = makeRoomManager();
+    rooms.createRoom("Kitchen");
+    server.setRoomManager(rooms);
+
+    const res = await req(server, "/api/rooms");
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.count).toBe(1);
+    expect(body.rooms[0].name).toBe("Kitchen");
+    expect(body.rooms[0].members).toEqual([]);
+  });
+
+  it("creates a room and returns 201 with the created room", async () => {
+    const server = makeServer();
+    server.setRoomManager(makeRoomManager());
+
+    const res = await req(server, "/api/rooms", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "Office" }),
+    });
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body.name).toBe("Office");
+    expect(typeof body.id).toBe("string");
+  });
+
+  it("returns 409 for a duplicate room name and creates nothing", async () => {
+    const server = makeServer();
+    const rooms = makeRoomManager();
+    rooms.createRoom("Office");
+    server.setRoomManager(rooms);
+
+    const res = await req(server, "/api/rooms", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "Office" }),
+    });
+    expect(res.status).toBe(409);
+    expect(rooms.listRooms()).toHaveLength(1);
+  });
+
+  it("returns 400 for a missing name", async () => {
+    const server = makeServer();
+    server.setRoomManager(makeRoomManager());
+
+    const res = await req(server, "/api/rooms", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("renames a room", async () => {
+    const server = makeServer();
+    const rooms = makeRoomManager();
+    const created = rooms.createRoom("Office");
+    if (created.status !== "ok") throw new Error("unreachable");
+    server.setRoomManager(rooms);
+
+    const res = await req(server, `/api/rooms/${created.room.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "Study" }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.name).toBe("Study");
+  });
+
+  it("returns 404 renaming an unknown room", async () => {
+    const server = makeServer();
+    server.setRoomManager(makeRoomManager());
+
+    const res = await req(server, "/api/rooms/nope", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "Study" }),
+    });
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 409 renaming a room to a name already in use", async () => {
+    const server = makeServer();
+    const rooms = makeRoomManager();
+    rooms.createRoom("Bedroom");
+    const created = rooms.createRoom("Office");
+    if (created.status !== "ok") throw new Error("unreachable");
+    server.setRoomManager(rooms);
+
+    const res = await req(server, `/api/rooms/${created.room.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "Bedroom" }),
+    });
+    expect(res.status).toBe(409);
+  });
+
+  it("deletes a room without deleting its devices", async () => {
+    const server = makeServer();
+    const rooms = makeRoomManager([{ qualifiedId: "zigbee:0xaaa" }]);
+    const created = rooms.createRoom("Garage");
+    if (created.status !== "ok") throw new Error("unreachable");
+    rooms.assignDevice("zigbee:0xaaa", created.room.id);
+    server.setRoomManager(rooms);
+
+    const res = await req(server, `/api/rooms/${created.room.id}`, { method: "DELETE" });
+    expect(res.status).toBe(200);
+    expect(rooms.listRooms()).toHaveLength(0);
+    expect(rooms.getRoomForDevice("zigbee:0xaaa")).toBeNull();
+  });
+
+  it("returns 404 deleting an unknown room", async () => {
+    const server = makeServer();
+    server.setRoomManager(makeRoomManager());
+
+    const res = await req(server, "/api/rooms/nope", { method: "DELETE" });
+    expect(res.status).toBe(404);
+  });
+
+  it("lists devices belonging to no room under /api/rooms/unassigned", async () => {
+    const server = makeServer();
+    const rooms = makeRoomManager([
+      { qualifiedId: "zigbee:0xaaa" },
+      { qualifiedId: "shelly:plug" },
+    ]);
+    const created = rooms.createRoom("Office");
+    if (created.status !== "ok") throw new Error("unreachable");
+    rooms.assignDevice("zigbee:0xaaa", created.room.id);
+    server.setRoomManager(rooms);
+
+    const res = await req(server, "/api/rooms/unassigned");
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.count).toBe(1);
+    expect(body.devices).toEqual([{ qualifiedId: "shelly:plug" }]);
+  });
+
+  it("reports an absent room member as unavailable without erroring", async () => {
+    const server = makeServer();
+    const rooms = makeRoomManager([]);
+    const created = rooms.createRoom("Living Room");
+    if (created.status !== "ok") throw new Error("unreachable");
+    rooms.assignDevice("zigbee:0xunpaired", created.room.id);
+    server.setRoomManager(rooms);
+
+    const res = await req(server, "/api/rooms");
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.rooms[0].members).toEqual([
+      { qualifiedId: "zigbee:0xunpaired", available: false, device: null },
+    ]);
+  });
+});
+
+describe("HttpServer — PUT/DELETE /api/device-catalog/:qualifiedId/room", () => {
+  it("returns 503 when no room manager is configured", async () => {
+    const server = makeServer();
+    const res = await req(server, "/api/device-catalog/zigbee:0xaaa/room", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ roomId: "abc" }),
+    });
+    expect(res.status).toBe(503);
+  });
+
+  it("assigns a device to a room", async () => {
+    const server = makeServer();
+    const rooms = makeRoomManager([{ qualifiedId: "zigbee:0xaaa" }]);
+    const created = rooms.createRoom("Office");
+    if (created.status !== "ok") throw new Error("unreachable");
+    server.setRoomManager(rooms);
+
+    const res = await req(server, "/api/device-catalog/zigbee:0xaaa/room", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ roomId: created.room.id }),
+    });
+    expect(res.status).toBe(200);
+    expect(rooms.getRoomForDevice("zigbee:0xaaa")?.id).toBe(created.room.id);
+  });
+
+  it("returns 404 assigning to an unknown room", async () => {
+    const server = makeServer();
+    server.setRoomManager(makeRoomManager([{ qualifiedId: "zigbee:0xaaa" }]));
+
+    const res = await req(server, "/api/device-catalog/zigbee:0xaaa/room", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ roomId: "nope" }),
+    });
+    expect(res.status).toBe(404);
+  });
+
+  it("clears a device's room assignment", async () => {
+    const server = makeServer();
+    const rooms = makeRoomManager([{ qualifiedId: "zigbee:0xaaa" }]);
+    const created = rooms.createRoom("Office");
+    if (created.status !== "ok") throw new Error("unreachable");
+    rooms.assignDevice("zigbee:0xaaa", created.room.id);
+    server.setRoomManager(rooms);
+
+    const res = await req(server, "/api/device-catalog/zigbee:0xaaa/room", { method: "DELETE" });
+    expect(res.status).toBe(200);
+    expect(rooms.getRoomForDevice("zigbee:0xaaa")).toBeNull();
   });
 });
 

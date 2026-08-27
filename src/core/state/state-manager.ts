@@ -10,6 +10,26 @@ export type StateChangeHandler<T = unknown> = (
 ) => void;
 
 /**
+ * Sigil prefix for the reserved internal state namespace (design.md D20).
+ *
+ * Automation-scoped keys are `<automation-name>:<key>`, and automation names
+ * derive from kebab-case filenames — they can never begin with `$`. A public
+ * caller can therefore never produce a key inside this namespace, which is
+ * what makes the reservation enforceable rather than merely conventional.
+ *
+ * Internal consumers (room definitions, automation enabled flags) write
+ * through {@link StateManager.setInternal} / {@link StateManager.deleteInternal},
+ * which bypass the rejection that {@link StateManager.set} and
+ * {@link StateManager.delete} apply to every other caller.
+ */
+export const INTERNAL_STATE_PREFIX = "$internal:";
+
+/** Returns true when `key` falls inside the reserved internal namespace. */
+export function isReservedStateKey(key: string): boolean {
+  return key.startsWith(INTERNAL_STATE_PREFIX);
+}
+
+/**
  * Options for the StateManager.
  */
 export interface StateManagerOptions {
@@ -17,7 +37,7 @@ export interface StateManagerOptions {
    * Whether to persist state to a JSON file on shutdown and
    * restore it on startup.
    *
-   * @default false
+   * @default true
    */
   persist?: boolean;
 
@@ -28,6 +48,20 @@ export interface StateManagerOptions {
    * @default "./state.json"
    */
   filePath?: string;
+
+  /**
+   * Milliseconds to wait after a mutation before flushing a coalesced save to
+   * disk. Multiple writes within one window produce a single save. `0` saves
+   * on every mutation. Only used when `persist` is true.
+   *
+   * An abrupt process kill loses mutations from the current window — a
+   * bounded trade-off against writing through on every `set()`, which is not
+   * viable given `save()` rewrites and fsyncs the whole store (design.md D6,
+   * R3).
+   *
+   * @default 1000
+   */
+  flushIntervalMs?: number;
 }
 
 /**
@@ -61,13 +95,25 @@ export class StateManager {
   private readonly globalListeners: Set<StateChangeHandler> = new Set();
   private readonly persist: boolean;
   private readonly filePath: string;
+  private readonly flushIntervalMs: number;
+
+  /** Pending coalesced-save timer, or `null` when no save is scheduled. */
+  private flushTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /**
+   * Chains every `save()` call (scheduled or explicit) so overlapping calls
+   * never race on the same file — a scheduled flush and an explicit call from
+   * graceful shutdown can otherwise land inside `atomicWrite()` concurrently.
+   */
+  private saveChain: Promise<void> = Promise.resolve();
 
   constructor(
     private readonly logger: Logger,
     options: StateManagerOptions = {},
   ) {
-    this.persist = options.persist ?? false;
+    this.persist = options.persist ?? true;
     this.filePath = options.filePath ?? "./state.json";
+    this.flushIntervalMs = options.flushIntervalMs ?? 1000;
   }
 
   // -------------------------------------------------------------------------
@@ -91,12 +137,44 @@ export class StateManager {
   /**
    * Set a value in the state store.
    *
-   * Fires change listeners if the value actually changed.
+   * Fires change listeners if the value actually changed, and schedules a
+   * coalesced save when persistence is enabled.
    *
    * @param key The state key
    * @param value The value to store
+   * @throws {Error} if `key` falls inside the reserved internal namespace
+   * (design.md D20). Use {@link setInternal} for room and automation
+   * enabled-flag writes.
    */
   set<T = unknown>(key: string, value: T): void {
+    if (isReservedStateKey(key)) {
+      throw new Error(`Cannot write reserved internal state key "${key}" through the public API`);
+    }
+    this.writeValue(key, value);
+  }
+
+  /**
+   * Writes a key under the reserved internal namespace, bypassing the
+   * rejection {@link set} applies to public callers. Used only by the room
+   * and automation enabled-flag writers (design.md D20).
+   *
+   * Everything else about the write is unchanged — it is persisted,
+   * coalesced by the flush interval, and delivered to change listeners like
+   * any other key.
+   *
+   * @throws {Error} if `key` does not fall inside the reserved namespace —
+   * this path exists for internal keys only.
+   */
+  setInternal<T = unknown>(key: string, value: T): void {
+    if (!isReservedStateKey(key)) {
+      throw new Error(
+        `setInternal() may only write reserved internal keys (prefix "${INTERNAL_STATE_PREFIX}"); got "${key}"`,
+      );
+    }
+    this.writeValue(key, value);
+  }
+
+  private writeValue<T>(key: string, value: T): void {
     const oldValue = this.store.get(key);
     this.store.set(key, value);
 
@@ -105,17 +183,44 @@ export class StateManager {
       this.logger.debug({ key, oldValue, newValue: value }, "State changed");
       this.notifyListeners(key, value, oldValue);
     }
+
+    this.scheduleFlush();
   }
 
   /**
    * Delete a key from the state store.
    *
-   * Fires change listeners if the key existed.
+   * Fires change listeners if the key existed, and schedules a coalesced
+   * save when persistence is enabled.
    *
    * @param key The state key
    * @returns true if the key existed and was deleted
+   * @throws {Error} if `key` falls inside the reserved internal namespace.
+   * Use {@link deleteInternal} for room and automation enabled-flag deletes.
    */
   delete(key: string): boolean {
+    if (isReservedStateKey(key)) {
+      throw new Error(`Cannot delete reserved internal state key "${key}" through the public API`);
+    }
+    return this.deleteValue(key);
+  }
+
+  /**
+   * Deletes a key under the reserved internal namespace, bypassing the
+   * rejection {@link delete} applies to public callers (design.md D20).
+   *
+   * @throws {Error} if `key` does not fall inside the reserved namespace.
+   */
+  deleteInternal(key: string): boolean {
+    if (!isReservedStateKey(key)) {
+      throw new Error(
+        `deleteInternal() may only delete reserved internal keys (prefix "${INTERNAL_STATE_PREFIX}"); got "${key}"`,
+      );
+    }
+    return this.deleteValue(key);
+  }
+
+  private deleteValue(key: string): boolean {
     if (!this.store.has(key)) {
       return false;
     }
@@ -124,6 +229,7 @@ export class StateManager {
     this.store.delete(key);
     this.logger.debug({ key, oldValue }, "State deleted");
     this.notifyListeners(key, undefined, oldValue);
+    this.scheduleFlush();
     return true;
   }
 
@@ -135,10 +241,32 @@ export class StateManager {
   }
 
   /**
-   * Get all keys in the state store.
+   * Get all keys in the state store, excluding reserved internal keys
+   * (design.md D20). Every surface that lists or counts keys derives from
+   * this method, so a count alongside a listing can never disagree with it.
    */
   keys(): string[] {
-    return [...this.store.keys()];
+    return [...this.store.keys()].filter((key) => !isReservedStateKey(key));
+  }
+
+  /**
+   * Returns reserved internal keys starting with `prefix`, for an internal
+   * consumer that owns a slice of the reserved namespace and needs to
+   * enumerate it — for example the automation-enabled reaper discarding
+   * preferences for automations no longer discovered (design.md D20, D30).
+   *
+   * The reserved namespace is otherwise unenumerable through the public API
+   * by design; this exists for internal consumers only.
+   *
+   * @throws {Error} if `prefix` does not fall inside the reserved namespace.
+   */
+  keysInternal(prefix: string): string[] {
+    if (!isReservedStateKey(prefix)) {
+      throw new Error(
+        `keysInternal() may only enumerate reserved internal keys (prefix "${INTERNAL_STATE_PREFIX}"); got "${prefix}"`,
+      );
+    }
+    return [...this.store.keys()].filter((key) => key.startsWith(prefix));
   }
 
   // -------------------------------------------------------------------------
@@ -261,11 +389,21 @@ export class StateManager {
 
   /**
    * Save current state to disk (if persistence is enabled).
-   * Called by the engine on shutdown.
+   *
+   * Concurrent calls — a scheduled coalesced flush racing an explicit call
+   * from graceful shutdown — are serialized onto one chain so they never
+   * open the same temp file at once. A failed save is logged and does not
+   * prevent a later save from running (design.md R3; task 2.5).
    */
   async save(): Promise<void> {
     if (!this.persist) return;
+    const next = this.saveChain.then(() => this.performSave());
+    // however performSave() resolves, keep the chain alive for the next caller
+    this.saveChain = next;
+    return next;
+  }
 
+  private async performSave(): Promise<void> {
     try {
       // Serialize each entry individually so one bad value cannot abort the
       // entire save — unserializable keys are skipped and logged.
@@ -292,6 +430,48 @@ export class StateManager {
     } catch (err) {
       this.logger.error({ err, file: this.filePath }, "Failed to persist state");
     }
+  }
+
+  /**
+   * Schedules a coalesced save after a mutation, when persistence is
+   * enabled. Multiple writes inside one `flushIntervalMs` window produce a
+   * single save — the first write in an idle period starts the timer, and
+   * later writes ride along until it fires rather than restarting it, so a
+   * sustained stream of writes still flushes at a bounded interval rather
+   * than being deferred indefinitely (design.md D6).
+   *
+   * `flushIntervalMs: 0` saves on every mutation instead of scheduling.
+   */
+  private scheduleFlush(): void {
+    if (!this.persist) return;
+
+    if (this.flushIntervalMs <= 0) {
+      void this.save();
+      return;
+    }
+
+    if (this.flushTimer) return;
+    this.flushTimer = setTimeout(() => {
+      this.flushTimer = null;
+      void this.save();
+    }, this.flushIntervalMs);
+    // Never let a pending flush keep the process alive on its own — the
+    // engine's graceful shutdown path calls flush() explicitly.
+    this.flushTimer.unref?.();
+  }
+
+  /**
+   * Cancels any pending coalesced save and performs one immediately.
+   *
+   * Called by the engine on graceful shutdown so mutations made inside the
+   * current debounce window are not lost (design.md D6; task 2.3).
+   */
+  async flush(): Promise<void> {
+    if (this.flushTimer) {
+      clearTimeout(this.flushTimer);
+      this.flushTimer = null;
+    }
+    await this.save();
   }
 
   /**

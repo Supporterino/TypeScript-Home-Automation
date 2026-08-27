@@ -54,9 +54,21 @@ export function buildShellyAccessory(
   }
 }
 
+/**
+ * The seed string hashed into a Shelly accessory's stable HomeKit UUID.
+ *
+ * Extracted as its own named, hap-nodejs-independent function so a
+ * characterisation test (task 6.15) can freeze it without importing
+ * `hap-nodejs` — a pairing-critical value that must survive any refactor of
+ * this factory unchanged.
+ */
+export function shellyAccessoryUuidSeed(device: ShellyDevice): string {
+  return `shelly:${device.name}`;
+}
+
 /** Generate a stable accessory UUID per Shelly device. */
 function shellyUuid(device: ShellyDevice): string {
-  return uuid.generate(`shelly:${device.name}`);
+  return uuid.generate(shellyAccessoryUuidSeed(device));
 }
 
 /** Populate the AccessoryInformation service for a Shelly device. */
