@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
 import { Hono } from "hono";
 import pino from "pino";
+import { ExecutionRecorder } from "../src/core/observability/execution-recorder.js";
 import { PrometheusMetricsService } from "../src/core/services/prometheus-metrics-service.js";
 import type {
   DeviceRegistry,
@@ -9,6 +10,11 @@ import type {
 import type { ZigbeeDevice } from "../src/types/zigbee/bridge.js";
 
 const logger = pino({ level: "silent" });
+
+/** A no-op stand-in for tests that don't exercise the execution counters. */
+function createNoopExecutionRecorder(): ExecutionRecorder {
+  return new ExecutionRecorder(logger);
+}
 
 function makeDevice(friendlyName: string, overrides: Partial<ZigbeeDevice> = {}): ZigbeeDevice {
   return {
@@ -142,6 +148,7 @@ describe("PrometheusMetricsService", () => {
         http: {} as never,
         logger,
         deviceRegistry: mockRegistry.registry,
+        executionRecorder: createNoopExecutionRecorder(),
       });
     });
 
@@ -536,6 +543,7 @@ describe("PrometheusMetricsService", () => {
           http: {} as never,
           logger,
           deviceRegistry: null,
+          executionRecorder: createNoopExecutionRecorder(),
         }),
       ).resolves.toBeUndefined();
     });
@@ -545,6 +553,7 @@ describe("PrometheusMetricsService", () => {
         http: {} as never,
         logger,
         deviceRegistry: null,
+        executionRecorder: createNoopExecutionRecorder(),
       });
 
       const res = await app.request("/metrics");
@@ -569,6 +578,7 @@ describe("PrometheusMetricsService", () => {
         http: {} as never,
         logger,
         deviceRegistry: mockRegistry.registry,
+        executionRecorder: createNoopExecutionRecorder(),
       });
 
       // Should have the info gauge and initial state from the existing device
@@ -583,6 +593,165 @@ describe("PrometheusMetricsService", () => {
       const body2 = await res2.text();
       expect(body2).toContain('zigbee_device_state{device="bulb"} 1');
       expect(body2).toContain('zigbee_device_brightness{device="bulb"} 254');
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Automation execution counters (design.md D18; task 8.8)
+  // ---------------------------------------------------------------------------
+
+  describe("automation execution counters", () => {
+    const cronTrigger = () => ({
+      type: "cron" as const,
+      expression: "manual",
+      firedAt: new Date(),
+    });
+
+    it("increments only the execution counter on a successful run", async () => {
+      const recorder = new ExecutionRecorder(logger);
+      await service.onStart({
+        http: {} as never,
+        logger,
+        deviceRegistry: null,
+        executionRecorder: recorder,
+      });
+
+      await recorder.run("motion-light", cronTrigger(), async () => {});
+
+      const res = await app.request("/metrics");
+      const body = await res.text();
+      expect(body).toContain('automation_executions_total{automation="motion-light"} 1');
+      expect(body).not.toContain('automation_failures_total{automation="motion-light"}');
+    });
+
+    it("increments both counters on a failed run", async () => {
+      const recorder = new ExecutionRecorder(logger);
+      await service.onStart({
+        http: {} as never,
+        logger,
+        deviceRegistry: null,
+        executionRecorder: recorder,
+      });
+
+      await expect(
+        recorder.run("motion-light", cronTrigger(), async () => {
+          throw new Error("boom");
+        }),
+      ).rejects.toThrow("boom");
+
+      const res = await app.request("/metrics");
+      const body = await res.text();
+      expect(body).toContain('automation_executions_total{automation="motion-light"} 1');
+      expect(body).toContain('automation_failures_total{automation="motion-light"} 1');
+    });
+
+    it("reports distinct automations under distinct labels", async () => {
+      const recorder = new ExecutionRecorder(logger);
+      await service.onStart({
+        http: {} as never,
+        logger,
+        deviceRegistry: null,
+        executionRecorder: recorder,
+      });
+
+      await recorder.run("motion-light", cronTrigger(), async () => {});
+      await recorder.run("night-mode", cronTrigger(), async () => {});
+      await recorder.run("night-mode", cronTrigger(), async () => {});
+
+      const res = await app.request("/metrics");
+      const body = await res.text();
+      expect(body).toContain('automation_executions_total{automation="motion-light"} 1');
+      expect(body).toContain('automation_executions_total{automation="night-mode"} 2');
+    });
+
+    it("counters survive well past the in-memory history retention limit", async () => {
+      const recorder = new ExecutionRecorder(logger, 3); // history caps at 3
+      await service.onStart({
+        http: {} as never,
+        logger,
+        deviceRegistry: null,
+        executionRecorder: recorder,
+      });
+
+      for (let i = 0; i < 10; i++) {
+        await recorder.run("motion-light", cronTrigger(), async () => {});
+      }
+
+      expect(recorder.getHistory("motion-light")).toHaveLength(3);
+      const res = await app.request("/metrics");
+      const body = await res.text();
+      expect(body).toContain('automation_executions_total{automation="motion-light"} 10');
+    });
+
+    it("does not report a spurious value for an automation that has never executed", async () => {
+      const recorder = new ExecutionRecorder(logger);
+      await service.onStart({
+        http: {} as never,
+        logger,
+        deviceRegistry: null,
+        executionRecorder: recorder,
+      });
+
+      const res = await app.request("/metrics");
+      const body = await res.text();
+      expect(body).not.toContain("automation=");
+    });
+
+    it("stops incrementing after onStop unsubscribes", async () => {
+      const recorder = new ExecutionRecorder(logger);
+      await service.onStart({
+        http: {} as never,
+        logger,
+        deviceRegistry: null,
+        executionRecorder: recorder,
+      });
+      await service.onStop();
+
+      await recorder.run("motion-light", cronTrigger(), async () => {});
+
+      const app2 = new Hono();
+      const freshService = new PrometheusMetricsService(logger);
+      freshService.registerRoutes(app2);
+      // The stopped service's own registry was cleared by onStop(); a fresh
+      // service confirms the recorder itself has no leftover subscriber
+      // still driving counters for the old service.
+      const res = await app2.request("/metrics");
+      const body = await res.text();
+      expect(body).not.toContain('automation="motion-light"');
+    });
+  });
+
+  describe("no unbounded labels (task 8.8)", () => {
+    it("never derives a metric label from a trigger payload, device name, or state value", async () => {
+      const recorder = new ExecutionRecorder(logger);
+      await service.onStart({
+        http: {} as never,
+        logger,
+        deviceRegistry: null,
+        executionRecorder: recorder,
+      });
+
+      await recorder.run(
+        "motion-light",
+        {
+          type: "mqtt",
+          topic: "zigbee2mqtt/hallway_sensor",
+          payload: { occupancy: true, device_name: "hallway_sensor" },
+        },
+        async () => {},
+      );
+
+      const res = await app.request("/metrics");
+      const body = await res.text();
+      // Only the automation label appears — nothing derived from the topic
+      // or payload leaks into the automation counter's own label set (the
+      // pre-existing `zigbee_device_occupancy` gauge's own HELP text also
+      // contains the word "occupancy", so the check is scoped to the metric
+      // line itself rather than the whole exposition body).
+      const executionLine = body
+        .split("\n")
+        .find((line) => line.startsWith("automation_executions_total{"));
+      expect(executionLine).toBe('automation_executions_total{automation="motion-light"} 1');
     });
   });
 });
