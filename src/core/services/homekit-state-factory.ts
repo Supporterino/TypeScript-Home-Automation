@@ -6,6 +6,18 @@ import {
 } from "./homekit-accessory-factory.js";
 
 /**
+ * The seed string hashed into a state toggle accessory's stable HomeKit UUID.
+ *
+ * Extracted as its own named, hap-nodejs-independent function so a
+ * characterisation test (task 6.15) can freeze it without importing
+ * `hap-nodejs` — a pairing-critical value that must survive any refactor of
+ * this factory unchanged.
+ */
+export function stateToggleUuidSeed(stateKey: string): string {
+  return `state:${stateKey}`;
+}
+
+/**
  * Builds a HomeKit Switch accessory that mirrors a boolean `StateManager` key.
  *
  * The `On` characteristic is wired to `onSet` for write-back and its value is
@@ -26,7 +38,7 @@ export function buildStateToggleAccessory(
   stateKey: string,
   onSet: (value: boolean) => void,
 ): CreatedAccessory {
-  const accessory = new Accessory(name, uuid.generate(`state:${stateKey}`));
+  const accessory = new Accessory(name, uuid.generate(stateToggleUuidSeed(stateKey)));
   accessory.category = HAP_CATEGORY_SWITCH;
 
   const service = accessory.addService(Service.Switch);
