@@ -24,19 +24,9 @@
     }
   },
   "files": {
-    "includes": ["src/**", "tests/**", "*.json"]
+    "includes": ["src/**", "tests/**", "*.json", "!src/core/web-ui/assets/manifest.ts"]
   },
   "overrides": [
-    {
-      "includes": ["src/core/web-ui/assets/app-js.ts"],
-      "linter": {
-        "rules": {
-          "suspicious": {
-            "noTemplateCurlyInString": "off"
-          }
-        }
-      }
-    },
     {
       "includes": ["src/core/web-ui/app/**"],
       "linter": {

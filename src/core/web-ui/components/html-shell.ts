@@ -1,5 +1,4 @@
-import { JS } from "../assets/app-js.js";
-import { CSS } from "../assets/style-css.js";
+import { firstPaintAssetUrls } from "../asset-routes.js";
 
 export interface HtmlShellOptions {
   /** URL path prefix where the web UI is mounted, e.g. "/status". */
@@ -15,9 +14,10 @@ export interface HtmlShellOptions {
  * Returns the full HTML document for the web UI dashboard.
  *
  * The page is a minimal shell — a single <div id="app"> mount point for the
- * React + Mantine frontend. Both the CSS (Mantine styles) and the compiled JS
- * bundle are inlined so the dashboard loads with a single HTTP request and
- * requires no external network access.
+ * React + Mantine frontend. The compiled JS and CSS bundles are referenced by
+ * their content-addressed asset URLs rather than inlined, so they are
+ * cacheable across requests and across views (design.md D8). The shell's size
+ * is therefore independent of the compiled application's size.
  *
  * The data-base-path attribute is read by the React app to prefix all API
  * calls with the correct path (e.g. /status/api/status).
@@ -30,6 +30,12 @@ export function htmlShell({ basePath, hasAuth: _hasAuth }: HtmlShellOptions): st
 
   const iconPath = basePath === "/" ? "/icon.svg" : `${basePath}/icon.svg`;
   const manifestPath = basePath === "/" ? "/manifest.json" : `${basePath}/manifest.json`;
+
+  const { js, css } = firstPaintAssetUrls(basePath);
+  const cssLinks = css.map((href) => `  <link rel="stylesheet" href="${esc(href)}" />`).join("\n");
+  const jsScripts = js
+    .map((src) => `  <script type="module" src="${esc(src)}"></script>`)
+    .join("\n");
 
   return `<!DOCTYPE html>
 <html lang="en" data-base-path="${esc(basePath)}">
@@ -46,11 +52,11 @@ export function htmlShell({ basePath, hasAuth: _hasAuth }: HtmlShellOptions): st
   <link rel="apple-touch-icon" href="${esc(iconPath)}" />
   <link rel="icon" type="image/svg+xml" href="${esc(iconPath)}" />
   <script>${colorSchemeScript}</script>
-  <style>${CSS}</style>
+${cssLinks}
 </head>
 <body>
   <div id="app"></div>
-  <script type="module">${JS}</script>
+${jsScripts}
 </body>
 </html>`;
 }
