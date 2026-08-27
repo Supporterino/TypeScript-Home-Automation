@@ -6,7 +6,7 @@ A `Bun.serve()`-backed HTTP server built on the Hono web framework. Provides hea
 
 ## Requirements
 
-### Server Lifecycle
+### Requirement: Server Lifecycle
 
 `start()` MUST begin listening on the configured port.
 
@@ -14,7 +14,7 @@ A `Bun.serve()`-backed HTTP server built on the Hono web framework. Provides hea
 
 The system MUST be creatable with `HTTP_PORT=0` — in this case, no server is started and the engine logs an info message.
 
-### Endpoints
+### Requirement: Endpoints
 
 #### Unauthenticated Endpoints
 
@@ -104,19 +104,19 @@ Returns 503 if `LogBuffer` is not yet available.
 
 Returns 503 if `DeviceRegistry` is disabled or not available.
 
-### Web UI Mounting
+### Requirement: Web UI Mounting
 
 The system MUST support lazy mounting of the web UI on a configurable path (default: `/status`). The web UI is only mounted when `WEB_UI_ENABLED=true`. The Hono sub-app is served under the configured path prefix.
 
-### Service Plugin Routes
+### Requirement: Service Plugin Routes
 
 The system MUST call `registerRoutes(app)` on every `ServicePlugin` before the server starts listening, allowing plugins to mount custom API routes.
 
-### Authentication Warning
+### Requirement: Authentication Warning
 
 The system MUST log a warning at startup when `HTTP_TOKEN` is empty, reminding the operator to secure the API.
 
-### Internal API
+### Requirement: Internal API
 
 The `HttpServer` exposes:
 - `fetch: (req: Request) => Response | Promise<Response>` — The Hono app's fetch handler (for testing without starting a real server)

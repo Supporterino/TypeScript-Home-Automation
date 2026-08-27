@@ -6,7 +6,7 @@ Exposes Prometheus gauges for mmWave presence sensor state (presence, target dis
 
 ## Requirements
 
-### Presence sensor Prometheus gauge
+### Requirement: Presence sensor Prometheus gauge
 
 The system SHALL expose a `zigbee_device_presence` gauge in `PrometheusMetricsService` that reflects the `presence` field of any device state, with value 1 when presence is detected and 0 when vacant.
 
@@ -22,7 +22,7 @@ The system SHALL expose a `zigbee_device_presence` gauge in `PrometheusMetricsSe
 - **WHEN** a device reports state without a `presence` key
 - **THEN** `zigbee_device_presence` SHALL NOT be set for that device (no default value)
 
-### Target distance Prometheus gauge
+### Requirement: Target distance Prometheus gauge
 
 The system SHALL expose a `zigbee_device_target_distance` gauge in `PrometheusMetricsService` that reflects the `target_distance` field (in meters) of any device state.
 
@@ -34,7 +34,7 @@ The system SHALL expose a `zigbee_device_target_distance` gauge in `PrometheusMe
 - **WHEN** a device reports state without a `target_distance` key
 - **THEN** `zigbee_device_target_distance` SHALL NOT be set for that device
 
-### PIR detection Prometheus gauge
+### Requirement: PIR detection Prometheus gauge
 
 The system SHALL expose a `zigbee_device_pir_detection` gauge in `PrometheusMetricsService` that reflects the `pir_detection` field of any device state, with value 1 when PIR motion is detected and 0 when none.
 
@@ -46,7 +46,7 @@ The system SHALL expose a `zigbee_device_pir_detection` gauge in `PrometheusMetr
 - **WHEN** a device reports state with `pir_detection: false`
 - **THEN** `zigbee_device_pir_detection{device="<friendly_name>"}` SHALL be 0
 
-### Gauge lifecycle management
+### Requirement: Gauge lifecycle management
 
 The system SHALL register the new presence gauges in `allSingleLabelGauges` so they are properly cleaned up on device removal and service stop.
 
@@ -58,7 +58,7 @@ The system SHALL register the new presence gauges in `allSingleLabelGauges` so t
 - **WHEN** `PrometheusMetricsService.onStop()` is called
 - **THEN** all presence-related gauge entries SHALL be cleaned up
 
-### Existing occupancy gauge unchanged
+### Requirement: Existing occupancy gauge unchanged
 
 The existing `zigbee_device_occupancy` gauge SHALL continue to function exactly as before — presence sensors use a separate gauge and do not affect the occupancy metric.
 

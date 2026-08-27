@@ -6,7 +6,7 @@ Controls Shelly Gen 2 devices (Plus, Pro series) over either their local HTTP RP
 
 ## Requirements
 
-### Device Registration
+### Requirement: Device Registration
 
 `register(name, host, type?)` MUST:
 - Store the device in an internal `Map<string, ShellyDevice>`
@@ -55,7 +55,7 @@ Controls Shelly Gen 2 devices (Plus, Pro series) over either their local HTTP RP
   `onDeviceRegistered`
 - **THEN** the listener is invoked with the newly registered device
 
-### Device Inventory Read Access
+### Requirement: Device Inventory Read Access
 
 `ShellyService` MUST expose a public read view of registered devices via
 `getDevices(): ShellyDevice[]`, returning all currently registered devices with
@@ -67,7 +67,7 @@ their `name`, `type`, `transport`, and either `host` (HTTP-transport) or
 - **WHEN** two devices have been registered and `getDevices()` is called
 - **THEN** it returns both devices including their normalized host and type
 
-### Registration Event Listeners
+### Requirement: Registration Event Listeners
 
 `ShellyService` MUST allow consumers to subscribe to device registrations so they
 can react to devices registered at any time (including after service startup):
@@ -96,7 +96,7 @@ from running.
 - **WHEN** one listener throws during a registration
 - **THEN** the error is caught and logged and remaining listeners still run
 
-### Device Type Definition
+### Requirement: Device Type Definition
 
 The type `ShellyDeviceType = "switch" | "outlet" | "cover"` MUST be defined in
 `src/types/shelly.ts`, and `ShellyDevice` MUST include a `type: ShellyDeviceType`
@@ -107,7 +107,7 @@ field.
 - **WHEN** a `ShellyDevice` is constructed
 - **THEN** it carries a `type` field of `ShellyDeviceType`
 
-### Switch Control
+### Requirement: Switch Control
 
 All switch methods operate on component `id: "0"`.
 
@@ -119,7 +119,7 @@ All switch methods operate on component `id: "0"`.
 
 All switch methods return `ShellySwitchSetResult` (contains the state BEFORE the command).
 
-### Cover/Shutter Control
+### Requirement: Cover/Shutter Control
 
 All cover methods operate on component `id: "0"`.
 
@@ -143,7 +143,7 @@ All cover methods operate on component `id: "0"`.
 
 **`getCoverState(name)`** — Get current state enum.
 
-### Status and Info
+### Requirement: Status and Info
 
 **`getStatus(name)`** — Get switch status including power metering (W, V, A, energy counters).
 
@@ -159,7 +159,7 @@ All cover methods operate on component `id: "0"`.
 
 **`reboot(name, delayMs?)`** — Reboot the device. Optional delay in ms. Logs warning.
 
-### Service Construction Receives MQTT
+### Requirement: Service Construction Receives MQTT
 
 `ShellyService` MUST be constructed with (or otherwise gain access to) both an
 `HttpClient` and a `MqttService`, in addition to its `Logger`, so it can route
@@ -181,7 +181,7 @@ type ShellyServiceFactory = (ctx: ShellyServiceContext) => ShellyService;
 - **THEN** it invokes the factory with a single `ShellyServiceContext` object
   containing `http`, `mqtt`, and `logger`
 
-### Transport-Aware RPC Dispatch
+### Requirement: Transport-Aware RPC Dispatch
 
 Every command/status method on `ShellyService` (`turnOn`, `turnOff`, `toggle`,
 `coverOpen`, `coverClose`, `coverStop`, `coverGoToPosition`,
@@ -215,7 +215,7 @@ fails or times out MUST NOT be retried over HTTP, and vice versa.
 - **WHEN** an MQTT RPC command to an MQTT-transport device fails or times out
 - **THEN** the call rejects with a descriptive error and is NOT retried over HTTP
 
-### MQTT RPC Command Protocol
+### Requirement: MQTT RPC Command Protocol
 
 For MQTT-transport devices, the system MUST implement the Shelly Gen2
 RPC-over-MQTT protocol:
@@ -264,7 +264,7 @@ RPC-over-MQTT protocol:
   subscription and are correctly routed to their respective pending calls by
   `id`
 
-### RPC Communication (HTTP Transport)
+### Requirement: RPC Communication (HTTP Transport)
 
 This section applies to devices registered with `transport: "http"`. For
 `transport: "mqtt"` devices, see "MQTT RPC Command Protocol" above.
@@ -287,13 +287,13 @@ Before using the parsed response body, the system MUST validate that it has the 
 - **WHEN** the parsed RPC response is not an object or lacks the expected fields
 - **THEN** the system throws a descriptive error identifying the device, host, and method
 
-### Error Handling
+### Requirement: Error Handling
 
 - Unregistered device → throw `Error`: `Shelly device "X" is not registered. Call shelly.register("X", "<ip>") first.`
 - HTTP failure → throw `Error`: `Shelly RPC {method} failed for "{name}" ({host}): HTTP {status}`
 - All operational errors are logged via the child logger
 
-### Types
+### Requirement: Types
 
 The service uses typed response interfaces from `src/types/shelly.ts`:
 - `ShellySwitchStatus` — output, apower, voltage, current, energy counters

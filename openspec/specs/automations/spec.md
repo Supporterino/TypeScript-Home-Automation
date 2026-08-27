@@ -6,7 +6,7 @@ The automation system is the core extensibility mechanism. Users write TypeScrip
 
 ## Requirements
 
-### Automation Base Class
+### Requirement: Automation Base Class
 
 The system MUST provide an abstract `Automation` class with:
 
@@ -33,7 +33,7 @@ The system MUST provide an abstract `Automation` class with:
 - `protected require<T>(key: string): T` — Non-null service retrieval (validated at startup)
 - `protected async notify(options: NotificationOptions): Promise<void>` — Push notification (no-ops if service absent)
 
-### Trigger Types
+### Requirement: Trigger Types
 
 The system MUST support 7 trigger types:
 
@@ -79,7 +79,7 @@ Fires when a Zigbee device joins. Optional `friendlyName` scopes to a specific d
 ```
 Fires when a Zigbee device leaves. Optional `friendlyName` scopes to a specific device. Requires `DEVICE_REGISTRY_ENABLED=true`.
 
-### Trigger Context
+### Requirement: Trigger Context
 
 The `execute()` method receives a discriminated union based on trigger type:
 
@@ -93,18 +93,18 @@ The `execute()` method receives a discriminated union based on trigger type:
 | `device_joined` | `type`, `device: ZigbeeDevice` |
 | `device_left` | `type`, `device: ZigbeeDevice` |
 
-### Dependency Injection
+### Requirement: Dependency Injection
 
 The system MUST inject dependencies via `Automation._inject(context: AutomationContext)` before calling `onStart()`. The `AutomationContext` includes:
 - `mqtt`, `http`, `state`, `logger`, `config` (always present)
 - `deviceRegistry` (`null` when disabled)
 - `services` (shared ServiceRegistry)
 
-### Required Services Validation
+### Requirement: Required Services Validation
 
 If an automation declares `requiredServices`, the system MUST validate at registration time that every listed key exists in the `ServiceRegistry`. Missing services cause a thrown `Error` with a descriptive message listing the automation name and missing key. This validation happens BEFORE `onStart()` is called.
 
-### Automation Manager
+### Requirement: Automation Manager
 
 The Automation Manager MUST discover, register, and clean up automations, and MUST release any resources created during a partially-failed `onStart()`.
 
@@ -159,10 +159,10 @@ The system MUST expose these query methods for the debug API:
 - **WHEN** an automation's `onStart()` creates a timer or listener and then throws
 - **THEN** registration rollback unwinds the wired triggers, calls the automation's `onStop()` to release those resources, and removes the automation — leaving no orphaned timer or listener
 
-### Execution Error Handling
+### Requirement: Execution Error Handling
 
 The system MUST catch errors from `execute()` and log them via the automation's child logger. Errors from one trigger execution MUST NOT affect other triggers or automations.
 
-### Disabled Service Warnings
+### Requirement: Disabled Service Warnings
 
 When a trigger references a disabled service (e.g., webhook trigger with `HTTP_PORT=0`, device_state trigger with `DEVICE_REGISTRY_ENABLED=false`), the system MUST log a warning and skip the trigger registration. The automation still registers; only the unsupported trigger is ignored.

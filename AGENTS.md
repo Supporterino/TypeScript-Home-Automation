@@ -50,6 +50,7 @@ Other scripts: `format:check`, `lint:fix`, `docker:build/up/down`, `prepublishOn
   - `logging/` — `log-buffer.ts`
   - `services/` — `shelly-service.ts`, `nanoleaf-service.ts`, `ntfy-notification-service.ts`, `open-meteo-service.ts`, `openweathermap-service.ts`, `homekit-service.ts`, `service-registry.ts`, `service-plugin.ts`
   - `devices/` — `aqara-h1-automation.ts`, `ikea-styrbar-automation.ts`, `ikea-rodret-automation.ts`
+  - `device-sources/` — the source-neutral `DeviceSource` abstraction spanning Zigbee, Shelly, Nanoleaf, and state toggles (`device-source.ts`, `qualified-id.ts`, `zigbee-source.ts`, `shelly-source.ts`, `nanoleaf-source.ts`, `state-source.ts`, `aggregate.ts`) — exposed as `Engine.devices`, not a `ServiceRegistry` registration point
   - `zigbee/` — `device-registry.ts` (Zigbee2MQTT device discovery and state tracking)
   - `web-ui/` — Web dashboard served by Hono
     - `web-ui/app/` — React + Mantine frontend (compiled by `Bun.build`, **not** `tsc`)
@@ -71,10 +72,15 @@ Full schema in `src/config.ts`. `.env.example` lists defaults. Notable env vars:
 | `MQTT_HOST` | `localhost` | MQTT broker hostname |
 | `LOG_LEVEL` | `info` | `trace` · `debug` · `info` · `warn` · `error` |
 | `HTTP_PORT` | `8080` | HTTP server port (`0` = disabled) |
+| `HTTP_TOKEN` | _(empty)_ | Bearer token / session secret for `/api/*` and the web UI. Empty = no auth. Automation source (`GET /api/automations/:name/source`) is readable under the same policy — document this prominently wherever `HTTP_TOKEN` is discussed (design.md D10, R4) |
 | `WEB_UI_ENABLED` | `false` | Enable the web UI dashboard |
 | `DEVICE_REGISTRY_ENABLED` | `false` | Enable Zigbee device discovery — controls `deviceRegistry` nullability in automations |
+| `DEVICE_REGISTRY_PERSIST` | `true` | Persist the device list and capability schema to disk, restored before the bridge republishes (breaking default change — design.md D6, R14) |
 | `AUTOMATIONS_RECURSIVE` | `false` | Scan subdirectories recursively for automation files |
-| `STATE_PERSIST` | `false` | Persist state to disk on shutdown |
+| `STATE_PERSIST` | `true` | Persist state to disk (write-behind, debounced by `STATE_FLUSH_MS`); holds room definitions and automation enabled flags, which must survive a restart (breaking default change — design.md D6, R14) |
+| `STATE_FLUSH_MS` | `1000` | Debounce window, in ms, between coalesced state saves. `0` saves on every write |
+| `SHELLY_POLL_MS` | `10000` | Refresh interval for HTTP-transport Shelly devices in the unified device source layer |
+| `NANOLEAF_POLL_MS` | `10000` | Refresh interval for the Nanoleaf device source |
 
 ## Formatting (Biome)
 

@@ -6,7 +6,7 @@ Configuration is loaded from environment variables and validated with Zod at sta
 
 ## Requirements
 
-### Schema
+### Requirement: Schema
 
 The system MUST validate configuration against a Zod schema with these sections:
 
@@ -46,7 +46,7 @@ type Config = {
 
 Where `LogLevel` is `"fatal" | "error" | "warn" | "info" | "debug" | "trace"`.
 
-### Environment Variable Mapping
+### Requirement: Environment Variable Mapping
 
 | Environment Variable | Config Path |
 |---------------------|-------------|
@@ -67,7 +67,7 @@ Where `LogLevel` is `"fatal" | "error" | "warn" | "info" | "debug" | "trace"`.
 | `WEB_UI_ENABLED` | `httpServer.webUi.enabled` |
 | `WEB_UI_PATH` | `httpServer.webUi.path` |
 
-### Boolean Coercion
+### Requirement: Boolean Coercion
 
 The system MUST coerce boolean environment variables tolerantly — matching is case-insensitive and ignores surrounding whitespace:
 - Truthy: `"true"`, `"1"`, `"yes"`, `"on"` (any letter case, trimmed)
@@ -86,10 +86,10 @@ A value that does not match any recognized token MUST NOT throw an uncaught erro
 - **WHEN** a boolean environment variable is set to an unrecognized value (e.g. `"maybe"`)
 - **THEN** the system reports a formatted validation error and exits via `process.exit(1)`, rather than throwing an uncaught `ZodError` with a raw stack trace
 
-### Validation Failure
+### Requirement: Validation Failure
 
 The system MUST call `process.exit(1)` and print formatted Zod errors when validation fails.
 
-### Services Passthrough
+### Requirement: Services Passthrough
 
 The `services` field MUST be an open record (`z.record(z.string(), z.unknown())`). Services read their own slice of this record. This allows adding new service configurations without modifying the config schema.

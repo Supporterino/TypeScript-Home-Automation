@@ -95,7 +95,9 @@ An in-memory `Map<string, unknown>` protected by a typed API. When `set()` is ca
 
 ### `LogBuffer`
 
-A circular ring buffer (default 2500 entries) that receives every pino log line as a newline-delimited JSON string via pino's multistream. Each entry is parsed and stored as a `LogEntry` object. The buffer is queried by the debug API and status page for log display and filtering.
+A circular ring buffer (default 1000 entries) that receives every pino log line as a newline-delimited JSON string via pino's multistream. Each entry is parsed and stored as a `LogEntry` object. `query()` serves the `GET /api/logs` endpoint and the CLI; `subscribe(listener)` additionally feeds the realtime event stream's log category (design.md D32).
+
+Notification is deferred off the synchronous `write()` call via `setImmediate` — `write()` is reached by every `logger.*` call in the engine through pino's sink, so running fan-out (including network writes to connected SSE clients) synchronously inside it would put stream delivery on the hot logging path (design.md D32, R9, mirroring the automation execution context's own async-context requirement). Deferring only the *stack* is not sufficient on its own: a log entry produced by the delivery path's own failure would otherwise re-enter the same cycle across turns rather than the same call stack. The event stream's delivery path (fan-out, per-connection buffering, the fell-behind signal, payload serialisation, failing-client isolation) therefore logs through a **second, stdout-only pino instance** rather than the primary logger, cutting the cycle rather than merely deferring it. Stream *lifecycle* events (a connection accepted or closed, a subscription registered) are not part of the delivery path and remain on the primary logger, visible in the log view — narrowing the stdout-only logger to exactly the delivery path is what keeps that narrower scope honest, since a wider one would make the log view blind to the one subsystem whose failure also breaks the log view. This means **an SSE delivery failure is intentionally absent from the log view** (it is on stdout only); a stream lifecycle event is not.
 
 ### `HttpServer`
 
@@ -103,8 +105,8 @@ A `Bun.serve()`-based HTTP server handling:
 
 - `/healthz`, `/readyz` — health probes (always unauthenticated)
 - `/webhook/*` — webhook trigger dispatch (optionally authenticated)
- - `/debug/*` — debug API (automations, state, logs) — authenticated when `HTTP_TOKEN` is set
- - `/ui/*` (default: `/status/*`) — Hono sub-app for the web UI (mounted lazily when `WEB_UI_ENABLED=true`)
+- `/api/*` — automations, state, logs, device catalog, rooms, and the realtime event stream — authenticated when `HTTP_TOKEN` is set (see [API Reference](api-reference.md#httpserver) for the full route table)
+- `{WEB_UI_PATH}/*` (default: `/status/*`) — Hono sub-app serving the web UI's HTML shell, compiled assets, and login/logout (mounted lazily when `WEB_UI_ENABLED=true`); the `/api/*` routes above are **not** nested under this path — see [Web UI](http/web-ui.md#data-api)
 
 ### `ShellyService`
 

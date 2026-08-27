@@ -6,14 +6,14 @@ A type-safe key-value registry for optional services, with three retrieval style
 
 ## Requirements
 
-### Registration
+### Requirement: Registration
 
 `register<T>(key, service)` MUST:
 - Store the service in an internal `Map<string, unknown>`
 - Replace any previously registered service with the same key
 - Log a debug message
 
-### Retrieval — Three Styles
+### Requirement: Retrieval — Three Styles
 
 #### 1. `get<T>(key): T | null`
 
@@ -41,12 +41,12 @@ Callback wrapper. Calls `fn(service)` if the service is registered, returns `und
 await this.services.use<ShellyService>("shelly", (s) => s.turnOff("tv_plug"));
 ```
 
-### Query Methods
+### Requirement: Query Methods
 
 - `has(key): boolean` — Returns whether a service is registered
 - `keys(): string[]` — Returns all registered service keys
 
-### ServicePlugin Lifecycle
+### Requirement: ServicePlugin Lifecycle
 
 The registry MUST manage `ServicePlugin` lifecycle hooks:
 
@@ -81,11 +81,11 @@ For every registered service that implements `ServicePlugin`:
 - **WHEN** `stopAll()` runs after multiple plugins were started
 - **THEN** plugins are stopped in the reverse of their registration order
 
-### Logger Injection
+### Requirement: Logger Injection
 
 The engine MUST call `setLogger(logger)` on the registry after construction, providing a `{ service: "services" }` scoped child logger.
 
-### Well-Known Keys
+### Requirement: Well-Known Keys
 
 The system recognizes these conventional service keys:
 - `"notifications"` — `NotificationService`

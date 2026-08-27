@@ -6,7 +6,7 @@ Defines TypeScript interfaces for mmWave presence sensor state payloads and conf
 
 ## Requirements
 
-### Generic presence sensor payload
+### Requirement: Generic presence sensor payload
 
 The system SHALL provide a `PresencePayload` interface in `src/types/zigbee/common.ts` that represents the state of any mmWave presence sensor, with `presence` as the required boolean field and optional `target_distance`, `illuminance`, `temperature`, `humidity`, `battery`, `voltage`, and `linkquality` fields.
 
@@ -30,7 +30,7 @@ The system SHALL provide a `PresencePayload` interface in `src/types/zigbee/comm
 - **WHEN** a presence sensor reports with `battery: 85`, `voltage: 2900`, and `linkquality: 54`
 - **THEN** the payload SHALL be assignable to `PresencePayload` with optional diagnostic fields populated
 
-### Generic presence sensor set command
+### Requirement: Generic presence sensor set command
 
 The system SHALL provide a `PresenceSetCommand` interface in `src/types/zigbee/common.ts` for configuring presence sensor sensitivity.
 
@@ -38,7 +38,7 @@ The system SHALL provide a `PresenceSetCommand` interface in `src/types/zigbee/c
 - **WHEN** constructing a set command for a presence sensor
 - **THEN** the command SHALL accept an optional `motion_sensitivity` field of type `"low" | "medium" | "high"`
 
-### Aqara-specific presence sensor payload
+### Requirement: Aqara-specific presence sensor payload
 
 The system SHALL provide an `AqaraPresencePayload` interface in `src/types/zigbee/aqara.ts` that extends `PresencePayload` with Aqara FP300-specific fields including PIR detection state, presence detection options, AI features, and zone-based detection range.
 
@@ -58,7 +58,7 @@ The system SHALL provide an `AqaraPresencePayload` interface in `src/types/zigbe
 - **WHEN** the Aqara FP300 reports zone-based detection with `detection_range_composite: { "detection_range_0": true, "detection_range_5": true }`
 - **THEN** the payload SHALL be assignable to `AqaraPresencePayload` with those zone booleans
 
-### Aqara-specific presence sensor set command
+### Requirement: Aqara-specific presence sensor set command
 
 The system SHALL provide an `AqaraPresenceSetCommand` interface in `src/types/zigbee/aqara.ts` that extends `PresenceSetCommand` with FP300-specific writable configuration and write-only commands.
 
@@ -78,7 +78,7 @@ The system SHALL provide an `AqaraPresenceSetCommand` interface in `src/types/zi
 - **WHEN** constructing a set command for an Aqara FP300
 - **THEN** the command SHALL accept optional write-only fields `spatial_learning` (`"Start Learning"`), `restart_device` (`"Restart Device"`), `identify` (`"identify"`), and `track_target_distance` (`"start_tracking_distance"`)
 
-### Re-exports from type index
+### Requirement: Re-exports from type index
 
 The system SHALL re-export `PresencePayload`, `PresenceSetCommand`, `AqaraPresencePayload`, and `AqaraPresenceSetCommand` from `src/types/zigbee/index.ts` and `src/index.ts`.
 

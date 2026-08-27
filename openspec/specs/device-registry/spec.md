@@ -6,7 +6,7 @@ Discovers Zigbee2MQTT devices, tracks their live state, and exposes device metad
 
 ## Requirements
 
-### Lifecycle
+### Requirement: Lifecycle
 
 The registry MUST follow a strict lifecycle:
 
@@ -15,7 +15,7 @@ The registry MUST follow a strict lifecycle:
 3. **`stop()`** — Unsubscribe all topics, clear internal state. Called during shutdown.
 4. **`save()`** — Persist device list and state. Called before shutdown.
 
-### Bridge Topics
+### Requirement: Bridge Topics
 
 The system MUST subscribe to two Zigbee2MQTT bridge topics:
 
@@ -34,7 +34,7 @@ The system MUST subscribe to two Zigbee2MQTT bridge topics:
 - **WHEN** a `bridge/event` message arrives without a `data` field
 - **THEN** the system logs a warning and skips the event without throwing, and the MQTT message handler continues to function
 
-### Per-Device State Tracking
+### Requirement: Per-Device State Tracking
 
 For each tracked device, the system MUST:
 1. Subscribe to `{prefix}/{friendly_name}` (the device's state topic)
@@ -53,7 +53,7 @@ State merging mirrors Zigbee2MQTT behavior — partial updates (e.g., only `brig
 - **WHEN** a device topic receives a non-object payload (e.g. the string `"online"`)
 - **THEN** the payload is ignored (debug-logged) and the existing device state is left unchanged
 
-### Device List Management
+### Requirement: Device List Management
 
 **`getDevices(): ZigbeeDevice[]`** — All tracked non-coordinator devices
 
@@ -61,11 +61,11 @@ State merging mirrors Zigbee2MQTT behavior — partial updates (e.g., only `brig
 
 **`hasDevice(friendlyName): boolean`** — Whether a device is tracked
 
-### State Query
+### Requirement: State Query
 
 **`getDeviceState(friendlyName): Record<string, unknown> | undefined`** — Last-known merged state
 
-### Event Listeners
+### Requirement: Event Listeners
 
 The system MUST support three listener types:
 
@@ -90,7 +90,7 @@ type DeviceRemovedHandler = (device: ZigbeeDevice) => void;
 - `onDeviceRemoved(handler)` — Register (fires when a device disappears)
 - `offDeviceRemoved(handler)` — Remove
 
-### Nice Names
+### Requirement: Nice Names
 
 The system MUST support human-readable device names via `DeviceNiceNames`:
 
@@ -106,7 +106,7 @@ interface DeviceNiceNames {
 2. `transform(friendlyName)` result
 3. Raw `friendly_name` as-is
 
-### Persistence
+### Requirement: Persistence
 
 When `persist` is enabled:
 - `save()` writes both device list and state JSON to `filePath`
@@ -114,7 +114,7 @@ When `persist` is enabled:
 - Incoming MQTT data always overwrites restored values — persisted data is a cold-start seed, never a source of truth
 - `ENOENT` on load is silently handled (no persisted file yet)
 
-### Error Handling
+### Requirement: Error Handling
 
 The system MUST:
 - Validate incoming payloads (array check, object check, friendly_name type check)
@@ -122,7 +122,7 @@ The system MUST:
 - Catch and log errors from listener callbacks — one failing listener does not affect others
 - Log error on persistence failures, continue running
 
-### Disabled Mode
+### Requirement: Disabled Mode
 
 When `DEVICE_REGISTRY_ENABLED=false`:
 - No `DeviceRegistry` is created

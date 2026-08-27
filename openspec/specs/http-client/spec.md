@@ -6,7 +6,7 @@ A typed wrapper around the global `fetch` API with structured pino logging, auto
 
 ## Requirements
 
-### Request Execution
+### Requirement: Request Execution
 
 `request<T>(url, options?): Promise<HttpResponse<T>>` MUST:
 - Accept `HttpRequestOptions`:
@@ -33,7 +33,7 @@ A typed wrapper around the global `fetch` API with structured pino logging, auto
   }
   ```
 
-### Convenience Methods
+### Requirement: Convenience Methods
 
 The system MUST provide shorthand methods:
 - `get<T>(url, options?)` — `method: "GET"`
@@ -42,7 +42,7 @@ The system MUST provide shorthand methods:
 - `patch<T>(url, body?, options?)` — `method: "PATCH"`
 - `del<T>(url, options?)` — `method: "DELETE"`
 
-### Retry Behavior
+### Requirement: Retry Behavior
 
 The system MUST implement exponential backoff retries with the following classification:
 
@@ -68,11 +68,11 @@ The system MUST implement exponential backoff retries with the following classif
 - **WHEN** a retry is scheduled
 - **THEN** the delay is `retryDelay * 2^attempt` plus a randomized jitter component
 
-### Timeout
+### Requirement: Timeout
 
 The system MUST support request timeout via `AbortController`. If `timeout` is set, the request is aborted after the specified milliseconds. A timeout counts as a network failure subject to retry logic.
 
-### Logging
+### Requirement: Logging
 
 Every request MUST log:
 - `debug`: Request sent with `{ method, url, status, durationMs }`
@@ -85,7 +85,7 @@ Every request MUST log:
 - **WHEN** a request URL contains a credential token as a path segment (e.g. `http://host:16021/api/v1/SECRETTOKEN/state`)
 - **THEN** the logged URL masks the token segment rather than printing it in plaintext
 
-### JSON Handling
+### Requirement: JSON Handling
 
 The system MUST:
 - Auto-serialize body to JSON with `Content-Type: application/json`
@@ -99,6 +99,6 @@ The system MUST:
 - **WHEN** the server returns `204 No Content`
 - **THEN** the client returns a response with `data` as `null` or `undefined` without a parse error
 
-### Shared Instance
+### Requirement: Shared Instance
 
 The engine creates a single shared `HttpClient` instance with a `{ service: "http" }` scoped child logger. All services receive this shared instance via their factory function or constructor.

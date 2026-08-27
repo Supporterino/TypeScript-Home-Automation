@@ -6,7 +6,7 @@ An in-memory key-value store with typed access, change listeners, and optional J
 
 ## Requirements
 
-### Core Operations
+### Requirement: Core Operations
 
 The system MUST provide a `StateManager` class with:
 
@@ -28,7 +28,7 @@ The system MUST provide a `StateManager` class with:
 
 **`keys(): string[]`** — Returns all stored keys
 
-### Change Listeners
+### Requirement: Change Listeners
 
 **`onChange<T>(key, handler)`**
 - Register a listener for a specific key
@@ -45,20 +45,20 @@ The system MUST provide a `StateManager` class with:
 **`offAnyChange(handler)`**
 - Remove a global listener
 
-### Listener Notification
+### Requirement: Listener Notification
 
 Listeners MUST fire synchronously during the same event loop tick as `set()` / `delete()`. This enables state-triggered automations to react immediately.
 
 The system MUST catch errors from individual listeners and log them — one failing listener MUST NOT prevent other listeners from firing.
 
-### Equality Check
+### Requirement: Equality Check
 
 The system MUST compare values before notifying listeners:
 - Strict equality (`===`) for primitives
 - `JSON.stringify` comparison for objects
 - Returns `false` on comparison errors (graceful degradation)
 
-### Persistence
+### Requirement: Persistence
 
 The system MUST persist and restore state durably: writes MUST be atomic and resilient to individual unserializable values, and loads MUST recover gracefully from a corrupt file.
 
@@ -106,7 +106,7 @@ The system MUST persist and restore state durably: writes MUST be atomic and res
 - **WHEN** `save()` completes successfully and a prior `state.json` existed
 - **THEN** the prior content is available as `state.json.bak` after the new file is written
 
-### Configuration
+### Requirement: Configuration
 
 ```ts
 interface StateManagerOptions {
@@ -117,7 +117,7 @@ interface StateManagerOptions {
 
 The `persist` option can be set via `STATE_PERSIST` env var or `options.state.persist` in `createEngine()`.
 
-### Naming Conventions
+### Requirement: Naming Conventions
 
 State keys SHOULD use `snake_case`. Keys prefixed with a colon-scoped namespace are recommended for multi-automation state:
 - `"night_mode"` — global state
