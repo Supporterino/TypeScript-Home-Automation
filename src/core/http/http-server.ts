@@ -4,11 +4,14 @@ import { getCookie } from "hono/cookie";
 import type { Logger } from "pino";
 import type { TriggerContext } from "../automation.js";
 import type { AutomationManager } from "../automation-manager.js";
+import type { AggregateDeviceSource } from "../device-sources/aggregate.js";
+import type { EventBus } from "../events/event-bus.js";
 import type { LogBuffer, LogQuery } from "../logging/log-buffer.js";
 import type { MqttService } from "../mqtt/mqtt-service.js";
+import type { RoomManager } from "../room-manager.js";
 import type { ServiceRegistry } from "../services/service-registry.js";
-import type { StateManager } from "../state/state-manager.js";
-import type { DeviceRegistry } from "../zigbee/device-registry.js";
+import { isReservedStateKey, type StateManager } from "../state/state-manager.js";
+import { EventStreamHub } from "./event-stream.js";
 import { levelNameToNumber, SESSION_COOKIE } from "./utils.js";
 
 /**
@@ -42,14 +45,30 @@ interface WebhookRoute {
  * - `GET  /api/status`                     — Engine and MQTT status
  * - `GET  /api/automations`                — List all automations
  * - `GET  /api/automations/:name`          — Get automation details
+ * - `PUT  /api/automations/:name/enabled`  — Enable or disable an automation
+ * - `GET  /api/automations/:name/source`   — Read the automation's source file
+ * - `GET  /api/automations/:name/history`  — Execution history (start time, trigger, duration, outcome)
+ * - `GET  /api/automations/:name/relationships` — Declared and observed relationships
  * - `POST /api/automations/:name/trigger`  — Manually trigger an automation
  * - `GET  /api/state`                      — List all state keys and values
  * - `GET  /api/state/:key`                 — Get a single state value
  * - `PUT  /api/state/:key`                 — Set a state value
  * - `DELETE /api/state/:key`               — Delete a state key
  * - `GET  /api/logs`                       — Query log buffer
- * - `GET  /api/devices`                    — List all tracked Zigbee devices
- * - `GET  /api/devices/:friendlyName`      — Get a single device with its state
+ * - `GET  /api/device-catalog`             — List devices from every available source
+ * - `GET  /api/device-catalog/:qualifiedId` — Get a single device by qualified id
+ * - `POST /api/device-catalog/:qualifiedId/command` — Issue a validated command to a device
+ * - `PUT  /api/device-catalog/:qualifiedId/room` — Assign a device to a room
+ * - `DELETE /api/device-catalog/:qualifiedId/room` — Clear a device's room assignment
+ * - `GET  /api/rooms`                      — List rooms with membership
+ * - `GET  /api/rooms/unassigned`           — Devices belonging to no room
+ * - `POST /api/rooms`                      — Create a room
+ * - `PUT  /api/rooms/:id`                  — Rename a room
+ * - `DELETE /api/rooms/:id`                — Delete a room
+ * - `GET  /api/events`                     — Realtime server-sent event stream
+ *
+ * `GET /api/devices` and `GET /api/devices/:friendlyName` (Zigbee-only) are
+ * removed rather than repurposed (design.md R13) — see `/api/device-catalog`.
  *
  * Uses `Bun.serve()` backed by a Hono router.
  *
@@ -63,7 +82,9 @@ export class HttpServer {
   private stateManager: StateManager | null = null;
   private automationManager: AutomationManager | null = null;
   private logBuffer: LogBuffer | null = null;
-  private deviceRegistry: DeviceRegistry | null = null;
+  private deviceSources: AggregateDeviceSource | null = null;
+  private roomManager: RoomManager | null = null;
+  private eventStreamHub: EventStreamHub | null = null;
   private readonly honoApp: Hono;
 
   constructor(
@@ -86,11 +107,45 @@ export class HttpServer {
   }
 
   /**
-   * Set the device registry for the `/api/devices` endpoints.
-   * Pass `null` when the registry is disabled.
+   * Wire the unified device catalog endpoints (`/api/device-catalog`,
+   * `/api/device-catalog/:qualifiedId`) to the engine's aggregate device
+   * accessor. Called by the engine after construction; `engine.devices` is
+   * always present, so this is called unconditionally rather than passed
+   * `null` for an unconfigured deployment (task 6.13a).
    */
-  setDeviceRegistry(registry: DeviceRegistry | null): void {
-    this.deviceRegistry = registry;
+  setDeviceSources(sources: AggregateDeviceSource): void {
+    this.deviceSources = sources;
+  }
+
+  /**
+   * Wire the room endpoints (`/api/rooms`, `/api/device-catalog/:qualifiedId/room`)
+   * to the engine's room manager. Called by the engine after construction;
+   * `engine.rooms` is always present, so this is called unconditionally
+   * (task 9.6).
+   */
+  setRoomManager(rooms: RoomManager): void {
+    this.roomManager = rooms;
+  }
+
+  /**
+   * Wire the realtime event stream's `/api/events` endpoint to the engine's
+   * shared {@link EventBus}.
+   *
+   * `deliveryLogger` MUST be the stdout-only logger from `engine.ts`
+   * (design.md D32) — never `this.logger` or any of its children — since the
+   * delivery path's own logging (fan-out failures, overflow, the
+   * fell-behind signal) must not be able to feed back into the log category
+   * it delivers (task 5.0c). Connection accepted/closed logging uses
+   * `this.logger` instead, so stream activity remains visible in the log
+   * view even if delivery itself is failing.
+   */
+  setEventStream(bus: EventBus, deliveryLogger: Logger): void {
+    this.eventStreamHub?.stop();
+    this.eventStreamHub = new EventStreamHub(
+      bus,
+      deliveryLogger,
+      this.logger.child({ service: "sse" }),
+    );
   }
 
   /**
@@ -157,6 +212,8 @@ export class HttpServer {
    * Stop the HTTP server.
    */
   stop(): void {
+    this.eventStreamHub?.stop();
+    this.eventStreamHub = null;
     if (this.server) {
       this.server.stop(true);
       this.server = null;
@@ -296,6 +353,78 @@ export class HttpServer {
       return c.json(automation);
     });
 
+    app.put("/api/automations/:name/enabled", async (c) => {
+      if (!this.automationManager) return c.json({ error: "Not available" }, 503);
+      const name = decodeURIComponent(c.req.param("name"));
+
+      let body: { enabled?: unknown };
+      try {
+        body = await c.req.json();
+      } catch {
+        return c.json({ error: "Invalid JSON body" }, 400);
+      }
+
+      if (typeof body.enabled !== "boolean") {
+        return c.json({ error: "Body must be { enabled: boolean }" }, 400);
+      }
+
+      if (body.enabled) {
+        const result = await this.automationManager.start(name);
+        if (result.status === "not_found") {
+          return c.json({ error: "Automation not found", name }, 404);
+        }
+        if (result.status === "error") {
+          return c.json({ error: result.message, name }, 400);
+        }
+        const automation = this.automationManager.getAutomation(name);
+        return c.json(automation);
+      }
+
+      const result = await this.automationManager.stop(name);
+      if (result === "not_found") {
+        return c.json({ error: "Automation not found", name }, 404);
+      }
+      const automation = this.automationManager.getAutomation(name);
+      return c.json(automation);
+    });
+
+    app.get("/api/automations/:name/source", async (c) => {
+      if (!this.automationManager) return c.json({ error: "Not available" }, 503);
+      const name = decodeURIComponent(c.req.param("name"));
+
+      const result = await this.automationManager.getSource(name);
+      if (result.status === "not_found") {
+        return c.json({ error: "Automation not found", name }, 404);
+      }
+      if (result.status === "error") {
+        return c.json({ error: result.message, name }, 500);
+      }
+      return c.json({ name, source: result.source });
+    });
+
+    // Execution history and relationships (design.md D11; task 8.6). Both
+    // return 404 for an unknown automation, and an automation that is known
+    // but has never run reports an empty history rather than an error —
+    // `getHistory()`/`getRelationships()` return `null` only for the former,
+    // so a single null-check distinguishes the two cases correctly.
+    app.get("/api/automations/:name/history", (c) => {
+      if (!this.automationManager) return c.json({ error: "Not available" }, 503);
+      const name = decodeURIComponent(c.req.param("name"));
+
+      const history = this.automationManager.getHistory(name);
+      if (history === null) return c.json({ error: "Automation not found", name }, 404);
+      return c.json({ name, history });
+    });
+
+    app.get("/api/automations/:name/relationships", (c) => {
+      if (!this.automationManager) return c.json({ error: "Not available" }, 503);
+      const name = decodeURIComponent(c.req.param("name"));
+
+      const relationships = this.automationManager.getRelationships(name);
+      if (relationships === null) return c.json({ error: "Automation not found", name }, 404);
+      return c.json({ name, ...relationships });
+    });
+
     app.post("/api/automations/:name/trigger", async (c) => {
       if (!this.automationManager) return c.json({ error: "Not available" }, 503);
       const name = decodeURIComponent(c.req.param("name"));
@@ -364,8 +493,11 @@ export class HttpServer {
       this.logger.info({ automation: name, type: body.type }, "Manual trigger via API");
 
       try {
-        const found = await this.automationManager.triggerAutomation(name, context);
-        if (!found) return c.json({ error: "Automation not found", name }, 404);
+        const result = await this.automationManager.triggerAutomation(name, context);
+        if (result === "not_found") return c.json({ error: "Automation not found", name }, 404);
+        if (result === "disabled") {
+          return c.json({ error: "Automation is disabled", name }, 409);
+        }
         return c.json({ status: "triggered", automation: name, type: body.type });
       } catch (err) {
         this.logger.error({ err, automation: name }, "Manual trigger failed");
@@ -395,6 +527,9 @@ export class HttpServer {
     app.put("/api/state/:key", async (c) => {
       if (!this.stateManager) return c.json({ error: "Not available" }, 503);
       const key = decodeURIComponent(c.req.param("key"));
+      if (isReservedStateKey(key)) {
+        return c.json({ error: `Cannot write reserved internal state key "${key}"` }, 400);
+      }
 
       let value: unknown;
       try {
@@ -412,6 +547,9 @@ export class HttpServer {
     app.delete("/api/state/:key", (c) => {
       if (!this.stateManager) return c.json({ error: "Not available" }, 503);
       const key = decodeURIComponent(c.req.param("key"));
+      if (isReservedStateKey(key)) {
+        return c.json({ error: `Cannot delete reserved internal state key "${key}"` }, 400);
+      }
       const existed = this.stateManager.has(key);
       if (existed) {
         this.stateManager.delete(key);
@@ -442,66 +580,185 @@ export class HttpServer {
       return c.json({ entries, count: entries.length });
     });
 
-    // ── API: Devices ────────────────────────────────────────────────────────
+    // ── API: Realtime event stream ─────────────────────────────────────────
 
-    app.get("/api/devices", (c) => {
-      if (!this.deviceRegistry) {
-        return c.json(
-          { error: "Device registry is disabled (DEVICE_REGISTRY_ENABLED=false)" },
-          503,
-        );
+    app.get("/api/events", (c) => {
+      if (!this.eventStreamHub) return c.json({ error: "Not available" }, 503);
+      return this.eventStreamHub.open();
+    });
+
+    // ── API: Unified device catalog ───────────────────────────────────────────
+    //
+    // `GET /api/devices` and `GET /api/devices/:friendlyName` (Zigbee-only)
+    // are removed rather than repurposed (design.md R13; task 6.14): serving
+    // a source-qualified payload from the same paths would return 200 with a
+    // shape neither existing client can read, defeating the failed-fetch
+    // handling both already have. The unified, source-spanning endpoints are
+    // served from different paths below.
+
+    app.get("/api/devices", (c) => c.json({ error: "Removed — use /api/device-catalog" }, 410));
+    app.get("/api/devices/:friendlyName", (c) =>
+      c.json({ error: "Removed — use /api/device-catalog" }, 410),
+    );
+
+    app.get("/api/device-catalog", (c) => {
+      if (!this.deviceSources) return c.json({ error: "Not available" }, 503);
+
+      const devices = this.deviceSources.list();
+      return c.json({
+        devices,
+        count: devices.length,
+        sources: this.deviceSources.sources(),
+      });
+    });
+
+    app.get("/api/device-catalog/:qualifiedId", (c) => {
+      if (!this.deviceSources) return c.json({ error: "Not available" }, 503);
+
+      const qualifiedId = decodeURIComponent(c.req.param("qualifiedId"));
+      const device = this.deviceSources.get(qualifiedId);
+      if (!device) return c.json({ error: "Device not found", qualifiedId }, 404);
+
+      return c.json(device);
+    });
+
+    // Issues a command to a single device, addressed by qualified identifier
+    // (task 7.2; specs/http-server "Device Command Endpoint"). The payload is
+    // never forwarded to a transport unvalidated — validation happens inside
+    // `DeviceSource.command()`, one level below this endpoint, so every
+    // dispatch path (HomeKit, this endpoint, and any future consumer) is
+    // validated identically rather than duplicating the rule here.
+    app.post("/api/device-catalog/:qualifiedId/command", async (c) => {
+      if (!this.deviceSources) return c.json({ error: "Not available" }, 503);
+
+      const qualifiedId = decodeURIComponent(c.req.param("qualifiedId"));
+
+      let properties: unknown;
+      try {
+        properties = await c.req.json();
+      } catch {
+        return c.json({ error: "Invalid JSON body" }, 400);
+      }
+      if (properties === null || typeof properties !== "object" || Array.isArray(properties)) {
+        return c.json({ error: "Command body must be a JSON object of properties" }, 400);
       }
 
-      const devices = this.deviceRegistry.getDevices().map((d) => ({
-        friendly_name: d.friendly_name,
-        nice_name: this.deviceRegistry?.getNiceName(d.friendly_name),
-        ieee_address: d.ieee_address,
-        type: d.type,
-        supported: d.supported,
-        interview_state: d.interview_state,
-        power_source: d.power_source ?? null,
-        state: this.deviceRegistry?.getDeviceState(d.friendly_name) ?? null,
-        definition: d.definition
-          ? {
-              model: d.definition.model,
-              vendor: d.definition.vendor,
-              description: d.definition.description,
-            }
-          : null,
-      }));
+      const outcome = await this.deviceSources.command(
+        qualifiedId,
+        properties as Record<string, unknown>,
+      );
 
+      switch (outcome.status) {
+        case "ok":
+          return c.json({ qualifiedId, status: "ok" });
+        case "invalid":
+          return c.json({ error: outcome.error, qualifiedId }, 400);
+        case "not_found":
+          return c.json({ error: "Device not found", qualifiedId }, 404);
+        case "unavailable":
+          return c.json({ error: "Device source unavailable", qualifiedId }, 503);
+      }
+    });
+
+    // ── API: Rooms ──────────────────────────────────────────────────────────
+    //
+    // User-defined rooms grouping devices across every device source
+    // (design.md D14; specs/device-rooms/spec.md, specs/http-server/spec.md
+    // "Room Endpoints"; task 9.6).
+
+    app.get("/api/rooms", (c) => {
+      if (!this.roomManager) return c.json({ error: "Not available" }, 503);
+      const rooms = this.roomManager.listRooms();
+      return c.json({ rooms, count: rooms.length });
+    });
+
+    // Must be registered before "/api/rooms/:id" so the literal segment
+    // "unassigned" is never captured as a room id.
+    app.get("/api/rooms/unassigned", (c) => {
+      if (!this.roomManager) return c.json({ error: "Not available" }, 503);
+      const devices = this.roomManager.getUnassignedDevices();
       return c.json({ devices, count: devices.length });
     });
 
-    app.get("/api/devices/:friendlyName", (c) => {
-      if (!this.deviceRegistry) {
-        return c.json(
-          { error: "Device registry is disabled (DEVICE_REGISTRY_ENABLED=false)" },
-          503,
-        );
+    app.post("/api/rooms", async (c) => {
+      if (!this.roomManager) return c.json({ error: "Not available" }, 503);
+
+      let body: { name?: unknown };
+      try {
+        body = await c.req.json();
+      } catch {
+        return c.json({ error: "Invalid JSON body" }, 400);
+      }
+      if (typeof body.name !== "string" || body.name.length === 0) {
+        return c.json({ error: "Body must be { name: string }" }, 400);
       }
 
-      const friendlyName = decodeURIComponent(c.req.param("friendlyName"));
-      const device = this.deviceRegistry.getDevice(friendlyName);
-      if (!device) return c.json({ error: "Device not found", friendlyName }, 404);
+      const result = this.roomManager.createRoom(body.name);
+      if (result.status === "duplicate_name") {
+        return c.json({ error: result.message }, 409);
+      }
+      return c.json(result.room, 201);
+    });
 
-      return c.json({
-        friendly_name: device.friendly_name,
-        nice_name: this.deviceRegistry.getNiceName(device.friendly_name),
-        ieee_address: device.ieee_address,
-        type: device.type,
-        supported: device.supported,
-        interview_state: device.interview_state,
-        power_source: device.power_source ?? null,
-        state: this.deviceRegistry.getDeviceState(device.friendly_name) ?? null,
-        definition: device.definition
-          ? {
-              model: device.definition.model,
-              vendor: device.definition.vendor,
-              description: device.definition.description,
-            }
-          : null,
-      });
+    app.put("/api/rooms/:id", async (c) => {
+      if (!this.roomManager) return c.json({ error: "Not available" }, 503);
+      const id = decodeURIComponent(c.req.param("id"));
+
+      let body: { name?: unknown };
+      try {
+        body = await c.req.json();
+      } catch {
+        return c.json({ error: "Invalid JSON body" }, 400);
+      }
+      if (typeof body.name !== "string" || body.name.length === 0) {
+        return c.json({ error: "Body must be { name: string }" }, 400);
+      }
+
+      const result = this.roomManager.renameRoom(id, body.name);
+      if (result.status === "not_found") return c.json({ error: "Room not found", id }, 404);
+      if (result.status === "duplicate_name") return c.json({ error: result.message }, 409);
+      return c.json(result.room);
+    });
+
+    app.delete("/api/rooms/:id", (c) => {
+      if (!this.roomManager) return c.json({ error: "Not available" }, 503);
+      const id = decodeURIComponent(c.req.param("id"));
+
+      const result = this.roomManager.deleteRoom(id);
+      if (result === "not_found") return c.json({ error: "Room not found", id }, 404);
+      return c.json({ id, deleted: true });
+    });
+
+    // Assign/unassign a device's room, addressed by qualified identifier —
+    // alongside the device-catalog read and command endpoints above, rather
+    // than under /api/rooms, since a device belongs to at most one room and
+    // this is fundamentally a property of the device (design.md D14).
+    app.put("/api/device-catalog/:qualifiedId/room", async (c) => {
+      if (!this.roomManager) return c.json({ error: "Not available" }, 503);
+      const qualifiedId = decodeURIComponent(c.req.param("qualifiedId"));
+
+      let body: { roomId?: unknown };
+      try {
+        body = await c.req.json();
+      } catch {
+        return c.json({ error: "Invalid JSON body" }, 400);
+      }
+      if (typeof body.roomId !== "string" || body.roomId.length === 0) {
+        return c.json({ error: "Body must be { roomId: string }" }, 400);
+      }
+
+      const result = this.roomManager.assignDevice(qualifiedId, body.roomId);
+      if (result === "room_not_found") {
+        return c.json({ error: "Room not found", roomId: body.roomId }, 404);
+      }
+      return c.json({ qualifiedId, roomId: body.roomId });
+    });
+
+    app.delete("/api/device-catalog/:qualifiedId/room", (c) => {
+      if (!this.roomManager) return c.json({ error: "Not available" }, 503);
+      const qualifiedId = decodeURIComponent(c.req.param("qualifiedId"));
+      this.roomManager.unassignDevice(qualifiedId);
+      return c.json({ qualifiedId, roomId: null });
     });
 
     return app;
