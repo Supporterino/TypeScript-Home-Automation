@@ -119,7 +119,12 @@ function createManager(registry: DeviceRegistry | null) {
     {} as MqttService,
     { schedule: mock(() => {}), removeByPrefix: mock(() => {}) } as unknown as CronScheduler,
     {} as HttpClient,
-    { onChange: mock(() => {}), offChange: mock(() => {}) } as unknown as StateManager,
+    {
+      onChange: mock(() => {}),
+      offChange: mock(() => {}),
+      onAnyChange: mock(() => {}),
+      offAnyChange: mock(() => {}),
+    } as unknown as StateManager,
     null, // httpServer
     config,
     logger,

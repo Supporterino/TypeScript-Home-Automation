@@ -44,8 +44,12 @@ const configSchema = z.object({
   zigbee2mqttPrefix: z.string().default("zigbee2mqtt"),
   logLevel: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info"),
   state: z.object({
-    persist: booleanEnv(false),
+    // Defaults to true: the store now holds room definitions and automation
+    // enabled flags, which must survive a restart (design.md D6, R14).
+    persist: booleanEnv(true),
     filePath: z.string().default("./state.json"),
+    /** Milliseconds between coalesced state saves. `0` saves on every write. */
+    flushIntervalMs: z.coerce.number().int().min(0).default(1000),
   }),
   automations: z.object({
     /** Whether to scan subdirectories recursively for automation files. */
@@ -54,10 +58,21 @@ const configSchema = z.object({
   deviceRegistry: z.object({
     /** Whether to enable automatic Zigbee2MQTT device discovery and state tracking. */
     enabled: booleanEnv(false),
-    /** Whether to persist the device list and state to disk on shutdown. */
-    persist: booleanEnv(false),
+    // Defaults to true: the device list and capability schema should be
+    // readable immediately on boot, before the bridge republishes
+    // (design.md D6).
+    persist: booleanEnv(true),
     /** Path to the device registry persistence JSON file. */
     filePath: z.string().default("./device-registry.json"),
+  }),
+  devices: z.object({
+    /**
+     * Refresh interval, in milliseconds, for HTTP-transport Shelly devices in
+     * the unified device source layer.
+     */
+    shellyPollMs: z.coerce.number().int().positive().default(10000),
+    /** Refresh interval, in milliseconds, for the Nanoleaf device source. */
+    nanoleafPollMs: z.coerce.number().int().positive().default(10000),
   }),
   httpServer: z.object({
     /** Port for the HTTP server (health probes + webhooks). Set to 0 to disable. */
@@ -104,6 +119,7 @@ export function loadConfig(): Config {
     state: {
       persist: process.env.STATE_PERSIST,
       filePath: process.env.STATE_FILE_PATH,
+      flushIntervalMs: process.env.STATE_FLUSH_MS,
     },
     automations: {
       recursive: process.env.AUTOMATIONS_RECURSIVE,
@@ -112,6 +128,10 @@ export function loadConfig(): Config {
       enabled: process.env.DEVICE_REGISTRY_ENABLED,
       persist: process.env.DEVICE_REGISTRY_PERSIST,
       filePath: process.env.DEVICE_REGISTRY_FILE_PATH,
+    },
+    devices: {
+      shellyPollMs: process.env.SHELLY_POLL_MS,
+      nanoleafPollMs: process.env.NANOLEAF_POLL_MS,
     },
     httpServer: {
       port: process.env.HTTP_PORT,
