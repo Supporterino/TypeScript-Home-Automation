@@ -6,7 +6,7 @@ A command-line tool (`ts-ha`) for managing running engine instances. Provides co
 
 ## Requirements
 
-### Target Configuration
+### Requirement: Target Configuration
 
 The CLI MUST maintain a config file at `~/.config/ts-ha/config.json` with:
 
@@ -28,7 +28,7 @@ The CLI MUST:
 - Set file permissions to `0o600` (owner-only, since tokens are stored in plaintext)
 - Support `ENOENT` gracefully (create default)
 
-### Remote Communication
+### Requirement: Remote Communication
 
 The CLI MUST communicate with engine instances via HTTP to the configured target's host/port. All API requests include `Authorization: Bearer <token>` when a token is configured.
 
@@ -40,7 +40,7 @@ The `DebugClient` MUST provide methods matching the engine's API:
 - `getDevices()` / `getDevice(name)` → `GET /api/devices/*`
 - `getHomekitStatus()` → `GET /api/homekit/status`
 
-### Commands
+### Requirement: Commands
 
 #### `ts-ha automations`
 
@@ -89,7 +89,7 @@ Target management subcommands:
 - `ts-ha config use <name>` — Set active target
 - `ts-ha config path` — Show config file path
 
-### Error Handling
+### Requirement: Error Handling
 
 The CLI MUST:
 - Report connection failures clearly (host unreachable, auth failed)

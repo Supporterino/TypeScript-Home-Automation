@@ -34,7 +34,14 @@ The registry is accessible as `engine.deviceRegistry` (type `DeviceRegistry | nu
 
 ## Persistence
 
-By default the registry is purely in-memory — it rebuilds from Zigbee2MQTT on every engine startup. Enable persistence to save both the device list and last-known device states to a JSON file on shutdown and restore them on startup.
+`DEVICE_REGISTRY_PERSIST` **defaults to `true`** (a breaking default change —
+design.md D6, R14): the device list and its mapped capability schema should
+be readable immediately on boot, before Zigbee2MQTT republishes, and this
+now matches `STATE_PERSIST` defaulting on for the same reason. Persistence
+saves both the device list and last-known device states to a JSON file on
+shutdown and restores them on startup. Set `DEVICE_REGISTRY_PERSIST=false`
+explicitly to opt back out to the old purely-in-memory behaviour, where the
+registry rebuilds from Zigbee2MQTT on every engine startup.
 
 This is useful when:
 - Automations query `getDeviceState()` immediately on startup before any MQTT messages arrive
@@ -42,10 +49,10 @@ This is useful when:
 
 Live MQTT data **always wins** — persisted values are a cold-start seed, not a source of truth. Incoming `bridge/devices` overwrites device metadata, and incoming state payloads are merged on top of restored state.
 
-### Enabling
+### Configuring
 
 ```bash
-DEVICE_REGISTRY_PERSIST=true
+DEVICE_REGISTRY_PERSIST=true   # default
 DEVICE_REGISTRY_FILE_PATH=./data/device-registry.json  # optional, default: ./device-registry.json
 ```
 
@@ -342,16 +349,68 @@ When the registry is disabled, both commands print a clear message and exit with
 
 ---
 
-## Web UI
+## Capability vocabulary
 
-When `WEB_UI_ENABLED=true` and `DEVICE_REGISTRY_ENABLED=true`, the browser dashboard includes a **Devices** tab. Each device is displayed as an expandable card (Accordion) showing:
+Zigbee2MQTT devices describe themselves through `definition.exposes` — a
+Zigbee-specific shape carrying concepts (endpoints, clusters) that mean
+nothing to an HTTP light panel or a Nanoleaf panel. Rather than exposing that
+shape directly to consumers, the device registry **maps** each device's
+`exposes` into a source-neutral capability vocabulary (`src/types/capabilities.ts`,
+design.md D22) via `mapZ2MExposes()`:
 
-- Device type and interview state (color-coded badges)
-- IEEE address, supported status, power source
-- Model/vendor/description (when device is supported)
-- Full live state as a key-value table
+```
+   z2m exposes ──┐
+   shelly (authored) ──┼──► capability vocabulary ──┬──► HAP projection (HomeKit)
+   nanoleaf effects ───┤    (source-neutral)        └──► generic renderer (web UI)
+   state toggle ───────┘
+```
 
-When the registry is disabled, the tab shows an informational notice instead of a device list.
+Shelly, Nanoleaf, and state-toggle devices describe themselves in the same
+vocabulary — an authored description for Shelly (which publishes none), an
+enumerated capability for Nanoleaf effects, and a single writable boolean for
+a state toggle — so the web UI's generic device-detail view and HomeKit's
+accessory factory both consume one shape regardless of source. See
+[Web UI](http/web-ui.md) for how the vocabulary drives the generic control
+renderer, and [HomeKit: Supported device types](services/homekit.md#supported-device-types)
+for the HAP projection.
+
+A `Capability` carries a `kind`, `access` (readable/writable), a `valueType`,
+and — depending on kind — a `range`, `step`, or `permittedValues`. Container
+capabilities (e.g. a light with brightness and color) nest their leaf
+capabilities under `features`. The registry retains the raw `exposes` array
+on `ZigbeeDeviceDefinition.exposes` alongside the mapped vocabulary; the
+mapping is additive, not a replacement of what the bridge publishes.
+
+---
+
+## Web UI and unified device layer
+
+Zigbee devices are exposed to the browser dashboard and to HomeKit through
+the same shared, source-neutral device layer as Shelly, Nanoleaf, and state
+toggles (`Engine.devices`) — not through a Zigbee-specific tab. Each Zigbee
+device is addressed as a **qualified identifier** `zigbee:<ieee_address>`
+(design.md D29) and appears in:
+
+- `GET /api/device-catalog` — every device from every enabled source, each
+  carrying its mapped capabilities, reachability, and observation mode
+- The web UI's **Devices**, room, and device-detail views, which render
+  controls generically from the mapped capability schema — there is no
+  Zigbee-specific rendering code
+- HomeKit, through the accessory factory described in
+  [Supported device types](services/homekit.md#supported-device-types)
+
+`GET /api/devices` and `GET /api/devices/:friendlyName` — the old
+Zigbee-only endpoints — are **removed**, not repurposed; they return `410`.
+See [API Reference](api-reference.md#httpserver) for the replacement and
+[Configuration](configuration.md#breaking-changes-for-upgrading-operators)
+for the migration note. When the registry is disabled, the unified endpoints
+simply contribute no Zigbee devices — they do not error.
+
+The CLI dashboard's **Devices** tab still reads the old endpoints and is
+**not yet migrated** to the unified device layer; it degrades to reporting
+devices unavailable rather than crashing. The CLI's other tabs (automations,
+state, logs, HomeKit) are unaffected. Realigning the CLI dashboard onto the
+unified device layer is tracked as a follow-up change (design.md R13).
 
 ---
 
@@ -381,7 +440,7 @@ The device metadata object returned by `getDevices()`, `getDevice()`, and all de
 | `vendor` | `string` | Manufacturer name |
 | `description` | `string` | Human-readable description |
 | `source` | `"native" \| "generated" \| "external"` | Where the device definition originates from |
-| `exposes` | `unknown[]` | Z2M exposes definitions |
+| `exposes` | `unknown[]` | Raw Z2M exposes definitions. Mapped into the source-neutral `Capability[]` vocabulary consumed by the web UI and HomeKit — see [Capability vocabulary](#capability-vocabulary). |
 | `options` | `unknown[]` | Z2M device options |
 
 ### `DeviceNiceNames`

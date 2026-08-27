@@ -108,3 +108,37 @@ if (!nanoleaf) return;
 await nanoleaf.setColorTemp("panels", 2700);  // warm white
 await nanoleaf.setBrightness("panels", 40, 3); // 40%, 3s transition
 ```
+
+---
+
+## Web UI and HomeKit
+
+Registered Nanoleaf devices are also exposed through the engine's shared,
+source-neutral device layer (`Engine.devices`) — the same layer Zigbee,
+Shelly, and state-toggle devices go through — so they appear in the web UI
+and (when configured) HomeKit automatically, with no separate wiring beyond
+registering the service.
+
+- **Addressing:** each device is addressed as the qualified identifier
+  `nanoleaf:<name>` (the name passed to `register()`/`registerMany()`),
+  e.g. `nanoleaf:panels` — see [API Reference](../api-reference.md#httpserver)
+  for the qualified identifier format.
+- **Liveness:** Nanoleaf has no push transport. Every device is refreshed on
+  a fixed interval, `NANOLEAF_POLL_MS` (default `10000`), rather than
+  reacting to a stream. A single unreachable device is marked unreachable
+  and logged without disrupting the poll for the others.
+- **Effects as a capability:** the effect list is described as an enumerated
+  writable property, not a bespoke Nanoleaf panel — the web UI's generic
+  device-detail view renders it as a plain select control populated from
+  `getEffects()`, refreshed whenever the device's own effect list changes
+  (design.md D17).
+- **Optimistic actuation:** because Nanoleaf is polled rather than
+  push-backed, the web UI's revert deadline for an unconfirmed command on a
+  Nanoleaf device is derived from its reported refresh interval plus a
+  margin — not a short fixed deadline as for a push-backed device — read
+  from the device's own descriptor rather than hardcoded per source
+  (design.md D21).
+
+See [HomeKit: Supported device types](homekit.md#supported-device-types) and
+[Device Registry: Capability vocabulary](../device-registry.md#capability-vocabulary)
+for how the same mapped capability schema is projected onto HAP.

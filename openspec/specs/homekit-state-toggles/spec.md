@@ -6,7 +6,7 @@ Exposes boolean state keys from the shared `StateManager` as toggle switches in 
 
 ## Requirements
 
-### Configure state toggles
+### Requirement: Configure state toggles
 
 The system SHALL accept a static `stateToggles` list in `HomekitServiceOptions`, where each entry is `{ stateKey: string; name: string }`. `name` is REQUIRED and used as the accessory's display name in the Home app. When the list is empty or omitted, no state accessories are created.
 
@@ -20,7 +20,7 @@ The system SHALL accept a static `stateToggles` list in `HomekitServiceOptions`,
 - **WHEN** `stateToggles` is omitted or empty
 - **THEN** the state source creates no accessories and does not affect the bridge
 
-### Accessory identity is stable
+### Requirement: Accessory identity is stable
 
 Each state toggle SHALL be a HomeKit `Switch` accessory whose UUID is seeded from its state key, so renaming the display name in config does not orphan the accessory in the Home app. Accessory IDs passed to the bridge sink SHALL be namespaced by the source (e.g. `state:<stateKey>`).
 
@@ -29,7 +29,7 @@ Each state toggle SHALL be a HomeKit `Switch` accessory whose UUID is seeded fro
 - **WHEN** a toggle's `name` is changed but its `stateKey` stays the same
 - **THEN** the accessory keeps its existing HomeKit UUID and is not re-added as a new accessory
 
-### State changes appear in HomeKit
+### Requirement: State changes appear in HomeKit
 
 The state source SHALL subscribe to `StateManager.onChange` for each configured key and push the new value into the accessory's `On` characteristic. Truthy values SHALL map to ON and falsy values to OFF.
 
@@ -43,7 +43,7 @@ The state source SHALL subscribe to `StateManager.onChange` for each configured 
 - **WHEN** a configured state key is deleted via `state.delete(key)`
 - **THEN** the toggle's `On` characteristic becomes OFF
 
-### Initial toggle value
+### Requirement: Initial toggle value
 
 When the bridge starts, each toggle SHALL read its current state value and seed the `On` characteristic from it. A missing or absent key SHALL default to OFF.
 
@@ -57,7 +57,7 @@ When the bridge starts, each toggle SHALL read its current state value and seed 
 - **WHEN** a toggle starts and its state key does not exist
 - **THEN** the toggle's `On` characteristic is OFF at start
 
-### HomeKit write-back to state
+### Requirement: HomeKit write-back to state
 
 Flipping a toggle in the Home app SHALL write a real boolean to the `StateManager` via `state.set(stateKey, value)`, which fires state change listeners so `state`-trigger automations react.
 
@@ -71,7 +71,7 @@ Flipping a toggle in the Home app SHALL write a real boolean to the `StateManage
 - **WHEN** a toggle is flipped and an automation listens for changes to that state key
 - **THEN** the automation's `state` trigger fires with the new boolean value
 
-### Listener cleanup on stop
+### Requirement: Listener cleanup on stop
 
 The state source SHALL detach every `StateManager` listener it registered when stopped, so shutdown leaves no dangling listeners.
 

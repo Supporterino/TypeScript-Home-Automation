@@ -6,7 +6,7 @@ Runs a HAP (HomeKit Accessory Protocol) bridge inside the engine process using `
 
 ## Requirements
 
-### Configuration
+### Requirement: Configuration
 
 The `HomekitService` MUST accept `HomekitServiceOptions`:
 
@@ -67,7 +67,7 @@ type HomekitServiceFactory = (ctx: HomekitServiceContext) => HomekitService;
 - **THEN** the state-toggle source is created with no accessories and does not
   affect the bridge
 
-### Accessory Source Abstraction
+### Requirement: Accessory Source Abstraction
 
 The HomeKit bridge MUST consume devices through a source-agnostic
 `AccessorySource` interface rather than reading device families directly. Each
@@ -112,7 +112,7 @@ name).
 - **THEN** the bridge keeps them as distinct accessories because IDs are
   namespaced per source
 
-### Zigbee Accessory Source
+### Requirement: Zigbee Accessory Source
 
 Zigbee bridging MUST be provided by a `ZigbeeSource` implementing
 `AccessorySource`, preserving the previous behavior. On `start(sink)` it MUST
@@ -134,7 +134,7 @@ listeners.
 - **THEN** `onDeviceAdded` / `onDeviceRemoved` create or remove the accessory
   through the sink
 
-### Shelly Accessory Source
+### Requirement: Shelly Accessory Source
 
 Shelly bridging MUST be provided by a `ShellySource` implementing
 `AccessorySource`. On `start(sink)` it MUST replay `ShellyService.getDevices()`,
@@ -186,7 +186,7 @@ start-time snapshot, so devices registered at any time are bridged.
 - **THEN** their per-device MQTT status and presence subscriptions are removed
   in addition to clearing the HTTP poll interval
 
-### Shelly State Polling
+### Requirement: Shelly State Polling
 
 `ShellySource` MUST keep HTTP-transport devices' HomeKit characteristics fresh
 via a single global polling loop over HTTP. The interval MUST be configurable
@@ -223,7 +223,7 @@ and skipped. MQTT-transport devices MUST NOT be included in the poll loop.
 - **THEN** only the HTTP-transport devices are queried over HTTP; MQTT-transport
   devices are not polled
 
-### Shelly MQTT Push Status
+### Requirement: Shelly MQTT Push Status
 
 For each MQTT-transport Shelly device, `ShellySource` MUST subscribe to that
 device's `<topicPrefix>/events/rpc` topic and, on receiving a `NotifyStatus`
@@ -246,7 +246,7 @@ event-driven instead of interval-driven.
 - **THEN** the notification is logged and skipped without affecting other
   devices or crashing the source
 
-### Shelly MQTT Presence
+### Requirement: Shelly MQTT Presence
 
 For each MQTT-transport Shelly device, `ShellySource` MUST subscribe to that
 device's `<topicPrefix>/online` topic (the device's LWT-backed presence
@@ -265,7 +265,7 @@ its `true`/`false` payload.
   after having been marked unreachable
 - **THEN** `ShellySource` marks the corresponding accessory as reachable again
 
-### Shelly Accessory Factory
+### Requirement: Shelly Accessory Factory
 
 A Shelly-specific accessory factory MUST build HAP accessories from a
 `ShellyDevice` and its `type`:
@@ -287,7 +287,7 @@ contract and MUST generate a stable accessory UUID per device.
 - **WHEN** a device has no recognized Shelly type mapping
 - **THEN** the factory returns null and the source skips it with a log
 
-### WindowCovering Support
+### Requirement: WindowCovering Support
 
 The system MUST support Shelly 2PM covers as HAP `WindowCovering` accessories.
 State translation MUST be:
@@ -349,7 +349,7 @@ the accessory.
 - **WHEN** `Cover.GetStatus` reports `current_pos: null`
 - **THEN** `CurrentPosition` is reported as 0 and a calibration warning is logged
 
-### Requirements
+### Requirement: Requirements
 
 The system MUST start the HomeKit bridge when at least one accessory source is
 available. The Zigbee source requires `DEVICE_REGISTRY_ENABLED=true`; when the
@@ -377,7 +377,7 @@ skip startup.
   available
 - **THEN** the service logs a warning and skips startup
 
-### ServicePlugin Implementation
+### Requirement: ServicePlugin Implementation
 
 The service MUST implement `ServicePlugin`:
 - `readonly serviceKey = "homekit"`
@@ -385,7 +385,7 @@ The service MUST implement `ServicePlugin`:
 - `onStop()` — Unpublish bridge, detach listeners, clear accessories
 - `registerRoutes(app: Hono)` — Mount `GET /api/homekit/status`
 
-### Startup Behavior
+### Requirement: Startup Behavior
 
 `onStart()` MUST:
 
@@ -414,7 +414,7 @@ If `bridge.publish()` fails (throws or rejects), `onStart()` MUST tear down any 
 - **WHEN** `bridge.publish()` throws or rejects after sources were started
 - **THEN** each started source's `stop()` is called, `published` is `false`, `bridge` is cleared, and no poll interval or registry listener remains active
 
-### Accessory Creation
+### Requirement: Accessory Creation
 
 For each Zigbee device, the accessory factory MUST:
 
@@ -435,7 +435,7 @@ For each Zigbee device, the accessory factory MUST:
 
 5. **Skip unsupported devices** — If a device has no recognized capability, skip with a debug log
 
-### Dynamic Device Management
+### Requirement: Dynamic Device Management
 
 When a new device joins the network:
 - `onDeviceAdded` fires → `addAccessory(device)` creates and bridges the accessory
@@ -443,7 +443,7 @@ When a new device joins the network:
 When a device leaves the network:
 - `onDeviceRemoved` fires → `removeAccessory(device)` removes the accessory and detaches listeners
 
-### Shutdown
+### Requirement: Shutdown
 
 `onStop()` MUST:
 
@@ -458,7 +458,7 @@ When a device leaves the network:
 - **WHEN** `onStop()` runs while a Shelly poll loop is active
 - **THEN** the poll interval is cleared and no further HTTP polls occur
 
-### Status API
+### Requirement: Status API
 
 `getStatus(): HomekitStatus` MUST return:
 ```ts
@@ -475,10 +475,10 @@ When a device leaves the network:
 
 `GET /api/homekit/status` MUST return this status (protected by `/api/*` auth middleware).
 
-### Crypto Polyfill
+### Requirement: Crypto Polyfill
 
 The system MUST load a crypto polyfill for Bun compatibility before importing `hap-nodejs`, because Bun does not support the `chacha20-poly1305` cipher used by HAP.
 
-### Color Conversion
+### Requirement: Color Conversion
 
 The factory MUST convert CIE xy color space (used by HomeKit) to hue/saturation (used by Zigbee2MQTT) and vice versa, enabling color light control through the Home app.

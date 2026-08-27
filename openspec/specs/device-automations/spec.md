@@ -6,7 +6,7 @@ Abstract base classes that simplify writing automations for specific physical de
 
 ## Requirements
 
-### Aqara H1 Remote
+### Requirement: Aqara H1 Remote
 
 `AqaraH1Automation` MUST extend `Automation` and provide:
 
@@ -31,7 +31,7 @@ Abstract base classes that simplify writing automations for specific physical de
 
 The `execute()` method MUST parse `AqaraRemoteSwitchH1Payload.action` and dispatch to the corresponding handler. Unknown actions are logged as warnings.
 
-### IKEA STYRBAR Remote
+### Requirement: IKEA STYRBAR Remote
 
 `IkeaStyrbarAutomation` MUST extend `Automation` and provide:
 
@@ -53,7 +53,7 @@ The `execute()` method MUST parse `AqaraRemoteSwitchH1Payload.action` and dispat
 | `onArrowRightHold()` | `action: "arrow_right_hold"` |
 | `onArrowRightRelease()` | `action: "arrow_right_release"` |
 
-### IKEA RODRET Dimmer
+### Requirement: IKEA RODRET Dimmer
 
 `IkeaRodretAutomation` MUST extend `Automation` and provide:
 
@@ -69,7 +69,7 @@ The `execute()` method MUST parse `AqaraRemoteSwitchH1Payload.action` and dispat
 | `onBrightnessMoveDown()` | `action: "brightness_move_down"` |
 | `onBrightnessStop()` | `action: "brightness_stop"` |
 
-### Common Patterns
+### Requirement: Common Patterns
 
 All three base classes MUST:
 - Use a `get triggers()` getter (not a field) to compute triggers dynamically, because abstract properties aren't available during `super()` construction
@@ -77,7 +77,7 @@ All three base classes MUST:
 - Handle unknown actions by logging a warning (don't throw)
 - Expose all handlers as `protected async` methods (allowing subclasses to await on device operations)
 
-### Usage Pattern
+### Requirement: Usage Pattern
 
 ```ts
 export default class MyRemote extends AqaraH1Automation {

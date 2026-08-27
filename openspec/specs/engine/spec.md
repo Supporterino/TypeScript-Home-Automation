@@ -6,7 +6,7 @@ The Engine is the top-level orchestrator that wires together all services, loads
 
 ## Requirements
 
-### Engine Creation
+### Requirement: Engine Creation
 
 The system MUST provide a `createEngine(options: EngineOptions): Engine` factory function.
 
@@ -40,7 +40,7 @@ interface Engine {
 }
 ```
 
-### Startup Sequence (start())
+### Requirement: Startup Sequence (start())
 
 The system MUST execute startup in this order:
 
@@ -59,7 +59,7 @@ The system MUST execute startup in this order:
 
 The system MUST roll back (best-effort cleanup) on any startup failure and re-throw the error.
 
-### Shutdown Sequence (stop())
+### Requirement: Shutdown Sequence (stop())
 
 The system MUST execute shutdown in this order:
 
@@ -89,7 +89,7 @@ The system MUST be idempotent — calling `stop()` when not started is a no-op.
 - **WHEN** `stop()` is called and the engine was never started
 - **THEN** it returns without side effects
 
-### Service Resolution
+### Requirement: Service Resolution
 
 The system MUST support three service registration patterns:
 
@@ -99,15 +99,15 @@ The system MUST support three service registration patterns:
 
 Factory functions receive the engine's shared `HttpClient` and a child `Logger`. HomeKit's factory instead receives a single `HomekitServiceContext` object with `http`, `logger`, `mqtt`, `deviceRegistry | null`, and `shelly | null`.
 
-### Custom Services
+### Requirement: Custom Services
 
 The system MUST accept arbitrary service keys beyond the well-known set (`notifications`, `weather`, `shelly`, `nanoleaf`, `homekit`, `metrics`). Custom keys are resolved identically (instance or factory) and registered in the `ServiceRegistry`.
 
-### Configuration Merging
+### Requirement: Configuration Merging
 
 The system MUST merge `options.config` on top of environment-derived config, with deep merge for `options.config.mqtt`.
 
-### Logger Creation
+### Requirement: Logger Creation
 
 The system MUST create a default logger when no `options.logger` is provided:
 - Production (`NODE_ENV=production`): raw JSON to stdout

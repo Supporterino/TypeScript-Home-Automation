@@ -6,7 +6,7 @@ Exports device state and process health metrics in Prometheus format via the `/m
 
 ## Requirements
 
-### ServicePlugin Implementation
+### Requirement: ServicePlugin Implementation
 
 The `PrometheusMetricsService` MUST implement `ServicePlugin`:
 - `readonly serviceKey = "metrics"`
@@ -14,22 +14,22 @@ The `PrometheusMetricsService` MUST implement `ServicePlugin`:
 - `onStop()` — Detach all device listeners, clear gauges
 - `registerRoutes(app)` — Mount `GET /metrics` endpoint
 
-### Registration
+### Requirement: Registration
 
 The service is enabled by passing an instance or factory under the `"metrics"` key in the engine's services map. No additional configuration is required.
 
-### Metrics Endpoint
+### Requirement: Metrics Endpoint
 
 `GET /metrics` MUST:
 - Return Prometheus text format from the `prom-client` registry
 - Be mounted on the shared Hono app (protected by `/api/*` auth middleware)
 - Include `Content-Type: text/plain`
 
-### Default Metrics
+### Requirement: Default Metrics
 
 The system MUST collect `prom-client` default metrics (CPU, memory, event loop, GC, etc.) via `collectDefaultMetrics()`.
 
-### Device Info Gauge
+### Requirement: Device Info Gauge
 
 A `device_info` gauge MUST be populated for every tracked device with labels:
 - `device` — friendly name
@@ -39,7 +39,7 @@ A `device_info` gauge MUST be populated for every tracked device with labels:
 - `ieee_address` — IEEE 802.15.4 address
 - `power_source` — "Battery" or "Mains"
 
-### Device State Gauges
+### Requirement: Device State Gauges
 
 The system MUST populate these per-device gauges by reading device state fields:
 
@@ -80,11 +80,11 @@ The system MUST populate these per-device gauges by reading device state fields:
 **Internal:**
 - `device_internal_temperature` — Celsius
 
-### Dynamic Device Lifecycle
+### Requirement: Dynamic Device Lifecycle
 
 On device added: register device info gauge, set up `DeviceStateChangeHandler`.
 On device removed: remove all gauges for that device, detach handler.
 
-### Disabled Registry
+### Requirement: Disabled Registry
 
 When `DEVICE_REGISTRY_ENABLED=false`, the service still starts and exposes default/process metrics, but no per-device gauges are populated.
