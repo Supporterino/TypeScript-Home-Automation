@@ -81,7 +81,6 @@ export class DeviceCatalogSource implements AccessorySource {
           "Error updating HomeKit accessory state",
         );
       }
-      existing.accessory.updateReachability(descriptor.reachable);
       return;
     }
 
@@ -114,8 +113,6 @@ export class DeviceCatalogSource implements AccessorySource {
         "Error applying initial state to HomeKit accessory",
       );
     }
-    created.accessory.updateReachability(descriptor.reachable);
-
     this.accessories.set(descriptor.qualifiedId, created);
     this.sink.add(descriptor.qualifiedId, created);
 
