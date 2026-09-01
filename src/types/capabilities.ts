@@ -70,11 +70,53 @@ export interface Capability {
   /** Nested features, present on composite/container capabilities. */
   features?: Capability[];
   /**
+   * The value this capability's source reports and accepts to mean "on",
+   * present only on `valueType: "boolean"` capabilities. Absence means a
+   * real JSON boolean `true` — that is what most sources already produce,
+   * and what a reader falls back to when a source declares nothing
+   * (design.md D1). Declaring `valueType: "boolean"` without this pair
+   * states a property's type but not its encoding, which is not enough for
+   * a consumer to interpret or command it: Zigbee2MQTT reports a binary
+   * on/off property as the strings `"ON"`/`"OFF"`, not a real boolean.
+   */
+  valueOn?: string | number | boolean;
+  /** The value representing "off", mirroring {@link valueOn}; absence means `false`. */
+  valueOff?: string | number | boolean;
+  /**
    * The untouched source entry, present only when the mapper did not
    * specifically recognise this entry's kind. Lets a consumer fall back to
    * presenting raw data rather than nothing.
    */
   raw?: unknown;
+}
+
+/**
+ * Interprets a reported value against a boolean capability's declared on/off
+ * encoding, defaulting to treating a real boolean `true` as the "on" value
+ * when the capability declares nothing (design.md D1). Used by both the web
+ * UI's read path and anything else that needs to turn a device's reported
+ * value into a boolean without source-specific knowledge.
+ */
+export function readBooleanCapabilityValue(
+  capability: Pick<Capability, "valueOn">,
+  reportedValue: unknown,
+): boolean {
+  const onValue = capability.valueOn ?? true;
+  return reportedValue === onValue;
+}
+
+/**
+ * Composes the wire value to command a boolean capability to `desired`,
+ * using its declared on/off encoding and defaulting to a real boolean when
+ * the capability declares nothing (design.md D1). The single place that
+ * implements this rule, so a consumer never has to know which sources
+ * bothered to declare an encoding.
+ */
+export function composeBooleanCapabilityValue(
+  capability: Pick<Capability, "valueOn" | "valueOff">,
+  desired: boolean,
+): string | number | boolean {
+  return desired ? (capability.valueOn ?? true) : (capability.valueOff ?? false);
 }
 
 // ---------------------------------------------------------------------------
@@ -116,8 +158,15 @@ interface Z2MExposeLike {
   value_max?: unknown;
   value_step?: unknown;
   values?: unknown;
+  value_on?: unknown;
+  value_off?: unknown;
   features?: unknown;
   [key: string]: unknown;
+}
+
+/** Whether a raw z2m field is a value this vocabulary can carry as a boolean encoding. */
+function isCapabilityBooleanValue(v: unknown): v is string | number | boolean {
+  return typeof v === "string" || typeof v === "number" || typeof v === "boolean";
 }
 
 function accessFromBitmask(bits: unknown): CapabilityAccess {
@@ -165,6 +214,13 @@ export function mapZ2MExpose(expose: unknown): Capability {
     };
   }
   if (typeof e.value_step === "number") capability.step = e.value_step;
+  // Only a binary expose has anything to say about on/off encoding — carry
+  // it through when the published schema declares it, and leave it absent
+  // otherwise, so the D1 default (a real boolean) applies (design.md D2, R1).
+  if (type === "binary") {
+    if (isCapabilityBooleanValue(e.value_on)) capability.valueOn = e.value_on;
+    if (isCapabilityBooleanValue(e.value_off)) capability.valueOff = e.value_off;
+  }
   if (Array.isArray(e.values)) {
     capability.permittedValues = e.values.filter(
       (v): v is string | number => typeof v === "string" || typeof v === "number",

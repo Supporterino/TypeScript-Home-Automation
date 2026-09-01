@@ -49,19 +49,23 @@ function validateValue(capability: Capability, value: unknown): CommandValidatio
   const property = capability.property ?? "<unknown>";
 
   switch (capability.valueType) {
-    case "boolean":
-      // Zigbee2MQTT's own convention for a binary on/off expose is the
-      // strings `"ON"`/`"OFF"` on the wire, not a real boolean — the same
-      // special case `homekit-descriptor-factory.ts`'s `writeOnOff()` holds
-      // for its own write-back. A command's `boolean` property is valid
-      // either as a real boolean or as one of those two wire strings.
-      if (typeof value !== "boolean" && value !== "ON" && value !== "OFF") {
-        return {
-          ok: false,
-          error: `Property "${property}" must be ${describeValueType(capability.valueType)}, got ${typeof value}`,
-        };
-      }
-      return { ok: true };
+    case "boolean": {
+      // A command's `boolean` property is valid as a real boolean regardless
+      // of the capability's declared encoding — that keeps existing callers
+      // (HomeKit, automations, the API) working — or as one of the two
+      // values this specific capability declares for on/off, defaulting to
+      // `true`/`false` when it declares nothing (design.md D1, D3). This
+      // replaces a hardcoded `"ON"`/`"OFF"` special case that accepted (and
+      // silently mishandled) Zigbee2MQTT's convention for every source.
+      if (typeof value === "boolean") return { ok: true };
+      const onValue = capability.valueOn ?? true;
+      const offValue = capability.valueOff ?? false;
+      if (value === onValue || value === offValue) return { ok: true };
+      return {
+        ok: false,
+        error: `Property "${property}" must be ${describeValueType(capability.valueType)} (or its declared on/off value: ${JSON.stringify(onValue)}/${JSON.stringify(offValue)}), got ${JSON.stringify(value)}`,
+      };
+    }
 
     case "numeric": {
       if (typeof value !== "number" || !Number.isFinite(value)) {

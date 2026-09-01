@@ -38,6 +38,8 @@ const TOGGLE_CAPABILITIES: Capability[] = [
     property: "on",
     access: { readable: true, writable: true },
     valueType: "boolean",
+    valueOn: true,
+    valueOff: false,
   },
 ];
 
