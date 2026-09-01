@@ -151,6 +151,11 @@ export interface RoomMembershipChangedEvent {
   qualifiedId: string;
   roomId: string | null;
 }
+export interface DeviceVisibilityChangedEvent {
+  category: "device_visibility";
+  qualifiedId: string;
+  hidden: boolean;
+}
 
 export type StreamEvent =
   | StateChangedEvent
@@ -165,4 +170,5 @@ export type StreamEvent =
   | AutomationExecutionCompletedEvent
   | RoomChangedEvent
   | RoomMembershipChangedEvent
+  | DeviceVisibilityChangedEvent
   | { category: "unknown" };

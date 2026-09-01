@@ -3,13 +3,15 @@
  * capabilities, not a fixed per-model list (design.md D12; specs/web-ui
  * "Device Control Interface"; task 10.11).
  */
-import { Alert, Badge, Group, Paper, Select, Stack, Text, Title } from "@mantine/core";
-import { IconAlertTriangle } from "@tabler/icons-react";
+import { Alert, Badge, Button, Group, Paper, Select, Stack, Text, Title } from "@mantine/core";
+import { IconAlertTriangle, IconEye, IconEyeOff, IconUsersGroup } from "@tabler/icons-react";
 import { assignDeviceRoom, unassignDeviceRoom } from "../api.js";
 import { CapabilityControl } from "../components/CapabilityControl.js";
 import { flattenCapabilities } from "../lib/capability-ranking.js";
 import { useDataStore } from "../lib/data-store.js";
 import { formatAge, isObservationStale } from "../lib/format.js";
+import { deviceDetailPath } from "../lib/router.js";
+import { useRouter } from "../lib/router-context.js";
 import { useNow } from "../lib/use-now.js";
 
 /** "current_heating_setpoint" → "Current heating setpoint". */
@@ -19,7 +21,8 @@ function prettifyPropertyName(property: string): string {
 }
 
 export function DeviceDetailView({ qualifiedId }: { qualifiedId: string }) {
-  const { devicesByQualifiedId, rooms, refresh } = useDataStore();
+  const { devicesByQualifiedId, rooms, refresh, hideDevice, unhideDevice } = useDataStore();
+  const { navigate, basePath } = useRouter();
   const now = useNow();
   const device = devicesByQualifiedId.get(qualifiedId);
 
@@ -38,6 +41,7 @@ export function DeviceDetailView({ qualifiedId }: { qualifiedId: string }) {
     device.observation.refreshIntervalMs,
     now,
   );
+  const isGroup = device.source === "zigbee-group";
 
   async function handleRoomChange(roomId: string | null) {
     if (roomId) await assignDeviceRoom(qualifiedId, roomId);
@@ -48,9 +52,17 @@ export function DeviceDetailView({ qualifiedId }: { qualifiedId: string }) {
   return (
     <Stack gap="md">
       <Group justify="space-between" wrap="wrap">
-        <Title order={2}>{device.displayName}</Title>
+        <Group gap="xs" wrap="nowrap">
+          {isGroup && <IconUsersGroup size={20} color="var(--mantine-color-dimmed)" />}
+          <Title order={2}>{device.displayName}</Title>
+        </Group>
         <Group gap="xs">
-          <Badge variant="light">{device.source}</Badge>
+          <Badge variant="light">{isGroup ? "group" : device.source}</Badge>
+          {device.hidden && (
+            <Badge color="gray" variant="outline">
+              Hidden
+            </Badge>
+          )}
           {!device.reachable && (
             <Badge color="red" variant="light">
               Unreachable
@@ -66,6 +78,16 @@ export function DeviceDetailView({ qualifiedId }: { qualifiedId: string }) {
               live
             </Badge>
           )}
+          <Button
+            size="xs"
+            variant="default"
+            leftSection={device.hidden ? <IconEye size={14} /> : <IconEyeOff size={14} />}
+            onClick={() =>
+              void (device.hidden ? unhideDevice(qualifiedId) : hideDevice(qualifiedId))
+            }
+          >
+            {device.hidden ? "Unhide" : "Hide"}
+          </Button>
         </Group>
       </Group>
 
@@ -78,6 +100,34 @@ export function DeviceDetailView({ qualifiedId }: { qualifiedId: string }) {
         onChange={handleRoomChange}
         style={{ maxWidth: 320 }}
       />
+
+      {isGroup && device.memberQualifiedIds && device.memberQualifiedIds.length > 0 && (
+        <Stack gap="xs">
+          <Text fw={600} size="sm" c="dimmed" tt="uppercase">
+            Members
+          </Text>
+          <Text c="dimmed" size="xs">
+            Membership is managed in Zigbee2MQTT and read-only here.
+          </Text>
+          <Group gap="xs">
+            {device.memberQualifiedIds.map((memberId) => {
+              const member = devicesByQualifiedId.get(memberId);
+              return (
+                <Button
+                  key={memberId}
+                  size="xs"
+                  variant="light"
+                  color={member?.hidden ? "gray" : "blue"}
+                  onClick={() => navigate(deviceDetailPath(basePath, memberId))}
+                >
+                  {member?.displayName ?? memberId}
+                  {member?.hidden ? " (hidden)" : ""}
+                </Button>
+              );
+            })}
+          </Group>
+        </Stack>
+      )}
 
       <Stack gap="sm">
         {flat.length === 0 && (

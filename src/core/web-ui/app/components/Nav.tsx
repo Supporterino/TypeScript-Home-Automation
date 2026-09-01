@@ -64,7 +64,11 @@ export function DesktopSidebar() {
             </Link>
             {rooms.map((room) => {
               const path = roomPath(basePath, room.id);
-              const count = room.members.filter((m) => m.available).length;
+              // Counts what a user sees on the room's own default listing
+              // (reveal off) — a count that includes hidden members would
+              // disagree with the list beneath it (specs/web-ui "Hidden
+              // Devices Are Filtered By Default And Revealable").
+              const count = room.members.filter((m) => m.available && !m.device?.hidden).length;
               return (
                 <Link key={room.id} to={path} style={{ textDecoration: "none" }}>
                   <NavLink

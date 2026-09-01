@@ -183,7 +183,7 @@ export function normalizeDeviceDescriptor(value: unknown): DeviceDescriptor {
   const observationRec = asRecord(rec.observation);
   const mode = observationRec.mode === "polled" ? "polled" : "push";
 
-  return {
+  const descriptor: DeviceDescriptor = {
     source: asString(rec.source, "unknown"),
     id: asString(rec.id),
     qualifiedId: asString(rec.qualifiedId),
@@ -196,7 +196,14 @@ export function normalizeDeviceDescriptor(value: unknown): DeviceDescriptor {
       observedAt: asNumber(observationRec.observedAt, Date.now()),
       refreshIntervalMs: asNullableNumber(observationRec.refreshIntervalMs) ?? undefined,
     },
+    hidden: asBoolean(rec.hidden),
   };
+  if (Array.isArray(rec.memberQualifiedIds)) {
+    descriptor.memberQualifiedIds = rec.memberQualifiedIds.filter(
+      (id): id is string => typeof id === "string",
+    );
+  }
+  return descriptor;
 }
 
 export function normalizeDeviceDescriptors(value: unknown): DeviceDescriptor[] {
@@ -355,6 +362,12 @@ export function normalizeStreamEvent(value: unknown): StreamEvent {
         category: "room_membership",
         qualifiedId: asString(rec.qualifiedId),
         roomId: typeof rec.roomId === "string" ? rec.roomId : null,
+      };
+    case "device_visibility":
+      return {
+        category: "device_visibility",
+        qualifiedId: asString(rec.qualifiedId),
+        hidden: asBoolean(rec.hidden),
       };
     default:
       return { category: "unknown" };

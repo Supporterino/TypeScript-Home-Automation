@@ -15,28 +15,36 @@ function operable(devices: DeviceDescriptor[], operableOnly: boolean): DeviceDes
   return operableOnly ? devices.filter((d) => isOperableDevice(d.capabilities)) : devices;
 }
 
+/** Hidden devices are filtered out unless revealed (design.md D12; specs/web-ui). */
+function reveal(devices: DeviceDescriptor[], showHidden: boolean): DeviceDescriptor[] {
+  return showHidden ? devices : devices.filter((d) => !d.hidden);
+}
+
 export function DashboardView() {
   const { status, rooms, unassignedDevices } = useDataStore();
   const [operableOnly, setOperableOnly] = useState(false);
+  const [showHidden, setShowHidden] = useState(false);
 
   const ready = status?.status === "ready";
 
   const roomSections = rooms
     .map((room) => ({
       room,
-      allMembers: room.members.filter((m) => m.available && m.device),
+      // biome-ignore lint/style/noNonNullAssertion: filtered below
+      allMembers: room.members.filter((m) => m.available && m.device).map((m) => m.device!),
     }))
     .filter(({ allMembers }) => allMembers.length > 0)
-    .map(({ room, allMembers }) => ({
-      room,
-      // biome-ignore lint/style/noNonNullAssertion: filtered above
-      visibleMembers: operable(
-        allMembers.map((m) => m.device!),
-        operableOnly,
-      ),
-    }));
+    .map(({ room, allMembers }) => {
+      const shownMembers = reveal(allMembers, showHidden);
+      return {
+        room,
+        allHidden: shownMembers.length === 0,
+        visibleMembers: operable(shownMembers, operableOnly),
+      };
+    });
 
-  const visibleUnassigned = operable(unassignedDevices, operableOnly);
+  const shownUnassigned = reveal(unassignedDevices, showHidden);
+  const visibleUnassigned = operable(shownUnassigned, operableOnly);
 
   const totalDevices =
     rooms.reduce((n, r) => n + r.members.filter((m) => m.available).length, 0) +
@@ -44,15 +52,26 @@ export function DashboardView() {
   const genuinelyEmpty = rooms.length === 0 && unassignedDevices.length === 0;
   const filteredEmpty =
     !genuinelyEmpty &&
-    operableOnly &&
     roomSections.every((s) => s.visibleMembers.length === 0) &&
     visibleUnassigned.length === 0;
+  const allHiddenOnly =
+    filteredEmpty &&
+    !showHidden &&
+    roomSections.every((s) => s.allHidden) &&
+    shownUnassigned.length === 0;
 
   return (
     <Stack gap="lg">
       <Group justify="space-between">
         <Title order={2}>Dashboard</Title>
         <Group gap="md">
+          <Switch
+            label="Show hidden"
+            size="sm"
+            checked={showHidden}
+            onChange={(e) => setShowHidden(e.currentTarget.checked)}
+            disabled={totalDevices === 0}
+          />
           <Switch
             label="Operable only"
             size="sm"
@@ -73,15 +92,32 @@ export function DashboardView() {
         </Text>
       )}
 
-      {filteredEmpty && (
-        <Text c="dimmed" size="sm">
-          No operable devices. Every known device only reports — turn off "Operable only" to see
-          them.
-        </Text>
-      )}
+      {filteredEmpty &&
+        (allHiddenOnly ? (
+          <Text c="dimmed" size="sm">
+            Every device is hidden — turn on "Show hidden" to see them.
+          </Text>
+        ) : (
+          <Text c="dimmed" size="sm">
+            No operable devices. Every known device only reports — turn off "Operable only" to see
+            them.
+          </Text>
+        ))}
 
-      {roomSections.map(({ room, visibleMembers }) => {
-        if (visibleMembers.length === 0) return null;
+      {roomSections.map(({ room, visibleMembers, allHidden }) => {
+        if (visibleMembers.length === 0) {
+          if (!allHidden || showHidden) return null;
+          return (
+            <Stack key={room.id} gap="xs">
+              <Text fw={600} size="sm" c="dimmed" tt="uppercase">
+                {room.name}
+              </Text>
+              <Text c="dimmed" size="xs">
+                All devices in this room are hidden.
+              </Text>
+            </Stack>
+          );
+        }
         return (
           <Stack key={room.id} gap="xs">
             <Text fw={600} size="sm" c="dimmed" tt="uppercase">

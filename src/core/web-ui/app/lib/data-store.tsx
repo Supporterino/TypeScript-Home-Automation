@@ -42,8 +42,10 @@ import {
   fetchRooms,
   fetchState,
   fetchStatus,
+  hideDevice as hideDeviceRequest,
   openEventStream,
   sendDeviceCommand,
+  unhideDevice as unhideDeviceRequest,
 } from "../api.js";
 import type {
   Automation,
@@ -90,6 +92,15 @@ interface DataStoreValue {
   refresh: () => Promise<void>;
   /** Subscribe to every raw stream event — used by detail views that need one specific category (e.g. an automation's own executions). */
   subscribe: (listener: (event: StreamEvent) => void) => () => void;
+  /**
+   * Hides a device: reflected in the local store immediately, then sent to
+   * the server. Reverted if the request fails; otherwise reconciled (as a
+   * no-op) by the `device_visibility` event the server broadcasts, the same
+   * way another client's change already updates this one.
+   */
+  hideDevice: (qualifiedId: string) => Promise<void>;
+  /** Unhides a device — the mirror of {@link hideDevice}. */
+  unhideDevice: (qualifiedId: string) => Promise<void>;
   /**
    * The single app-wide coalescer every optimistic device command goes
    * through (design.md D31) — one instance, not one per component, so a
@@ -163,6 +174,42 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
     setLogs(logsRes);
     setHomekit(homekitRes);
   }, []);
+
+  const setDeviceHidden = useCallback((qualifiedId: string, hidden: boolean) => {
+    setDevicesByQualifiedId((prev) => {
+      const existing = prev.get(qualifiedId);
+      if (!existing || existing.hidden === hidden) return prev;
+      const next = new Map(prev);
+      next.set(qualifiedId, { ...existing, hidden });
+      return next;
+    });
+  }, []);
+
+  const hideDevice = useCallback(
+    async (qualifiedId: string) => {
+      setDeviceHidden(qualifiedId, true);
+      try {
+        await hideDeviceRequest(qualifiedId);
+      } catch (err) {
+        setDeviceHidden(qualifiedId, false);
+        throw err;
+      }
+    },
+    [setDeviceHidden],
+  );
+
+  const unhideDevice = useCallback(
+    async (qualifiedId: string) => {
+      setDeviceHidden(qualifiedId, false);
+      try {
+        await unhideDeviceRequest(qualifiedId);
+      } catch (err) {
+        setDeviceHidden(qualifiedId, true);
+        throw err;
+      }
+    },
+    [setDeviceHidden],
+  );
 
   // Initial snapshot, then open the stream. Re-runs (via the effect below)
   // are not needed after this — reconnection triggers its own refresh.
@@ -293,6 +340,16 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
           });
           break;
         }
+        case "device_visibility": {
+          setDevicesByQualifiedId((prev) => {
+            const existing = prev.get(event.qualifiedId);
+            if (!existing) return prev;
+            const next = new Map(prev);
+            next.set(event.qualifiedId, { ...existing, hidden: event.hidden });
+            return next;
+          });
+          break;
+        }
         case "fell_behind": {
           // The connection is healthy but discarded buffered events — the
           // client is behind, not disconnected. Re-snapshot to recover,
@@ -397,6 +454,8 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
       refresh,
       subscribe,
       commandCoalescer,
+      hideDevice,
+      unhideDevice,
     }),
     [
       status,
@@ -412,6 +471,8 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
       refresh,
       subscribe,
       commandCoalescer,
+      hideDevice,
+      unhideDevice,
     ],
   );
 

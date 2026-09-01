@@ -164,6 +164,18 @@ export async function unassignDeviceRoom(qualifiedId: string): Promise<void> {
   });
 }
 
+export async function hideDevice(qualifiedId: string): Promise<void> {
+  await apiFetch(`/api/device-catalog/${encodeURIComponent(qualifiedId)}/hidden`, {
+    method: "PUT",
+  });
+}
+
+export async function unhideDevice(qualifiedId: string): Promise<void> {
+  await apiFetch(`/api/device-catalog/${encodeURIComponent(qualifiedId)}/hidden`, {
+    method: "DELETE",
+  });
+}
+
 // ── Rooms ───────────────────────────────────────────────────────────────
 
 export async function fetchRooms(): Promise<RoomWithMembers[]> {

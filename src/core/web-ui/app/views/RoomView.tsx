@@ -58,6 +58,9 @@ export function RoomView({ roomId }: { roomId: string }) {
   // Session-scoped filter (design.md D5), same predicate as every other
   // device collection (design.md D4).
   const [operableOnly, setOperableOnly] = useState(false);
+  // Session-scoped reveal (design.md D12): a viewing preference, never a
+  // change to any device's hidden flag — resets on reload.
+  const [showHidden, setShowHidden] = useState(false);
 
   if (!room) {
     return (
@@ -116,17 +119,20 @@ export function RoomView({ roomId }: { roomId: string }) {
 
   const allAvailableMembers = room.members.filter((m) => m.available && m.device);
   const unavailableMembers = room.members.filter((m) => !m.available);
+  // biome-ignore lint/style/noNonNullAssertion: filtered above
+  const shownMembers = showHidden
+    ? allAvailableMembers
+    : allAvailableMembers.filter((m) => !m.device!.hidden);
   const availableMembers = operableOnly
     ? // biome-ignore lint/style/noNonNullAssertion: filtered above
-      allAvailableMembers.filter((m) => isOperableDevice(m.device!.capabilities))
-    : allAvailableMembers;
+      shownMembers.filter((m) => isOperableDevice(m.device!.capabilities))
+    : shownMembers;
 
   const genuinelyEmpty = allAvailableMembers.length === 0 && unavailableMembers.length === 0;
   const filteredEmpty =
-    !genuinelyEmpty &&
-    operableOnly &&
-    availableMembers.length === 0 &&
-    unavailableMembers.length === 0;
+    !genuinelyEmpty && availableMembers.length === 0 && unavailableMembers.length === 0;
+  const allHiddenOnly =
+    filteredEmpty && !showHidden && allAvailableMembers.length > 0 && shownMembers.length === 0;
 
   return (
     <Stack gap="md">
@@ -183,6 +189,12 @@ export function RoomView({ roomId }: { roomId: string }) {
       {!genuinelyEmpty && (
         <Group justify="flex-end">
           <Switch
+            label="Show hidden"
+            size="sm"
+            checked={showHidden}
+            onChange={(e) => setShowHidden(e.currentTarget.checked)}
+          />
+          <Switch
             label="Operable only"
             size="sm"
             checked={operableOnly}
@@ -191,12 +203,17 @@ export function RoomView({ roomId }: { roomId: string }) {
         </Group>
       )}
 
-      {filteredEmpty && (
-        <Text c="dimmed" size="sm">
-          No operable devices. Every device in this room only reports — turn off "Operable only" to
-          see them.
-        </Text>
-      )}
+      {filteredEmpty &&
+        (allHiddenOnly ? (
+          <Text c="dimmed" size="sm">
+            This room's devices are hidden, not absent — turn on "Show hidden" to see them.
+          </Text>
+        ) : (
+          <Text c="dimmed" size="sm">
+            No operable devices. Every device in this room only reports — turn off "Operable only"
+            to see them.
+          </Text>
+        ))}
 
       {(availableMembers.length > 0 || unavailableMembers.length > 0) && (
         <SimpleGrid cols={{ base: 2, sm: 3, md: 4, lg: 5 }} spacing="sm">

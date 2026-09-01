@@ -10,10 +10,18 @@
  * device collection shares one tile shape rather than a room inventing a
  * second one.
  */
-import { Badge, Group, Paper, Stack, Text } from "@mantine/core";
-import { IconPlugOff, IconWifi, IconWifiOff } from "@tabler/icons-react";
+import { ActionIcon, Badge, Group, Paper, Stack, Text } from "@mantine/core";
+import {
+  IconEye,
+  IconEyeOff,
+  IconPlugOff,
+  IconUsersGroup,
+  IconWifi,
+  IconWifiOff,
+} from "@tabler/icons-react";
 import type { ReactNode } from "react";
 import { flattenCapabilities, rankDeviceTile } from "../lib/capability-ranking.js";
+import { useDataStore } from "../lib/data-store.js";
 import { formatAge, isObservationStale } from "../lib/format.js";
 import { deviceDetailPath } from "../lib/router.js";
 import { useRouter } from "../lib/router-context.js";
@@ -71,6 +79,30 @@ function UnavailableTile({ qualifiedId, action }: UnavailableProps) {
   );
 }
 
+/**
+ * A hide/unhide toggle, never requiring the caller to know a device's
+ * qualified identifier — it reads it off the descriptor itself (specs/web-ui
+ * "Hiding And Unhiding From The Interface"). Composed alongside any
+ * caller-supplied `action` in the tile's corner slot, so a room's own
+ * unassign control and this toggle can coexist.
+ */
+function VisibilityToggle({ device }: { device: DeviceDescriptor }) {
+  const { hideDevice, unhideDevice } = useDataStore();
+  return (
+    <ActionIcon
+      variant="subtle"
+      color="gray"
+      size="sm"
+      aria-label={device.hidden ? "Unhide device" : "Hide device"}
+      onClick={() => {
+        void (device.hidden ? unhideDevice(device.qualifiedId) : hideDevice(device.qualifiedId));
+      }}
+    >
+      {device.hidden ? <IconEye size={14} /> : <IconEyeOff size={14} />}
+    </ActionIcon>
+  );
+}
+
 export function DeviceTile(props: Props) {
   const { navigate, basePath } = useRouter();
   const now = useNow();
@@ -80,6 +112,7 @@ export function DeviceTile(props: Props) {
   }
 
   const { device, action } = props;
+  const isGroup = device.source === "zigbee-group";
   const ranking = rankDeviceTile(device.capabilities);
   const flat = flattenCapabilities(device.capabilities);
 
@@ -105,7 +138,12 @@ export function DeviceTile(props: Props) {
       withBorder
       p="sm"
       radius="md"
-      style={{ cursor: "pointer", position: "relative" }}
+      opacity={device.hidden ? 0.7 : 1}
+      style={{
+        cursor: "pointer",
+        position: "relative",
+        borderStyle: device.hidden ? "dashed" : undefined,
+      }}
       onClick={openDetail}
       role="button"
       tabIndex={0}
@@ -115,9 +153,18 @@ export function DeviceTile(props: Props) {
     >
       <Stack gap={6}>
         <Group justify="space-between" wrap="nowrap">
-          <Text size="sm" fw={600} truncate>
-            {device.displayName}
-          </Text>
+          <Group gap={4} wrap="nowrap" style={{ minWidth: 0 }}>
+            {isGroup && (
+              <IconUsersGroup
+                size={14}
+                color="var(--mantine-color-dimmed)"
+                aria-label="Group of devices"
+              />
+            )}
+            <Text size="sm" fw={600} truncate>
+              {device.displayName}
+            </Text>
+          </Group>
           {!device.reachable && <IconPlugOff size={14} color="var(--mantine-color-red-6)" />}
         </Group>
 
@@ -142,6 +189,11 @@ export function DeviceTile(props: Props) {
         )}
 
         <Group gap={4} wrap="nowrap">
+          {device.hidden && (
+            <Badge size="xs" color="gray" variant="outline">
+              Hidden
+            </Badge>
+          )}
           {!device.reachable ? (
             <Badge size="xs" color="red" variant="light">
               Unreachable
@@ -167,7 +219,14 @@ export function DeviceTile(props: Props) {
         </Group>
       </Stack>
 
-      {action && <ActionSlot action={action} />}
+      <ActionSlot
+        action={
+          <Group gap={2} wrap="nowrap">
+            {action}
+            <VisibilityToggle device={device} />
+          </Group>
+        }
+      />
     </Paper>
   );
 }
