@@ -1,5 +1,11 @@
 import { describe, expect, it } from "bun:test";
-import { mapZ2MExpose, mapZ2MExposes } from "../src/types/capabilities.js";
+import type { Capability } from "../src/types/capabilities.js";
+import {
+  composeBooleanCapabilityValue,
+  mapZ2MExpose,
+  mapZ2MExposes,
+  readBooleanCapabilityValue,
+} from "../src/types/capabilities.js";
 
 describe("mapZ2MExposes", () => {
   it("returns an empty array for undefined, null, or non-array input", () => {
@@ -75,6 +81,8 @@ describe("mapZ2MExposes", () => {
     expect(state.property).toBe("state");
     expect(state.valueType).toBe("boolean");
     expect(state.access).toEqual({ readable: true, writable: true });
+    expect(state.valueOn).toBe("ON");
+    expect(state.valueOff).toBe("OFF");
 
     expect(brightness.kind).toBe("numeric");
     expect(brightness.property).toBe("brightness");
@@ -140,5 +148,78 @@ describe("mapZ2MExposes", () => {
   it("mapZ2MExpose maps a single entry the same way mapZ2MExposes maps an array of one", () => {
     const entry = { type: "binary", name: "contact", property: "contact", access: 1 };
     expect(mapZ2MExpose(entry)).toEqual(mapZ2MExposes([entry])[0]);
+  });
+
+  it("declares a binary expose's on/off values when the schema publishes them", () => {
+    const [capability] = mapZ2MExposes([
+      { type: "binary", property: "state", access: 3, value_on: "ON", value_off: "OFF" },
+    ]);
+    expect(capability.valueOn).toBe("ON");
+    expect(capability.valueOff).toBe("OFF");
+  });
+
+  it("declares neither on/off value when a binary expose omits them (design R1)", () => {
+    const [capability] = mapZ2MExposes([{ type: "binary", property: "contact", access: 1 }]);
+    expect(capability.valueOn).toBeUndefined();
+    expect(capability.valueOff).toBeUndefined();
+  });
+
+  it("does not set on/off values on a non-binary expose", () => {
+    const [capability] = mapZ2MExposes([
+      { type: "numeric", property: "brightness", access: 3, value_min: 0, value_max: 254 },
+    ]);
+    expect(capability.valueOn).toBeUndefined();
+    expect(capability.valueOff).toBeUndefined();
+  });
+});
+
+describe("readBooleanCapabilityValue", () => {
+  it("reads a declared string encoding correctly for on and off", () => {
+    const capability: Pick<Capability, "valueOn"> = { valueOn: "ON" };
+    expect(readBooleanCapabilityValue(capability, "ON")).toBe(true);
+    expect(readBooleanCapabilityValue(capability, "OFF")).toBe(false);
+  });
+
+  it("reads a declared real-boolean encoding correctly", () => {
+    const capability: Pick<Capability, "valueOn"> = { valueOn: true };
+    expect(readBooleanCapabilityValue(capability, true)).toBe(true);
+    expect(readBooleanCapabilityValue(capability, false)).toBe(false);
+  });
+
+  it("defaults to treating a real boolean true as on when nothing is declared", () => {
+    const capability: Pick<Capability, "valueOn"> = {};
+    expect(readBooleanCapabilityValue(capability, true)).toBe(true);
+    expect(readBooleanCapabilityValue(capability, false)).toBe(false);
+  });
+
+  it("does not treat a foreign value as on", () => {
+    const capability: Pick<Capability, "valueOn"> = { valueOn: "ON" };
+    expect(readBooleanCapabilityValue(capability, true)).toBe(false);
+  });
+});
+
+describe("composeBooleanCapabilityValue", () => {
+  it("composes a declared string encoding", () => {
+    const capability: Pick<Capability, "valueOn" | "valueOff"> = {
+      valueOn: "ON",
+      valueOff: "OFF",
+    };
+    expect(composeBooleanCapabilityValue(capability, true)).toBe("ON");
+    expect(composeBooleanCapabilityValue(capability, false)).toBe("OFF");
+  });
+
+  it("composes a declared real-boolean encoding", () => {
+    const capability: Pick<Capability, "valueOn" | "valueOff"> = {
+      valueOn: true,
+      valueOff: false,
+    };
+    expect(composeBooleanCapabilityValue(capability, true)).toBe(true);
+    expect(composeBooleanCapabilityValue(capability, false)).toBe(false);
+  });
+
+  it("defaults to a real boolean when nothing is declared", () => {
+    const capability: Pick<Capability, "valueOn" | "valueOff"> = {};
+    expect(composeBooleanCapabilityValue(capability, true)).toBe(true);
+    expect(composeBooleanCapabilityValue(capability, false)).toBe(false);
   });
 });

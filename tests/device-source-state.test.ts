@@ -37,6 +37,8 @@ describe("StateDeviceSource", () => {
         property: "on",
         access: { readable: true, writable: true },
         valueType: "boolean",
+        valueOn: true,
+        valueOff: false,
       },
     ]);
     expect(devices[0].reachable).toBe(true);

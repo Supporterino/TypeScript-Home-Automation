@@ -64,6 +64,10 @@ describe("NanoleafDeviceSource", () => {
       expect.arrayContaining(["on", "brightness", "hue", "saturation", "effect"]),
     );
 
+    const onCap = devices[0].capabilities.find((c) => c.property === "on");
+    expect(onCap?.valueOn).toBe(true);
+    expect(onCap?.valueOff).toBe(false);
+
     source.stop();
   });
 

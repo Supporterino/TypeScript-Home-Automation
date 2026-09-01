@@ -16,6 +16,8 @@ const ZIGBEE_LIGHT_CAPABILITIES: Capability[] = [
         property: "state",
         access: { readable: true, writable: true },
         valueType: "boolean",
+        valueOn: "ON",
+        valueOff: "OFF",
       },
       {
         kind: "numeric",
@@ -51,6 +53,20 @@ const STATE_TOGGLE_CAPABILITIES: Capability[] = [
   },
 ];
 
+// A Shelly-shaped switch: a real boolean encoding, declared explicitly
+// (design.md D1, task 3.1) rather than relying on the absent-declaration
+// default — the shape a Shelly `on` property has after that task.
+const SHELLY_SWITCH_CAPABILITIES: Capability[] = [
+  {
+    kind: "switch",
+    property: "on",
+    access: { readable: true, writable: true },
+    valueType: "boolean",
+    valueOn: true,
+    valueOff: false,
+  },
+];
+
 describe("validateCommand — Zigbee device", () => {
   it("accepts a valid brightness within range", () => {
     const result = validateCommand(ZIGBEE_LIGHT_CAPABILITIES, { brightness: 150 });
@@ -65,6 +81,18 @@ describe("validateCommand — Zigbee device", () => {
   it("accepts a real boolean for a boolean-typed property", () => {
     const result = validateCommand(ZIGBEE_LIGHT_CAPABILITIES, { state: true });
     expect(result).toEqual({ ok: true });
+  });
+
+  it("accepts the declared off value", () => {
+    const result = validateCommand(ZIGBEE_LIGHT_CAPABILITIES, { state: "OFF" });
+    expect(result).toEqual({ ok: true });
+  });
+
+  it("rejects a value in a foreign encoding with a descriptive error (design D3)", () => {
+    const result = validateCommand(ZIGBEE_LIGHT_CAPABILITIES, { state: 1 });
+    expect(result.ok).toBe(false);
+    expect((result as { error: string }).error).toMatch(/must be a boolean/);
+    expect((result as { error: string }).error).toMatch(/"ON"\/"OFF"/);
   });
 
   it("rejects a brightness value above the declared maximum", () => {
@@ -139,5 +167,18 @@ describe("validateCommand — state toggle", () => {
   it("accepts an empty command with no properties", () => {
     const result = validateCommand(STATE_TOGGLE_CAPABILITIES, {});
     expect(result).toEqual({ ok: true });
+  });
+});
+
+describe("validateCommand — Shelly switch (declared real-boolean encoding)", () => {
+  it("accepts a real boolean", () => {
+    const result = validateCommand(SHELLY_SWITCH_CAPABILITIES, { on: true });
+    expect(result).toEqual({ ok: true });
+  });
+
+  it('rejects "ON" now that validation reads the declared encoding rather than a hardcoded convention', () => {
+    const result = validateCommand(SHELLY_SWITCH_CAPABILITIES, { on: "ON" });
+    expect(result.ok).toBe(false);
+    expect((result as { error: string }).error).toMatch(/must be a boolean/);
   });
 });

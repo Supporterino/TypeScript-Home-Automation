@@ -120,6 +120,19 @@ describe("ZigbeeDeviceSource", () => {
     expect(devices[0].observation.mode).toBe("push");
   });
 
+  it("preserves a binary expose's declared on/off encoding end-to-end (design.md D1/D2)", () => {
+    mqttMock.emit("zigbee2mqtt/bridge/devices", [
+      makeDevice("lamp", "0xaaa", [STATE_EXPOSE]),
+    ] as unknown as Record<string, unknown>);
+    source.start();
+
+    const device = source.get("0xaaa");
+    const [capability] = device?.capabilities ?? [];
+    expect(capability?.property).toBe("state");
+    expect(capability?.valueOn).toBe("ON");
+    expect(capability?.valueOff).toBe("OFF");
+  });
+
   it("preserves stable identity across a rename", () => {
     mqttMock.emit("zigbee2mqtt/bridge/devices", [makeDevice("lamp", "0xaaa")] as unknown as Record<
       string,

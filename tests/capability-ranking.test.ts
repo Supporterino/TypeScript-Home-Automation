@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import {
   flattenCapabilities,
+  isOperableDevice,
   rankDeviceTile,
   selectPrimaryAction,
   selectPrimaryReadout,
@@ -20,6 +21,11 @@ function numeric(property: string, access = rw, unit?: string): Capability {
 
 function light(features: Capability[]): Capability {
   return { kind: "light", access: rw, valueType: "composite", features };
+}
+
+/** An output-kind container of the given kind, e.g. a fan with only a discrete speed choice. */
+function outputContainer(kind: string, features: Capability[]): Capability {
+  return { kind, access: rw, valueType: "composite", features };
 }
 
 describe("flattenCapabilities", () => {
@@ -84,21 +90,95 @@ describe("selectPrimaryAction — an unrankable device", () => {
   });
 });
 
-describe("selectPrimaryAction — fallback ranks", () => {
-  it("falls back to any other writable enum", () => {
+describe("selectPrimaryAction — fallback ranks (gated on OUTPUT_KINDS, design D4)", () => {
+  it("falls back to a writable enum when it belongs to an output-kind capability", () => {
     const capabilities: Capability[] = [
-      { kind: "enum", property: "effect", access: rw, valueType: "enum", permittedValues: ["a"] },
+      outputContainer("fan", [
+        { kind: "enum", property: "effect", access: rw, valueType: "enum", permittedValues: ["a"] },
+      ]),
     ];
     const action = selectPrimaryAction(capabilities);
     expect(action?.kind).toBe("enum");
     expect(action?.capability.property).toBe("effect");
   });
 
-  it("falls back to any other writable numeric", () => {
-    const capabilities = [numeric("fan_speed")];
+  it("falls back to a writable numeric when it belongs to an output-kind capability", () => {
+    const capabilities = [outputContainer("fan", [numeric("fan_speed")])];
     const action = selectPrimaryAction(capabilities);
     expect(action?.kind).toBe("numeric");
   });
+
+  it("does not fall back to a writable enum outside any output-kind capability", () => {
+    // A motion sensor's writable `sensitivity` setting — a bare enum with no
+    // output-kind container — must not become a primary action (specs/web-ui
+    // "A sensor's configuration setting is not its primary action").
+    const capabilities: Capability[] = [
+      {
+        kind: "enum",
+        property: "sensitivity",
+        access: rw,
+        valueType: "enum",
+        permittedValues: ["low", "medium", "high"],
+      },
+    ];
+    expect(selectPrimaryAction(capabilities)).toBeNull();
+  });
+
+  it("does not fall back to a writable numeric outside any output-kind capability", () => {
+    const capabilities = [numeric("sensitivity_threshold")];
+    expect(selectPrimaryAction(capabilities)).toBeNull();
+  });
+});
+
+describe("isOperableDevice — agrees with selectPrimaryAction (design D4)", () => {
+  const fixtures: { name: string; capabilities: Capability[] }[] = [
+    { name: "dimmable light", capabilities: [light([onOff("state"), numeric("brightness")])] },
+    {
+      name: "cover",
+      capabilities: [
+        numeric("position"),
+        { kind: "enum", property: "state", access: rw, valueType: "enum" as const },
+      ],
+    },
+    { name: "read-only temperature sensor", capabilities: [numeric("temperature", ro, "°C")] },
+    {
+      name: "unrankable device",
+      capabilities: [{ kind: "text", property: "firmware_version", access: ro, valueType: "text" }],
+    },
+    { name: "empty capability list", capabilities: [] },
+    {
+      name: "enum-only actuator inside an output-kind container",
+      capabilities: [
+        outputContainer("fan", [
+          {
+            kind: "enum",
+            property: "effect",
+            access: rw,
+            valueType: "enum",
+            permittedValues: ["a"],
+          },
+        ]),
+      ],
+    },
+    {
+      name: "motion sensor with writable sensitivity enum",
+      capabilities: [
+        {
+          kind: "enum",
+          property: "sensitivity",
+          access: rw,
+          valueType: "enum",
+          permittedValues: ["low", "medium", "high"],
+        },
+      ],
+    },
+  ];
+
+  for (const { name, capabilities } of fixtures) {
+    it(`agrees with selectPrimaryAction for: ${name}`, () => {
+      expect(isOperableDevice(capabilities)).toBe(selectPrimaryAction(capabilities) !== null);
+    });
+  }
 });
 
 describe("selectPrimaryReadout — with a primary action", () => {
