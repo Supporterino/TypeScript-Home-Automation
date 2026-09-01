@@ -7,7 +7,7 @@ import {
   DeviceRegistry,
   type DeviceRegistryPersistenceOptions,
 } from "../src/core/zigbee/device-registry.js";
-import type { ZigbeeDevice } from "../src/types/zigbee/bridge.js";
+import type { ZigbeeDevice, ZigbeeGroup } from "../src/types/zigbee/bridge.js";
 
 const logger = pino({ level: "silent" });
 
@@ -55,6 +55,15 @@ function makeDeviceWithRawExposes(friendlyName: string, rawExposes: unknown[]): 
   } as unknown as ZigbeeDevice;
 }
 
+/** A minimal ZigbeeGroup fixture for tests. */
+function makeGroup(
+  id: number,
+  friendlyName: string,
+  members: { ieee_address: string; endpoint: number }[] = [],
+): ZigbeeGroup {
+  return { id, friendly_name: friendlyName, members };
+}
+
 /** Create a mock MqttService that captures all subscribe/unsubscribe/publish calls. */
 function createMockMqtt() {
   const subscriptions: { topic: string; handler: MqttMessageHandler }[] = [];
@@ -97,11 +106,12 @@ describe("DeviceRegistry", () => {
   // ---------------------------------------------------------------------------
 
   describe("start", () => {
-    it("subscribes to bridge/devices and bridge/event topics", () => {
+    it("subscribes to bridge/devices, bridge/groups, and bridge/event topics", () => {
       registry.start();
 
       const topics = mqttMock.subscriptions.map((s) => s.topic);
       expect(topics).toContain("zigbee2mqtt/bridge/devices");
+      expect(topics).toContain("zigbee2mqtt/bridge/groups");
       expect(topics).toContain("zigbee2mqtt/bridge/event");
     });
 
@@ -112,6 +122,7 @@ describe("DeviceRegistry", () => {
 
       const topics = mqttMock.subscriptions.map((s) => s.topic);
       expect(topics).toContain("myhome/bridge/devices");
+      expect(topics).toContain("myhome/bridge/groups");
       expect(topics).toContain("myhome/bridge/event");
     });
   });
@@ -123,7 +134,20 @@ describe("DeviceRegistry", () => {
 
       const unsubTopics = mqttMock.unsubscriptions.map((u) => u.topic);
       expect(unsubTopics).toContain("zigbee2mqtt/bridge/devices");
+      expect(unsubTopics).toContain("zigbee2mqtt/bridge/groups");
       expect(unsubTopics).toContain("zigbee2mqtt/bridge/event");
+    });
+
+    it("clears the group list on stop", () => {
+      registry.start();
+      mqttMock.emit("zigbee2mqtt/bridge/groups", [makeGroup(1, "lamp")] as unknown as Record<
+        string,
+        unknown
+      >);
+
+      expect(registry.getGroups()).toHaveLength(1);
+      registry.stop();
+      expect(registry.getGroups()).toHaveLength(0);
     });
 
     it("clears the device list on stop", () => {
@@ -247,6 +271,147 @@ describe("DeviceRegistry", () => {
 
       expect(registry.hasDevice("sensor")).toBe(true);
       expect(registry.hasDevice("bulb")).toBe(false);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Group discovery (tasks 1.2-1.5; specs/zigbee-groups "Group Discovery")
+  // ---------------------------------------------------------------------------
+
+  describe("group discovery", () => {
+    beforeEach(() => {
+      registry.start();
+    });
+
+    it("tracks groups from a bridge/groups message", () => {
+      mqttMock.emit("zigbee2mqtt/bridge/groups", [
+        makeGroup(1, "lamp", [{ ieee_address: "0xa", endpoint: 1 }]),
+        makeGroup(2, "fan"),
+      ] as unknown as Record<string, unknown>);
+
+      expect(registry.getGroups()).toHaveLength(2);
+      expect(registry.getGroup(1)?.friendly_name).toBe("lamp");
+      expect(registry.getGroup(2)?.friendly_name).toBe("fan");
+    });
+
+    it("getGroup returns undefined for an unknown id", () => {
+      expect(registry.getGroup(99)).toBeUndefined();
+    });
+
+    it("removes a group absent from a new bridge/groups message", () => {
+      mqttMock.emit("zigbee2mqtt/bridge/groups", [
+        makeGroup(1, "lamp"),
+        makeGroup(2, "fan"),
+      ] as unknown as Record<string, unknown>);
+
+      mqttMock.emit("zigbee2mqtt/bridge/groups", [makeGroup(1, "lamp")] as unknown as Record<
+        string,
+        unknown
+      >);
+
+      expect(registry.getGroups()).toHaveLength(1);
+      expect(registry.getGroup(2)).toBeUndefined();
+    });
+
+    it("updates a group's members in place", () => {
+      mqttMock.emit("zigbee2mqtt/bridge/groups", [
+        makeGroup(1, "lamp", [{ ieee_address: "0xa", endpoint: 1 }]),
+      ] as unknown as Record<string, unknown>);
+
+      mqttMock.emit("zigbee2mqtt/bridge/groups", [
+        makeGroup(1, "lamp", [
+          { ieee_address: "0xa", endpoint: 1 },
+          { ieee_address: "0xb", endpoint: 1 },
+        ]),
+      ] as unknown as Record<string, unknown>);
+
+      expect(registry.getGroup(1)?.members).toHaveLength(2);
+    });
+
+    it("preserves identity across a friendly name rename", () => {
+      mqttMock.emit("zigbee2mqtt/bridge/groups", [makeGroup(5, "old_name")] as unknown as Record<
+        string,
+        unknown
+      >);
+      mqttMock.emit("zigbee2mqtt/bridge/groups", [makeGroup(5, "new_name")] as unknown as Record<
+        string,
+        unknown
+      >);
+
+      expect(registry.getGroups()).toHaveLength(1);
+      expect(registry.getGroup(5)?.friendly_name).toBe("new_name");
+    });
+
+    it("ignores a non-array bridge/groups payload, leaving tracked groups unchanged", () => {
+      mqttMock.emit("zigbee2mqtt/bridge/groups", [makeGroup(1, "lamp")] as unknown as Record<
+        string,
+        unknown
+      >);
+
+      expect(() =>
+        mqttMock.emit("zigbee2mqtt/bridge/groups", { error: "not an array" }),
+      ).not.toThrow();
+
+      expect(registry.getGroups()).toHaveLength(1);
+    });
+
+    it("skips a malformed group entry (non-numeric id) without throwing", () => {
+      expect(() =>
+        mqttMock.emit("zigbee2mqtt/bridge/groups", [
+          { id: "not-a-number", friendly_name: "bad" },
+          makeGroup(1, "lamp"),
+        ] as unknown as Record<string, unknown>),
+      ).not.toThrow();
+
+      expect(registry.getGroups()).toHaveLength(1);
+      expect(registry.getGroup(1)?.friendly_name).toBe("lamp");
+    });
+
+    it("skips a malformed group entry (non-string friendly_name) without throwing", () => {
+      expect(() =>
+        mqttMock.emit("zigbee2mqtt/bridge/groups", [
+          { id: 9, friendly_name: 123 },
+        ] as unknown as Record<string, unknown>),
+      ).not.toThrow();
+
+      expect(registry.getGroups()).toHaveLength(0);
+    });
+
+    it("fires onGroupsChanged once per message that changes the tracked set", () => {
+      const handler = mock(() => {});
+      registry.onGroupsChanged(handler);
+
+      mqttMock.emit("zigbee2mqtt/bridge/groups", [makeGroup(1, "lamp")] as unknown as Record<
+        string,
+        unknown
+      >);
+      expect(handler).toHaveBeenCalledTimes(1);
+
+      // Same content again — no observable change.
+      mqttMock.emit("zigbee2mqtt/bridge/groups", [makeGroup(1, "lamp")] as unknown as Record<
+        string,
+        unknown
+      >);
+      expect(handler).toHaveBeenCalledTimes(1);
+
+      mqttMock.emit("zigbee2mqtt/bridge/groups", [makeGroup(1, "renamed")] as unknown as Record<
+        string,
+        unknown
+      >);
+      expect(handler).toHaveBeenCalledTimes(2);
+    });
+
+    it("stops firing onGroupsChanged after offGroupsChanged", () => {
+      const handler = mock(() => {});
+      registry.onGroupsChanged(handler);
+      registry.offGroupsChanged(handler);
+
+      mqttMock.emit("zigbee2mqtt/bridge/groups", [makeGroup(1, "lamp")] as unknown as Record<
+        string,
+        unknown
+      >);
+
+      expect(handler).not.toHaveBeenCalled();
     });
   });
 
@@ -1025,6 +1190,68 @@ describe("DeviceRegistry", () => {
         brightness: 200,
         color_temp: 4000,
       });
+    });
+
+    it("save() then load() round-trips groups alongside devices", async () => {
+      const tmpFile = `/tmp/ts-ha-test-groups-roundtrip-${Date.now()}.json`;
+
+      const freshMqtt = createMockMqtt();
+      const regA = new DeviceRegistry(
+        freshMqtt.mqtt,
+        { ...config, deviceRegistry: { enabled: true, persist: true, filePath: tmpFile } },
+        logger,
+        {},
+        { persist: true, filePath: tmpFile },
+      );
+      regA.start();
+      freshMqtt.emit("zigbee2mqtt/bridge/groups", [
+        makeGroup(1, "lamp", [{ ieee_address: "0xa", endpoint: 1 }]),
+      ] as unknown as Record<string, unknown>);
+
+      await regA.save();
+
+      const regB = new DeviceRegistry(
+        createMockMqtt().mqtt,
+        { ...config, deviceRegistry: { enabled: true, persist: true, filePath: tmpFile } },
+        logger,
+        {},
+        { persist: true, filePath: tmpFile },
+      );
+      await regB.load();
+
+      expect(regB.getGroups()).toHaveLength(1);
+      expect(regB.getGroup(1)?.friendly_name).toBe("lamp");
+
+      const { unlink } = await import("node:fs/promises");
+      await unlink(tmpFile).catch(() => {});
+    });
+
+    it("loads a snapshot written before groups were persisted with no groups and no error", async () => {
+      const tmpFile = `/tmp/ts-ha-test-groups-missing-key-${Date.now()}.json`;
+      const { writeFile, mkdir } = await import("node:fs/promises");
+      const { dirname } = await import("node:path");
+      await mkdir(dirname(tmpFile), { recursive: true });
+      // No `groups` key at all — simulating a pre-groups snapshot.
+      await writeFile(
+        tmpFile,
+        JSON.stringify({ devices: { bulb: makeDevice("bulb") }, states: {} }),
+        "utf-8",
+      );
+
+      const registry = new DeviceRegistry(
+        createMockMqtt().mqtt,
+        { ...config, deviceRegistry: { enabled: true, persist: true, filePath: tmpFile } },
+        logger,
+        {},
+        { persist: true, filePath: tmpFile },
+      );
+
+      await expect(registry.load()).resolves.toBeUndefined();
+      expect(registry.getGroups()).toHaveLength(0);
+      expect(registry.hasDevice("bulb")).toBe(true);
+
+      const { unlink } = await import("node:fs/promises");
+      await unlink(tmpFile).catch(() => {});
     });
 
     it("save() creates parent directories", async () => {

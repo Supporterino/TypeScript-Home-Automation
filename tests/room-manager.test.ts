@@ -11,8 +11,14 @@ import type {
   DeviceSource,
 } from "../src/core/device-sources/device-source.js";
 import { formatQualifiedId } from "../src/core/device-sources/qualified-id.js";
+import { DeviceVisibility } from "../src/core/device-visibility.js";
 import { RoomManager } from "../src/core/room-manager.js";
 import { StateManager } from "../src/core/state/state-manager.js";
+
+/** A minimal fake `DeviceVisibility` — every device is visible. */
+function makeVisibility(): DeviceVisibility {
+  return { isHidden: () => false } as unknown as DeviceVisibility;
+}
 
 const logger = pino({ level: "silent" });
 
@@ -30,6 +36,7 @@ function makeDescriptor(
     capabilities: [],
     reachable: true,
     observation: { mode: "push", observedAt: Date.now() },
+    hidden: false,
     ...overrides,
   };
 }
@@ -77,7 +84,11 @@ describe("RoomManager", () => {
     zigbee = makeMutableSource("zigbee", [makeDescriptor("zigbee", "0xaaa111")]);
     shelly = makeMutableSource("shelly", [makeDescriptor("shelly", "living_room_plug")]);
     nanoleaf = makeMutableSource("nanoleaf", [makeDescriptor("nanoleaf", "panel")]);
-    aggregate = new AggregateDeviceSource([zigbee.source, shelly.source, nanoleaf.source], logger);
+    aggregate = new AggregateDeviceSource(
+      [zigbee.source, shelly.source, nanoleaf.source],
+      makeVisibility(),
+      logger,
+    );
     await aggregate.start();
     rooms = new RoomManager(state, aggregate, logger);
   });
@@ -317,6 +328,53 @@ describe("RoomManager", () => {
     });
   });
 
+  describe("visibility (design.md D9; task 3.8)", () => {
+    it("hiding a device leaves its room membership intact", async () => {
+      const realVisibility = new DeviceVisibility(state, logger);
+      const visAggregate = new AggregateDeviceSource(
+        [zigbee.source, shelly.source, nanoleaf.source],
+        realVisibility,
+        logger,
+      );
+      await visAggregate.start();
+      const visRooms = new RoomManager(state, visAggregate, logger);
+
+      const created = visRooms.createRoom("Living Room");
+      if (created.status !== "ok") throw new Error("unreachable");
+      const qualifiedId = formatQualifiedId("zigbee", "0xaaa111");
+      visRooms.assignDevice(qualifiedId, created.room.id);
+
+      realVisibility.hide(qualifiedId);
+
+      const listed = visRooms.listRooms();
+      const member = listed[0]?.members.find((m) => m.qualifiedId === qualifiedId);
+      expect(member).toBeDefined();
+      expect(member?.available).toBe(true);
+      expect(visRooms.getRoomForDevice(qualifiedId)?.id).toBe(created.room.id);
+
+      await visAggregate.stop();
+    });
+
+    it("getUnassignedDevices() still includes a hidden device", async () => {
+      const realVisibility = new DeviceVisibility(state, logger);
+      const visAggregate = new AggregateDeviceSource(
+        [zigbee.source, shelly.source, nanoleaf.source],
+        realVisibility,
+        logger,
+      );
+      await visAggregate.start();
+      const visRooms = new RoomManager(state, visAggregate, logger);
+
+      const qualifiedId = formatQualifiedId("zigbee", "0xaaa111");
+      realVisibility.hide(qualifiedId);
+
+      const unassigned = visRooms.getUnassignedDevices();
+      expect(unassigned.map((d) => d.qualifiedId)).toContain(qualifiedId);
+
+      await visAggregate.stop();
+    });
+  });
+
   describe("durability (task 9.8)", () => {
     let tmpDir: string;
     let filePath: string;
@@ -333,7 +391,7 @@ describe("RoomManager", () => {
     it("restores rooms and assignments across a graceful restart", async () => {
       const s1 = new StateManager(logger, { persist: true, filePath });
       const zigbee1 = makeMutableSource("zigbee", [makeDescriptor("zigbee", "0xaaa111")]);
-      const agg1 = new AggregateDeviceSource([zigbee1.source], logger);
+      const agg1 = new AggregateDeviceSource([zigbee1.source], makeVisibility(), logger);
       await agg1.start();
       const r1 = new RoomManager(s1, agg1, logger);
 
@@ -347,7 +405,7 @@ describe("RoomManager", () => {
       const s2 = new StateManager(logger, { persist: true, filePath });
       await s2.load();
       const zigbee2 = makeMutableSource("zigbee", [makeDescriptor("zigbee", "0xaaa111")]);
-      const agg2 = new AggregateDeviceSource([zigbee2.source], logger);
+      const agg2 = new AggregateDeviceSource([zigbee2.source], makeVisibility(), logger);
       await agg2.start();
       const r2 = new RoomManager(s2, agg2, logger);
 
@@ -368,7 +426,7 @@ describe("RoomManager", () => {
       // specs/device-rooms "Rooms survive abrupt termination").
       const s1 = new StateManager(logger, { persist: true, filePath, flushIntervalMs: 10 });
       const zigbee1 = makeMutableSource("zigbee", [makeDescriptor("zigbee", "0xaaa111")]);
-      const agg1 = new AggregateDeviceSource([zigbee1.source], logger);
+      const agg1 = new AggregateDeviceSource([zigbee1.source], makeVisibility(), logger);
       await agg1.start();
       const r1 = new RoomManager(s1, agg1, logger);
 
@@ -384,7 +442,7 @@ describe("RoomManager", () => {
       const s2 = new StateManager(logger, { persist: true, filePath });
       await s2.load();
       const zigbee2 = makeMutableSource("zigbee", [makeDescriptor("zigbee", "0xaaa111")]);
-      const agg2 = new AggregateDeviceSource([zigbee2.source], logger);
+      const agg2 = new AggregateDeviceSource([zigbee2.source], makeVisibility(), logger);
       await agg2.start();
       const r2 = new RoomManager(s2, agg2, logger);
 

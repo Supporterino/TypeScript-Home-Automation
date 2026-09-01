@@ -1,5 +1,6 @@
 import { describe, expect, it, mock } from "bun:test";
 import pino from "pino";
+import { DeviceVisibility } from "../src/core/device-visibility.js";
 import { EventBus } from "../src/core/events/event-bus.js";
 import { HttpServer } from "../src/core/http/http-server.js";
 import { LogBuffer } from "../src/core/logging/log-buffer.js";
@@ -800,6 +801,48 @@ describe("HttpServer — /api/device-catalog", () => {
     ]);
   });
 
+  it("returns every device carrying its hidden status, including hidden devices (task 5.2)", async () => {
+    const server = makeServer();
+    const visible = {
+      source: "shelly",
+      id: "plug",
+      qualifiedId: "shelly:plug",
+      displayName: "plug",
+      state: { on: true },
+      capabilities: [],
+      reachable: true,
+      observation: { mode: "push", observedAt: Date.now() },
+      hidden: false,
+    };
+    const hidden = {
+      source: "zigbee",
+      id: "0xaaa",
+      qualifiedId: "zigbee:0xaaa",
+      displayName: "lamp",
+      state: {},
+      capabilities: [],
+      reachable: true,
+      observation: { mode: "push", observedAt: Date.now() },
+      hidden: true,
+    };
+    server.setDeviceSources({
+      list: mock(() => [visible, hidden]),
+      get: mock(() => undefined),
+      sources: mock(() => []),
+    } as unknown as import("../src/core/device-sources/aggregate.js").AggregateDeviceSource);
+
+    const res = await req(server, "/api/device-catalog");
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.count).toBe(2);
+    expect(
+      body.devices.find((d: { qualifiedId: string }) => d.qualifiedId === "zigbee:0xaaa").hidden,
+    ).toBe(true);
+    expect(
+      body.devices.find((d: { qualifiedId: string }) => d.qualifiedId === "shelly:plug").hidden,
+    ).toBe(false);
+  });
+
   it("reports the Zigbee source unavailable rather than failing the whole request", async () => {
     const server = makeServer();
     server.setDeviceSources({
@@ -1293,6 +1336,85 @@ describe("HttpServer — PUT/DELETE /api/device-catalog/:qualifiedId/room", () =
     const res = await req(server, "/api/device-catalog/zigbee:0xaaa/room", { method: "DELETE" });
     expect(res.status).toBe(200);
     expect(rooms.getRoomForDevice("zigbee:0xaaa")).toBeNull();
+  });
+});
+
+// ── Device visibility ────────────────────────────────────────────────────
+
+describe("HttpServer — PUT/DELETE /api/device-catalog/:qualifiedId/hidden", () => {
+  it("returns 503 when no device visibility is configured", async () => {
+    const server = makeServer();
+    const res = await req(server, "/api/device-catalog/zigbee:0xaaa/hidden", { method: "PUT" });
+    expect(res.status).toBe(503);
+  });
+
+  it("hides a device and reports it hidden", async () => {
+    const server = makeServer();
+    const visibility = new DeviceVisibility(new StateManager(logger, { persist: false }), logger);
+    server.setDeviceVisibility(visibility);
+
+    const res = await req(server, "/api/device-catalog/zigbee:0xaaa/hidden", { method: "PUT" });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toEqual({ qualifiedId: "zigbee:0xaaa", hidden: true });
+    expect(visibility.isHidden("zigbee:0xaaa")).toBe(true);
+  });
+
+  it("hiding twice succeeds and still reports hidden", async () => {
+    const server = makeServer();
+    const visibility = new DeviceVisibility(new StateManager(logger, { persist: false }), logger);
+    server.setDeviceVisibility(visibility);
+
+    await req(server, "/api/device-catalog/zigbee:0xaaa/hidden", { method: "PUT" });
+    const res = await req(server, "/api/device-catalog/zigbee:0xaaa/hidden", { method: "PUT" });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ qualifiedId: "zigbee:0xaaa", hidden: true });
+  });
+
+  it("hides an unknown qualified identifier without rejecting the request", async () => {
+    const server = makeServer();
+    const visibility = new DeviceVisibility(new StateManager(logger, { persist: false }), logger);
+    server.setDeviceVisibility(visibility);
+
+    const res = await req(server, "/api/device-catalog/zigbee:0xghost/hidden", { method: "PUT" });
+    expect(res.status).toBe(200);
+    expect(visibility.isHidden("zigbee:0xghost")).toBe(true);
+  });
+
+  it("hides an identifier containing the delimiter, round-tripped through one percent-encoded segment", async () => {
+    const server = makeServer();
+    const visibility = new DeviceVisibility(new StateManager(logger, { persist: false }), logger);
+    server.setDeviceVisibility(visibility);
+
+    const qualifiedId = "state:motion-light:lights_on";
+    const res = await req(server, `/api/device-catalog/${encodeURIComponent(qualifiedId)}/hidden`, {
+      method: "PUT",
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ qualifiedId, hidden: true });
+    expect(visibility.isHidden(qualifiedId)).toBe(true);
+  });
+
+  it("unhides a device and reports it visible", async () => {
+    const server = makeServer();
+    const visibility = new DeviceVisibility(new StateManager(logger, { persist: false }), logger);
+    visibility.hide("zigbee:0xaaa");
+    server.setDeviceVisibility(visibility);
+
+    const res = await req(server, "/api/device-catalog/zigbee:0xaaa/hidden", { method: "DELETE" });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ qualifiedId: "zigbee:0xaaa", hidden: false });
+    expect(visibility.isHidden("zigbee:0xaaa")).toBe(false);
+  });
+
+  it("unhiding an already-visible device succeeds", async () => {
+    const server = makeServer();
+    const visibility = new DeviceVisibility(new StateManager(logger, { persist: false }), logger);
+    server.setDeviceVisibility(visibility);
+
+    const res = await req(server, "/api/device-catalog/zigbee:0xaaa/hidden", { method: "DELETE" });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ qualifiedId: "zigbee:0xaaa", hidden: false });
   });
 });
 

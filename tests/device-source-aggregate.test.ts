@@ -8,8 +8,16 @@ import type {
   DeviceSource,
 } from "../src/core/device-sources/device-source.js";
 import { formatQualifiedId } from "../src/core/device-sources/qualified-id.js";
+import type { DeviceVisibility } from "../src/core/device-visibility.js";
 
 const logger = pino({ level: "silent" });
+
+/** A minimal fake `DeviceVisibility` for aggregate tests that do not exercise visibility itself. */
+function makeVisibility(hiddenIds: string[] = []): DeviceVisibility {
+  return {
+    isHidden: (qualifiedId: string) => hiddenIds.includes(qualifiedId),
+  } as unknown as DeviceVisibility;
+}
 
 /** A minimal in-memory fake DeviceSource for aggregate-level testing. */
 function makeFakeSource(
@@ -59,6 +67,7 @@ function makeDescriptor(source: string, id: string): DeviceDescriptor {
     capabilities: [],
     reachable: true,
     observation: { mode: "push", observedAt: Date.now() },
+    hidden: false,
   };
 }
 
@@ -66,7 +75,7 @@ describe("AggregateDeviceSource", () => {
   it("enumerates devices from every available source", async () => {
     const zigbee = makeFakeSource("zigbee", { devices: [makeDescriptor("zigbee", "0xaaa")] });
     const shelly = makeFakeSource("shelly", { devices: [makeDescriptor("shelly", "plug")] });
-    const aggregate = new AggregateDeviceSource([zigbee, shelly], logger);
+    const aggregate = new AggregateDeviceSource([zigbee, shelly], makeVisibility(), logger);
     await aggregate.start();
 
     const devices = aggregate.list();
@@ -79,7 +88,7 @@ describe("AggregateDeviceSource", () => {
   it("omits an unavailable source from enumeration without failing", async () => {
     const zigbee = makeFakeSource("zigbee", { available: false, devices: [] });
     const shelly = makeFakeSource("shelly", { devices: [makeDescriptor("shelly", "plug")] });
-    const aggregate = new AggregateDeviceSource([zigbee, shelly], logger);
+    const aggregate = new AggregateDeviceSource([zigbee, shelly], makeVisibility(), logger);
     await aggregate.start();
 
     expect(aggregate.list()).toHaveLength(1);
@@ -98,7 +107,7 @@ describe("AggregateDeviceSource", () => {
     const shelly = makeFakeSource("shelly", {
       devices: [makeDescriptor("shelly", "office_lamp")],
     });
-    const aggregate = new AggregateDeviceSource([zigbee, shelly], logger);
+    const aggregate = new AggregateDeviceSource([zigbee, shelly], makeVisibility(), logger);
     await aggregate.start();
 
     const a = aggregate.get(formatQualifiedId("zigbee", "office_lamp"));
@@ -111,7 +120,7 @@ describe("AggregateDeviceSource", () => {
 
   it("resolves a device by qualified identifier", async () => {
     const shelly = makeFakeSource("shelly", { devices: [makeDescriptor("shelly", "plug")] });
-    const aggregate = new AggregateDeviceSource([shelly], logger);
+    const aggregate = new AggregateDeviceSource([shelly], makeVisibility(), logger);
     await aggregate.start();
 
     expect(aggregate.get(formatQualifiedId("shelly", "plug"))?.id).toBe("plug");
@@ -124,7 +133,7 @@ describe("AggregateDeviceSource", () => {
   it("a source failing to start is logged and reported unavailable without failing engine startup", async () => {
     const broken = makeFakeSource("broken", { throwOnStart: true });
     const ok = makeFakeSource("ok", { devices: [makeDescriptor("ok", "a")] });
-    const aggregate = new AggregateDeviceSource([broken, ok], logger);
+    const aggregate = new AggregateDeviceSource([broken, ok], makeVisibility(), logger);
 
     await expect(aggregate.start()).resolves.toBeUndefined();
     expect(aggregate.list()).toHaveLength(1);
@@ -135,7 +144,7 @@ describe("AggregateDeviceSource", () => {
   it("stops only the sources that were actually started, leaving a throwing source's peers running until stop()", async () => {
     const broken = makeFakeSource("broken", { throwOnStart: true });
     const ok = makeFakeSource("ok", {});
-    const aggregate = new AggregateDeviceSource([broken, ok], logger);
+    const aggregate = new AggregateDeviceSource([broken, ok], makeVisibility(), logger);
     await aggregate.start();
 
     await aggregate.stop();
@@ -146,7 +155,7 @@ describe("AggregateDeviceSource", () => {
 
   it("dispatches a command to the owning source", async () => {
     const shelly = makeFakeSource("shelly", { devices: [makeDescriptor("shelly", "plug")] });
-    const aggregate = new AggregateDeviceSource([shelly], logger);
+    const aggregate = new AggregateDeviceSource([shelly], makeVisibility(), logger);
     await aggregate.start();
 
     const outcome = await aggregate.command(formatQualifiedId("shelly", "plug"), { on: true });
@@ -156,7 +165,7 @@ describe("AggregateDeviceSource", () => {
   });
 
   it("returns not_found for an unknown source in a command", async () => {
-    const aggregate = new AggregateDeviceSource([], logger);
+    const aggregate = new AggregateDeviceSource([], makeVisibility(), logger);
     await aggregate.start();
     const outcome = await aggregate.command(formatQualifiedId("unknown", "x"), {});
     expect(outcome).toEqual({ status: "not_found" });
@@ -165,7 +174,7 @@ describe("AggregateDeviceSource", () => {
 
   it("returns unavailable for a command addressed to an unavailable source", async () => {
     const zigbee = makeFakeSource("zigbee", { available: false });
-    const aggregate = new AggregateDeviceSource([zigbee], logger);
+    const aggregate = new AggregateDeviceSource([zigbee], makeVisibility(), logger);
     await aggregate.start();
     const outcome = await aggregate.command(formatQualifiedId("zigbee", "0xaaa"), {});
     expect(outcome).toEqual({ status: "unavailable" });
@@ -175,7 +184,7 @@ describe("AggregateDeviceSource", () => {
   it("subscribes to state changes across all sources at once", async () => {
     const zigbee = makeFakeSource("zigbee", {});
     const shelly = makeFakeSource("shelly", {});
-    const aggregate = new AggregateDeviceSource([zigbee, shelly], logger);
+    const aggregate = new AggregateDeviceSource([zigbee, shelly], makeVisibility(), logger);
     await aggregate.start();
 
     const seen: string[] = [];
@@ -191,7 +200,7 @@ describe("AggregateDeviceSource", () => {
 
   it("stop() unsubscribes from every source, so no further notifications are delivered", async () => {
     const zigbee = makeFakeSource("zigbee", {});
-    const aggregate = new AggregateDeviceSource([zigbee], logger);
+    const aggregate = new AggregateDeviceSource([zigbee], makeVisibility(), logger);
     await aggregate.start();
 
     const seen: string[] = [];
@@ -200,5 +209,80 @@ describe("AggregateDeviceSource", () => {
 
     for (const listener of zigbee.listeners) listener(makeDescriptor("zigbee", "0xaaa"));
     expect(seen).toEqual([]);
+  });
+
+  // ---------------------------------------------------------------------------
+  // Visibility stamping (design.md D8, D9; tasks 3.5, 3.6)
+  // ---------------------------------------------------------------------------
+
+  describe("visibility", () => {
+    it("stamps hidden: true from the visibility store on list()", async () => {
+      const zigbee = makeFakeSource("zigbee", { devices: [makeDescriptor("zigbee", "0xaaa")] });
+      const aggregate = new AggregateDeviceSource(
+        [zigbee],
+        makeVisibility([formatQualifiedId("zigbee", "0xaaa")]),
+        logger,
+      );
+      await aggregate.start();
+
+      expect(aggregate.list()[0]?.hidden).toBe(true);
+      await aggregate.stop();
+    });
+
+    it("stamps hidden: false on get() for a visible device", async () => {
+      const zigbee = makeFakeSource("zigbee", { devices: [makeDescriptor("zigbee", "0xaaa")] });
+      const aggregate = new AggregateDeviceSource([zigbee], makeVisibility(), logger);
+      await aggregate.start();
+
+      expect(aggregate.get(formatQualifiedId("zigbee", "0xaaa"))?.hidden).toBe(false);
+      await aggregate.stop();
+    });
+
+    it("stamps hidden on a descriptor delivered to a subscriber — the path that bypasses list()", async () => {
+      const zigbee = makeFakeSource("zigbee", {});
+      const aggregate = new AggregateDeviceSource(
+        [zigbee],
+        makeVisibility([formatQualifiedId("zigbee", "0xaaa")]),
+        logger,
+      );
+      await aggregate.start();
+
+      const seen: (boolean | undefined)[] = [];
+      aggregate.subscribe((descriptor) => seen.push(descriptor.hidden));
+      for (const listener of zigbee.listeners) listener(makeDescriptor("zigbee", "0xaaa"));
+
+      expect(seen).toEqual([true]);
+      await aggregate.stop();
+    });
+
+    it("list() includes hidden devices", async () => {
+      const zigbee = makeFakeSource("zigbee", { devices: [makeDescriptor("zigbee", "0xaaa")] });
+      const aggregate = new AggregateDeviceSource(
+        [zigbee],
+        makeVisibility([formatQualifiedId("zigbee", "0xaaa")]),
+        logger,
+      );
+      await aggregate.start();
+
+      expect(aggregate.list()).toHaveLength(1);
+      await aggregate.stop();
+    });
+
+    it("listVisible() excludes hidden devices", async () => {
+      const zigbee = makeFakeSource("zigbee", {
+        devices: [makeDescriptor("zigbee", "0xaaa"), makeDescriptor("zigbee", "0xbbb")],
+      });
+      const aggregate = new AggregateDeviceSource(
+        [zigbee],
+        makeVisibility([formatQualifiedId("zigbee", "0xaaa")]),
+        logger,
+      );
+      await aggregate.start();
+
+      const visible = aggregate.listVisible();
+      expect(visible).toHaveLength(1);
+      expect(visible[0]?.id).toBe("0xbbb");
+      await aggregate.stop();
+    });
   });
 });

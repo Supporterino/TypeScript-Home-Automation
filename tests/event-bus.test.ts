@@ -103,6 +103,7 @@ describe("EventBus", () => {
       capabilities: [],
       reachable: true,
       observation: { mode: "push" as const, observedAt: 1000 },
+      hidden: false,
     };
     bus.emit({ category: "device_appeared", device });
 
@@ -187,6 +188,18 @@ describe("EventBus", () => {
 
     expect(received).toEqual([
       { category: "room_membership", qualifiedId: "zigbee:0xaaa", roomId: null },
+    ]);
+  });
+
+  it("delivers a device_visibility category event naming the device and its new visibility", () => {
+    const bus = new EventBus();
+    const received: StreamEvent[] = [];
+    bus.subscribe((e) => received.push(e));
+
+    bus.emit({ category: "device_visibility", qualifiedId: "zigbee:0xaaa", hidden: true });
+
+    expect(received).toEqual([
+      { category: "device_visibility", qualifiedId: "zigbee:0xaaa", hidden: true },
     ]);
   });
 

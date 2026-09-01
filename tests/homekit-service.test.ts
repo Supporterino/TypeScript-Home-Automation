@@ -131,8 +131,14 @@ import type {
   DeviceSource,
 } from "../src/core/device-sources/device-source.js";
 import { formatQualifiedId } from "../src/core/device-sources/qualified-id.js";
+import type { DeviceVisibility } from "../src/core/device-visibility.js";
 import { HomekitService } from "../src/core/services/homekit-service.js";
 import type { CoreContext } from "../src/core/services/service-plugin.js";
+
+/** A minimal fake `DeviceVisibility` — every device is visible. */
+function makeVisibility(): DeviceVisibility {
+  return { isHidden: () => false } as unknown as DeviceVisibility;
+}
 
 const logger = pino({ level: "silent" });
 const ctx = {} as unknown as CoreContext;
@@ -178,6 +184,7 @@ function makeDescriptor(source: string, id: string): DeviceDescriptor {
     capabilities: [],
     reachable: true,
     observation: { mode: "push", observedAt: Date.now() },
+    hidden: false,
   };
 }
 
@@ -190,26 +197,36 @@ describe("HomekitService (source host)", () => {
   });
 
   it("rejects the old stateToggles location, naming the new one (design.md D19)", () => {
-    const devices = new AggregateDeviceSource([], logger);
+    const devices = new AggregateDeviceSource([], makeVisibility(), logger);
     expect(
       () =>
-        new HomekitService(logger, devices, {
-          pinCode: "031-45-154",
-          stateToggles: [{ stateKey: "night_mode", name: "Night Mode" }],
-        }),
+        new HomekitService(
+          logger,
+          devices,
+          {
+            pinCode: "031-45-154",
+            stateToggles: [{ stateKey: "night_mode", name: "Night Mode" }],
+          },
+          makeVisibility(),
+        ),
     ).toThrow(/stateToggles/);
     expect(
       () =>
-        new HomekitService(logger, devices, {
-          pinCode: "031-45-154",
-          stateToggles: [{ stateKey: "night_mode", name: "Night Mode" }],
-        }),
+        new HomekitService(
+          logger,
+          devices,
+          {
+            pinCode: "031-45-154",
+            stateToggles: [{ stateKey: "night_mode", name: "Night Mode" }],
+          },
+          makeVisibility(),
+        ),
     ).toThrow(/createEngine/);
   });
 
   it("starts and publishes even with an empty device inventory", async () => {
-    const devices = new AggregateDeviceSource([], logger);
-    const svc = new HomekitService(logger, devices, { pinCode: "031-45-154" });
+    const devices = new AggregateDeviceSource([], makeVisibility(), logger);
+    const svc = new HomekitService(logger, devices, { pinCode: "031-45-154" }, makeVisibility());
     await svc.onStart(ctx);
     expect(svc.getStatus().running).toBe(true);
     expect(bridged).toHaveLength(0);
@@ -218,10 +235,10 @@ describe("HomekitService (source host)", () => {
 
   it("bridges accessories from the aggregate device accessor through the sink", async () => {
     const shelly = makeFakeSource("shelly", [makeDescriptor("shelly", "plug")]);
-    const devices = new AggregateDeviceSource([shelly], logger);
+    const devices = new AggregateDeviceSource([shelly], makeVisibility(), logger);
     await devices.start();
 
-    const svc = new HomekitService(logger, devices, { pinCode: "031-45-154" });
+    const svc = new HomekitService(logger, devices, { pinCode: "031-45-154" }, makeVisibility());
     await svc.onStart(ctx);
 
     expect(svc.getStatus().running).toBe(true);
@@ -234,10 +251,10 @@ describe("HomekitService (source host)", () => {
 
   it("bridges a device that appears after start, across every source", async () => {
     const zigbee = makeFakeSource("zigbee", []);
-    const devices = new AggregateDeviceSource([zigbee], logger);
+    const devices = new AggregateDeviceSource([zigbee], makeVisibility(), logger);
     await devices.start();
 
-    const svc = new HomekitService(logger, devices, { pinCode: "031-45-154" });
+    const svc = new HomekitService(logger, devices, { pinCode: "031-45-154" }, makeVisibility());
     await svc.onStart(ctx);
     expect(bridged).toHaveLength(0);
 
@@ -254,10 +271,10 @@ describe("HomekitService (source host)", () => {
 
   it("removes an accessory whose device is no longer present in the aggregate", async () => {
     const zigbee = makeFakeSource("zigbee", [makeDescriptor("zigbee", "0xaaa")]);
-    const devices = new AggregateDeviceSource([zigbee], logger);
+    const devices = new AggregateDeviceSource([zigbee], makeVisibility(), logger);
     await devices.start();
 
-    const svc = new HomekitService(logger, devices, { pinCode: "031-45-154" });
+    const svc = new HomekitService(logger, devices, { pinCode: "031-45-154" }, makeVisibility());
     await svc.onStart(ctx);
     expect(bridged).toHaveLength(1);
 
@@ -275,10 +292,10 @@ describe("HomekitService (source host)", () => {
 
   it("tears down started sources and resets state when publish() rejects", async () => {
     const shelly = makeFakeSource("shelly", [makeDescriptor("shelly", "plug")]);
-    const devices = new AggregateDeviceSource([shelly], logger);
+    const devices = new AggregateDeviceSource([shelly], makeVisibility(), logger);
     await devices.start();
 
-    const svc = new HomekitService(logger, devices, { pinCode: "031-45-154" });
+    const svc = new HomekitService(logger, devices, { pinCode: "031-45-154" }, makeVisibility());
     publishError = new Error("publish failed");
 
     await expect(svc.onStart(ctx)).rejects.toThrow("publish failed");
@@ -293,10 +310,10 @@ describe("HomekitService (source host)", () => {
 
   it("clears accessories and unpublishes on stop", async () => {
     const shelly = makeFakeSource("shelly", [makeDescriptor("shelly", "plug")]);
-    const devices = new AggregateDeviceSource([shelly], logger);
+    const devices = new AggregateDeviceSource([shelly], makeVisibility(), logger);
     await devices.start();
 
-    const svc = new HomekitService(logger, devices, { pinCode: "031-45-154" });
+    const svc = new HomekitService(logger, devices, { pinCode: "031-45-154" }, makeVisibility());
     await svc.onStart(ctx);
     await svc.onStop();
     expect(svc.getStatus().running).toBe(false);

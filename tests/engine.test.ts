@@ -453,7 +453,7 @@ describe("createEngine", () => {
           .sources()
           .map((s) => s.id)
           .sort(),
-      ).toEqual(["nanoleaf", "shelly", "state", "zigbee"]);
+      ).toEqual(["nanoleaf", "shelly", "state", "zigbee", "zigbee-group"]);
     });
 
     it("reports the zigbee, shelly, and nanoleaf sources unavailable when unconfigured", () => {
@@ -464,6 +464,38 @@ describe("createEngine", () => {
       expect(statuses.get("nanoleaf")).toBe(false);
       // The state source is always available — its backing store is in-process.
       expect(statuses.get("state")).toBe(true);
+    });
+
+    it("registers the zigbee-group source alongside zigbee, both unavailable with the registry disabled (task 3.7)", () => {
+      engine = createTestEngine();
+      const statuses = new Map(engine.devices.sources().map((s) => [s.id, s.available]));
+      expect(statuses.has("zigbee-group")).toBe(true);
+      expect(statuses.get("zigbee-group")).toBe(false);
+      expect(engine.devices.list()).toEqual([]);
+    });
+
+    it("exposes engine.deviceVisibility, and the aggregate stamps hidden on a device through it (task 3.7)", async () => {
+      engine = createEngine({
+        automationsDir: fixturesDir,
+        logger,
+        config: {
+          httpServer: { port: 0, token: "", webUi: { enabled: false, path: "/status" } },
+          state: { persist: false, filePath: "./state.json", flushIntervalMs: 1000 },
+          deviceRegistry: { enabled: false, persist: false, filePath: "./device-registry.json" },
+        },
+        stateToggles: [{ stateKey: "night_mode", name: "Night Mode" }],
+      });
+      (engine.mqtt as { connect: unknown }).connect = mock(() => Promise.resolve());
+      (engine.mqtt as { disconnect: unknown }).disconnect = mock(() => Promise.resolve());
+      await engine.start();
+
+      expect(engine.deviceVisibility).toBeDefined();
+      expect(engine.devices.get("state:night_mode")?.hidden).toBe(false);
+
+      engine.deviceVisibility.hide("state:night_mode");
+
+      expect(engine.devices.get("state:night_mode")?.hidden).toBe(true);
+      expect(engine.devices.list()[0]?.hidden).toBe(true);
     });
 
     it("presents configured state toggles as devices through engine.devices", async () => {
@@ -577,7 +609,7 @@ describe("createEngine", () => {
       expect(dispatchedDuringStop).toEqual({ status: "ok" });
     });
 
-    it("passes HomekitService a context exposing only http, logger, and devices (task 6.16b)", () => {
+    it("passes HomekitService a context exposing http, logger, devices, and deviceVisibility (task 6.16b)", () => {
       let receivedContext: Record<string, unknown> | null = null;
       engine = createEngine({
         automationsDir: fixturesDir,
@@ -597,6 +629,7 @@ describe("createEngine", () => {
 
       expect(receivedContext).not.toBeNull();
       expect(Object.keys(receivedContext as Record<string, unknown>).sort()).toEqual([
+        "deviceVisibility",
         "devices",
         "http",
         "logger",
@@ -718,6 +751,57 @@ describe("createEngine", () => {
       const listed = engine.rooms.listRooms();
       expect(listed[0].members[0].qualifiedId).toBe(toggle.qualifiedId);
       expect(listed[0].members[0].available).toBe(true);
+    });
+  });
+
+  // ── Device visibility (task 5.3) ─────────────────────────────────────────
+
+  describe("device visibility", () => {
+    it("always exposes engine.deviceVisibility", () => {
+      engine = createTestEngine();
+      expect(engine.deviceVisibility).toBeDefined();
+      expect(typeof engine.deviceVisibility.hide).toBe("function");
+    });
+
+    it("emits a device_visibility event naming the device and its new visibility on hide (task 5.3)", async () => {
+      engine = createTestEngine();
+      await engine.start();
+
+      const received: unknown[] = [];
+      engine.events.subscribe((e) => received.push(e));
+
+      engine.deviceVisibility.hide("zigbee:0xaaa");
+
+      expect(received).toEqual([
+        { category: "device_visibility", qualifiedId: "zigbee:0xaaa", hidden: true },
+      ]);
+    });
+
+    it("emits a device_visibility event with hidden: false on unhide", async () => {
+      engine = createTestEngine();
+      await engine.start();
+      engine.deviceVisibility.hide("zigbee:0xaaa");
+
+      const received: unknown[] = [];
+      engine.events.subscribe((e) => received.push(e));
+
+      engine.deviceVisibility.unhide("zigbee:0xaaa");
+
+      expect(received).toEqual([
+        { category: "device_visibility", qualifiedId: "zigbee:0xaaa", hidden: false },
+      ]);
+    });
+
+    it("emits no state-key event for the reserved key backing visibility (task 5.3)", async () => {
+      engine = createTestEngine();
+      await engine.start();
+
+      const received: unknown[] = [];
+      engine.events.subscribe((e) => received.push(e));
+
+      engine.deviceVisibility.hide("zigbee:0xaaa");
+
+      expect(received.some((e) => (e as { category: string }).category === "state")).toBe(false);
     });
   });
 });

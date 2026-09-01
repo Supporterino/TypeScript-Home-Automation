@@ -245,6 +245,29 @@ describe("normalizeDeviceDescriptor", () => {
     });
     expect(result.capabilities).toHaveLength(1);
   });
+
+  it("defaults hidden to false when missing", () => {
+    const result = normalizeDeviceDescriptor({ qualifiedId: "zigbee:0xabc" });
+    expect(result.hidden).toBe(false);
+  });
+
+  it("preserves hidden: true", () => {
+    const result = normalizeDeviceDescriptor({ qualifiedId: "zigbee:0xabc", hidden: true });
+    expect(result.hidden).toBe(true);
+  });
+
+  it("normalises memberQualifiedIds when present", () => {
+    const result = normalizeDeviceDescriptor({
+      qualifiedId: "zigbee-group:5",
+      memberQualifiedIds: ["zigbee:0xa", "zigbee:0xb"],
+    });
+    expect(result.memberQualifiedIds).toEqual(["zigbee:0xa", "zigbee:0xb"]);
+  });
+
+  it("omits memberQualifiedIds when absent", () => {
+    const result = normalizeDeviceDescriptor({ qualifiedId: "zigbee:0xabc" });
+    expect(result.memberQualifiedIds).toBeUndefined();
+  });
 });
 
 describe("normalizeDeviceDescriptors", () => {
@@ -472,6 +495,30 @@ describe("normalizeStreamEvent", () => {
       category: "room_membership",
       qualifiedId: "zigbee:0xabc",
       roomId: null,
+    });
+  });
+
+  it("normalises a device_visibility event", () => {
+    const hidden = normalizeStreamEvent({
+      category: "device_visibility",
+      qualifiedId: "zigbee:0xabc",
+      hidden: true,
+    });
+    expect(hidden).toEqual({
+      category: "device_visibility",
+      qualifiedId: "zigbee:0xabc",
+      hidden: true,
+    });
+
+    const shown = normalizeStreamEvent({
+      category: "device_visibility",
+      qualifiedId: "zigbee:0xabc",
+      hidden: false,
+    });
+    expect(shown).toEqual({
+      category: "device_visibility",
+      qualifiedId: "zigbee:0xabc",
+      hidden: false,
     });
   });
 });

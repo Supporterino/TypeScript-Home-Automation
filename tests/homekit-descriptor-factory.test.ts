@@ -165,6 +165,7 @@ function descriptor(overrides: Partial<DeviceDescriptor> = {}): DeviceDescriptor
     capabilities: [],
     reachable: true,
     observation: { mode: "push", observedAt: Date.now() },
+    hidden: false,
     ...overrides,
   };
 }

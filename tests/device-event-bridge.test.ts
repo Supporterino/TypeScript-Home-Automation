@@ -8,9 +8,15 @@ import type {
   DeviceDescriptor,
 } from "../src/core/device-sources/device-source.js";
 import { formatQualifiedId } from "../src/core/device-sources/qualified-id.js";
+import type { DeviceVisibility } from "../src/core/device-visibility.js";
 import { EventBus, type StreamEvent } from "../src/core/events/event-bus.js";
 
 const logger = pino({ level: "silent" });
+
+/** A minimal fake `DeviceVisibility` — every device is visible. */
+function makeVisibility(): DeviceVisibility {
+  return { isHidden: () => false } as unknown as DeviceVisibility;
+}
 
 /** A minimal in-memory fake DeviceSource, mutable via `setDevices`/`emit` for test control. */
 function makeFakeSource(id: string, initialDevices: DeviceDescriptor[] = []) {
@@ -52,6 +58,7 @@ function makeDescriptor(
     capabilities: [],
     reachable: true,
     observation: { mode: "push", observedAt: Date.now() },
+    hidden: false,
     ...overrides,
   };
 }
@@ -59,7 +66,7 @@ function makeDescriptor(
 describe("wireDeviceEvents", () => {
   it("emits device_appeared for a device notified for the first time", async () => {
     const fake = makeFakeSource("zigbee");
-    const aggregate = new AggregateDeviceSource([fake], logger);
+    const aggregate = new AggregateDeviceSource([fake], makeVisibility(), logger);
     const bus = new EventBus();
     const events: StreamEvent[] = [];
     bus.subscribe((e) => events.push(e));
@@ -77,7 +84,7 @@ describe("wireDeviceEvents", () => {
 
   it("does not emit device_appeared for a device already known when wired", async () => {
     const fake = makeFakeSource("zigbee", [makeDescriptor("zigbee", "0xaaa")]);
-    const aggregate = new AggregateDeviceSource([fake], logger);
+    const aggregate = new AggregateDeviceSource([fake], makeVisibility(), logger);
     const bus = new EventBus();
     const events: StreamEvent[] = [];
     bus.subscribe((e) => events.push(e));
@@ -92,7 +99,7 @@ describe("wireDeviceEvents", () => {
     const fake = makeFakeSource("zigbee", [
       makeDescriptor("zigbee", "0xaaa", { state: { on: false, brightness: 10 } }),
     ]);
-    const aggregate = new AggregateDeviceSource([fake], logger);
+    const aggregate = new AggregateDeviceSource([fake], makeVisibility(), logger);
     const bus = new EventBus();
     const events: StreamEvent[] = [];
     bus.subscribe((e) => events.push(e));
@@ -114,7 +121,7 @@ describe("wireDeviceEvents", () => {
     const fake = makeFakeSource("shelly", [
       makeDescriptor("shelly", "plug", { state: { on: true } }),
     ]);
-    const aggregate = new AggregateDeviceSource([fake], logger);
+    const aggregate = new AggregateDeviceSource([fake], makeVisibility(), logger);
     const bus = new EventBus();
     const events: StreamEvent[] = [];
     bus.subscribe((e) => events.push(e));
@@ -135,7 +142,7 @@ describe("wireDeviceEvents", () => {
     const fake = makeFakeSource("shelly", [
       makeDescriptor("shelly", "plug", { state: { on: true } }),
     ]);
-    const aggregate = new AggregateDeviceSource([fake], logger);
+    const aggregate = new AggregateDeviceSource([fake], makeVisibility(), logger);
     const bus = new EventBus();
     const events: StreamEvent[] = [];
     bus.subscribe((e) => events.push(e));
@@ -150,7 +157,7 @@ describe("wireDeviceEvents", () => {
   it("emits device_disappeared when a device drops out of enumeration", async () => {
     const fakeA = makeFakeSource("zigbee", [makeDescriptor("zigbee", "0xaaa")]);
     const fakeB = makeFakeSource("shelly", [makeDescriptor("shelly", "plug")]);
-    const aggregate = new AggregateDeviceSource([fakeA, fakeB], logger);
+    const aggregate = new AggregateDeviceSource([fakeA, fakeB], makeVisibility(), logger);
     const bus = new EventBus();
     const events: StreamEvent[] = [];
     bus.subscribe((e) => events.push(e));
@@ -181,7 +188,11 @@ describe("wireDeviceEvents", () => {
         observation: { mode: "polled", observedAt: 1, refreshIntervalMs: 10000 },
       }),
     ]);
-    const aggregate = new AggregateDeviceSource([pushSource, polledSource], logger);
+    const aggregate = new AggregateDeviceSource(
+      [pushSource, polledSource],
+      makeVisibility(),
+      logger,
+    );
     const bus = new EventBus();
     const events: StreamEvent[] = [];
     bus.subscribe((e) => events.push(e));
@@ -212,7 +223,7 @@ describe("wireDeviceEvents", () => {
 
   it("returns an unsubscribe function that stops further events", async () => {
     const fake = makeFakeSource("zigbee");
-    const aggregate = new AggregateDeviceSource([fake], logger);
+    const aggregate = new AggregateDeviceSource([fake], makeVisibility(), logger);
     const bus = new EventBus();
     const events: StreamEvent[] = [];
     bus.subscribe((e) => events.push(e));
@@ -222,5 +233,26 @@ describe("wireDeviceEvents", () => {
     fake.emit(makeDescriptor("zigbee", "0xaaa"));
 
     expect(events).toHaveLength(0);
+  });
+
+  it("hiding a device emits no device_disappeared (design.md D9; task 3.8)", async () => {
+    const fake = makeFakeSource("zigbee", [makeDescriptor("zigbee", "0xaaa")]);
+    // Total enumeration is unaffected by visibility — hiding stamps the
+    // descriptor but does not remove it from list(), so the bridge's
+    // reconciliation never sees a hidden device drop out.
+    const aggregate = new AggregateDeviceSource(
+      [fake],
+      { isHidden: () => true } as unknown as DeviceVisibility,
+      logger,
+    );
+    await aggregate.start();
+    const bus = new EventBus();
+    const events: StreamEvent[] = [];
+    bus.subscribe((e) => events.push(e));
+
+    wireDeviceEvents(aggregate, bus);
+    fake.emit(makeDescriptor("zigbee", "0xaaa", { state: { on: true } }));
+
+    expect(events.some((e) => e.category === "device_disappeared")).toBe(false);
   });
 });
