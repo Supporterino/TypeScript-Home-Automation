@@ -1,32 +1,42 @@
 /**
  * A single room's detail and management view — rename, delete, assign,
- * unassign (design.md D14; specs/web-ui "Room Management Interface"; task
- * 10.8, 10.9).
+ * unassign (design.md D14, D6, D7; specs/web-ui "Room Management
+ * Interface"; task 10.8, 10.9).
  *
- * An unavailable member is rendered distinctly and never shown with its
- * stale state presented as current (task 10.9) — {@link DeviceTile} already
- * marks unreachable devices, but an *unavailable* room member (its source
- * dropped it entirely) has no live descriptor at all, so it is rendered
- * here directly rather than through the tile.
+ * Members are presented in the same grid every other device collection
+ * uses, through the same {@link DeviceTile} component — an unavailable
+ * member renders through its unavailable variant rather than a parallel
+ * layout, and never shows its stale state as current. Removing a member
+ * is not always-present chrome: it lives behind a room-level edit mode,
+ * reachable by tap so it works on the PWA's primary input.
  */
 import {
   ActionIcon,
   Alert,
-  Badge,
   Button,
   Group,
   Modal,
-  Paper,
   Select,
+  SimpleGrid,
   Stack,
+  Switch,
   Text,
   TextInput,
   Title,
 } from "@mantine/core";
-import { IconAlertTriangle, IconPencil, IconPlus, IconTrash, IconX } from "@tabler/icons-react";
+import {
+  IconAlertTriangle,
+  IconCheck,
+  IconListCheck,
+  IconPencil,
+  IconPlus,
+  IconTrash,
+  IconX,
+} from "@tabler/icons-react";
 import { useState } from "react";
 import { assignDeviceRoom, deleteRoom, renameRoom, unassignDeviceRoom } from "../api.js";
 import { DeviceTile } from "../components/DeviceTile.js";
+import { isOperableDevice } from "../lib/capability-ranking.js";
 import { useDataStore } from "../lib/data-store.js";
 import { roomsPath } from "../lib/router.js";
 import { useRouter } from "../lib/router-context.js";
@@ -42,6 +52,12 @@ export function RoomView({ roomId }: { roomId: string }) {
   const [assignTarget, setAssignTarget] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Local, discarded on navigation — nothing about edit mode is worth
+  // persisting (design.md D7).
+  const [editMode, setEditMode] = useState(false);
+  // Session-scoped filter (design.md D5), same predicate as every other
+  // device collection (design.md D4).
+  const [operableOnly, setOperableOnly] = useState(false);
 
   if (!room) {
     return (
@@ -98,8 +114,19 @@ export function RoomView({ roomId }: { roomId: string }) {
     }
   }
 
-  const availableMembers = room.members.filter((m) => m.available && m.device);
+  const allAvailableMembers = room.members.filter((m) => m.available && m.device);
   const unavailableMembers = room.members.filter((m) => !m.available);
+  const availableMembers = operableOnly
+    ? // biome-ignore lint/style/noNonNullAssertion: filtered above
+      allAvailableMembers.filter((m) => isOperableDevice(m.device!.capabilities))
+    : allAvailableMembers;
+
+  const genuinelyEmpty = allAvailableMembers.length === 0 && unavailableMembers.length === 0;
+  const filteredEmpty =
+    !genuinelyEmpty &&
+    operableOnly &&
+    availableMembers.length === 0 &&
+    unavailableMembers.length === 0;
 
   return (
     <Stack gap="md">
@@ -116,6 +143,13 @@ export function RoomView({ roomId }: { roomId: string }) {
             aria-label="Delete room"
           >
             <IconTrash size={16} />
+          </ActionIcon>
+          <ActionIcon
+            variant={editMode ? "filled" : "light"}
+            onClick={() => setEditMode((v) => !v)}
+            aria-label={editMode ? "Done managing members" : "Manage members"}
+          >
+            {editMode ? <IconCheck size={16} /> : <IconListCheck size={16} />}
           </ActionIcon>
         </Group>
       </Group>
@@ -140,53 +174,73 @@ export function RoomView({ roomId }: { roomId: string }) {
         </Button>
       </Group>
 
-      {availableMembers.length === 0 && unavailableMembers.length === 0 && (
+      {genuinelyEmpty && (
         <Text c="dimmed" size="sm">
           No devices in this room yet.
         </Text>
       )}
 
-      <Stack gap="xs">
-        {availableMembers.map((member) => (
-          <Group key={member.qualifiedId} justify="space-between" wrap="nowrap">
-            <div style={{ flex: 1, maxWidth: 260 }}>
-              {/* biome-ignore lint/style/noNonNullAssertion: filtered above */}
-              <DeviceTile device={member.device!} />
-            </div>
-            <ActionIcon
-              variant="subtle"
-              color="gray"
-              onClick={() => handleUnassign(member.qualifiedId)}
-              aria-label="Remove from room"
-            >
-              <IconX size={16} />
-            </ActionIcon>
-          </Group>
-        ))}
+      {!genuinelyEmpty && (
+        <Group justify="flex-end">
+          <Switch
+            label="Operable only"
+            size="sm"
+            checked={operableOnly}
+            onChange={(e) => setOperableOnly(e.currentTarget.checked)}
+          />
+        </Group>
+      )}
 
-        {unavailableMembers.map((member) => (
-          <Paper key={member.qualifiedId} withBorder p="sm" radius="md" opacity={0.6}>
-            <Group justify="space-between">
-              <Group gap="xs">
-                <Badge color="gray" variant="light" size="sm">
-                  Unavailable
-                </Badge>
-                <Text size="sm" c="dimmed" ff="monospace">
-                  {member.qualifiedId}
-                </Text>
-              </Group>
-              <ActionIcon
-                variant="subtle"
-                color="gray"
-                onClick={() => handleUnassign(member.qualifiedId)}
-                aria-label="Remove from room"
-              >
-                <IconX size={16} />
-              </ActionIcon>
-            </Group>
-          </Paper>
-        ))}
-      </Stack>
+      {filteredEmpty && (
+        <Text c="dimmed" size="sm">
+          No operable devices. Every device in this room only reports — turn off "Operable only" to
+          see them.
+        </Text>
+      )}
+
+      {(availableMembers.length > 0 || unavailableMembers.length > 0) && (
+        <SimpleGrid cols={{ base: 2, sm: 3, md: 4, lg: 5 }} spacing="sm">
+          {availableMembers.map((member) => (
+            <DeviceTile
+              key={member.qualifiedId}
+              // biome-ignore lint/style/noNonNullAssertion: filtered above
+              device={member.device!}
+              action={
+                editMode ? (
+                  <ActionIcon
+                    variant="subtle"
+                    color="gray"
+                    onClick={() => handleUnassign(member.qualifiedId)}
+                    aria-label="Remove from room"
+                  >
+                    <IconX size={16} />
+                  </ActionIcon>
+                ) : undefined
+              }
+            />
+          ))}
+
+          {unavailableMembers.map((member) => (
+            <DeviceTile
+              key={member.qualifiedId}
+              unavailable
+              qualifiedId={member.qualifiedId}
+              action={
+                editMode ? (
+                  <ActionIcon
+                    variant="subtle"
+                    color="gray"
+                    onClick={() => handleUnassign(member.qualifiedId)}
+                    aria-label="Remove from room"
+                  >
+                    <IconX size={16} />
+                  </ActionIcon>
+                ) : undefined
+              }
+            />
+          ))}
+        </SimpleGrid>
+      )}
 
       <Modal opened={renaming} onClose={() => setRenaming(false)} title="Rename room">
         <Stack>

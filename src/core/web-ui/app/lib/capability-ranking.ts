@@ -8,11 +8,12 @@
  * without touching specs (design.md D16, D23).
  *
  * Ranking reads well-known property names authored across every source
- * (`on`, `state`, `position`, `brightness`, `power`, `temperature`, …) —
- * source-neutral in the sense that no source-specific `kind` string is
- * consulted, only the property names every source already agrees on
- * (state-source.ts, nanoleaf-source.ts, shelly-capabilities.ts, and the
- * mapped Zigbee2MQTT `exposes`).
+ * (`on`, `state`, `position`, `brightness`, `power`, `temperature`, …). The
+ * named branches consult only those property names; the enum/numeric
+ * fall-through additionally consults {@link OUTPUT_KINDS}, the one
+ * cross-source `kind` contract every source already authors deliberately
+ * (design.md D4) — so a configuration setting on a purely-reporting device
+ * (a motion sensor's sensitivity) is not mistaken for a primary action.
  */
 
 import type {
@@ -20,6 +21,24 @@ import type {
   CapabilityAccess,
   CapabilityValueType,
 } from "../../../../types/capabilities.js";
+
+/**
+ * The source-neutral output-device kinds — a cross-source `kind` contract
+ * `shelly-capabilities.ts`, `nanoleaf-source.ts`, and `state-source.ts`
+ * already author deliberately, and the mapped Zigbee2MQTT `exposes` use for
+ * the same families. The single set behind both the ranking guard below and
+ * the collection filter, so a device hidden by the filter is exactly one
+ * that would not have offered a primary action (design.md D4).
+ */
+export const OUTPUT_KINDS: ReadonlySet<string> = new Set([
+  "light",
+  "switch",
+  "outlet",
+  "cover",
+  "fan",
+  "lock",
+  "climate",
+]);
 
 /** A leaf (non-container) capability, flattened out of any nested `features`. */
 export interface FlatCapability {
@@ -30,15 +49,25 @@ export interface FlatCapability {
   permittedValues?: (string | number)[];
   range?: { min?: number; max?: number };
   step?: number;
+  /** The declared on/off encoding for a boolean property (design.md D1). */
+  valueOn?: string | number | boolean;
+  valueOff?: string | number | boolean;
+  /**
+   * The `kind` of the top-level capability entry this leaf was flattened
+   * from — its own `kind` when it is not nested in a container, or its
+   * container's `kind` when it is (design.md D4). Consulted only by the
+   * enum/numeric fall-through via {@link OUTPUT_KINDS}.
+   */
+  kind: string;
 }
 
 /** Recursively flattens a capability tree into its leaf (property-bearing) entries. */
 export function flattenCapabilities(capabilities: Capability[]): FlatCapability[] {
   const out: FlatCapability[] = [];
 
-  function visit(capability: Capability): void {
+  function visit(capability: Capability, rootKind: string): void {
     if (capability.features && capability.features.length > 0) {
-      for (const feature of capability.features) visit(feature);
+      for (const feature of capability.features) visit(feature, rootKind);
       // A container's own property (rare) is still worth keeping — some
       // sources set it directly on a leaf-shaped container.
       if (!capability.property) return;
@@ -52,10 +81,13 @@ export function flattenCapabilities(capabilities: Capability[]): FlatCapability[
       permittedValues: capability.permittedValues,
       range: capability.range,
       step: capability.step,
+      valueOn: capability.valueOn,
+      valueOff: capability.valueOff,
+      kind: rootKind,
     });
   }
 
-  for (const capability of capabilities) visit(capability);
+  for (const capability of capabilities) visit(capability, capability.kind);
   return out;
 }
 
@@ -120,13 +152,36 @@ export function selectPrimaryAction(capabilities: Capability[]): PrimaryAction |
   );
   if (setpoint) return { kind: "setpoint", capability: setpoint };
 
-  const otherEnum = find(flat, (c) => c.valueType === "enum" && c.access.writable);
+  // Gated on OUTPUT_KINDS (design.md D4): a writable enum/numeric elsewhere
+  // in the schema is not promoted to a primary action unless it belongs to
+  // a capability whose declared category operates the physical world.
+  // Ungated, this branch is what promotes a motion sensor's writable
+  // `sensitivity` setting to its tile's primary control.
+  const otherEnum = find(
+    flat,
+    (c) => c.valueType === "enum" && c.access.writable && OUTPUT_KINDS.has(c.kind),
+  );
   if (otherEnum) return { kind: "enum", capability: otherEnum };
 
-  const otherNumeric = find(flat, (c) => c.valueType === "numeric" && c.access.writable);
+  const otherNumeric = find(
+    flat,
+    (c) => c.valueType === "numeric" && c.access.writable && OUTPUT_KINDS.has(c.kind),
+  );
   if (otherNumeric) return { kind: "numeric", capability: otherNumeric };
 
   return null;
+}
+
+/**
+ * Whether a device would offer a tile primary action at all (design.md D4;
+ * specs/web-ui "Device Tiles" — the output filter). Defined as exactly the
+ * devices {@link selectPrimaryAction} finds one for, so a device hidden by
+ * the filter is exactly one that would not have offered a primary action —
+ * two independently maintained rules would drift and produce a device that
+ * is filtered out yet has a working control, or vice versa.
+ */
+export function isOperableDevice(capabilities: Capability[]): boolean {
+  return selectPrimaryAction(capabilities) !== null;
 }
 
 /** Which ranked readout a device's primary readout matched, if any. */

@@ -12,6 +12,10 @@
  * reflection, reconciliation, and revert.
  */
 import { Select, Slider, Switch, Text, TextInput, Tooltip } from "@mantine/core";
+import {
+  composeBooleanCapabilityValue,
+  readBooleanCapabilityValue,
+} from "../../../../types/capabilities.js";
 import type { FlatCapability } from "../lib/capability-ranking.js";
 import { useOptimisticDeviceProperty } from "../lib/use-optimistic-property.js";
 import type { DeviceDescriptor } from "../types.js";
@@ -53,12 +57,19 @@ export function CapabilityControl({ device, capability, compact }: Props) {
 
     switch (capability.valueType) {
       case "boolean":
+        // Reads and writes through the capability's declared on/off encoding
+        // rather than general-purpose truthiness or a raw JSON boolean —
+        // some sources (Zigbee2MQTT) report and accept a string encoding,
+        // and both assumptions silently misread/mis-command those devices
+        // (design.md D1, D2; specs/web-ui "Device Control Interface").
         return (
           <Switch
             size={compact ? "sm" : "md"}
-            checked={Boolean(value)}
+            checked={readBooleanCapabilityValue(capability, value)}
             disabled={disabled}
-            onChange={(e) => setValue(e.currentTarget.checked)}
+            onChange={(e) =>
+              setValue(composeBooleanCapabilityValue(capability, e.currentTarget.checked))
+            }
             aria-label={capability.property}
           />
         );

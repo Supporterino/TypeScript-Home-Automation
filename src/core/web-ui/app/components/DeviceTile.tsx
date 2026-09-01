@@ -3,9 +3,16 @@
  * selected by the curated capability ranking (design.md D12, D16; task
  * 10.6). Degrades to a read-only tile opening the detail view when nothing
  * ranks (design.md "An unrankable device degrades gracefully").
+ *
+ * Also takes an optional action slot and an optional unavailable mode
+ * (design.md D6) — a room places its unassign control in the slot, and
+ * renders an unavailable member through the unavailable variant, so every
+ * device collection shares one tile shape rather than a room inventing a
+ * second one.
  */
 import { Badge, Group, Paper, Stack, Text } from "@mantine/core";
 import { IconPlugOff, IconWifi, IconWifiOff } from "@tabler/icons-react";
+import type { ReactNode } from "react";
 import { flattenCapabilities, rankDeviceTile } from "../lib/capability-ranking.js";
 import { formatAge, isObservationStale } from "../lib/format.js";
 import { deviceDetailPath } from "../lib/router.js";
@@ -14,13 +21,65 @@ import { useNow } from "../lib/use-now.js";
 import type { DeviceDescriptor } from "../types.js";
 import { CapabilityControl, formatReadoutValue } from "./CapabilityControl.js";
 
-interface Props {
-  device: DeviceDescriptor;
+/** Renders `action` in a corner, stopping propagation so it never triggers the tile's own click target. */
+function ActionSlot({ action }: { action: ReactNode }) {
+  return (
+    <div
+      style={{ position: "absolute", top: 6, right: 6 }}
+      onClick={(e) => e.stopPropagation()}
+      onKeyDown={(e) => e.stopPropagation()}
+    >
+      {action}
+    </div>
+  );
 }
 
-export function DeviceTile({ device }: Props) {
+interface AvailableProps {
+  device: DeviceDescriptor;
+  /** Rendered in a corner of the tile, e.g. a room's unassign control in edit mode (design.md D6, D7). */
+  action?: ReactNode;
+}
+
+interface UnavailableProps {
+  /** Marks this tile as an unavailable room member: no live descriptor exists for it. */
+  unavailable: true;
+  qualifiedId: string;
+  action?: ReactNode;
+}
+
+type Props = AvailableProps | UnavailableProps;
+
+/**
+ * The unavailable variant: qualified identifier and an unavailable marker,
+ * with no control and no state readout — its stale state is never presented
+ * as current (design.md D6; specs/web-ui "Unavailable member is visible but
+ * distinct").
+ */
+function UnavailableTile({ qualifiedId, action }: UnavailableProps) {
+  return (
+    <Paper withBorder p="sm" radius="md" opacity={0.6} style={{ position: "relative" }}>
+      <Stack gap={6}>
+        <Text size="sm" c="dimmed" ff="monospace" truncate>
+          {qualifiedId}
+        </Text>
+        <Badge color="gray" variant="light" size="sm" style={{ alignSelf: "flex-start" }}>
+          Unavailable
+        </Badge>
+      </Stack>
+      {action && <ActionSlot action={action} />}
+    </Paper>
+  );
+}
+
+export function DeviceTile(props: Props) {
   const { navigate, basePath } = useRouter();
   const now = useNow();
+
+  if ("unavailable" in props) {
+    return <UnavailableTile {...props} />;
+  }
+
+  const { device, action } = props;
   const ranking = rankDeviceTile(device.capabilities);
   const flat = flattenCapabilities(device.capabilities);
 
@@ -46,7 +105,7 @@ export function DeviceTile({ device }: Props) {
       withBorder
       p="sm"
       radius="md"
-      style={{ cursor: "pointer" }}
+      style={{ cursor: "pointer", position: "relative" }}
       onClick={openDetail}
       role="button"
       tabIndex={0}
@@ -107,6 +166,8 @@ export function DeviceTile({ device }: Props) {
           )}
         </Group>
       </Stack>
+
+      {action && <ActionSlot action={action} />}
     </Paper>
   );
 }
