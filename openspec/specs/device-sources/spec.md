@@ -92,6 +92,7 @@ include at minimum:
   including for each actuatable property its type, permitted values or numeric
   range, and unit where applicable
 - reachability, and the freshness of the last state observation
+- whether the device is hidden
 
 A capability describing a boolean property MUST additionally declare the two
 values that represent on and off for that property, as that source reports and
@@ -102,6 +103,18 @@ silently misreads every device using the other, presenting an off device as on
 and issuing commands the transport ignores. The declared values MUST be
 sufficient for a consumer to both interpret a reported value and compose a
 command, with no source-specific knowledge.
+
+Hidden status is a user preference held above the sources, not something a source
+knows about its own devices. A source MUST NOT be required to supply it; the
+aggregate MUST stamp it onto every descriptor it yields, whether the descriptor is
+returned from enumeration, from retrieval by identifier, or delivered to a
+subscriber. A descriptor delivered by any of those paths without it would leave the
+consumer unable to distinguish a visible device from one whose visibility is simply
+unknown.
+
+Hidden status on the descriptor is information, not enforcement. It tells a
+consumer what the user chose; it does not by itself remove the device from any
+listing. Which listings honour it is defined by the device visibility capability.
 
 The descriptor MUST NOT be narrowed to any particular consumer's model. In
 particular it MUST NOT be reduced to the subset of properties that map onto
@@ -135,6 +148,18 @@ themselves.
   on and off values
 - **THEN** the client can compose the command using the declared off value rather
   than guessing an encoding
+
+#### Scenario: Hidden status is present on every delivery path
+
+- **WHEN** a consumer obtains a descriptor by enumeration, by retrieval by
+  qualified identifier, and by subscription
+- **THEN** all three carry the device's hidden status
+
+#### Scenario: A source does not supply hidden status
+
+- **WHEN** a source yields a descriptor for one of its devices
+- **THEN** the source is not required to know the device's visibility, and the
+  aggregate supplies it
 
 ### Requirement: Command Dispatch
 
@@ -417,6 +442,20 @@ A source that is unavailable — because its backing service is not configured o
 is disabled — MUST be omitted from the aggregate without causing enumeration to
 fail.
 
+The aggregate MUST offer two distinct enumerations:
+
+- **total enumeration**, returning every device from every available source,
+  including hidden devices. This is the enumeration used to reconcile which
+  devices exist — appearances, disappearances, and room membership — and omitting
+  hidden devices from it would make hiding indistinguishable from disappearing.
+- **visible enumeration**, returning the same set minus hidden devices, for
+  consumers that present devices to a person and take no part in reconciliation.
+
+Both MUST be available to callers, and a caller MUST choose between them
+explicitly. The choice is deliberately made at the call site rather than by a
+mode or a flag on a single enumeration, because the two sets of consumers must not
+drift toward whichever default was set last.
+
 #### Scenario: Aggregate enumeration spans sources
 
 - **WHEN** Zigbee, Shelly, and Nanoleaf sources are all registered
@@ -428,3 +467,19 @@ fail.
 - **WHEN** the Nanoleaf service is not configured
 - **THEN** aggregate enumeration returns the remaining sources' devices and does
   not fail
+
+#### Scenario: Total enumeration includes hidden devices
+
+- **WHEN** a device is hidden and a caller performs total enumeration
+- **THEN** the device is returned, marked hidden
+
+#### Scenario: Visible enumeration excludes hidden devices
+
+- **WHEN** a device is hidden and a caller performs visible enumeration
+- **THEN** the device is not returned
+
+#### Scenario: Zigbee groups participate in the aggregate
+
+- **WHEN** Zigbee groups are discovered
+- **THEN** they are enumerated, resolved, and commanded through the aggregate on
+  the same terms as devices from any other source
