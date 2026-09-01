@@ -4,6 +4,7 @@ import type { Hono } from "hono";
 import type { Logger } from "pino";
 import type { AggregateDeviceSource } from "../device-sources/aggregate.js";
 import type { StateToggleConfig } from "../device-sources/state-source.js";
+import type { DeviceVisibility } from "../device-visibility.js";
 import type { CreatedAccessory } from "./homekit-descriptor-factory.js";
 import type { AccessorySink, AccessorySource } from "./homekit-sources/accessory-source.js";
 import type { CoreContext, ServicePlugin } from "./service-plugin.js";
@@ -57,12 +58,12 @@ export interface HomekitStatus {
  * const engine = createEngine({
  *   automationsDir: "...",
  *   services: {
- *     homekit: ({ logger, devices }) =>
+ *     homekit: ({ logger, devices, deviceVisibility }) =>
  *       new HomekitService(logger, devices, {
  *         pinCode: "031-45-154",
  *         persistPath: "./homekit-persist",
  *         bridgeName: "My Home Bridge",
- *       }),
+ *       }, deviceVisibility),
  *   },
  * });
  * ```
@@ -185,10 +186,10 @@ export interface HomekitServiceOptions {
  * const engine = createEngine({
  *   automationsDir: "...",
  *   services: {
- *     homekit: ({ logger, devices }) =>
+ *     homekit: ({ logger, devices, deviceVisibility }) =>
  *       new HomekitService(logger, devices, {
  *         pinCode: "031-45-154",
- *       }),
+ *       }, deviceVisibility),
  *   },
  * });
  * ```
@@ -210,6 +211,7 @@ export class HomekitService implements ServicePlugin {
     private readonly logger: Logger,
     private readonly devices: AggregateDeviceSource,
     private readonly options: HomekitServiceOptions,
+    private readonly visibility: DeviceVisibility,
   ) {
     // `stateToggles` moved to engine-level configuration (design.md D19).
     // Reject the old location explicitly, naming the new one, rather than
@@ -376,7 +378,14 @@ export class HomekitService implements ServicePlugin {
   private async buildSources(): Promise<AccessorySource[]> {
     const { createAccessoryFromDescriptor } = await import("./homekit-descriptor-factory.js");
     const { DeviceCatalogSource } = await import("./homekit-sources/device-catalog-source.js");
-    return [new DeviceCatalogSource(this.devices, this.logger, createAccessoryFromDescriptor)];
+    return [
+      new DeviceCatalogSource(
+        this.devices,
+        this.visibility,
+        this.logger,
+        createAccessoryFromDescriptor,
+      ),
+    ];
   }
 
   /**

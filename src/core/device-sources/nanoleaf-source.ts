@@ -246,6 +246,9 @@ export class NanoleafDeviceSource implements DeviceSource {
       capabilities: nanoleafCapabilities(tracked.effects),
       reachable: tracked.reachable,
       observation: tracked.observation,
+      // Stamped by `AggregateDeviceSource` (design.md D8) — a source does
+      // not know a user's visibility preference for its own devices.
+      hidden: false,
     };
   }
 }

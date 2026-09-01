@@ -130,6 +130,22 @@ export interface RoomMembershipChangedEvent {
   roomId: string | null;
 }
 
+/**
+ * A device's hidden flag changed (design.md D11; task 5.3).
+ *
+ * Its own category rather than `device_appeared`/`device_disappeared`: a
+ * hidden device has not disappeared — it is still enumerable, commandable,
+ * and a member of its room. Carries only the one device and its new
+ * visibility, not the device list. Not inferable from a state key change
+ * either: the flag lives in the reserved state namespace, which is
+ * deliberately excluded from the `state` category (design.md D20).
+ */
+export interface DeviceVisibilityChangedEvent {
+  category: "device_visibility";
+  qualifiedId: string;
+  hidden: boolean;
+}
+
 /** Every event the stream can deliver. */
 export type StreamEvent =
   | StateChangedEvent
@@ -143,7 +159,8 @@ export type StreamEvent =
   | DeviceDisappearedEvent
   | AutomationExecutionCompletedEvent
   | RoomChangedEvent
-  | RoomMembershipChangedEvent;
+  | RoomMembershipChangedEvent
+  | DeviceVisibilityChangedEvent;
 
 export type StreamEventListener = (event: StreamEvent) => void;
 

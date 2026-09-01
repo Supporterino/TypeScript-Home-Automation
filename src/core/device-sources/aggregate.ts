@@ -4,11 +4,20 @@
  *
  * Exposed as `Engine.devices` — always present, never a `ServicePlugin`, and
  * never a registration point for a caller-supplied source: the source set is
- * fixed at four (Zigbee, Shelly, Nanoleaf, state toggles), constructed and
- * owned entirely by `createEngine()`. `DeviceSource` itself is exported only
- * for inspection and testing.
+ * fixed at five (Zigbee, Zigbee groups, Shelly, Nanoleaf, state toggles),
+ * constructed and owned entirely by `createEngine()`. `DeviceSource` itself
+ * is exported only for inspection and testing.
+ *
+ * Takes one dependency beyond its sources: `DeviceVisibility`, used to stamp
+ * `hidden` onto every descriptor it yields (design.md D8) — the aggregate is
+ * the one place all three delivery paths (`list()`, `get()`, and
+ * subscription delivery via `notify()`) converge, so stamping here is the
+ * only way to guarantee no consumer ever sees a descriptor with `hidden`
+ * unset. `DeviceVisibility` itself depends only on `StateManager`, so this
+ * stays acyclic.
  */
 import type { Logger } from "pino";
+import type { DeviceVisibility } from "../device-visibility.js";
 import type {
   DeviceChangeListener,
   DeviceCommandOutcome,
@@ -32,6 +41,7 @@ export class AggregateDeviceSource {
 
   constructor(
     sources: DeviceSource[],
+    private readonly visibility: DeviceVisibility,
     private readonly logger: Logger,
   ) {
     this.allSources = sources;
@@ -78,14 +88,28 @@ export class AggregateDeviceSource {
     this.listeners.clear();
   }
 
-  /** Enumerate every device from every available source. Never fails when a source is unavailable. */
+  /**
+   * Enumerate every device from every available source — total enumeration,
+   * including hidden devices (design.md D9). This is the enumeration used
+   * to reconcile which devices exist: appearances, disappearances, and room
+   * membership. Never fails when a source is unavailable.
+   */
   list(): DeviceDescriptor[] {
     const devices: DeviceDescriptor[] = [];
     for (const source of this.allSources) {
       if (!source.available) continue;
-      devices.push(...source.list());
+      devices.push(...source.list().map((d) => this.stamp(d)));
     }
     return devices;
+  }
+
+  /**
+   * Enumerate every visible device — the same set as {@link list}, minus
+   * hidden devices (design.md D9). For consumers that present devices to a
+   * person and take no part in reconciliation, such as the HomeKit bridge.
+   */
+  listVisible(): DeviceDescriptor[] {
+    return this.list().filter((d) => !d.hidden);
   }
 
   /** Look up one device by qualified identifier. */
@@ -98,7 +122,8 @@ export class AggregateDeviceSource {
     }
     const source = this.byId.get(parsed.source);
     if (!source?.available) return undefined;
-    return source.get(parsed.deviceId);
+    const descriptor = source.get(parsed.deviceId);
+    return descriptor ? this.stamp(descriptor) : undefined;
   }
 
   /** Report which sources exist and whether each is currently available. */
@@ -130,12 +155,22 @@ export class AggregateDeviceSource {
   }
 
   private notify(descriptor: DeviceDescriptor): void {
+    // Stamped here, not just in list()/get() — subscriber-delivered
+    // descriptors come straight from the source and bypass list() entirely,
+    // so skipping this would leave `hidden` unset on every live update
+    // (design.md D8).
+    const stamped = this.stamp(descriptor);
     for (const listener of this.listeners) {
       try {
-        listener(descriptor);
+        listener(stamped);
       } catch (err) {
         this.logger.error({ err }, "Error in aggregate device change listener");
       }
     }
+  }
+
+  /** Stamps `hidden` onto a descriptor from the visibility store (design.md D8). */
+  private stamp(descriptor: DeviceDescriptor): DeviceDescriptor {
+    return { ...descriptor, hidden: this.visibility.isHidden(descriptor.qualifiedId) };
   }
 }

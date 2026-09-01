@@ -17,7 +17,7 @@ export type CommandValidationResult = { ok: true } | { ok: false; error: string 
  * the same property name overwrites an earlier one, which only matters for
  * malformed/duplicate schemas.
  */
-function flattenByProperty(
+export function flattenByProperty(
   capabilities: Capability[],
   into: Map<string, Capability> = new Map(),
 ): Map<string, Capability> {

@@ -314,6 +314,9 @@ export class ShellyDeviceSource implements DeviceSource {
       capabilities: shellyCapabilitiesFor(device.type),
       reachable: tracked.reachable,
       observation: tracked.observation,
+      // Stamped by `AggregateDeviceSource` (design.md D8) — a source does
+      // not know a user's visibility preference for its own devices.
+      hidden: false,
     };
   }
 }

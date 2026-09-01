@@ -13,13 +13,24 @@
  * ones that disappeared (design.md's device-sources spec describes state and
  * reachability changes, not an explicit removal event). Every notification
  * therefore also reconciles the tracked accessory set against a fresh
- * `list()`, removing any accessory whose device is no longer present — the
- * same outcome the old `ZigbeeSource`'s `onDeviceRemoved` listener achieved,
- * reached generically instead of per-family.
+ * `listVisible()`, removing any accessory whose device is no longer present
+ * or has been hidden — the same outcome the old `ZigbeeSource`'s
+ * `onDeviceRemoved` listener achieved, reached generically instead of
+ * per-family.
+ *
+ * Sourced through `devices.listVisible()` rather than `list()` (design.md
+ * D9, D10; specs/homekit "Visibility-Filtered Accessory Exposure"): a hidden
+ * device must never be bridged, and reproducing that filter here instead of
+ * reading it from the shared device model would give the system two
+ * independently maintained definitions of "hidden". A `DeviceVisibility`
+ * subscription drives the same add/remove path directly, since hiding
+ * produces no device notification of its own — without it, a hidden device
+ * would linger in the Home app until it happened to report something.
  */
 import type { Logger } from "pino";
 import type { AggregateDeviceSource } from "../../device-sources/aggregate.js";
 import type { DeviceDescriptor } from "../../device-sources/device-source.js";
+import type { DeviceVisibility } from "../../device-visibility.js";
 import type { CreatedAccessory } from "../homekit-descriptor-factory.js";
 import type { AccessorySink, AccessorySource } from "./accessory-source.js";
 
@@ -36,10 +47,22 @@ export class DeviceCatalogSource implements AccessorySource {
   private sink: AccessorySink | null = null;
   /** Maps qualifiedId → CreatedAccessory (for state updates + removal). */
   private readonly accessories: Map<string, CreatedAccessory> = new Map();
-  private unsubscribe: (() => void) | null = null;
+  private unsubscribeDevices: (() => void) | null = null;
+  private readonly onVisibilityChange = (change: {
+    qualifiedId: string;
+    hidden: boolean;
+  }): void => {
+    if (change.hidden) {
+      this.removeAccessory(change.qualifiedId);
+      return;
+    }
+    const descriptor = this.devices.get(change.qualifiedId);
+    if (descriptor && !descriptor.hidden) this.addOrUpdate(descriptor);
+  };
 
   constructor(
     private readonly devices: AggregateDeviceSource,
+    private readonly visibility: DeviceVisibility,
     private readonly logger: Logger,
     private readonly createAccessory: DescriptorAccessoryFactory,
   ) {}
@@ -47,19 +70,21 @@ export class DeviceCatalogSource implements AccessorySource {
   start(sink: AccessorySink): void {
     this.sink = sink;
 
-    for (const descriptor of this.devices.list()) {
+    for (const descriptor of this.devices.listVisible()) {
       this.addOrUpdate(descriptor);
     }
 
-    this.unsubscribe = this.devices.subscribe((descriptor) => {
-      this.addOrUpdate(descriptor);
+    this.unsubscribeDevices = this.devices.subscribe((descriptor) => {
+      if (!descriptor.hidden) this.addOrUpdate(descriptor);
       this.reconcileRemovals();
     });
+    this.visibility.onChange(this.onVisibilityChange);
   }
 
   stop(): void {
-    this.unsubscribe?.();
-    this.unsubscribe = null;
+    this.unsubscribeDevices?.();
+    this.unsubscribeDevices = null;
+    this.visibility.offChange(this.onVisibilityChange);
     this.accessories.clear();
     this.sink = null;
   }
@@ -124,13 +149,25 @@ export class DeviceCatalogSource implements AccessorySource {
 
   private reconcileRemovals(): void {
     if (!this.sink) return;
-    const live = new Set(this.devices.list().map((d) => d.qualifiedId));
+    const live = new Set(this.devices.listVisible().map((d) => d.qualifiedId));
     for (const qualifiedId of Array.from(this.accessories.keys())) {
       if (!live.has(qualifiedId)) {
-        this.sink.remove(qualifiedId);
-        this.accessories.delete(qualifiedId);
-        this.logger.debug({ device: qualifiedId }, "HomeKit accessory removed");
+        this.removeAccessory(qualifiedId);
       }
     }
+  }
+
+  /**
+   * Removes a tracked accessory, indistinguishably from removal on
+   * disappearance (design.md D10) — the accessory is removed and its
+   * identifier freed, so re-adding it (on unhide, or on reappearance)
+   * produces the same derived UUID and requires no re-pairing.
+   */
+  private removeAccessory(qualifiedId: string): void {
+    if (!this.sink) return;
+    if (!this.accessories.has(qualifiedId)) return;
+    this.sink.remove(qualifiedId);
+    this.accessories.delete(qualifiedId);
+    this.logger.debug({ device: qualifiedId }, "HomeKit accessory removed");
   }
 }

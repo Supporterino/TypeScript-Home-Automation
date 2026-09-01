@@ -53,6 +53,29 @@ export interface ZigbeeDevice {
 }
 
 // ---------------------------------------------------------------------------
+// Bridge groups
+// ---------------------------------------------------------------------------
+
+/** One member of a Zigbee2MQTT group, as published on `bridge/groups`. */
+export interface ZigbeeGroupMember {
+  ieee_address: string;
+  endpoint: number;
+}
+
+/**
+ * A Zigbee2MQTT group as reported on `zigbee2mqtt/bridge/groups`.
+ *
+ * Identity is `id`, the numeric identifier the bridge assigns — not
+ * `friendly_name`, which can be renamed without affecting identity
+ * (design.md D2).
+ */
+export interface ZigbeeGroup {
+  id: number;
+  friendly_name: string;
+  members: ZigbeeGroupMember[];
+}
+
+// ---------------------------------------------------------------------------
 // Bridge events
 // ---------------------------------------------------------------------------
 

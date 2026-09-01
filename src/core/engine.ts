@@ -8,7 +8,9 @@ import { wireDeviceEvents } from "./device-sources/device-event-bridge.js";
 import { NanoleafDeviceSource } from "./device-sources/nanoleaf-source.js";
 import { ShellyDeviceSource } from "./device-sources/shelly-source.js";
 import { StateDeviceSource, type StateToggleConfig } from "./device-sources/state-source.js";
+import { ZigbeeGroupDeviceSource } from "./device-sources/zigbee-group-source.js";
 import { ZigbeeDeviceSource } from "./device-sources/zigbee-source.js";
+import { DeviceVisibility } from "./device-visibility.js";
 import { EventBus } from "./events/event-bus.js";
 import { HttpClient } from "./http/http-client.js";
 import { HttpServer } from "./http/http-server.js";
@@ -82,6 +84,12 @@ export interface HomekitServiceContext {
   http: HttpClient;
   logger: Logger;
   devices: AggregateDeviceSource;
+  /**
+   * The persisted, per-device hidden flag (design.md D7, D10). HomeKit
+   * exposure filters through it directly — see specs/homekit
+   * "Visibility-Filtered Accessory Exposure".
+   */
+  deviceVisibility: DeviceVisibility;
 }
 
 /**
@@ -92,10 +100,10 @@ export interface HomekitServiceContext {
  *
  * @example
  * ```ts
- * homekit: ({ logger, devices }) =>
+ * homekit: ({ logger, devices, deviceVisibility }) =>
  *   new HomekitService(logger, devices, {
  *     pinCode: "031-45-154",
- *   }),
+ *   }, deviceVisibility),
  * ```
  */
 export type HomekitServiceFactory = (ctx: HomekitServiceContext) => HomekitService;
@@ -325,6 +333,12 @@ export interface Engine {
    * (design.md D14). Always present, like `devices`.
    */
   readonly rooms: RoomManager;
+
+  /**
+   * The persisted, per-device hidden flag (design.md D7). Always present,
+   * like `devices` and `rooms`.
+   */
+  readonly deviceVisibility: DeviceVisibility;
 }
 
 /**
@@ -515,6 +529,25 @@ export function createEngine(options: EngineOptions): Engine {
     );
   }
 
+  // ── Device visibility ────────────────────────────────────────────────────
+  //
+  // Constructed right after `StateManager` and ahead of `AggregateDeviceSource`
+  // (design.md D7, D8): a persisted, per-device hidden flag that the
+  // aggregate stamps onto every descriptor it yields. Depends only on
+  // `StateManager` — never the device sources — which is what keeps this
+  // ordering acyclic.
+  const deviceVisibility = new DeviceVisibility(
+    stateManager,
+    logger.child({ service: "visibility" }),
+  );
+
+  // A visibility change produces no device state event of its own — the
+  // reserved key backing it is excluded from the `state` category above —
+  // so it rides its own SSE category instead (design.md D11; task 5.3).
+  deviceVisibility.onChange(({ qualifiedId, hidden }) => {
+    eventBus.emit({ category: "device_visibility", qualifiedId, hidden });
+  });
+
   // ── Unified device sources ────────────────────────────────────────────────
   //
   // Constructed here — after the device registry and every optional service
@@ -523,12 +556,18 @@ export function createEngine(options: EngineOptions): Engine {
   // constructed device surface (design.md D2; task 6.13a), and so
   // HomekitService (below) can be given the aggregate accessor rather than
   // the individual services it used to depend on (task 6.16b). The source
-  // set is fixed at four and is not a ServiceRegistry registration point
-  // (task 6.13d): `deviceSources` is started/stopped directly by the engine,
-  // symmetrically with `deviceRegistry`.
+  // set is fixed at five (Zigbee, Zigbee groups, Shelly, Nanoleaf, state
+  // toggles) and is not a ServiceRegistry registration point (task 6.13d):
+  // `deviceSources` is started/stopped directly by the engine, symmetrically
+  // with `deviceRegistry`.
   const deviceSources = new AggregateDeviceSource(
     [
       new ZigbeeDeviceSource(deviceRegistry, mqtt, logger.child({ service: "devices-zigbee" })),
+      new ZigbeeGroupDeviceSource(
+        deviceRegistry,
+        mqtt,
+        logger.child({ service: "devices-zigbee-group" }),
+      ),
       new ShellyDeviceSource(
         shellyService,
         mqtt,
@@ -546,6 +585,7 @@ export function createEngine(options: EngineOptions): Engine {
         logger.child({ service: "devices-state" }),
       ),
     ],
+    deviceVisibility,
     logger.child({ service: "devices" }),
   );
 
@@ -572,6 +612,7 @@ export function createEngine(options: EngineOptions): Engine {
             http,
             logger: logger.child({ service: "homekit" }),
             devices: deviceSources,
+            deviceVisibility,
           })
         : homekitValue;
 
@@ -654,6 +695,7 @@ export function createEngine(options: EngineOptions): Engine {
     deviceRegistry,
     devices: deviceSources,
     rooms: roomManager,
+    deviceVisibility,
 
     async start(): Promise<void> {
       if (started) {
@@ -675,6 +717,7 @@ export function createEngine(options: EngineOptions): Engine {
         httpServer?.setManagers(stateManager, manager, logBuffer);
         httpServer?.setDeviceSources(deviceSources);
         httpServer?.setRoomManager(roomManager);
+        httpServer?.setDeviceVisibility(deviceVisibility);
         httpServer?.setEventStream(eventBus, streamLogger);
 
         // Mount routes from service plugins before the server starts listening.

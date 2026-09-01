@@ -54,6 +54,23 @@ export interface DeviceDescriptor {
   reachable: boolean;
   /** How and when the current state was observed. */
   observation: DeviceObservation;
+  /**
+   * Whether the device is hidden — a user preference held above the
+   * sources, not something a source knows about its own devices
+   * (design.md D8; specs/device-sources "Rich Device Descriptor").
+   *
+   * A source does not set this; `AggregateDeviceSource` stamps it onto
+   * every descriptor it yields, from enumeration, retrieval, and
+   * subscription delivery alike.
+   */
+  hidden: boolean;
+  /**
+   * Qualified identifiers of this device's members, present only on a group
+   * device (design.md D14). Metadata about the group, not a structural
+   * parent/child relationship — member descriptors carry no reciprocal
+   * reference back to the group.
+   */
+  memberQualifiedIds?: string[];
 }
 
 /** Notified whenever a device's descriptor changes (state, reachability, or appearance/disappearance). */

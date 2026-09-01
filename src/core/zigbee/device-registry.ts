@@ -3,7 +3,7 @@ import { dirname } from "node:path";
 import type { Logger } from "pino";
 import type { Config } from "../../config.js";
 import { mapZ2MExposes } from "../../types/capabilities.js";
-import type { BridgeEventPayload, ZigbeeDevice } from "../../types/zigbee/bridge.js";
+import type { BridgeEventPayload, ZigbeeDevice, ZigbeeGroup } from "../../types/zigbee/bridge.js";
 import type { MqttMessageHandler, MqttService } from "../mqtt/mqtt-service.js";
 
 /**
@@ -39,6 +39,9 @@ export type DeviceStateChangeHandler = (
 
 export type DeviceAddedHandler = (device: ZigbeeDevice) => void;
 export type DeviceRemovedHandler = (device: ZigbeeDevice) => void;
+
+/** Fired whenever a `bridge/groups` message changes the tracked group set (task 1.5). */
+export type GroupsChangedHandler = () => void;
 
 /**
  * Human-readable name mappings for Zigbee2MQTT devices.
@@ -96,6 +99,12 @@ export class DeviceRegistry {
   /** Last-known state per device, keyed by `friendly_name`. */
   private readonly deviceStates: Map<string, Record<string, unknown>> = new Map();
 
+  /** Keyed by numeric group id (design.md D2). */
+  private readonly groups: Map<number, ZigbeeGroup> = new Map();
+
+  /** Handlers fired whenever a `bridge/groups` message changes the tracked set. */
+  private readonly groupsChangedHandlers: Set<GroupsChangedHandler> = new Set();
+
   /** Per-device state change handlers. */
   private readonly stateHandlers: Map<string, Set<DeviceStateChangeHandler>> = new Map();
 
@@ -113,6 +122,9 @@ export class DeviceRegistry {
 
   /** Handler for the `bridge/devices` topic — stored for unsubscribe. */
   private bridgeDevicesHandler: MqttMessageHandler | null = null;
+
+  /** Handler for the `bridge/groups` topic — stored for unsubscribe. */
+  private bridgeGroupsHandler: MqttMessageHandler | null = null;
 
   /** Handler for the `bridge/event` topic — stored for unsubscribe. */
   private bridgeEventHandler: MqttMessageHandler | null = null;
@@ -148,11 +160,20 @@ export class DeviceRegistry {
       const parsed = JSON.parse(data) as {
         devices?: Record<string, ZigbeeDevice>;
         states?: Record<string, Record<string, unknown>>;
+        groups?: ZigbeeGroup[];
       };
 
       // Restore last-known device states
       for (const [name, state] of Object.entries(parsed.states ?? {})) {
         this.deviceStates.set(name, state);
+      }
+
+      // Restore tracked groups. A snapshot written before groups were
+      // persisted has no `groups` key, which loads as an empty list rather
+      // than an error (D6, specs/device-registry "An older snapshot without
+      // groups still loads").
+      for (const group of parsed.groups ?? []) {
+        this.groups.set(group.id, group);
       }
 
       // Restore device metadata and register per-device MQTT subscriptions.
@@ -205,15 +226,22 @@ export class DeviceRegistry {
         statesObj[name] = state;
       }
 
+      const groupsArr: ZigbeeGroup[] = Array.from(this.groups.values());
+
       await mkdir(dirname(this.filePath), { recursive: true });
       await writeFile(
         this.filePath,
-        JSON.stringify({ devices: devicesObj, states: statesObj }, null, 2),
+        JSON.stringify({ devices: devicesObj, states: statesObj, groups: groupsArr }, null, 2),
         "utf-8",
       );
 
       this.logger.info(
-        { devices: this.devices.size, states: this.deviceStates.size, file: this.filePath },
+        {
+          devices: this.devices.size,
+          states: this.deviceStates.size,
+          groups: this.groups.size,
+          file: this.filePath,
+        },
         "Device registry persisted to disk",
       );
     } catch (err) {
@@ -233,6 +261,12 @@ export class DeviceRegistry {
       this.handleBridgeDevices(payload as unknown as ZigbeeDevice[]);
     };
     this.mqtt.subscribe(`${prefix}/bridge/devices`, this.bridgeDevicesHandler);
+
+    // Subscribe to the retained group list
+    this.bridgeGroupsHandler = (_topic, payload) => {
+      this.handleBridgeGroups(payload as unknown as ZigbeeGroup[]);
+    };
+    this.mqtt.subscribe(`${prefix}/bridge/groups`, this.bridgeGroupsHandler);
 
     // Subscribe to real-time join/leave events
     this.bridgeEventHandler = (_topic, payload) => {
@@ -254,6 +288,11 @@ export class DeviceRegistry {
       this.bridgeDevicesHandler = null;
     }
 
+    if (this.bridgeGroupsHandler) {
+      this.mqtt.unsubscribe(`${prefix}/bridge/groups`, this.bridgeGroupsHandler);
+      this.bridgeGroupsHandler = null;
+    }
+
     if (this.bridgeEventHandler) {
       this.mqtt.unsubscribe(`${prefix}/bridge/event`, this.bridgeEventHandler);
       this.bridgeEventHandler = null;
@@ -267,6 +306,7 @@ export class DeviceRegistry {
     this.mqttDeviceHandlers.clear();
     this.devices.clear();
     this.deviceStates.clear();
+    this.groups.clear();
 
     this.logger.info("Device registry stopped");
   }
@@ -288,6 +328,29 @@ export class DeviceRegistry {
   /** Return `true` if the named device is currently tracked. */
   hasDevice(friendlyName: string): boolean {
     return this.devices.has(friendlyName);
+  }
+
+  /** Return all tracked Zigbee groups. */
+  getGroups(): ZigbeeGroup[] {
+    return Array.from(this.groups.values());
+  }
+
+  /** Return a single group by its numeric id, or `undefined` if not tracked. */
+  getGroup(id: number): ZigbeeGroup | undefined {
+    return this.groups.get(id);
+  }
+
+  /**
+   * Register a handler that fires once per `bridge/groups` message that
+   * changes the tracked set (task 1.5).
+   */
+  onGroupsChanged(handler: GroupsChangedHandler): void {
+    this.groupsChangedHandlers.add(handler);
+  }
+
+  /** Remove a previously-registered groups-changed handler. */
+  offGroupsChanged(handler: GroupsChangedHandler): void {
+    this.groupsChangedHandlers.delete(handler);
   }
 
   /**
@@ -419,6 +482,66 @@ export class DeviceRegistry {
         this.devices.set(friendlyName, device);
       } else {
         this.addDevice(device);
+      }
+    }
+  }
+
+  /**
+   * Handle a payload from `{prefix}/bridge/groups`.
+   * Diffs the incoming list against the currently tracked groups: additions,
+   * in-place updates (e.g. a rename or membership change), and removals
+   * (task 1.3; specs/zigbee-groups "Group Discovery").
+   *
+   * A malformed payload — not a list, or an entry missing a numeric `id` or
+   * a string `friendly_name` — is skipped with a warning rather than
+   * aborting the update (task 1.4).
+   */
+  private handleBridgeGroups(incoming: ZigbeeGroup[]): void {
+    if (!Array.isArray(incoming)) {
+      this.logger.warn("bridge/groups payload is not an array — ignoring");
+      return;
+    }
+
+    const incomingMap = new Map<number, ZigbeeGroup>();
+    for (const group of incoming) {
+      if (
+        !group ||
+        typeof group !== "object" ||
+        typeof group.id !== "number" ||
+        typeof group.friendly_name !== "string"
+      ) {
+        this.logger.warn({ group }, "Malformed group entry — skipping");
+        continue;
+      }
+      incomingMap.set(group.id, group);
+    }
+
+    let changed = false;
+
+    // Detect removals — groups currently tracked but absent from the new list.
+    for (const id of this.groups.keys()) {
+      if (!incomingMap.has(id)) {
+        this.groups.delete(id);
+        changed = true;
+      }
+    }
+
+    // Detect additions and updates.
+    for (const [id, group] of incomingMap) {
+      const existing = this.groups.get(id);
+      if (!existing || JSON.stringify(existing) !== JSON.stringify(group)) {
+        this.groups.set(id, group);
+        changed = true;
+      }
+    }
+
+    if (!changed) return;
+
+    for (const handler of this.groupsChangedHandlers) {
+      try {
+        handler();
+      } catch (err) {
+        this.logger.error({ err }, "Error in onGroupsChanged handler");
       }
     }
   }

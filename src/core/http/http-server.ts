@@ -5,6 +5,7 @@ import type { Logger } from "pino";
 import type { TriggerContext } from "../automation.js";
 import type { AutomationManager } from "../automation-manager.js";
 import type { AggregateDeviceSource } from "../device-sources/aggregate.js";
+import type { DeviceVisibility } from "../device-visibility.js";
 import type { EventBus } from "../events/event-bus.js";
 import type { LogBuffer, LogQuery } from "../logging/log-buffer.js";
 import type { MqttService } from "../mqtt/mqtt-service.js";
@@ -60,6 +61,8 @@ interface WebhookRoute {
  * - `POST /api/device-catalog/:qualifiedId/command` — Issue a validated command to a device
  * - `PUT  /api/device-catalog/:qualifiedId/room` — Assign a device to a room
  * - `DELETE /api/device-catalog/:qualifiedId/room` — Clear a device's room assignment
+ * - `PUT  /api/device-catalog/:qualifiedId/hidden` — Mark a device hidden
+ * - `DELETE /api/device-catalog/:qualifiedId/hidden` — Mark a device visible
  * - `GET  /api/rooms`                      — List rooms with membership
  * - `GET  /api/rooms/unassigned`           — Devices belonging to no room
  * - `POST /api/rooms`                      — Create a room
@@ -84,6 +87,7 @@ export class HttpServer {
   private logBuffer: LogBuffer | null = null;
   private deviceSources: AggregateDeviceSource | null = null;
   private roomManager: RoomManager | null = null;
+  private deviceVisibility: DeviceVisibility | null = null;
   private eventStreamHub: EventStreamHub | null = null;
   private readonly honoApp: Hono;
 
@@ -125,6 +129,16 @@ export class HttpServer {
    */
   setRoomManager(rooms: RoomManager): void {
     this.roomManager = rooms;
+  }
+
+  /**
+   * Wire the device visibility endpoints (`/api/device-catalog/:qualifiedId/hidden`)
+   * to the engine's `DeviceVisibility`. Called by the engine after
+   * construction; `engine.deviceVisibility` is always present, so this is
+   * called unconditionally (task 5.1).
+   */
+  setDeviceVisibility(visibility: DeviceVisibility): void {
+    this.deviceVisibility = visibility;
   }
 
   /**
@@ -759,6 +773,29 @@ export class HttpServer {
       const qualifiedId = decodeURIComponent(c.req.param("qualifiedId"));
       this.roomManager.unassignDevice(qualifiedId);
       return c.json({ qualifiedId, roomId: null });
+    });
+
+    // ── API: Device visibility ─────────────────────────────────────────────
+    //
+    // A device's hidden flag, addressed by qualified identifier in a single
+    // percent-encoded path segment, alongside the room endpoints above
+    // (design.md D7; specs/device-visibility, specs/http-server "Device
+    // Visibility Endpoints"; task 5.1). Idempotent in both directions, and
+    // settable for a qualified id the system does not currently know — a
+    // device can legitimately be hidden while its bridge is down.
+
+    app.put("/api/device-catalog/:qualifiedId/hidden", (c) => {
+      if (!this.deviceVisibility) return c.json({ error: "Not available" }, 503);
+      const qualifiedId = decodeURIComponent(c.req.param("qualifiedId"));
+      this.deviceVisibility.hide(qualifiedId);
+      return c.json({ qualifiedId, hidden: true });
+    });
+
+    app.delete("/api/device-catalog/:qualifiedId/hidden", (c) => {
+      if (!this.deviceVisibility) return c.json({ error: "Not available" }, 503);
+      const qualifiedId = decodeURIComponent(c.req.param("qualifiedId"));
+      this.deviceVisibility.unhide(qualifiedId);
+      return c.json({ qualifiedId, hidden: false });
     });
 
     return app;
