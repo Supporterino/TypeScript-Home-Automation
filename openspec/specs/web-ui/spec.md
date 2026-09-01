@@ -337,6 +337,20 @@ A room view MUST show its member devices, including members that are currently
 unavailable, marked distinctly. A device shown as unavailable MUST NOT present
 its last known state as current.
 
+A room's member devices MUST be presented in the same layout the dashboard uses
+for any other device collection. A room MUST NOT adopt a different presentation
+merely because it also offers membership management: a management affordance is
+not a reason for a device to look different in one place than another.
+
+An unavailable member MUST be presented using the same device presentation as an
+available one, in an unavailable state, rather than a separate presentation of
+its own. It MUST remain distinguishable at a glance from an available member.
+
+The affordance for removing a device from a room MUST NOT be permanently present
+alongside every member. The room MUST offer a way to enter a mode in which
+removal is available for its members, and that mode MUST be reachable without a
+pointing device.
+
 Assigning a device to a room MUST move it out of any room it was previously in,
 and the change MUST be reflected in every connected dashboard.
 
@@ -360,15 +374,50 @@ being deleted.
 - **WHEN** a user deletes a room containing devices
 - **THEN** the devices remain and appear in the unassigned group
 
+#### Scenario: A room's devices look like devices anywhere else
+
+- **WHEN** a user opens a room containing several devices
+- **THEN** those devices are presented in the same layout as the dashboard's
+  device collections
+
+#### Scenario: Removal is available on request, not always
+
+- **WHEN** a user views a room without having asked to manage its membership
+- **THEN** no per-device removal affordance is shown, and one becomes available
+  after the user enters the room's management mode
+
+#### Scenario: Removal is reachable without hover
+
+- **WHEN** a user on a touch device enters a room's management mode
+- **THEN** the removal affordance for each member is operable without a hover
+  interaction
+
 ### Requirement: Device Tiles
 
 Where devices are presented as a collection, each device MUST be shown as a tile
 carrying at most one primary action and at most one primary readout, selected by
 ranking the device's declared capabilities.
 
+A tile's primary action MUST be a property that operates the device, not one that
+configures it. Many devices whose purpose is purely to report — motion sensors,
+buttons, contact sensors — nonetheless declare writable settings such as
+sensitivity or timeout. Presenting such a setting as a tile's primary action
+misrepresents a sensor as something the user operates, and buries its actual
+reading. A writable property MUST NOT be selected as a tile's primary action
+unless it belongs to a capability whose declared category is one that operates
+the physical world. A configuration property MUST remain available in the device
+detail view.
+
 A device whose capabilities include no actuatable property matching the ranking
 MUST render as a read-only tile that opens the device detail view, rather than
 failing to render or rendering an inoperative control.
+
+A device collection MUST offer a way to show only devices that can be operated,
+hiding those that only report. The selection MUST be derived from the same
+declared category that governs primary-action ranking, so that a device hidden by
+the filter is exactly one that would not have offered a primary action. The
+selection MUST default to showing all devices and MUST NOT persist beyond the
+current session.
 
 A tile MUST indicate whether the device is push-backed or polled, the age of the
 observation when polled, and whether it is unreachable.
@@ -394,6 +443,32 @@ on failure.
 - **WHEN** a device declares only capabilities the ranking does not cover
 - **THEN** a read-only tile is rendered that opens the detail view
 
+#### Scenario: A sensor's configuration setting is not its primary action
+
+- **WHEN** a motion sensor declaring a writable sensitivity setting is shown as a
+  tile
+- **THEN** the tile presents the sensor's reading rather than a control for that
+  setting, and the setting remains available in the device detail view
+
+#### Scenario: An actuator controlled only by a discrete setting still works
+
+- **WHEN** a device whose declared category operates the physical world offers
+  actuation only through a discrete choice of values
+- **THEN** the tile presents that choice as its primary action
+
+#### Scenario: Filtering to operable devices hides reporting-only devices
+
+- **WHEN** a user asks a device collection to show only devices that can be
+  operated
+- **THEN** lights, switches, outlets, covers, fans, locks and thermostats remain
+  visible, and devices that only report are hidden
+
+#### Scenario: The filter does not survive a reload
+
+- **WHEN** a user who has filtered a collection to operable devices reloads the
+  dashboard
+- **THEN** the collection again shows all devices
+
 ### Requirement: Device Control Interface
 
 The device detail view MUST render controls derived from the device's declared
@@ -403,6 +478,14 @@ dashboard has no specific knowledge of is still controllable.
 Each declared actuatable property MUST be presented with a control appropriate
 to its declared type and constraints, respecting the declared range or permitted
 values so that an out-of-range command cannot be composed in the interface.
+
+A control for a boolean property MUST determine its displayed state, and compose
+its commands, from the values that property declares for on and off. The
+interface MUST NOT infer a boolean's state by general-purpose truthiness, and MUST
+NOT assume a boolean is commanded as a true boolean. Both assumptions hold for
+some sources and fail for others; where they fail the device is shown in the
+wrong state and the command has no effect, which is the most damaging failure a
+control surface can have because nothing appears to be broken.
 
 Actuating a control MUST reflect the requested change immediately and MUST
 reconcile against the device's reported state when it arrives. A command that is
@@ -508,6 +591,19 @@ device is unreachable.
 - **WHEN** a device is reported unreachable
 - **THEN** the interface marks it as such and does not present its last known
   state as current
+
+#### Scenario: A device reporting off as a string is shown as off
+
+- **WHEN** a device whose boolean capability declares string on and off values
+  reports itself off
+- **THEN** its control is displayed in the off state
+
+#### Scenario: Turning off a string-encoded device actually turns it off
+
+- **WHEN** a user switches off a device whose boolean capability declares string
+  on and off values
+- **THEN** the command carries that capability's declared off value, the device
+  turns off, and the control settles in the off state rather than reverting
 
 ### Requirement: Automation Management Interface
 
