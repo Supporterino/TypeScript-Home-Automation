@@ -511,15 +511,19 @@ capability.
 
 ### Requirement: Static Asset Routes
 
-Compiled web UI assets MUST be served from routes beneath the UI path, addressed
-by a hash of their contents, with cache directives permitting indefinite client
-caching and a correct content type per asset.
+Compiled web UI assets MUST be served from routes beneath the web UI path,
+addressed by a hash of their contents, with cache directives permitting
+indefinite client caching and a correct content type per asset.
 
 Asset routes MUST be readable without authentication, and MUST serve only
 compiled application code and styles — never instance data, credentials, or
 device information.
 
-Asset routes MUST be registered only when the web UI is enabled.
+Asset routes MUST be registered by the `@ts-ha/web-ui` package as part of its
+`ServicePlugin` registration, not by the core HTTP server. They MUST be
+registered only when the web UI is enabled — which, because the package is loaded
+only when enabled, means they are absent whenever the web UI package is not
+loaded.
 
 #### Scenario: Assets are cacheable
 
@@ -580,10 +584,6 @@ value.
   state endpoint rather than the automation control endpoint
 - **THEN** the request is rejected and the automation's wiring is unchanged
 
-### Requirement: Web UI Mounting
-
-The system MUST support lazy mounting of the web UI on a configurable path (default: `/status`). The web UI is only mounted when `WEB_UI_ENABLED=true`. The Hono sub-app is served under the configured path prefix.
-
 ### Requirement: Service Plugin Routes
 
 The system MUST call `registerRoutes(app)` on every `ServicePlugin` before the server starts listening, allowing plugins to mount custom API routes.
@@ -599,6 +599,20 @@ The `HttpServer` exposes:
 - `setManagers(state, automations, logs)` — Set references after construction
 - `setDeviceRegistry(registry)` — Set the device registry reference
 - `setEngineStarted(started)` — Mark engine as started for readiness checks
-- `mountWebUi(path, token)` — Lazy-load and mount the web UI
 - `mountServiceRoutes(registry)` — Mount routes from all service plugins
 - `registerWebhook(path, methods, handler)` / `removeWebhook(path)` — Webhook route management
+
+The server MUST NOT expose a web-UI-specific mounting method.
+`mountServiceRoutes(registry)` is the single hook by which any optional service,
+including the web UI, attaches its routes.
+
+#### Scenario: No web UI mount method
+
+- **WHEN** the `HttpServer` public surface is inspected
+- **THEN** it offers no method that mounts the web UI by name
+
+#### Scenario: Service plugins mount through one hook
+
+- **WHEN** a service plugin that defines `registerRoutes` is registered with the
+  engine
+- **THEN** its routes are mounted via `mountServiceRoutes`

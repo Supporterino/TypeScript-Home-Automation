@@ -41,10 +41,6 @@ type Config = {
   httpServer: {
     port: number;        // default: 8080 (0 = disabled)
     token: string;       // default: ""
-    webUi: {
-      enabled: boolean;  // default: false
-      path: string;      // default: "/status"
-    };
   };
   services: Record<string, unknown>;  // default: {}
 };
@@ -57,6 +53,17 @@ the top level from the HomeKit service options. There is no web UI development
 setting: the development workflow is a build-time watcher, and the server serves
 its content-addressed assets identically in every environment.
 
+The `httpServer.webUi` section is removed from this schema. The web UI is a
+separate package that owns its own configuration; the core engine MUST NOT parse
+or expose web UI settings. The engine learns nothing about the web UI from its
+validated configuration.
+
+The Shelly MQTT RPC source identifier (`MQTT_SHELLY_RPC_SRC`, default
+`"ts-home-automation"`) is unchanged by the package rename. It is an on-wire
+value two instances sharing a broker use to disambiguate RPC responses, so its
+default MUST remain `"ts-home-automation"`; the rename covers package names, the
+binary name, and import paths only.
+
 #### Scenario: Persistence defaults are enabled
 
 - **WHEN** configuration is loaded with no persistence variables set
@@ -67,7 +74,15 @@ its content-addressed assets identically in every environment.
 - **WHEN** no state toggles are configured
 - **THEN** `stateToggles` is an empty list and no toggle devices are exposed
 
+#### Scenario: Core config has no web UI settings
+
+- **WHEN** the validated core configuration is inspected
+- **THEN** it contains no web UI section, regardless of the `WEB_UI_*`
+  environment variables that may be set
+
 ### Requirement: Environment Variable Mapping
+
+The core schema MUST map these environment variables:
 
 | Environment Variable | Config Path |
 |---------------------|-------------|
@@ -85,8 +100,20 @@ its content-addressed assets identically in every environment.
 | `DEVICE_REGISTRY_FILE_PATH` | `deviceRegistry.filePath` |
 | `HTTP_PORT` | `httpServer.port` |
 | `HTTP_TOKEN` | `httpServer.token` |
-| `WEB_UI_ENABLED` | `httpServer.webUi.enabled` |
-| `WEB_UI_PATH` | `httpServer.webUi.path` |
+
+`WEB_UI_ENABLED` and `WEB_UI_PATH` MUST NOT appear in the core schema's mapping;
+they are parsed by `@ts-ha/web-ui` for its own options.
+
+`HTTP_TOKEN` remains the core mapping for `httpServer.token`, and it is the
+source of the web UI's auth token: the registering entry point passes the
+resolved `httpServer.token` to the web UI plugin. `@ts-ha/web-ui` MUST NOT read
+`HTTP_TOKEN` itself.
+
+#### Scenario: Web UI variables are not part of core config
+
+- **WHEN** `WEB_UI_ENABLED` is set in the environment and the core configuration
+  is loaded
+- **THEN** the core configuration is unaffected and contains no web UI setting
 
 ### Requirement: Boolean Coercion
 
