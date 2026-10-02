@@ -73,6 +73,19 @@ if (forecast[0].precipitationChance > 0.5) {
 }
 ```
 
+Both methods accept an optional trailing `location` that overrides the
+service's configured default for that call only — useful when an automation
+cares about a second location (a holiday home, say):
+
+```ts
+const elsewhere = await weather.getCurrent({ latitude: 43.7, longitude: 7.3 });
+const alpine = await weather.getForecast(2, { latitude: 47.4, longitude: 10.3 });
+```
+
+Providers that bake a location into their constructor still use it when the
+argument is omitted, so existing `getCurrent()` / `getForecast(n)` calls are
+unaffected.
+
 ---
 
 ## Data types
@@ -108,7 +121,7 @@ if (forecast[0].precipitationChance > 0.5) {
 | `sunrise` | `Date \| undefined` | Sunrise time |
 | `sunset` | `Date \| undefined` | Sunset time |
 
-> **Caching:** Both built-in services cache API responses for 5 minutes to reduce network traffic and stay within rate limits. Repeated calls within that window return the cached result.
+> **Caching:** Both built-in services cache API responses for 5 minutes to reduce network traffic and stay within rate limits. The cache is keyed by the resolved coordinates, so a per-call `location` override is never served another location's cached response. Repeated calls for the same coordinates within that window return the cached result.
 
 ---
 
@@ -117,15 +130,20 @@ if (forecast[0].precipitationChance > 0.5) {
 Implement the `WeatherService` interface to integrate any other weather provider:
 
 ```ts
-import type { WeatherService, CurrentWeather, DailyForecast } from "@ts-ha/core";
+import type {
+  WeatherService,
+  CurrentWeather,
+  DailyForecast,
+  WeatherLocation,
+} from "@ts-ha/core";
 
 class MyWeatherService implements WeatherService {
-  async getCurrent(): Promise<CurrentWeather> {
-    // fetch from your API
+  async getCurrent(location?: WeatherLocation): Promise<CurrentWeather> {
+    // fetch from your API; `location` overrides the configured default
   }
 
-  async getForecast(days: number): Promise<DailyForecast[]> {
-    // fetch from your API
+  async getForecast(days = 5, location?: WeatherLocation): Promise<DailyForecast[]> {
+    // fetch from your API; `location` overrides the configured default
   }
 }
 

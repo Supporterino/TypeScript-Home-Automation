@@ -200,6 +200,39 @@ own `refreshIntervalMs`, it does not hardcode either constant.
 
 ---
 
+## Energy monitoring
+
+The engine samples the aggregate device source on a fixed interval and keeps a
+bounded, rolling history of the home's instantaneous power so the dashboard can
+render a recent trend. History is held in memory only and does **not** survive a
+restart (design.md D6/D7).
+
+| Variable | Default | Description |
+|---|---|---|
+| `ENERGY_SAMPLE_MS` | `60000` | Interval, in milliseconds, between power-history samples. Must be a positive integer; `0` is normalized to the default so history can never be sampled at a zero interval. |
+| `ENERGY_HISTORY_MINUTES` | `1440` | Rolling history window, in minutes. The retained sample count is bounded by `historyMinutes / sampleIntervalMs`. `0` disables history while current totals remain available. |
+
+---
+
+## Weather
+
+`GET /api/weather` returns the registered weather service's current conditions
+and forecast. Because the service takes a location per call, the engine uses a
+configured default location when a client supplies none, and a client may
+override it per request (design.md D8).
+
+| Variable | Default | Description |
+|---|---|---|
+| `WEATHER_LATITUDE` | _(unset)_ | Default latitude, `-90`..`90`. Must be set together with `WEATHER_LONGITUDE` for a default location to be configured. |
+| `WEATHER_LONGITUDE` | _(unset)_ | Default longitude, `-180`..`180`. Must be set together with `WEATHER_LATITUDE`. |
+| `WEATHER_FORECAST_DAYS` | `3` | Requested forecast horizon in days, clamped to a maximum of `7`. |
+
+Out-of-range coordinates fail startup validation with a descriptive error. When
+neither a configured default nor a client-supplied location is available, the
+endpoint rejects the request as a client error.
+
+---
+
 ## Example `.env`
 
 ```bash
@@ -226,4 +259,11 @@ DEVICE_REGISTRY_FILE_PATH=./data/device-registry.json
 
 SHELLY_POLL_MS=10000
 NANOLEAF_POLL_MS=10000
+
+ENERGY_SAMPLE_MS=60000
+ENERGY_HISTORY_MINUTES=1440
+
+WEATHER_LATITUDE=52.52
+WEATHER_LONGITUDE=13.405
+WEATHER_FORECAST_DAYS=3
 ```

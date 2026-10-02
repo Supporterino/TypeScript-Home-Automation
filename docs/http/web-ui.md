@@ -1,6 +1,8 @@
 # Web UI
 
-The `@ts-ha/web-ui` package provides an optional browser-based dashboard served on the same port as the HTTP server. It registers itself with the engine as a `ServicePlugin` — the core engine contains no web-UI-specific code. It is a control-first interface: the landing view is a device control surface organised by room, with engine internals (automations, state, logs, HomeKit) demoted to a distinct operator section.
+The `@ts-ha/web-ui` package provides an optional browser-based dashboard served on the same port as the HTTP server. It registers itself with the engine as a `ServicePlugin` — the core engine contains no web-UI-specific code. It is a control-first interface: the landing view is an **Overview** control surface that summarizes the home (live device metrics, favorites, and room zones) before listing it, with engine internals (automations, state, logs, HomeKit, energy, weather) demoted to a distinct operator section.
+
+The interface is built on a single designed visual system — **Ambient Glass**, a dark-first Mantine theme plus a CSS token layer (palette, typography, spacing, elevation, radii, motion), with a self-hosted display typeface. It is not component-library defaults.
 
 ---
 
@@ -66,21 +68,26 @@ before `onStart` are safe.
 
 The interface is split by audience, not by feature area (design.md D13):
 
-- **HOME** — a control surface. Dashboard (landing view), each user-defined room, an Unassigned-devices bucket, and an all-devices list.
-- **ENGINE** — an operator surface. Automations, State, Logs, HomeKit.
+- **HOME** — a control surface. Overview (landing view), a favorites group (shown when any device is favorited), each user-defined room, an Unassigned-devices bucket, and an all-devices list.
+- **ENGINE** — an operator surface. Automations, State, Logs, HomeKit, Energy, Weather.
 
 This one IA is rendered by two navigation components depending on viewport:
 
 | | Desktop (`sm` and up) | Mobile |
 |---|---|---|
 | Layout | Sidebar, collapsible HOME/ENGINE groups | Fixed 3-slot bottom bar |
-| Content | Both groups, rooms listed dynamically under HOME | Home / Rooms / Devices only |
+| Content | Both groups, favorites and rooms listed dynamically under HOME | Home / Rooms / Devices only |
 | ENGINE reachable? | Yes, in the sidebar | Yes, by direct URL — deliberately not promoted |
 
 The mobile bar's omission of ENGINE is a deliberate statement that a phone is
 a control surface, not a debugger. Every ENGINE view remains reachable by
 navigating directly to its URL on any viewport; nothing is unreachable, it is
 simply not promoted on the smallest screens.
+
+Navigation indicates the active view, and a detail route keeps its parent
+collection entry active: opening `/devices/:qualifiedId` leaves **All
+devices** highlighted, and `/automations/:name` leaves **Automations**
+highlighted.
 
 ---
 
@@ -94,9 +101,9 @@ UI is mounted at `/` (design.md D7):
 
 | Path (relative to `WEB_UI_PATH`) | View |
 |---|---|
-| `/` | Dashboard — device control landing view |
+| `/` | Overview — at-a-glance control landing view |
 | `/rooms` | Rooms index |
-| `/rooms/:id` | Single room — members, assign/unassign, rename, delete |
+| `/rooms/:id` | Single room — members, room-level all on/off, assign/unassign, rename, delete |
 | `/devices` | All devices |
 | `/devices/unassigned` | Devices belonging to no room |
 | `/devices/:qualifiedId` | Device detail — generic capability-driven controls |
@@ -105,6 +112,8 @@ UI is mounted at `/` (design.md D7):
 | `/state` | Operator state view |
 | `/logs` | Operator logs view |
 | `/homekit` | Operator HomeKit view |
+| `/energy` | Energy view — instantaneous power, cumulative total, per-device breakdown, trend |
+| `/weather` | Weather view — current conditions and forecast |
 | `/login`, `/logout` | Authentication |
 
 A path beneath the UI's mount path that matches none of these — a typo, or a
@@ -141,12 +150,17 @@ Every device — Zigbee, Shelly, Nanoleaf, and configured state toggles alike �
 is rendered from the same source-neutral capability schema (design.md D22),
 so there is no per-device-family UI code anywhere in the frontend.
 
-- **Tiles** (dashboard, room, and device-list views) show one curated primary
+- **Tiles** (overview, room, and device-list views) show one curated primary
   action and one primary readout, chosen by a fixed ranking — on/off leads,
   followed by position, brightness, and setpoint for actions; temperature,
   humidity, occupancy, contact, illuminance, water leak, and battery for
   readouts (design.md D16). A device matching no rank degrades to a
-  read-only tile that opens the detail view rather than failing to render.
+  read-only tile that still opens the detail view rather than failing to
+  render. A tile carries an explicit open-detail affordance; an embedded
+  control (the primary action, the favorite toggle, the visibility toggle)
+  never triggers it. State is encoded by more than color alone — an on/off
+  or reachable condition pairs its color with an icon and a label — so the
+  interface stays usable without color discrimination.
 - **Device detail** renders every declared capability generically —
   switches, sliders (bounded by the declared range and step), selects (for
   enumerated properties, including a Nanoleaf effect list), and read-only
@@ -166,6 +180,16 @@ so there is no per-device-family UI code anywhere in the frontend.
   unreachable device is badged distinctly, and a polled device shows its
   observation age while a push-backed one does not.
 
+### Favorites
+
+A device can be marked or unmarked as a favorite from its own tile, without
+knowing its identifier. Favorites are persisted as an ordinary state key
+(a JSON array of qualified identifiers), not a device change, so they survive
+a reload and are reflected in every connected dashboard as the state stream
+delivers updates (design.md D9). A favorites group appears in navigation, and
+favorited devices are presented on the Overview, only when at least one
+favorite is set.
+
 ---
 
 ## Rooms
@@ -177,6 +201,25 @@ A device that becomes unavailable (unpaired, or its source disabled) is
 **retained** in its room and shown distinctly as unavailable, rather than
 dropped — it reappears automatically with no user action once its source
 recovers (design.md D14).
+
+A room view offers an **all on / all off** action that commands every
+actuatable member through `POST /api/rooms/:id/command`. The request is
+optimistic per member: the requested change is reflected immediately, and
+each member reconciles against its reported state. A member whose command
+fails reverts and surfaces its error while the others remain commanded;
+members that do not support the command (e.g. sensors) are reported as
+skipped, distinctly from failures. The endpoint is best-effort and does not
+claim atomicity across members (design.md D5).
+
+For a room whose actuatable members all share one on/off property family
+(canonical `on`, or Zigbee2MQTT's `state`), the view issues exactly one
+request. A mixed room — some members declaring `on` and others `state` — is
+the deliberate exception: the endpoint requires every requested property to
+be writable by each targeted actuator and rejects a property a member does
+not declare, so the view sends **one batch request per property family**
+(e.g. one for `on`, one for `state`) and merges the per-member outcomes. It
+is not one request per device; a room with any number of devices across the
+two families costs at most two requests.
 
 ---
 
@@ -220,6 +263,27 @@ Bridge status, pairing configuration, and accessory count, reading the same
 `GET /api/homekit/status` endpoint used by the CLI dashboard. Reports the
 service as "not configured" rather than erroring or rendering an empty
 bridge when `HomekitService` is not registered.
+
+### Energy
+
+Instantaneous home power, cumulative consumption (displayed in kWh), a
+per-device breakdown, and a rolling recent trend when history is enabled,
+backed by `GET /api/energy` and updated from the event stream. An
+unreachable metering device is reported as unavailable, never counted as
+zero. The view remains useful with history disabled (current totals and
+breakdown, no trend) and on a deployment with no metering devices
+(explanatory empty state, no error). The trend is a hand-rendered SVG
+sparkline — no chart library is added. See
+[Configuration](../configuration.md#energy-monitoring) for
+`ENERGY_SAMPLE_MS` and `ENERGY_HISTORY_MINUTES`.
+
+### Weather
+
+Current conditions and a daily forecast, backed by `GET /api/weather`. The
+location is the configured default (`WEATHER_LATITUDE`/`WEATHER_LONGITUDE`)
+when the client supplies none. When no weather service is registered the view
+reports the feature as **unconfigured** rather than presenting an error or an
+empty forecast. See [Configuration](../configuration.md#weather).
 
 ---
 
@@ -266,7 +330,10 @@ The dashboard fetches an initial snapshot from `GET /api/status`,
 `GET /api/automations`, `GET /api/state`, `GET /api/device-catalog`,
 `GET /api/rooms`, `GET /api/logs`, and `GET /api/homekit/status` (tolerating
 a `404` there as "not configured"), then opens `GET /api/events` and applies
-incremental deltas. See [Realtime updates](#realtime-updates) above.
+incremental deltas. The Energy and Weather views fetch their own endpoints
+(`GET /api/energy`, `GET /api/weather`) lazily when opened — they are not part
+of first paint — and refetch on stream reconnect. See
+[Realtime updates](#realtime-updates) above.
 
 ---
 
@@ -289,13 +356,20 @@ runs a watcher that rebuilds the manifest on every frontend edit; combined
 with `bun --hot`, this is the entire development workflow — there is no
 separate dev server and no `WEB_UI_DEV` flag.
 
-**First-paint budget:** the JS and CSS required for first paint (excluding
-anything behind a dynamic import, such as the Prism syntax highlighter) is
-budgeted at 250 KB transferred (gzip-compressed), asserted in `bun test`
-against the build manifest (design.md D24, D26). Everything else —
-non-dashboard views, Prism and its grammars — is lazily loaded behind
-`React.lazy()` or a dynamic `import()` and never counted against first
-paint.
+The frontend's display typeface (a self-hosted subset of Plus Jakarta Sans,
+weights 500/700) is emitted as a content-hashed `.woff2` and served from the
+same content-addressed route as the scripts and stylesheets. It is never
+fetched from a third-party origin, so the dashboard renders correctly on a
+network with no internet access, and its transferred bytes are counted
+against the first-paint budget.
+
+**First-paint budget:** the JS, CSS, and font required for first paint
+(excluding anything behind a dynamic import, such as the Prism syntax
+highlighter, or the Energy and Weather views) is budgeted at 250 KB
+transferred (gzip-compressed), asserted in `bun test` against the build
+manifest (design.md D24, D26). Everything else — non-dashboard views, the
+energy/weather views, Prism and its grammars — is lazily loaded behind
+`React.lazy()` or a dynamic `import()` and never counted against first paint.
 
 ---
 

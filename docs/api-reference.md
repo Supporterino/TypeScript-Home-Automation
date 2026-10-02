@@ -415,6 +415,9 @@ type WebhookHandler = (context: {
 | `POST` | `/api/rooms` | Yes | Create a room (`{ name }`) |
 | `PUT` | `/api/rooms/:id` | Yes | Rename a room (`{ name }`) |
 | `DELETE` | `/api/rooms/:id` | Yes | Delete a room — its devices become unassigned |
+| `POST` | `/api/rooms/:id/command` | Yes | Issue one property command to every capable member of a room (best-effort, per-device outcomes) |
+| `GET` | `/api/energy` | Yes | Aggregated home energy view — instantaneous power, cumulative total, per-device breakdown, rolling history |
+| `GET` | `/api/weather` | Yes | Current conditions and forecast for a configured default or client-supplied location |
 | `GET` | `/api/events` | Yes | Realtime server-sent event stream |
 
 `GET /api/devices` and `GET /api/devices/:friendlyName` (Zigbee-only) are removed — they return `410`. Use `/api/device-catalog`, which spans every device source (Zigbee, Shelly, Nanoleaf, and state toggles), addressed by [qualified identifier](#qualified-device-identifier) (design.md R13).
@@ -422,6 +425,12 @@ type WebhookHandler = (context: {
 `PUT /api/state/:key` and `DELETE /api/state/:key` return `400` when `key` falls inside the reserved internal namespace (the `$internal:` prefix — rooms, automation enabled flags). `GET /api/state` never lists a reserved key, in either the returned map or its `count`. See [State Management](state.md#reserved-internal-namespace) (design.md D20).
 
 Room creation and rename return `409` for a name already in use. Unknown room or unknown device-room assignment target returns `404`. Rooms are user-defined groupings that span every device source; a device belongs to at most one room, and an absent member (unpaired, or its source disabled) is retained and reported unavailable rather than dropped (design.md D14).
+
+`POST /api/rooms/:id/command` accepts the same flat JSON object of properties as the single-device command endpoint (e.g. `{ "on": false }`). It resolves the room's members, dispatches to each member whose declared capabilities permit the requested property through the same validated `DeviceSource.command()` path as the single-device endpoint, and returns one result per member — `applied`, `skipped` (the member does not declare a writable capability for the property, or its descriptor is unavailable), or `failed` (dispatch rejected). The response is best-effort and never promises atomicity across members; a malformed body returns `400`, an unknown room `404`, and an engine with no room manager `503`.
+
+`GET /api/energy` returns `powerWatts` (sum across reachable devices declaring an instantaneous-power reading), `energyWh` (sum across reachable devices declaring a cumulative-energy reading, normalized to watt-hours), a `breakdown` of per-device contributions with `available`, and a `history` array of timestamped `powerWatts` samples (empty when history is disabled or no samples have been taken). It responds successfully with zero totals and an empty breakdown when no device meters energy. See [Configuration](configuration.md#energy-monitoring) for `ENERGY_SAMPLE_MS` and `ENERGY_HISTORY_MINUTES`.
+
+`GET /api/weather` returns current conditions and a daily forecast for a location resolved as: a client-supplied `lat`/`lon` pair when both are present and in range, otherwise the configured default location (`WEATHER_LATITUDE`/`WEATHER_LONGITUDE`). A `days` query parameter requests the forecast horizon and is clamped to a maximum of 7; it defaults to `WEATHER_FORECAST_DAYS`. When no weather service is registered the endpoint responds `404` with `{ available: false, reason: "service_unregistered" }`; when no location is resolvable it responds `400` with `{ available: false, reason: "no_location" }`. See [Weather services](services/weather.md).
 
 Authentication uses `Authorization: Bearer <token>` header or a session cookie (`ts-ha-session`, `HttpOnly`, `SameSite=Strict`) named identically to the web UI's session cookie — the two share one `HTTP_TOKEN` secret. Set `HTTP_TOKEN` to enable; leave empty for no authentication. When empty, every route above — including `GET /api/automations/:name/source` — is reachable with no authentication; see [Configuration](configuration.md#security-note-automation-source-is-readable-without-authentication) (design.md D10, R4).
 
