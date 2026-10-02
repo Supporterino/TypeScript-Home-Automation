@@ -53,14 +53,28 @@ describe("build-web-ui manifest", () => {
   });
 
   it("every entry carries a compressed body smaller than its raw body", () => {
+    // `font/woff2` is already compressed (a woff2 payload *is* a Brotli
+    // stream), so gzip cannot shrink it — and generally grows it slightly.
+    // The assertion is meaningful only for the compressible JS/CSS assets.
+    const precompressed = new Set(["font/woff2"]);
     for (const asset of ASSETS) {
+      if (precompressed.has(asset.contentType)) continue;
       const raw = base64ToBytes(asset.rawBase64);
       const gzip = base64ToBytes(asset.gzipBase64);
       expect(gzip.byteLength).toBeLessThan(raw.byteLength);
     }
   });
 
-  it("asserts a first-paint budget of 250 KB transferred (gzip JS + CSS)", () => {
+  it("lists the self-hosted display face as a first-paint font asset", () => {
+    const fontAssets = ASSETS.filter((a) => a.contentType === "font/woff2");
+    expect(fontAssets.length).toBeGreaterThanOrEqual(1);
+    for (const asset of fontAssets) {
+      expect(asset.fileName.endsWith(".woff2")).toBe(true);
+      expect(asset.firstPaint).toBe(true);
+    }
+  });
+
+  it("asserts a first-paint budget of 250 KB transferred (gzip JS + CSS + font)", () => {
     const transferred = firstPaintTransferredBytes(ASSETS);
     expect(transferred).toBeLessThanOrEqual(250 * 1024);
   });
@@ -99,6 +113,17 @@ describe("build-web-ui manifest", () => {
       },
     ];
     expect(firstPaintTransferredBytes(mixed)).toBe(Buffer.from("small").byteLength);
+  });
+
+  it("emits lazy view code as non-first-paint chunks", () => {
+    // Every route view beyond the landing/theme is behind a dynamic import
+    // (design.md D12), so the built manifest must carry at least one JS chunk
+    // excluded from the budget. Energy and weather are among these chunks:
+    // their code and data are only fetched once the route is opened.
+    const lazyJs = ASSETS.filter(
+      (a) => a.contentType === "application/javascript" && !a.firstPaint,
+    );
+    expect(lazyJs.length).toBeGreaterThanOrEqual(1);
   });
 });
 

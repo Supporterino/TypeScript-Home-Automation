@@ -117,7 +117,7 @@ export function DeviceDetailView({ qualifiedId }: { qualifiedId: string }) {
                   key={memberId}
                   size="xs"
                   variant="light"
-                  color={member?.hidden ? "gray" : "blue"}
+                  color={member?.hidden ? "gray" : "ambient"}
                   onClick={() => navigate(deviceDetailPath(basePath, memberId))}
                 >
                   {member?.displayName ?? memberId}

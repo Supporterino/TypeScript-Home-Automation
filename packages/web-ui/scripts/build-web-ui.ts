@@ -22,15 +22,55 @@ const ENTRY = join(PACKAGE_ROOT, "src/app/index.tsx");
 const APP_DIR = join(PACKAGE_ROOT, "src/app");
 const OUT_MANIFEST = join(PACKAGE_ROOT, "src/assets/manifest.ts");
 
+// The display face is referenced from `styles/tokens.css` by this relative
+// path. Bun's CSS bundler inlines `url()` assets as base64 data URLs
+// (oven-sh/bun#24599), so the reference is marked external, the file is
+// emitted as its own content-hashed asset below, and the CSS url is rewritten
+// to point at it (design.md D3).
+const FONT_SOURCE = join(APP_DIR, "fonts/plus-jakarta-sans-latin.woff2");
+const FONT_CSS_REF = "../fonts/plus-jakarta-sans-latin.woff2";
+
 const WATCH = process.argv.includes("--watch");
 
 /** MIME type for a given emitted file extension. */
 function contentTypeFor(path: string): string {
   if (path.endsWith(".css")) return "text/css";
+  if (path.endsWith(".woff2")) return "font/woff2";
   return "application/javascript";
 }
 
+/**
+ * Emits the self-hosted display face as a content-hashed first-paint asset.
+ * Returns null when the font has not been added to the tree yet.
+ */
+async function buildFontAsset(): Promise<BuiltAsset | null> {
+  if (!existsSync(FONT_SOURCE)) return null;
+
+  const rawBytes = new Uint8Array(await Bun.file(FONT_SOURCE).arrayBuffer());
+  const hash = new Bun.CryptoHasher("sha256").update(rawBytes).digest("hex").slice(0, 8);
+  const fileName = `plus-jakarta-sans-latin-${hash}.woff2`;
+  const gzipBytes = Bun.gzipSync(rawBytes);
+
+  return {
+    fileName,
+    contentType: "font/woff2",
+    hash,
+    rawBase64: Buffer.from(rawBytes).toString("base64"),
+    gzipBase64: Buffer.from(gzipBytes).toString("base64"),
+    firstPaint: true,
+  };
+}
+
+/** Points the stylesheet's external font reference at the emitted asset. */
+function rewriteFontReference(cssBytes: Uint8Array, fontFileName: string): Uint8Array {
+  const css = new TextDecoder().decode(cssBytes);
+  if (!css.includes(FONT_CSS_REF)) return cssBytes;
+  return new TextEncoder().encode(css.split(FONT_CSS_REF).join(fontFileName));
+}
+
 async function buildOnce(): Promise<boolean> {
+  const fontAsset = await buildFontAsset();
+
   const result = await Bun.build({
     entrypoints: [ENTRY],
     target: "browser",
@@ -45,6 +85,16 @@ async function buildOnce(): Promise<boolean> {
     jsx: {
       runtime: "automatic",
       importSource: "react",
+    },
+    // Keep the CSS font url as a relative path instead of inlining the woff2
+    // as base64; we emit and rewrite it ourselves after the build (D3).
+    external: ["*.woff2"],
+    // Fold `process.env.NODE_ENV` so React/ReactDOM resolve to their
+    // production builds. Bun's `development` resolution condition (kept for
+    // `@ts-ha/shared` source) otherwise drags in the dev runtime, which alone
+    // costs well over the first-paint budget.
+    define: {
+      "process.env.NODE_ENV": JSON.stringify("production"),
     },
     // Resolve `@ts-ha/shared` to its TypeScript source rather than a
     // not-yet-built `dist`, so the asset build is order-free (design.md D6).
@@ -65,11 +115,14 @@ async function buildOnce(): Promise<boolean> {
   for (const artifact of result.outputs) {
     if (artifact.kind === "sourcemap") continue;
 
-    const rawBytes = new Uint8Array(await artifact.arrayBuffer());
-    const gzipBytes = Bun.gzipSync(rawBytes);
-
     // artifact.path looks like "./index-<hash>.js" or "./chunk-<hash>.js".
     const fileName = artifact.path.replace(/^\.\//, "").replace(/^\.\/+/, "");
+
+    let rawBytes = new Uint8Array(await artifact.arrayBuffer());
+    if (fontAsset && fileName.endsWith(".css")) {
+      rawBytes = rewriteFontReference(rawBytes, fontAsset.fileName);
+    }
+    const gzipBytes = Bun.gzipSync(rawBytes);
 
     assets.push({
       fileName,
@@ -82,6 +135,8 @@ async function buildOnce(): Promise<boolean> {
       firstPaint: artifact.kind !== "chunk",
     });
   }
+
+  if (fontAsset) assets.push(fontAsset);
 
   if (assets.filter((a) => a.contentType === "application/javascript").length === 0) {
     console.error("[build-web-ui] No JS output produced.");
@@ -98,6 +153,7 @@ export const ASSETS: readonly BuiltAsset[] = ${JSON.stringify(assets, null, 2)};
 
   const jsAssets = assets.filter((a) => a.contentType === "application/javascript");
   const cssAssets = assets.filter((a) => a.contentType === "text/css");
+  const fontAssets = assets.filter((a) => a.contentType.startsWith("font/"));
   const rawTotalKb = (
     assets.reduce((sum, a) => sum + Buffer.from(a.rawBase64, "base64").length, 0) / 1024
   ).toFixed(1);
@@ -105,8 +161,8 @@ export const ASSETS: readonly BuiltAsset[] = ${JSON.stringify(assets, null, 2)};
     assets.reduce((sum, a) => sum + Buffer.from(a.gzipBase64, "base64").length, 0) / 1024
   ).toFixed(1);
   console.log(
-    `[build-web-ui] Done. ${jsAssets.length} JS, ${cssAssets.length} CSS asset(s). ` +
-      `Raw: ${rawTotalKb} KB, gzip: ${gzipTotalKb} KB.`,
+    `[build-web-ui] Done. ${jsAssets.length} JS, ${cssAssets.length} CSS, ` +
+      `${fontAssets.length} font asset(s). Raw: ${rawTotalKb} KB, gzip: ${gzipTotalKb} KB.`,
   );
 
   return true;

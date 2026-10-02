@@ -1,19 +1,27 @@
 /**
  * Audience-split navigation, rendered through two components sharing one
- * information architecture (design.md D13; specs/web-ui "Navigation and
- * Information Architecture", "Responsive Navigation"; task 10.3, 10.4).
+ * information architecture (design.md D10, D13; specs/web-ui "Navigation and
+ * Information Architecture", "Responsive Navigation"; tasks 8.2, 8.7).
  *
- * A control group (rooms, unassigned, all devices) and an operator group
- * (automations, state, logs, HomeKit). The desktop sidebar shows both,
- * each collapsible. The mobile bottom bar shows only the control group's
- * fixed three slots — home, rooms, devices — so the phone's most-used
- * surface is never behind a disclosure; every operator view stays
- * reachable by URL, just not promoted into this bar (task 10.4).
+ * A control group (favorites, overview, rooms, unassigned, all devices) and
+ * an operator group (automations, state, logs, HomeKit, energy, weather). The
+ * desktop sidebar shows both, each collapsible; the Favorites sub-list only
+ * appears when the user has favorites, and is labelled distinctly from the
+ * rooms. The mobile bottom bar shows only the control group's fixed three
+ * slots — home, rooms, devices — so the phone's most-used surface is never
+ * behind a disclosure; every operator view stays reachable by URL, just not
+ * promoted into this bar (design.md D10, D13).
+ *
+ * Active-state matching follows a detail route back to its collection entry
+ * (`isUnder`), while a sibling static route such as `/devices/unassigned` is
+ * excluded from activating "All devices".
  */
 import { Badge, Group, NavLink, ScrollArea, Stack, Text, UnstyledButton } from "@mantine/core";
 import {
+  IconBolt,
   IconChevronDown,
   IconChevronRight,
+  IconCloud,
   IconDatabase,
   IconDeviceUnknown,
   IconDoorEnter,
@@ -22,31 +30,40 @@ import {
   IconLayoutDashboard,
   IconListDetails,
   IconRobot,
+  IconStar,
 } from "@tabler/icons-react";
+import type { ReactNode } from "react";
 import { useState } from "react";
 import { useDataStore } from "../lib/data-store.js";
 import {
   automationsPath,
-  dashboardPath,
+  type ControlView,
+  deviceDetailPath,
   devicesPath,
+  energyPath,
   homekitPath,
+  isOverviewView,
+  isUnder,
   logsPath,
+  MOBILE_NAV_ITEMS,
+  overviewPath,
   roomPath,
   roomsPath,
   statePath,
   unassignedDevicesPath,
+  weatherPath,
 } from "../lib/router.js";
 import { Link, useRouter } from "../lib/router-context.js";
 
-function isActive(pathname: string, target: string): boolean {
-  return pathname === target;
-}
-
 export function DesktopSidebar() {
-  const { rooms } = useDataStore();
+  const { rooms, favorites, devicesByQualifiedId } = useDataStore();
   const { basePath, pathname } = useRouter();
   const [homeOpen, setHomeOpen] = useState(true);
   const [engineOpen, setEngineOpen] = useState(true);
+
+  const favoriteDevices = favorites
+    .map((qualifiedId) => devicesByQualifiedId.get(qualifiedId))
+    .filter((device): device is NonNullable<typeof device> => device !== undefined);
 
   return (
     <ScrollArea h="100%">
@@ -54,11 +71,38 @@ export function DesktopSidebar() {
         <GroupHeader label="Home" open={homeOpen} onToggle={() => setHomeOpen((o) => !o)} />
         {homeOpen && (
           <Stack gap={2}>
-            <Link to={dashboardPath(basePath)} style={{ textDecoration: "none" }}>
+            {favoriteDevices.length > 0 && (
+              // A separate label keeps the favorites list distinct from the
+              // rooms beneath it (specs/web-ui "Favorites are a navigable
+              // group").
+              <Stack gap={2} mb={4}>
+                <Group gap={6} px={6} py={2}>
+                  <IconStar size={12} />
+                  <Text size="xs" fw={700} tt="uppercase" c="dimmed">
+                    Favorites
+                  </Text>
+                </Group>
+                {favoriteDevices.map((device) => {
+                  const path = deviceDetailPath(basePath, device.qualifiedId);
+                  return (
+                    <Link key={device.qualifiedId} to={path} style={{ textDecoration: "none" }}>
+                      <NavLink
+                        label={device.displayName}
+                        leftSection={<IconStar size={16} />}
+                        active={isUnder(pathname, path)}
+                        component="div"
+                      />
+                    </Link>
+                  );
+                })}
+              </Stack>
+            )}
+
+            <Link to={overviewPath(basePath)} style={{ textDecoration: "none" }}>
               <NavLink
-                label="Dashboard"
+                label="Overview"
                 leftSection={<IconLayoutDashboard size={16} />}
-                active={isActive(pathname, dashboardPath(basePath))}
+                active={isOverviewView(pathname, basePath)}
                 component="div"
               />
             </Link>
@@ -79,7 +123,7 @@ export function DesktopSidebar() {
                         {count}
                       </Badge>
                     }
-                    active={isActive(pathname, path)}
+                    active={isUnder(pathname, path)}
                     component="div"
                   />
                 </Link>
@@ -89,7 +133,7 @@ export function DesktopSidebar() {
               <NavLink
                 label="Unassigned"
                 leftSection={<IconDeviceUnknown size={16} />}
-                active={isActive(pathname, unassignedDevicesPath(basePath))}
+                active={isUnder(pathname, unassignedDevicesPath(basePath))}
                 component="div"
               />
             </Link>
@@ -97,7 +141,12 @@ export function DesktopSidebar() {
               <NavLink
                 label="All devices"
                 leftSection={<IconListDetails size={16} />}
-                active={isActive(pathname, devicesPath(basePath))}
+                // `/devices/unassigned` has its own entry and must not light
+                // this one up; a device detail route keeps it active.
+                active={
+                  isUnder(pathname, devicesPath(basePath)) &&
+                  !isUnder(pathname, unassignedDevicesPath(basePath))
+                }
                 component="div"
               />
             </Link>
@@ -111,7 +160,7 @@ export function DesktopSidebar() {
               <NavLink
                 label="Automations"
                 leftSection={<IconRobot size={16} />}
-                active={isActive(pathname, automationsPath(basePath))}
+                active={isUnder(pathname, automationsPath(basePath))}
                 component="div"
               />
             </Link>
@@ -119,7 +168,7 @@ export function DesktopSidebar() {
               <NavLink
                 label="State"
                 leftSection={<IconDatabase size={16} />}
-                active={isActive(pathname, statePath(basePath))}
+                active={isUnder(pathname, statePath(basePath))}
                 component="div"
               />
             </Link>
@@ -127,7 +176,7 @@ export function DesktopSidebar() {
               <NavLink
                 label="Logs"
                 leftSection={<IconFileText size={16} />}
-                active={isActive(pathname, logsPath(basePath))}
+                active={isUnder(pathname, logsPath(basePath))}
                 component="div"
               />
             </Link>
@@ -135,7 +184,23 @@ export function DesktopSidebar() {
               <NavLink
                 label="HomeKit"
                 leftSection={<IconHome size={16} />}
-                active={isActive(pathname, homekitPath(basePath))}
+                active={isUnder(pathname, homekitPath(basePath))}
+                component="div"
+              />
+            </Link>
+            <Link to={energyPath(basePath)} style={{ textDecoration: "none" }}>
+              <NavLink
+                label="Energy"
+                leftSection={<IconBolt size={16} />}
+                active={isUnder(pathname, energyPath(basePath))}
+                component="div"
+              />
+            </Link>
+            <Link to={weatherPath(basePath)} style={{ textDecoration: "none" }}>
+              <NavLink
+                label="Weather"
+                leftSection={<IconCloud size={16} />}
+                active={isUnder(pathname, weatherPath(basePath))}
                 component="div"
               />
             </Link>
@@ -167,38 +232,44 @@ function GroupHeader({
   );
 }
 
+const MOBILE_ICONS: Record<ControlView, ReactNode> = {
+  overview: <IconLayoutDashboard size={20} />,
+  rooms: <IconDoorEnter size={20} />,
+  devices: <IconListDetails size={20} />,
+};
+
 /**
- * Three fixed slots, control-group only — the phone is a control surface,
- * not a debugger (design.md D13). Operator views remain reachable by URL.
+ * Three fixed slots, control-group only (design.md D10, D13) — the items are
+ * pure data in `router.ts` (`MOBILE_NAV_ITEMS`) so a test can assert no
+ * operator view is ever promoted here. Operator views remain reachable by URL.
  */
 export function MobileBottomBar() {
   const { basePath, pathname } = useRouter();
 
-  const items = [
-    { label: "Home", icon: <IconLayoutDashboard size={20} />, path: dashboardPath(basePath) },
-    { label: "Rooms", icon: <IconDoorEnter size={20} />, path: roomsPath(basePath) },
-    { label: "Devices", icon: <IconListDetails size={20} />, path: devicesPath(basePath) },
-  ];
-
   return (
     <Group h="100%" grow gap={0}>
-      {items.map((item) => (
-        <Link
-          key={item.path}
-          to={item.path}
-          style={{
-            textDecoration: "none",
-            color: isActive(pathname, item.path)
-              ? "var(--mantine-color-blue-6)"
-              : "var(--mantine-color-dimmed)",
-          }}
-        >
-          <Stack align="center" gap={2} py={6}>
-            {item.icon}
-            <Text size="xs">{item.label}</Text>
-          </Stack>
-        </Link>
-      ))}
+      {MOBILE_NAV_ITEMS.map((item) => {
+        const path = item.buildPath(basePath);
+        // The overview is active on both its base path and the `/overview`
+        // alias; rooms/devices keep their detail routes highlighted.
+        const active =
+          item.view === "overview" ? isOverviewView(pathname, basePath) : isUnder(pathname, path);
+        return (
+          <Link
+            key={item.view}
+            to={path}
+            style={{
+              textDecoration: "none",
+              color: active ? "var(--mantine-primary-color-filled)" : "var(--mantine-color-dimmed)",
+            }}
+          >
+            <Stack align="center" gap={2} py={6}>
+              {MOBILE_ICONS[item.view]}
+              <Text size="xs">{item.label}</Text>
+            </Stack>
+          </Link>
+        );
+      })}
     </Group>
   );
 }

@@ -94,7 +94,32 @@ function find(
   return flat.find(predicate);
 }
 
-const ON_OFF_PROPERTIES = new Set(["on", "state"]);
+/**
+ * The source-neutral boolean on/off property families: the canonical `on`
+ * authored by Shelly, Nanoleaf, and state toggles, plus Zigbee2MQTT's `state`.
+ * Shared with the room command so a device is treated as actuatable on exactly
+ * the same properties this ranking reads.
+ */
+export const ON_OFF_PROPERTIES: ReadonlySet<string> = new Set(["on", "state"]);
+
+/** The access direction a boolean on/off capability must declare to be selected. */
+export type OnOffAccess = "readable" | "writable";
+
+/**
+ * Picks the preferred boolean on/off capability from an already-flattened
+ * schema: the canonical `on` family wins over Zigbee2MQTT's `state` regardless
+ * of declaration order, so a device declaring both resolves to the same
+ * property for tile ranking and room commands alike.
+ */
+export function pickOnOffCapability(
+  flat: FlatCapability[],
+  access: OnOffAccess,
+): FlatCapability | undefined {
+  const matches = (c: FlatCapability) =>
+    ON_OFF_PROPERTIES.has(c.property) && c.valueType === "boolean" && c.access[access] === true;
+  return flat.find((c) => c.property === "on" && matches(c)) ?? flat.find(matches);
+}
+
 const SETPOINT_PROPERTIES = new Set([
   "occupied_heating_setpoint",
   "current_heating_setpoint",
@@ -124,10 +149,7 @@ export interface PrimaryAction {
 export function selectPrimaryAction(capabilities: Capability[]): PrimaryAction | null {
   const flat = flattenCapabilities(capabilities);
 
-  const onOff = find(
-    flat,
-    (c) => ON_OFF_PROPERTIES.has(c.property) && c.valueType === "boolean" && c.access.writable,
-  );
+  const onOff = pickOnOffCapability(flat, "writable");
   if (onOff) return { kind: "on_off", capability: onOff };
 
   const position = find(

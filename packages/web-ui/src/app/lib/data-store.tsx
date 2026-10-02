@@ -45,11 +45,13 @@ import {
   hideDevice as hideDeviceRequest,
   openEventStream,
   sendDeviceCommand,
+  setStateKey,
   unhideDevice as unhideDeviceRequest,
 } from "../api.js";
 import type {
   Automation,
   DeviceDescriptor,
+  DeviceObservation,
   HomekitStatus,
   LogEntry,
   NormalizedStreamEvent,
@@ -60,7 +62,14 @@ import type {
   TransportState,
 } from "../types.js";
 import { normalizeStreamEvent } from "../utils/normalize.js";
-import { CommandCoalescer } from "./command-coalescing.js";
+import { CommandCoalescer, coalescingKey } from "./command-coalescing.js";
+import {
+  FAVORITES_STATE_KEY,
+  favoritesFromState,
+  isFavorite as isFavoriteInList,
+  toggleFavorite as toggleFavoriteInList,
+} from "./favorites.js";
+import { computeRevertDeadlineMs, POLLED_DEFAULT_DEADLINE_MS } from "./revert-deadline.js";
 
 /** One coalesced device-property command request (design.md D31). */
 export interface DeviceCommandRequest {
@@ -70,6 +79,26 @@ export interface DeviceCommandRequest {
 }
 
 export type DeviceCommandCoalescer = CommandCoalescer<DeviceCommandRequest, void>;
+
+/**
+ * One store-level optimistic property override (design.md D5; task 10.2).
+ * Unlike the component-local override in {@link useOptimisticDeviceProperty},
+ * this is keyed in the shared store so a room batch command can command every
+ * member at once and have every mounted tile reflect it.
+ */
+export interface OptimisticOverride {
+  value: unknown;
+  token: symbol;
+}
+
+/**
+ * The pending revert deadline for one override key, tagged with the token that
+ * owns it so a stale revert cannot cancel a superseding override's timer.
+ */
+interface OverrideTimer {
+  token: symbol;
+  timer: ReturnType<typeof setTimeout>;
+}
 
 /** How many log entries the in-memory ring buffer retains (mirrors the server's own LogBuffer default order of magnitude). */
 const LOG_BUFFER_CAPACITY = 500;
@@ -88,6 +117,17 @@ interface DataStoreValue {
   logs: LogEntry[];
   homekit: HomekitStatus | null;
   transport: TransportState;
+  /** The user's favorites, derived from the ordinary state key (design.md D9). */
+  favorites: string[];
+  /** Whether `qualifiedId` is currently favorited. */
+  isFavorite: (qualifiedId: string) => boolean;
+  /**
+   * Toggles a device's favorite mark: reflected locally immediately, then
+   * written to the ordinary state key. Reverted if the request fails;
+   * otherwise reconciled by the `state` event the server broadcasts, the
+   * same way another client's change already updates this one (design.md D9).
+   */
+  toggleFavorite: (qualifiedId: string) => Promise<void>;
   /** Re-fetches the full snapshot on explicit user request. */
   refresh: () => Promise<void>;
   /** Subscribe to every raw stream event — used by detail views that need one specific category (e.g. an automation's own executions). */
@@ -109,6 +149,33 @@ interface DataStoreValue {
    * layer regardless of what the UI is doing.
    */
   commandCoalescer: DeviceCommandCoalescer;
+  /**
+   * Store-level optimistic overrides, keyed by `coalescingKey(qualifiedId,
+   * property)`, so a room batch command's per-member effect is visible in
+   * every mounted control — not only inside the view that issued it
+   * (design.md D5; task 10.2).
+   */
+  optimisticOverrides: Map<string, OptimisticOverride>;
+  /**
+   * Applies an optimistic value for one device property, returning a token
+   * identifying this application. The override is reflected by
+   * {@link useOptimisticDeviceProperty} and is cleared when a matching
+   * `device_state` event confirms it, or after a revert deadline derived from
+   * `observation` (falling back to the polled default). A later application
+   * for the same key supersedes an earlier one.
+   */
+  applyOptimisticOverride: (
+    qualifiedId: string,
+    property: string,
+    value: unknown,
+    observation?: DeviceObservation,
+  ) => symbol;
+  /**
+   * Clears an optimistic override. When `token` is omitted the override is
+   * cleared unconditionally; when given, a superseding override is left
+   * untouched (task 10.2).
+   */
+  revertOptimisticOverride: (qualifiedId: string, property: string, token?: symbol) => void;
 }
 
 const DataStoreContext = createContext<DataStoreValue | null>(null);
@@ -138,6 +205,106 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
     );
   }
   const commandCoalescer = commandCoalescerRef.current;
+
+  // Store-level optimistic overrides (task 10.2). A room batch command is a
+  // single request whose effect is nevertheless per member, so the overrides
+  // live in the shared store keyed by `qualifiedId:property` — every mounted
+  // tile, wherever it is rendered, reads the same override. The revert
+  // deadline uses the same pure rule as single-device optimistic commands.
+  const [optimisticOverrides, setOptimisticOverrides] = useState<Map<string, OptimisticOverride>>(
+    () => new Map(),
+  );
+  // Timer bookkeeping mirrors the state map's token guard: a key stores the
+  // token that owns its pending revert timer, so a stale token's revert can
+  // never cancel a newer override's deadline while leaving that newer override
+  // in state. A React store is not exercisable without a DOM harness, so this
+  // invariant is enforced structurally here and covered only by review.
+  const overrideTimersRef = useRef<Map<string, OverrideTimer>>(new Map());
+
+  const clearOverride = useCallback((key: string, token?: symbol) => {
+    const entry = overrideTimersRef.current.get(key);
+    if (entry && (token === undefined || entry.token === token)) {
+      clearTimeout(entry.timer);
+      overrideTimersRef.current.delete(key);
+    }
+    setOptimisticOverrides((prev) => {
+      const current = prev.get(key);
+      if (!current) return prev;
+      if (token !== undefined && current.token !== token) return prev;
+      const next = new Map(prev);
+      next.delete(key);
+      return next;
+    });
+  }, []);
+
+  const applyOptimisticOverride = useCallback(
+    (
+      qualifiedId: string,
+      property: string,
+      value: unknown,
+      observation?: DeviceObservation,
+    ): symbol => {
+      const key = coalescingKey(qualifiedId, property);
+      const token = Symbol(key);
+
+      const existing = overrideTimersRef.current.get(key);
+      if (existing) clearTimeout(existing.timer);
+
+      setOptimisticOverrides((prev) => {
+        const next = new Map(prev);
+        next.set(key, { value, token });
+        return next;
+      });
+
+      const deadlineMs = observation
+        ? computeRevertDeadlineMs(observation)
+        : POLLED_DEFAULT_DEADLINE_MS;
+      const timer = setTimeout(() => {
+        const entry = overrideTimersRef.current.get(key);
+        if (entry?.token === token) overrideTimersRef.current.delete(key);
+        // Only the latest application for this key may revert itself; a
+        // superseding application owns the key now (task 10.2).
+        setOptimisticOverrides((prev) => {
+          const current = prev.get(key);
+          if (!current || current.token !== token) return prev;
+          const next = new Map(prev);
+          next.delete(key);
+          return next;
+        });
+      }, deadlineMs);
+      overrideTimersRef.current.set(key, { token, timer });
+
+      return token;
+    },
+    [],
+  );
+
+  const revertOptimisticOverride = useCallback(
+    (qualifiedId: string, property: string, token?: symbol) => {
+      clearOverride(coalescingKey(qualifiedId, property), token);
+    },
+    [clearOverride],
+  );
+
+  // A device_state event that carries a property is the authoritative
+  // confirmation/rejection of any optimistic value for it: clear the store
+  // override so the reported state wins (design.md D5; task 10.2).
+  const clearConfirmedOverrides = useCallback(
+    (qualifiedId: string, properties: Record<string, unknown>) => {
+      for (const property of Object.keys(properties)) {
+        clearOverride(coalescingKey(qualifiedId, property));
+      }
+    },
+    [clearOverride],
+  );
+
+  useEffect(() => {
+    const timers = overrideTimersRef.current;
+    return () => {
+      for (const entry of timers.values()) clearTimeout(entry.timer);
+      timers.clear();
+    };
+  }, []);
 
   const listenersRef = useRef<Set<(event: NormalizedStreamEvent) => void>>(new Set());
   const subscribe = useCallback((listener: (event: NormalizedStreamEvent) => void) => {
@@ -211,6 +378,34 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
     [setDeviceHidden],
   );
 
+  const favorites = useMemo(() => favoritesFromState(state), [state]);
+
+  const toggleFavorite = useCallback(
+    async (qualifiedId: string) => {
+      const previous = favorites;
+      const next = toggleFavoriteInList(favorites, qualifiedId);
+      // The whole list is read-modify-written over one ordinary state key, so
+      // two clients toggling different devices within this write window
+      // last-write-wins (design.md D9 accepts favorites as ordinary state;
+      // the key is small, and a per-device schema would be a new subsystem).
+      // Optimistic: reflect the toggle before the request lands. The
+      // functional update preserves any other key updated concurrently.
+      setState((prev) => ({ ...prev, [FAVORITES_STATE_KEY]: next }));
+      try {
+        await setStateKey(FAVORITES_STATE_KEY, next);
+      } catch (err) {
+        setState((prev) => ({ ...prev, [FAVORITES_STATE_KEY]: previous }));
+        throw err;
+      }
+    },
+    [favorites],
+  );
+
+  const isFavorite = useCallback(
+    (qualifiedId: string) => isFavoriteInList(favorites, qualifiedId),
+    [favorites],
+  );
+
   // Initial snapshot, then open the stream. Re-runs (via the effect below)
   // are not needed after this — reconnection triggers its own refresh.
   useEffect(() => {
@@ -276,6 +471,7 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
             });
             return next;
           });
+          clearConfirmedOverrides(event.qualifiedId, event.properties);
           break;
         }
         case "device_reachability": {
@@ -451,9 +647,15 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
       logs,
       homekit,
       transport,
+      favorites,
+      isFavorite,
+      toggleFavorite,
       refresh,
       subscribe,
       commandCoalescer,
+      optimisticOverrides,
+      applyOptimisticOverride,
+      revertOptimisticOverride,
       hideDevice,
       unhideDevice,
     }),
@@ -468,9 +670,15 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
       logs,
       homekit,
       transport,
+      favorites,
+      isFavorite,
+      toggleFavorite,
       refresh,
       subscribe,
       commandCoalescer,
+      optimisticOverrides,
+      applyOptimisticOverride,
+      revertOptimisticOverride,
       hideDevice,
       unhideDevice,
     ],

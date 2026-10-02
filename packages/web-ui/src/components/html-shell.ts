@@ -47,7 +47,7 @@ export function htmlShell({ basePath, hasAuth: _hasAuth }: HtmlShellOptions): st
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="ts-ha" />
-  <meta name="theme-color" content="#228be6" />
+  <meta name="theme-color" content="#38BDF8" />
   <link rel="manifest" href="${esc(manifestPath)}" />
   <link rel="apple-touch-icon" href="${esc(iconPath)}" />
   <link rel="icon" type="image/svg+xml" href="${esc(iconPath)}" />
@@ -93,8 +93,8 @@ export function loginShell({ basePath, error }: { basePath: string; error?: stri
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       font-size: 14px;
-      background: light-dark(#f8f9fa, #1a1b1e);
-      color: light-dark(#212529, #c1c2c5);
+      background: light-dark(#F1F5F9, #0B1120);
+      color: light-dark(#0F172A, #F8FAFC);
       min-height: 100vh;
       display: flex;
       align-items: center;
@@ -103,38 +103,38 @@ export function loginShell({ basePath, error }: { basePath: string; error?: stri
       color-scheme: light dark;
     }
     .card {
-      background: light-dark(#fff, #25262b);
-      border: 1px solid light-dark(#dee2e6, #373a40);
-      border-radius: 8px;
+      background: light-dark(#FFFFFF, #151E2E);
+      border: 1px solid light-dark(#E2E8F0, rgba(255,255,255,.08));
+      border-radius: 14px;
       padding: 32px;
       width: 100%;
       max-width: 360px;
       display: flex;
       flex-direction: column;
       gap: 20px;
-      box-shadow: 0 4px 24px rgba(0,0,0,.1);
+      box-shadow: 0 8px 24px rgba(0,0,0,.32);
     }
-    h1 { font-size: 20px; font-weight: 700; color: #228be6; text-align: center; }
-    p { font-size: 12px; color: light-dark(#868e96, #909296); text-align: center; margin-top: -12px; }
+    h1 { font-size: 20px; font-weight: 700; color: #38BDF8; text-align: center; }
+    p { font-size: 12px; color: light-dark(#64748B, #94A3B8); text-align: center; margin-top: -12px; }
     label { font-size: 12px; font-weight: 600; display: block; margin-bottom: 5px; }
     input[type=password] {
       width: 100%; padding: 8px 12px;
-      border: 1px solid light-dark(#ced4da, #373a40);
-      border-radius: 4px;
-      background: light-dark(#fff, #1a1b1e);
+      border: 1px solid light-dark(#E2E8F0, rgba(255,255,255,.08));
+      border-radius: 10px;
+      background: light-dark(#FFFFFF, #1E2940);
       color: inherit;
       font-size: 14px;
       outline: none;
     }
-    input[type=password]:focus { border-color: #228be6; }
+    input[type=password]:focus { border-color: #38BDF8; }
     button {
       width: 100%; padding: 10px;
-      background: #228be6; color: #fff;
-      border: none; border-radius: 4px;
+      background: #0284C7; color: #fff;
+      border: none; border-radius: 10px;
       font-size: 14px; font-weight: 600;
       cursor: pointer;
     }
-    button:hover { background: #1c7ed6; }
+    button:hover { background: #0369A1; }
   </style>
 </head>
 <body>

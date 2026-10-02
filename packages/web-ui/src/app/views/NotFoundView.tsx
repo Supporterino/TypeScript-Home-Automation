@@ -1,5 +1,5 @@
 import { Stack, Text, Title } from "@mantine/core";
-import { dashboardPath } from "../lib/router.js";
+import { overviewPath } from "../lib/router.js";
 import { Link, useRouter } from "../lib/router-context.js";
 
 export function NotFoundView() {
@@ -10,7 +10,7 @@ export function NotFoundView() {
       <Text c="dimmed" size="sm">
         Nothing is registered at this path.
       </Text>
-      <Link to={dashboardPath(basePath)}>Back to dashboard</Link>
+      <Link to={overviewPath(basePath)}>Back to overview</Link>
     </Stack>
   );
 }

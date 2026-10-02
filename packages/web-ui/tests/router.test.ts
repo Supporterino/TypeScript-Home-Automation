@@ -2,18 +2,23 @@ import { describe, expect, it } from "bun:test";
 import {
   automationDetailPath,
   automationsPath,
-  dashboardPath,
   deviceDetailPath,
   devicesPath,
+  energyPath,
   homekitPath,
+  isOverviewView,
+  isUnder,
   logsPath,
+  MOBILE_NAV_ITEMS,
   matchRoute,
+  overviewPath,
   resolveRoute,
   roomPath,
   roomsPath,
   statePath,
   stripBasePath,
   unassignedDevicesPath,
+  weatherPath,
 } from "../src/app/lib/router.js";
 
 describe("stripBasePath", () => {
@@ -39,8 +44,12 @@ describe("stripBasePath", () => {
 });
 
 describe("matchRoute", () => {
-  it("matches the dashboard at the root", () => {
-    expect(matchRoute("/")).toEqual({ view: "dashboard", params: {} });
+  it("matches the overview at the root", () => {
+    expect(matchRoute("/")).toEqual({ view: "overview", params: {} });
+  });
+
+  it("matches the overview alias", () => {
+    expect(matchRoute("/overview")).toEqual({ view: "overview", params: {} });
   });
 
   it("matches the rooms index", () => {
@@ -89,6 +98,11 @@ describe("matchRoute", () => {
     expect(matchRoute("/homekit").view).toBe("homekit");
   });
 
+  it("matches the energy and weather operator views", () => {
+    expect(matchRoute("/energy")).toEqual({ view: "energy", params: {} });
+    expect(matchRoute("/weather")).toEqual({ view: "weather", params: {} });
+  });
+
   it("resolves an unknown top-level segment to not-found", () => {
     expect(matchRoute("/nonexistent").view).toBe("not-found");
   });
@@ -98,7 +112,7 @@ describe("matchRoute", () => {
   });
 
   it("resolves the empty string the same as the root", () => {
-    expect(matchRoute("").view).toBe("dashboard");
+    expect(matchRoute("").view).toBe("overview");
   });
 });
 
@@ -116,9 +130,65 @@ describe("resolveRoute", () => {
   });
 });
 
+describe("isUnder", () => {
+  it("matches the collection path itself", () => {
+    expect(isUnder("/devices", "/devices")).toBe(true);
+  });
+
+  it("matches a detail route beneath the collection", () => {
+    expect(isUnder("/devices/zigbee:0x1", "/devices")).toBe(true);
+  });
+
+  it("does not match a sibling path that shares a prefix without a separator", () => {
+    expect(isUnder("/devices-x", "/devices")).toBe(false);
+  });
+
+  it("does not match an unrelated path", () => {
+    expect(isUnder("/rooms", "/devices")).toBe(false);
+  });
+
+  it("keeps a device detail active for its collection but NOT the unassigned sibling", () => {
+    const collection = devicesPath("/status");
+    const unassigned = unassignedDevicesPath("/status");
+    const detail = deviceDetailPath("/status", "zigbee:0x1");
+    expect(isUnder(detail, collection) && !isUnder(detail, unassigned)).toBe(true);
+    expect(isUnder(unassigned, collection) && !isUnder(unassigned, unassigned)).toBe(false);
+  });
+
+  it("keeps an automation detail active for its collection", () => {
+    const collection = automationsPath("/status");
+    const detail = automationDetailPath("/status", "motion-light");
+    expect(isUnder(detail, collection)).toBe(true);
+  });
+});
+
+describe("isOverviewView", () => {
+  it("is active on the mounted base path", () => {
+    expect(isOverviewView("/status", "/status")).toBe(true);
+  });
+
+  it("is active on the base path with a trailing slash", () => {
+    expect(isOverviewView("/status/", "/status")).toBe(true);
+  });
+
+  it("is active on the /overview alias", () => {
+    expect(isOverviewView("/status/overview", "/status")).toBe(true);
+  });
+
+  it("is active at the root mount and its alias", () => {
+    expect(isOverviewView("/", "/")).toBe(true);
+    expect(isOverviewView("/overview", "/")).toBe(true);
+  });
+
+  it("is not active on any other view", () => {
+    expect(isOverviewView("/status/rooms", "/status")).toBe(false);
+    expect(isOverviewView("/status/devices/unassigned", "/status")).toBe(false);
+  });
+});
+
 describe("path builders round-trip through matchRoute", () => {
-  it("dashboardPath", () => {
-    expect(resolveRoute(dashboardPath("/status"), "/status").view).toBe("dashboard");
+  it("overviewPath", () => {
+    expect(resolveRoute(overviewPath("/status"), "/status").view).toBe("overview");
   });
 
   it("roomsPath", () => {
@@ -157,9 +227,41 @@ describe("path builders round-trip through matchRoute", () => {
     expect(resolveRoute(homekitPath("/status"), "/status").view).toBe("homekit");
   });
 
+  it("energyPath and weatherPath", () => {
+    expect(resolveRoute(energyPath("/status"), "/status").view).toBe("energy");
+    expect(resolveRoute(weatherPath("/status"), "/status").view).toBe("weather");
+  });
+
   it("every builder produces a path beneath a root-mounted base path", () => {
-    expect(dashboardPath("/")).toBe("/");
+    expect(overviewPath("/")).toBe("/");
     expect(devicesPath("/")).toBe("/devices");
     expect(resolveRoute(devicesPath("/"), "/").view).toBe("devices");
+  });
+});
+
+describe("MOBILE_NAV_ITEMS", () => {
+  it("offers exactly the control views, in home/rooms/devices order", () => {
+    expect(MOBILE_NAV_ITEMS.map((item) => item.view)).toEqual(["overview", "rooms", "devices"]);
+  });
+
+  it("never promotes an operator view into the bottom bar", () => {
+    const views = new Set<string>(MOBILE_NAV_ITEMS.map((item) => item.view));
+    for (const operator of [
+      "automations",
+      "automation-detail",
+      "state",
+      "logs",
+      "homekit",
+      "energy",
+      "weather",
+    ]) {
+      expect(views.has(operator)).toBe(false);
+    }
+  });
+
+  it("resolves every item to a control view beneath the base path", () => {
+    for (const item of MOBILE_NAV_ITEMS) {
+      expect(resolveRoute(item.buildPath("/status"), "/status").view).toBe(item.view);
+    }
   });
 });

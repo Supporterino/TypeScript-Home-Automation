@@ -1,0 +1,201 @@
+/**
+ * Ambient Glass design tokens (MASTER.md).
+ *
+ * Dark is authoritative and lives on :root; light is a designed scheme that
+ * overrides the color tokens under Mantine's color-scheme attribute. Views
+ * consume these via `var(--token)` or the Mantine theme — never a literal hex.
+ *
+ * This file is imported from `index.tsx` after Mantine's own stylesheet so the
+ * token layer wins where the two define the same property.
+ */
+
+@font-face {
+  font-family: "Plus Jakarta Sans";
+  font-style: normal;
+  font-weight: 500 700;
+  font-display: swap;
+  src: url("../fonts/plus-jakarta-sans-latin.woff2") format("woff2");
+}
+
+:root {
+  color-scheme: dark;
+
+  /* Color — dark (authoritative) */
+  --bg: #0b1120;
+  --surface: #151e2e;
+  --surface-2: #1e2940;
+  --hairline: rgba(255, 255, 255, 0.08);
+  --text: #f8fafc;
+  --text-muted: #94a3b8;
+  --on: #22c55e;
+  --stale: #f59e0b;
+  --danger: #ef4444;
+  --info: #38bdf8;
+  --focus-ring: #f8fafc;
+
+  /* Glass (chrome only) */
+  --glass-surface: rgba(21, 30, 46, 0.72);
+  --glass-blur: 14px;
+
+  /* Elevation */
+  --e0: none;
+  --e1: 0 1px 2px rgba(0, 0, 0, 0.24);
+  --e2: 0 8px 24px rgba(0, 0, 0, 0.32);
+
+  /* Radius */
+  --radius-tile: 14px;
+  --radius-pill: 999px;
+  --radius-input: 10px;
+
+  /* Spacing rhythm */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  /* Typography */
+  --font-display: "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-body:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+
+  /* Room accents (assigned by stable hash of room id) */
+  --room-coral: #fb7185;
+  --room-amber: #fbbf24;
+  --room-teal: #2dd4bf;
+  --room-violet: #a78bfa;
+  --room-lime: #a3e635;
+  --room-sky: #38bdf8;
+
+  /* Motion */
+  --motion-enter-duration: 180ms;
+  --motion-enter-translate: 8px;
+  --motion-stagger: 40ms;
+  --motion-toggle-duration: 120ms;
+  --motion-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+[data-mantine-color-scheme="light"] {
+  color-scheme: light;
+
+  --bg: #f1f5f9;
+  --surface: #ffffff;
+  --surface-2: #f8fafc;
+  --hairline: #e2e8f0;
+  --text: #0f172a;
+  --text-muted: #64748b;
+  --on: #16a34a;
+  --stale: #d97706;
+  --danger: #dc2626;
+  --info: #0284c7;
+  --focus-ring: #0f172a;
+
+  --glass-surface: rgba(255, 255, 255, 0.72);
+}
+
+/* `html body` outranks Mantine's own `body` baseline rule. */
+html body {
+  background-color: var(--bg);
+  color: var(--text);
+}
+
+/* Chrome: the only surfaces allowed real translucency (design.md D2). */
+.ambient-glass {
+  background-color: var(--glass-surface);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
+  --app-shell-border-color: var(--hairline);
+}
+
+/* Elevation / hairline utilities. */
+.ambient-e0 {
+  box-shadow: var(--e0);
+}
+.ambient-e1 {
+  box-shadow: var(--e1);
+}
+.ambient-e2 {
+  box-shadow: var(--e2);
+}
+.ambient-hairline {
+  border: 1px solid var(--hairline);
+}
+
+/* ── Motion ─────────────────────────────────────────────────────────────── */
+
+@keyframes ambient-enter {
+  from {
+    opacity: 0;
+    transform: translateY(var(--motion-enter-translate));
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.ambient-enter {
+  animation: ambient-enter var(--motion-enter-duration) var(--motion-ease) both;
+}
+
+.ambient-enter-stagger > * {
+  animation: ambient-enter var(--motion-enter-duration) var(--motion-ease) both;
+}
+.ambient-enter-stagger > *:nth-child(1) {
+  animation-delay: 0ms;
+}
+.ambient-enter-stagger > *:nth-child(2) {
+  animation-delay: calc(var(--motion-stagger) * 1);
+}
+.ambient-enter-stagger > *:nth-child(3) {
+  animation-delay: calc(var(--motion-stagger) * 2);
+}
+.ambient-enter-stagger > *:nth-child(4) {
+  animation-delay: calc(var(--motion-stagger) * 3);
+}
+.ambient-enter-stagger > *:nth-child(5) {
+  animation-delay: calc(var(--motion-stagger) * 4);
+}
+.ambient-enter-stagger > *:nth-child(6) {
+  animation-delay: calc(var(--motion-stagger) * 5);
+}
+.ambient-enter-stagger > *:nth-child(7) {
+  animation-delay: calc(var(--motion-stagger) * 6);
+}
+.ambient-enter-stagger > *:nth-child(8) {
+  animation-delay: calc(var(--motion-stagger) * 7);
+}
+.ambient-enter-stagger > *:nth-child(n + 9) {
+  animation-delay: calc(var(--motion-stagger) * 8);
+}
+
+/* Toggle/echo: color/opacity only — never changes layout bounds. */
+.ambient-toggle {
+  transition-property: color, background-color, border-color, opacity, fill, stroke;
+  transition-duration: var(--motion-toggle-duration);
+  transition-timing-function: var(--motion-ease);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ambient-enter,
+  .ambient-enter-stagger > * {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  .ambient-toggle {
+    transition-duration: 0.01ms !important;
+  }
+
+  /* Belt and braces: also neutralize Mantine's own transitions. */
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

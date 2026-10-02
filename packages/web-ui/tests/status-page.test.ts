@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { Hono } from "hono";
 import pino from "pino";
+import { AMBIENT_COLORS } from "../src/app/tokens.js";
 import { createWebUiService } from "../src/index.js";
 
 // The web UI is now a service plugin mounted on a bare Hono app. These route
@@ -97,6 +98,7 @@ describe("WebUiService — no auth", () => {
 describe("WebUiService — view segment allowlist", () => {
   describe("deep links serve the shell", () => {
     it.each([
+      "/status/overview",
       "/status/rooms",
       "/status/rooms/some-room-id",
       "/status/devices",
@@ -106,6 +108,8 @@ describe("WebUiService — view segment allowlist", () => {
       "/status/state",
       "/status/logs",
       "/status/homekit",
+      "/status/energy",
+      "/status/weather",
     ])("GET %s serves the dashboard shell", async (path) => {
       const app = await makeApp();
       const res = await req(app, path);
@@ -171,6 +175,57 @@ describe("WebUiService — view segment allowlist", () => {
       const res = await req(app, "/webhook/rooms");
       expect(res.headers.get("content-type")).not.toContain("text/html");
     });
+  });
+});
+
+// ── PWA manifest and login retint (design.md D13; task 12.1) ──────────────
+
+describe("WebUiService — Ambient Glass brand retint", () => {
+  it("keeps the ts-ha brand name while retinting the manifest to Ambient Glass", async () => {
+    const app = await makeApp();
+    const res = await req(app, "/status/manifest.json");
+    const manifest = (await res.json()) as {
+      name: string;
+      short_name: string;
+      theme_color: string;
+      background_color: string;
+    };
+    expect(manifest.name).toBe("ts-ha");
+    expect(manifest.short_name).toBe("ts-ha");
+    // Drift guard: the theme color is the dark-scheme interactive accent
+    // token, and the background is the dark-scheme `--bg` (MASTER.md).
+    expect(manifest.theme_color.toLowerCase()).toBe(AMBIENT_COLORS[4].toLowerCase());
+    expect(manifest.background_color.toLowerCase()).toBe("#0b1120");
+  });
+
+  it("still serves the icon the manifest references", async () => {
+    const app = await makeApp();
+    const manifestRes = await req(app, "/status/manifest.json");
+    const manifest = (await manifestRes.json()) as { icons: { src: string }[] };
+    const firstIcon = manifest.icons[0];
+    expect(firstIcon).toBeDefined();
+    const icon = await req(app, firstIcon?.src ?? "/status/icon.svg");
+    expect(icon.status).toBe(200);
+    expect(icon.headers.get("content-type")).toContain("image/svg+xml");
+  });
+
+  it("retints the login shell accent away from Mantine's default blue", async () => {
+    const app = await makeApp({ token: "secret" });
+    const res = await req(app, "/status/login");
+    const html = await res.text();
+    const lower = html.toLowerCase();
+    expect(lower).not.toContain("#228be6");
+    expect(lower).toContain("#38bdf8");
+  });
+
+  it("generates the app icon with the Ambient Glass accent, not Mantine blue", async () => {
+    const app = await makeApp();
+    const res = await req(app, "/status/icon.svg");
+    expect(res.status).toBe(200);
+    const svg = await res.text();
+    // Drift guard: the generated icon must match the manifest theme color.
+    expect(svg.toLowerCase()).not.toContain("#228be6");
+    expect(svg.toLowerCase()).toContain("#38bdf8");
   });
 });
 

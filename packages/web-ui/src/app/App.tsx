@@ -23,8 +23,8 @@ import { DesktopSidebar, MobileBottomBar } from "./components/Nav.js";
 import { useAuth } from "./hooks/useAuth.js";
 import { DataStoreProvider, useDataStore } from "./lib/data-store.js";
 import { RouterProvider, useRouter } from "./lib/router-context.js";
-import { DashboardView } from "./views/DashboardView.js";
 import { NotFoundView } from "./views/NotFoundView.js";
+import { OverviewView } from "./views/OverviewView.js";
 
 const RoomsView = lazy(() =>
   import("./views/RoomsView.js").then((m) => ({ default: m.RoomsView })),
@@ -50,6 +50,12 @@ const StateView = lazy(() =>
 const LogsView = lazy(() => import("./views/LogsView.js").then((m) => ({ default: m.LogsView })));
 const HomekitView = lazy(() =>
   import("./views/HomekitView.js").then((m) => ({ default: m.HomekitView })),
+);
+const EnergyView = lazy(() =>
+  import("./views/EnergyView.js").then((m) => ({ default: m.EnergyView })),
+);
+const WeatherView = lazy(() =>
+  import("./views/WeatherView.js").then((m) => ({ default: m.WeatherView })),
 );
 
 // Configuration injected by the server into the <html> element's data attributes
@@ -106,8 +112,8 @@ function RouteOutlet() {
   const { route } = useRouter();
 
   switch (route.view) {
-    case "dashboard":
-      return <DashboardView />;
+    case "overview":
+      return <OverviewView />;
     case "rooms":
       return <RoomsView />;
     case "room":
@@ -128,6 +134,10 @@ function RouteOutlet() {
       return <LogsView />;
     case "homekit":
       return <HomekitView />;
+    case "energy":
+      return <EnergyView />;
+    case "weather":
+      return <WeatherView />;
     default:
       return <NotFoundView />;
   }
@@ -143,7 +153,7 @@ function Shell() {
       footer={{ height: FOOTER_HEIGHT }}
       padding="md"
     >
-      <AppShell.Header>
+      <AppShell.Header className="ambient-glass">
         <Group h="100%" px="md" justify="space-between" wrap="nowrap">
           <Group gap={6} wrap="nowrap">
             <IconBolt size={18} />
@@ -158,11 +168,11 @@ function Shell() {
         </Group>
       </AppShell.Header>
 
-      <AppShell.Navbar visibleFrom="sm">
+      <AppShell.Navbar className="ambient-glass" visibleFrom="sm">
         <DesktopSidebar />
       </AppShell.Navbar>
 
-      <AppShell.Footer hiddenFrom="sm">
+      <AppShell.Footer className="ambient-glass" hiddenFrom="sm">
         <MobileBottomBar />
       </AppShell.Footer>
 
@@ -171,12 +181,17 @@ function Shell() {
           Keyed by pathname: navigating to another view and back remounts
           the boundary, which is how a caught render failure recovers
           (design.md R16). The single structural point where routed view
-          content is swapped.
+          content is swapped. The `ambient-enter` wrapper replays the
+          non-essential enter transition on each navigation; it is
+          transform/opacity only, so it never shifts layout, and the token
+          stylesheet suppresses it under prefers-reduced-motion.
         */}
         <ErrorBoundary key={pathname}>
-          <Suspense fallback={<Loader size="sm" mt="xl" />}>
-            <RouteOutlet />
-          </Suspense>
+          <div className="ambient-enter">
+            <Suspense fallback={<Loader size="sm" mt="xl" />}>
+              <RouteOutlet />
+            </Suspense>
+          </div>
         </ErrorBoundary>
       </AppShell.Main>
     </AppShell>

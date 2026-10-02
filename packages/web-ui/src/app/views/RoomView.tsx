@@ -13,6 +13,7 @@
 import {
   ActionIcon,
   Alert,
+  Badge,
   Button,
   Group,
   Modal,
@@ -27,22 +28,37 @@ import {
 import {
   IconAlertTriangle,
   IconCheck,
+  IconInfoCircle,
   IconListCheck,
   IconPencil,
   IconPlus,
+  IconPower,
   IconTrash,
   IconX,
 } from "@tabler/icons-react";
 import { useState } from "react";
-import { assignDeviceRoom, deleteRoom, renameRoom, unassignDeviceRoom } from "../api.js";
+import {
+  assignDeviceRoom,
+  deleteRoom,
+  renameRoom,
+  sendRoomCommand,
+  unassignDeviceRoom,
+} from "../api.js";
 import { DeviceTile } from "../components/DeviceTile.js";
 import { isOperableDevice } from "../lib/capability-ranking.js";
 import { useDataStore } from "../lib/data-store.js";
+import {
+  classifyRoomCommandResults,
+  groupOnOffCommand,
+  mergeRoomCommandResults,
+  supportsOnOffCommand,
+} from "../lib/room-command.js";
 import { roomsPath } from "../lib/router.js";
 import { useRouter } from "../lib/router-context.js";
 
 export function RoomView({ roomId }: { roomId: string }) {
-  const { rooms, unassignedDevices, refresh } = useDataStore();
+  const { rooms, unassignedDevices, refresh, applyOptimisticOverride, revertOptimisticOverride } =
+    useDataStore();
   const { navigate, basePath } = useRouter();
   const room = rooms.find((r) => r.id === roomId);
 
@@ -61,6 +77,10 @@ export function RoomView({ roomId }: { roomId: string }) {
   // Session-scoped reveal (design.md D12): a viewing preference, never a
   // change to any device's hidden flag — resets on reload.
   const [showHidden, setShowHidden] = useState(false);
+  // Room-command outcome, surfaced per task 10.2/10.3.
+  const [commandBusy, setCommandBusy] = useState(false);
+  const [commandError, setCommandError] = useState<string | null>(null);
+  const [skippedCount, setSkippedCount] = useState(0);
 
   if (!room) {
     return (
@@ -117,6 +137,85 @@ export function RoomView({ roomId }: { roomId: string }) {
     }
   }
 
+  /**
+   * Issues the room batch command (design.md D5; specs/web-ui "Room-Level
+   * Command"; task 10.1). Members are grouped by the on/off property they
+   * declare — one request per distinct family, since the endpoint rejects a
+   * property a member does not declare, so a single `{ on }` body could never
+   * address a Zigbee `state` light. A homogeneous room still issues exactly
+   * one request. Every actuatable member is reflected optimistically through
+   * the store-level override layer — so every mounted tile updates, not just
+   * this view — using the value actually sent for its family, then the
+   * per-member responses are merged: `applied` is left to the stream or the
+   * override deadline, `failed` reverts and is surfaced as an error, and
+   * `skipped` is reported separately as an informational count (tasks 10.2,
+   * 10.3).
+   */
+  async function handleRoomCommand(on: boolean) {
+    const capableMembers = room!.members
+      .filter((m) => m.available && m.device)
+      // biome-ignore lint/style/noNonNullAssertion: filtered above
+      .map((m) => ({ qualifiedId: m.qualifiedId, capabilities: m.device!.capabilities }))
+      .filter((m) => supportsOnOffCommand(m.capabilities));
+
+    // Nothing to command: do not issue a pointless request.
+    if (capableMembers.length === 0) return;
+
+    setCommandBusy(true);
+    setCommandError(null);
+    setSkippedCount(0);
+
+    const groups = groupOnOffCommand(capableMembers, on);
+    // biome-ignore lint/style/noNonNullAssertion: members are filtered available above
+    const deviceByMember = new Map(
+      room!.members.filter((m) => m.available && m.device).map((m) => [m.qualifiedId, m.device!]),
+    );
+
+    const overrides: { qualifiedId: string; property: string; token: symbol }[] = [];
+    for (const group of groups) {
+      for (const member of group.members) {
+        const token = applyOptimisticOverride(
+          member.qualifiedId,
+          group.property,
+          group.value,
+          deviceByMember.get(member.qualifiedId)?.observation,
+        );
+        overrides.push({ qualifiedId: member.qualifiedId, property: group.property, token });
+      }
+    }
+    const overrideByMember = new Map(overrides.map((o) => [o.qualifiedId, o]));
+
+    try {
+      const responses = await Promise.all(
+        groups.map((group) => sendRoomCommand(room!.id, { [group.property]: group.value })),
+      );
+      const { skipped, failed } = classifyRoomCommandResults(mergeRoomCommandResults(responses));
+
+      for (const qualifiedId of failed) {
+        const override = overrideByMember.get(qualifiedId);
+        if (override) {
+          revertOptimisticOverride(qualifiedId, override.property, override.token);
+        }
+      }
+
+      if (skipped.length > 0) setSkippedCount(skipped.length);
+      if (failed.length > 0) {
+        setCommandError(
+          `${failed.length} member${failed.length === 1 ? "" : "s"} could not be commanded and reverted.`,
+        );
+      }
+    } catch (err) {
+      // The request itself failed: no member's outcome is known, so revert
+      // every optimistic override and surface the failure.
+      for (const { qualifiedId, property, token } of overrides) {
+        revertOptimisticOverride(qualifiedId, property, token);
+      }
+      setCommandError(err instanceof Error ? err.message : "Room command failed");
+    } finally {
+      setCommandBusy(false);
+    }
+  }
+
   const allAvailableMembers = room.members.filter((m) => m.available && m.device);
   const unavailableMembers = room.members.filter((m) => !m.available);
   // biome-ignore lint/style/noNonNullAssertion: filtered above
@@ -129,6 +228,10 @@ export function RoomView({ roomId }: { roomId: string }) {
     : shownMembers;
 
   const genuinelyEmpty = allAvailableMembers.length === 0 && unavailableMembers.length === 0;
+  const actuatableMembers = allAvailableMembers.filter((m) =>
+    // biome-ignore lint/style/noNonNullAssertion: filtered above
+    supportsOnOffCommand(m.device!.capabilities),
+  );
   const filteredEmpty =
     !genuinelyEmpty && availableMembers.length === 0 && unavailableMembers.length === 0;
   const allHiddenOnly =
@@ -179,6 +282,50 @@ export function RoomView({ roomId }: { roomId: string }) {
           Add
         </Button>
       </Group>
+
+      {actuatableMembers.length > 0 && (
+        <Group gap="xs" align="center">
+          <Text size="sm" c="dimmed">
+            Room control
+          </Text>
+          <Button
+            size="xs"
+            variant="light"
+            leftSection={<IconPower size={14} />}
+            loading={commandBusy}
+            onClick={() => void handleRoomCommand(true)}
+          >
+            All on
+          </Button>
+          <Button
+            size="xs"
+            variant="light"
+            color="gray"
+            leftSection={<IconPower size={14} />}
+            loading={commandBusy}
+            onClick={() => void handleRoomCommand(false)}
+          >
+            All off
+          </Button>
+        </Group>
+      )}
+
+      {commandError && (
+        <Alert color="red" icon={<IconAlertTriangle size={16} />} title="Room command failed">
+          {commandError}
+        </Alert>
+      )}
+
+      {skippedCount > 0 && (
+        <Badge
+          color="gray"
+          variant="light"
+          leftSection={<IconInfoCircle size={12} />}
+          style={{ alignSelf: "flex-start" }}
+        >
+          {skippedCount} skipped (no control)
+        </Badge>
+      )}
 
       {genuinelyEmpty && (
         <Text c="dimmed" size="sm">

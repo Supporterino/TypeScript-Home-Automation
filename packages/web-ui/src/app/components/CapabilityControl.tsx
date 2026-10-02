@@ -22,6 +22,17 @@ interface Props {
   capability: FlatCapability;
   /** Renders at a smaller scale for a tile's primary control. */
   compact?: boolean;
+  /**
+   * Controlled optimistic value. When paired with `onChange`, the caller owns
+   * the optimistic state and this component renders it instead of its own —
+   * the tile lifts one hook so its embedded control and on/off chip resolve
+   * from the same value (specs/web-ui "Device Tile Presentation").
+   */
+  value?: unknown;
+  /** Controlled change handler, paired with `value`. */
+  onChange?: (next: unknown) => void;
+  /** Error from the caller's optimistic hook, surfaced when controlled. */
+  error?: string | null;
 }
 
 /** Formats a readout value for display, applying the capability's unit when numeric. */
@@ -32,14 +43,26 @@ export function formatReadoutValue(value: unknown, unit?: string): string {
   return String(value);
 }
 
-export function CapabilityControl({ device, capability, compact }: Props) {
+export function CapabilityControl({
+  device,
+  capability,
+  compact,
+  value: controlledValue,
+  onChange,
+  error: controlledError,
+}: Props) {
   const confirmedValue = device.state[capability.property];
-  const { value, error, setValue } = useOptimisticDeviceProperty(
+  const optimistic = useOptimisticDeviceProperty(
     device.qualifiedId,
     capability.property,
     confirmedValue,
     device.observation,
   );
+
+  const controlled = onChange !== undefined;
+  const value = controlled ? controlledValue : optimistic.value;
+  const setValue = onChange ?? optimistic.setValue;
+  const error = controlled ? (controlledError ?? optimistic.error) : optimistic.error;
 
   const disabled = !device.reachable;
 

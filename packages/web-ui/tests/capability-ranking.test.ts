@@ -7,6 +7,7 @@ import {
   selectPrimaryAction,
   selectPrimaryReadout,
 } from "../src/app/lib/capability-ranking.js";
+import { findOnOffCapability } from "../src/app/lib/room-command.js";
 
 const rw = { readable: true, writable: true };
 const ro = { readable: true, writable: false };
@@ -52,6 +53,27 @@ describe("selectPrimaryAction — dimmable light", () => {
   it("ranks on/off above brightness", () => {
     const action = selectPrimaryAction(capabilities);
     expect(action?.kind).toBe("on_off");
+  });
+});
+
+describe("selectPrimaryAction — canonical on/off preference", () => {
+  // A device declaring Zigbee2MQTT's `state` first and the canonical `on`
+  // second: both the tile's ranked action and the room command must resolve to
+  // `on`, so the tile's optimistic override key (`qid:on`) matches the property
+  // the room command commands.
+  const capabilities = [onOff("state"), onOff("on")];
+
+  it("prefers on over state regardless of declaration order", () => {
+    const action = selectPrimaryAction(capabilities);
+    expect(action?.kind).toBe("on_off");
+    expect(action?.capability.property).toBe("on");
+  });
+
+  it("agrees with the room command's on/off capability", () => {
+    expect(findOnOffCapability(capabilities)?.property).toBe("on");
+    expect(findOnOffCapability(capabilities)?.property).toBe(
+      selectPrimaryAction(capabilities)?.capability.property,
+    );
   });
 });
 

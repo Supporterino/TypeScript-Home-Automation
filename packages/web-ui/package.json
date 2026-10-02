@@ -19,7 +19,8 @@
   "files": [
     "dist",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "OFL.txt"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",

@@ -1,6 +1,12 @@
 /** Typed fetch wrappers for the web UI API, plus the realtime event stream. */
 
 import type {
+  EnergyData,
+  RoomBatchCommandResponse,
+  WeatherData,
+  WeatherUnavailable,
+} from "@ts-ha/shared";
+import type {
   Automation,
   AutomationRelationships,
   Capability,
@@ -23,6 +29,21 @@ export function initApi(basePath: string, token: string) {
 }
 
 export async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const res = await apiFetchResponse(path, options);
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(body.error ?? `HTTP ${res.status}`);
+  }
+  return res.json() as Promise<T>;
+}
+
+/**
+ * Performs an authenticated request and applies only the shared 401
+ * redirect, leaving status handling to the caller. Lets a wrapper inspect a
+ * non-2xx response (e.g. `/api/weather`'s unconfigured markers) without the
+ * generic error thrown by {@link apiFetch}.
+ */
+async function apiFetchResponse(path: string, options: RequestInit = {}): Promise<Response> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (_token) headers["Authorization"] = `Bearer ${_token}`;
 
@@ -36,12 +57,7 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
     throw new Error("Unauthorized");
   }
 
-  if (!res.ok) {
-    const body = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(body.error ?? `HTTP ${res.status}`);
-  }
-
-  return res.json() as Promise<T>;
+  return res;
 }
 
 // ── Status ──────────────────────────────────────────────────────────────
@@ -205,6 +221,22 @@ export async function deleteRoom(id: string): Promise<void> {
   await apiFetch(`/api/rooms/${encodeURIComponent(id)}`, { method: "DELETE" });
 }
 
+/**
+ * Issues one property command to every capable member of a room (design.md
+ * D5; specs/http-server "Room Batch Command Endpoint"). Best-effort: the
+ * response reports each member's outcome so the caller can reconcile them
+ * independently.
+ */
+export function sendRoomCommand(
+  roomId: string,
+  properties: Record<string, unknown>,
+): Promise<RoomBatchCommandResponse> {
+  return apiFetch<RoomBatchCommandResponse>(`/api/rooms/${encodeURIComponent(roomId)}/command`, {
+    method: "POST",
+    body: JSON.stringify(properties),
+  });
+}
+
 // ── HomeKit ─────────────────────────────────────────────────────────────
 
 /** `null` when the HomeKit service is not configured (the route itself is unregistered → 404). */
@@ -214,6 +246,31 @@ export async function fetchHomekitStatus(): Promise<HomekitStatus | null> {
   } catch {
     return null;
   }
+}
+
+// ── Energy ──────────────────────────────────────────────────────────────
+
+export function fetchEnergy(): Promise<EnergyData> {
+  return apiFetch<EnergyData>("/api/energy");
+}
+
+// ── Weather ─────────────────────────────────────────────────────────────
+
+/**
+ * Fetches current conditions and forecast. The engine answers `404` when no
+ * weather service is registered and `400` when no location is resolvable
+ * (design.md D8); both are the feature being unconfigured, not an error, so
+ * they resolve to a {@link WeatherUnavailable} marker rather than throwing.
+ */
+export async function fetchWeather(): Promise<WeatherData | WeatherUnavailable> {
+  const res = await apiFetchResponse("/api/weather");
+  if (res.status === 404) return { available: false, reason: "service_unregistered" };
+  if (res.status === 400) return { available: false, reason: "no_location" };
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(body.error ?? `HTTP ${res.status}`);
+  }
+  return res.json() as Promise<WeatherData>;
 }
 
 // ── Realtime event stream ───────────────────────────────────────────────

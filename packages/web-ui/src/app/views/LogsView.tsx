@@ -84,7 +84,7 @@ export function LogsView() {
         {isLogFilterActive(filter) && (
           <Text
             size="xs"
-            c="blue"
+            c="ambient"
             style={{ cursor: "pointer" }}
             onClick={() => setFilter(EMPTY_LOG_FILTER)}
           >

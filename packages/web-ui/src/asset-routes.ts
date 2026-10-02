@@ -41,7 +41,13 @@ export function registerAssetRoutes(app: Hono, basePath: string): void {
   });
 }
 
-/** URLs of every asset required for first paint, in manifest order. */
+/**
+ * URLs of every asset required for first paint, in manifest order.
+ *
+ * Only scripts and stylesheets are referenced from the document; first-paint
+ * fonts are fetched by the stylesheet's own `@font-face` url and must not be
+ * emitted as `<script>`/`<link>` tags here.
+ */
 export function firstPaintAssetUrls(basePath: string): { js: string[]; css: string[] } {
   const js: string[] = [];
   const css: string[] = [];
@@ -49,7 +55,7 @@ export function firstPaintAssetUrls(basePath: string): { js: string[]; css: stri
     if (!asset.firstPaint) continue;
     const url = subpath(basePath, `assets/${asset.fileName}`);
     if (asset.contentType === "text/css") css.push(url);
-    else js.push(url);
+    else if (asset.contentType === "application/javascript") js.push(url);
   }
   return { js, css };
 }

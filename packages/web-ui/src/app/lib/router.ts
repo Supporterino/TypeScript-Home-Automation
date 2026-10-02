@@ -14,7 +14,7 @@
  */
 
 export type ViewName =
-  | "dashboard"
+  | "overview"
   | "rooms"
   | "room"
   | "devices"
@@ -25,6 +25,8 @@ export type ViewName =
   | "state"
   | "logs"
   | "homekit"
+  | "energy"
+  | "weather"
   | "not-found";
 
 export interface RouteMatch {
@@ -42,7 +44,11 @@ interface RoutePattern {
 // segments are tried first regardless of table order (see `matchRoute`),
 // but the table is still written most-specific-first for readability.
 const ROUTE_TABLE: { pattern: string; view: ViewName }[] = [
-  { pattern: "/", view: "dashboard" },
+  { pattern: "/", view: "overview" },
+  // Alias for the landing view so `UI_VIEW_SEGMENTS` can list "overview" and
+  // the server registration stays in sync with a client route (see the module
+  // comment). `/` remains the canonical landing path.
+  { pattern: "/overview", view: "overview" },
   { pattern: "/rooms", view: "rooms" },
   { pattern: "/rooms/:id", view: "room" },
   { pattern: "/devices", view: "devices" },
@@ -53,6 +59,8 @@ const ROUTE_TABLE: { pattern: string; view: ViewName }[] = [
   { pattern: "/state", view: "state" },
   { pattern: "/logs", view: "logs" },
   { pattern: "/homekit", view: "homekit" },
+  { pattern: "/energy", view: "energy" },
+  { pattern: "/weather", view: "weather" },
 ];
 
 function splitSegments(path: string): string[] {
@@ -125,13 +133,34 @@ export function resolveRoute(pathname: string, basePath: string): RouteMatch {
   return matchRoute(stripped);
 }
 
+/**
+ * Whether `pathname` is `collectionPath` itself or a detail route nested
+ * beneath it (design.md D10; specs/web-ui "Active view is indicated within a
+ * collection"). Used so an item's detail route keeps its collection entry
+ * active, while a sibling static route (e.g. `/devices/unassigned` under
+ * `/devices`) is excluded by the caller.
+ */
+export function isUnder(pathname: string, collectionPath: string): boolean {
+  return pathname === collectionPath || pathname.startsWith(`${collectionPath}/`);
+}
+
+/**
+ * Whether `pathname` resolves to the overview view. Covers both the canonical
+ * base path and the `/overview` alias, so either one highlights the
+ * Overview/Home navigation entry (design.md D10; specs/web-ui "Active view is
+ * indicated within a collection").
+ */
+export function isOverviewView(pathname: string, basePath: string): boolean {
+  return resolveRoute(pathname, basePath).view === "overview";
+}
+
 // ── Path builders — the inverse of matching, used by links and navigation ──
 
 function joinBasePath(basePath: string, suffix: string): string {
   return basePath === "/" ? suffix : `${basePath}${suffix}`;
 }
 
-export function dashboardPath(basePath: string): string {
+export function overviewPath(basePath: string): string {
   return joinBasePath(basePath, "/");
 }
 
@@ -174,3 +203,35 @@ export function logsPath(basePath: string): string {
 export function homekitPath(basePath: string): string {
   return joinBasePath(basePath, "/homekit");
 }
+
+export function energyPath(basePath: string): string {
+  return joinBasePath(basePath, "/energy");
+}
+
+export function weatherPath(basePath: string): string {
+  return joinBasePath(basePath, "/weather");
+}
+
+// ── Mobile bottom bar — control-only (design.md D10, D13) ──────────────────
+
+/** The control-surface views the narrow-viewport bottom bar may offer. */
+export type ControlView = "overview" | "rooms" | "devices";
+
+export interface MobileNavItem {
+  label: string;
+  view: ControlView;
+  buildPath: (basePath: string) => string;
+}
+
+/**
+ * The narrow-viewport bottom bar's item descriptors, as pure data so a test
+ * can assert the bar never promotes an operator view (automations, state,
+ * logs, HomeKit, energy, weather) — those stay URL-reachable. The bar is a
+ * control surface, not a debugger (design.md D10, D13). Icons are supplied
+ * by the renderer; this module stays dependency-free.
+ */
+export const MOBILE_NAV_ITEMS: readonly MobileNavItem[] = [
+  { label: "Home", view: "overview", buildPath: overviewPath },
+  { label: "Rooms", view: "rooms", buildPath: roomsPath },
+  { label: "Devices", view: "devices", buildPath: devicesPath },
+];

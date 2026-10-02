@@ -17,7 +17,7 @@ export function HomekitView() {
       <Title order={2}>HomeKit</Title>
 
       {!homekit ? (
-        <Alert color="blue" title="HomeKit bridge not configured" icon={<IconHome size={16} />}>
+        <Alert color="ambient" title="HomeKit bridge not configured" icon={<IconHome size={16} />}>
           Register a <Code>HomekitService</Code> in your engine's services map to expose devices to
           Apple Home.
         </Alert>
@@ -36,7 +36,7 @@ export function HomekitView() {
               <Text size="xs" c="dimmed" tt="uppercase" fw={600} mb={6}>
                 Accessories
               </Text>
-              <Text fw={700} size="lg" c="blue">
+              <Text fw={700} size="lg" c="ambient">
                 {homekit.accessoryCount}
               </Text>
             </Paper>

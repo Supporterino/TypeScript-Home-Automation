@@ -38,10 +38,17 @@ export function useOptimisticDeviceProperty<T = unknown>(
   confirmedValue: T | undefined,
   observation: DeviceObservation,
 ): OptimisticProperty<T> {
-  const { subscribe, commandCoalescer } = useDataStore();
+  const { subscribe, commandCoalescer, optimisticOverrides, revertOptimisticOverride } =
+    useDataStore();
   const [override, setOverride] = useState<Override<T> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const key = coalescingKey(qualifiedId, property);
+
+  // A store-level override (e.g. a room batch command) outranks this
+  // component's own local override, so every mounted control reflects the
+  // room-wide command, not just the view that issued it (design.md D5; task
+  // 10.2).
+  const storeOverride = optimisticOverrides.get(key);
 
   // Track the latest observation in a ref so a deadline timer armed against
   // an earlier render's observation object still reads current data if it
@@ -88,6 +95,9 @@ export function useOptimisticDeviceProperty<T = unknown>(
       );
 
       setError(null);
+      // A direct edit supersedes any room-level optimistic value for this
+      // key — the user's newest intent wins (task 10.2).
+      revertOptimisticOverride(qualifiedId, property);
       setOverride({ value: next, token });
 
       const deadlineMs = computeRevertDeadlineMs(observationRef.current);
@@ -99,12 +109,12 @@ export function useOptimisticDeviceProperty<T = unknown>(
         });
       }, deadlineMs);
     },
-    [commandCoalescer, key, qualifiedId, property],
+    [commandCoalescer, key, qualifiedId, property, revertOptimisticOverride],
   );
 
   return {
-    value: override ? override.value : confirmedValue,
-    pending: override !== null,
+    value: storeOverride ? (storeOverride.value as T) : override ? override.value : confirmedValue,
+    pending: storeOverride !== undefined || override !== null,
     error,
     setValue,
   };

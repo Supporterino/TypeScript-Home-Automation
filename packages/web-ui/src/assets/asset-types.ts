@@ -23,7 +23,11 @@ export interface BuiltAsset {
   hash: string;
   /** Raw, uncompressed body, base64-encoded. */
   rawBase64: string;
-  /** Gzip-compressed body, base64-encoded. Always smaller than `rawBase64`. */
+  /**
+   * Gzip-compressed body, base64-encoded. Smaller than `rawBase64` for
+   * compressible payloads (JS and CSS); an already-compressed payload such
+   * as `font/woff2` may instead grow slightly under gzip.
+   */
   gzipBase64: string;
   /**
    * Whether this asset is required for first paint. `false` for chunks only

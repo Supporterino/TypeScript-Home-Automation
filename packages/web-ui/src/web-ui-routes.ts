@@ -25,12 +25,15 @@ import { htmlShell, loginShell } from "./components/html-shell.js";
  * of these serves the shell and that an unregistered segment does not.
  */
 export const UI_VIEW_SEGMENTS = [
+  "overview",
   "rooms",
   "devices",
   "automations",
   "state",
   "logs",
   "homekit",
+  "energy",
+  "weather",
 ] as const;
 
 /**
@@ -108,8 +111,11 @@ export function registerWebUiRoutes(
       display: "standalone",
       start_url: path,
       scope: path,
-      background_color: "#1a1b1e",
-      theme_color: "#228be6",
+      // Ambient Glass retint (design.md D13). Keep in sync with the dark-scheme
+      // `--bg` and the interactive accent in `src/app/tokens.ts`; the brand
+      // name itself is unchanged.
+      background_color: "#0B1120",
+      theme_color: "#38BDF8",
       icons: [{ src: iconPath, sizes: "512x512", type: "image/svg+xml", purpose: "any maskable" }],
     });
     return c.body(manifest, 200, { "Content-Type": "application/manifest+json" });
