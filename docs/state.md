@@ -8,7 +8,7 @@ The engine includes a shared in-memory state store. Any automation can read and 
 
 ```ts
 const engine = createEngine({
-  automationsDir: "./src/automations",
+  automationsDir: "./automations",
   state: {
     persist: true,                   // default: true — see write-behind below
     filePath: "./data/state.json",   // defaults to ./state.json

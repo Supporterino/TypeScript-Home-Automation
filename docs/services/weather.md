@@ -9,10 +9,10 @@ The engine supports an optional weather service for fetching current conditions 
 Free, no API key required. Uses the [Open-Meteo](https://open-meteo.com/) API.
 
 ```ts
-import { createEngine, OpenMeteoService } from "ts-home-automation";
+import { createEngine, OpenMeteoService } from "@ts-ha/core";
 
 const engine = createEngine({
-  automationsDir: "./src/automations",
+  automationsDir: "./automations",
   services: {
     weather: (http, logger) =>
       new OpenMeteoService(
@@ -31,10 +31,10 @@ const engine = createEngine({
 Free tier requires an API key from [openweathermap.org](https://openweathermap.org/).
 
 ```ts
-import { createEngine, OpenWeatherMapService } from "ts-home-automation";
+import { createEngine, OpenWeatherMapService } from "@ts-ha/core";
 
 const engine = createEngine({
-  automationsDir: "./src/automations",
+  automationsDir: "./automations",
   services: {
     weather: (http, logger) =>
       new OpenWeatherMapService(
@@ -54,7 +54,7 @@ const engine = createEngine({
 ## Using in automations
 
 ```ts
-import type { WeatherService } from "ts-home-automation";
+import type { WeatherService } from "@ts-ha/core";
 
 // Current conditions
 const weather = this.services.get<WeatherService>("weather");
@@ -117,7 +117,7 @@ if (forecast[0].precipitationChance > 0.5) {
 Implement the `WeatherService` interface to integrate any other weather provider:
 
 ```ts
-import type { WeatherService, CurrentWeather, DailyForecast } from "ts-home-automation";
+import type { WeatherService, CurrentWeather, DailyForecast } from "@ts-ha/core";
 
 class MyWeatherService implements WeatherService {
   async getCurrent(): Promise<CurrentWeather> {

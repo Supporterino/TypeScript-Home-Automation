@@ -11,7 +11,7 @@ Any value can be registered as a service and retrieved by automations:
 ```ts
 // Register a plain object
 const engine = createEngine({
-  automationsDir: "./src/automations",
+  automationsDir: "./automations",
   services: {
     myCache: new Map<string, unknown>(),
   },
@@ -24,7 +24,7 @@ const cache = this.services.get<Map<string, unknown>>("myCache");
 A **service plugin** goes further — it implements the `ServicePlugin` interface to hook into the engine lifecycle:
 
 ```ts
-import type { ServicePlugin, CoreContext } from "ts-home-automation";
+import type { ServicePlugin, CoreContext } from "@ts-ha/core";
 ```
 
 ---
@@ -68,7 +68,7 @@ This example creates a service that periodically fetches data from an external A
 
 ```ts
 // src/services/solar-service.ts
-import type { ServicePlugin, CoreContext, HttpClient } from "ts-home-automation";
+import type { ServicePlugin, CoreContext, HttpClient } from "@ts-ha/core";
 import type { Logger } from "pino";
 import type { Hono } from "hono";
 
@@ -145,7 +145,7 @@ export class SolarService implements ServicePlugin {
 
 ```ts
 // src/index.ts
-import { createEngine } from "ts-home-automation";
+import { createEngine } from "@ts-ha/core";
 import { SolarService } from "./services/solar-service.js";
 
 const engine = createEngine({
@@ -167,7 +167,7 @@ Because `SolarService` implements `ServicePlugin` (has a `serviceKey` property a
 ### 3. Use in automations
 
 ```ts
-import { Automation, type Trigger, type TriggerContext } from "ts-home-automation";
+import { Automation, type Trigger, type TriggerContext } from "@ts-ha/core";
 import type { SolarService } from "../services/solar-service.js";
 
 export default class SolarAlert extends Automation {

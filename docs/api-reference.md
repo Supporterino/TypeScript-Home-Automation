@@ -1,9 +1,9 @@
 # API Reference
 
-Complete reference for all public exports from the `ts-home-automation` package. Organised by module.
+Complete reference for all public exports from the `@ts-ha/core` package. Organised by module.
 
 ```ts
-import { createEngine, Automation, type Trigger, type TriggerContext } from "ts-home-automation";
+import { createEngine, Automation, type Trigger, type TriggerContext } from "@ts-ha/core";
 ```
 
 ---
@@ -107,7 +107,7 @@ The object returned by `createEngine()`.
 **Example:**
 
 ```ts
-import { createEngine } from "ts-home-automation";
+import { createEngine } from "@ts-ha/core";
 
 const engine = createEngine({
   automationsDir: new URL("./automations", import.meta.url).pathname,
@@ -128,7 +128,7 @@ await engine.start();
 Base class for all automations. Subclasses must implement `name`, `triggers`, and `execute()`.
 
 ```ts
-import { Automation, type Trigger, type TriggerContext } from "ts-home-automation";
+import { Automation, type Trigger, type TriggerContext } from "@ts-ha/core";
 
 export default class MyAutomation extends Automation {
   readonly name = "my-automation";
@@ -290,7 +290,7 @@ Manages discovery, registration, and lifecycle of automations. Available as `eng
 Manages the MQTT connection and multiplexes subscriptions across automations.
 
 ```ts
-import type { MqttService, MqttMessageHandler } from "ts-home-automation";
+import type { MqttService, MqttMessageHandler } from "@ts-ha/core";
 ```
 
 ### `MqttMessageHandler`
@@ -331,7 +331,7 @@ type MqttMessageHandler = (topic: string, payload: Record<string, unknown>) => v
 General-purpose HTTP client with structured logging, timeouts, and retry support.
 
 ```ts
-import type { HttpClient, HttpRequestOptions, HttpResponse } from "ts-home-automation";
+import type { HttpClient, HttpRequestOptions, HttpResponse } from "@ts-ha/core";
 ```
 
 ### `HttpRequestOptions`
@@ -456,7 +456,7 @@ multiple segments.
 In-memory key-value store with typed access, change listeners, and optional file persistence.
 
 ```ts
-import type { StateManager, StateManagerOptions, StateChangeHandler } from "ts-home-automation";
+import type { StateManager, StateManagerOptions, StateChangeHandler } from "@ts-ha/core";
 ```
 
 ### `StateManagerOptions`
@@ -515,7 +515,7 @@ Timezone is read from the `TZ` environment variable.
 Type-safe key-value registry for optional services. Services implementing `ServicePlugin` receive lifecycle hooks.
 
 ```ts
-import type { ServiceRegistry } from "ts-home-automation";
+import type { ServiceRegistry } from "@ts-ha/core";
 ```
 
 | Method | Signature | Description |
@@ -536,7 +536,7 @@ import type { ServiceRegistry } from "ts-home-automation";
 Interface for services that need lifecycle hooks and HTTP route registration. See [Custom Service Plugins](service-plugins.md) for a full guide.
 
 ```ts
-import type { ServicePlugin, CoreContext } from "ts-home-automation";
+import type { ServicePlugin, CoreContext } from "@ts-ha/core";
 ```
 
 ### `CoreContext`
@@ -562,7 +562,7 @@ import type { ServicePlugin, CoreContext } from "ts-home-automation";
 Ring buffer for in-memory log storage. Used by the debug API and web UI.
 
 ```ts
-import type { LogBuffer, LogEntry, LogQuery } from "ts-home-automation";
+import type { LogBuffer, LogEntry, LogQuery } from "@ts-ha/core";
 ```
 
 ### `LogEntry`
@@ -650,7 +650,7 @@ Abstract automation classes for common Zigbee remotes. See [Device Base Classes]
 The resolved configuration object. See [Configuration](configuration.md) for all environment variables.
 
 ```ts
-import type { Config } from "ts-home-automation";
+import type { Config } from "@ts-ha/core";
 ```
 
 ### `loadConfig(overrides?)`
@@ -669,32 +669,32 @@ All Zigbee2MQTT, Shelly, Nanoleaf, Weather, and Notification types are re-export
 
 ```ts
 // Zigbee types
-import type { OccupancyPayload, ColorLightSetCommand, ZigbeeDevice } from "ts-home-automation";
+import type { OccupancyPayload, ColorLightSetCommand, ZigbeeDevice } from "@ts-ha/core";
 
 // Shelly types
-import type { ShellySwitchStatus, ShellyCoverStatus } from "ts-home-automation";
+import type { ShellySwitchStatus, ShellyCoverStatus } from "@ts-ha/core";
 // Or from the subpath:
-import type { ShellySwitchStatus } from "ts-home-automation/types/shelly";
+import type { ShellySwitchStatus } from "@ts-ha/shared/types/shelly";
 
 // Weather types
-import type { WeatherService, CurrentWeather, DailyForecast } from "ts-home-automation";
+import type { WeatherService, CurrentWeather, DailyForecast } from "@ts-ha/core";
 
 // Notification types
-import type { NotificationService, NotificationOptions } from "ts-home-automation";
+import type { NotificationService, NotificationOptions } from "@ts-ha/core";
 
 // Nanoleaf types
-import type { NanoleafState, NanoleafDeviceInfo } from "ts-home-automation";
+import type { NanoleafState, NanoleafDeviceInfo } from "@ts-ha/core";
 ```
 
 ### Subpath imports
 
-The package provides subpath exports for each type category:
+`@ts-ha/shared` provides subpath exports for each type category; `@ts-ha/core` re-exports the cross-cutting contracts from its main barrel:
 
 | Import path | Contents |
 |---|---|
-| `ts-home-automation` | Everything (main barrel) |
-| `ts-home-automation/types` | All Zigbee2MQTT types |
-| `ts-home-automation/types/shelly` | Shelly Gen 2 RPC types |
-| `ts-home-automation/types/nanoleaf` | Nanoleaf OpenAPI types |
-| `ts-home-automation/types/weather` | `WeatherService` interface and data types |
-| `ts-home-automation/types/notification` | `NotificationService` interface and option types |
+| `@ts-ha/core` | Everything (main barrel) |
+| `@ts-ha/shared/types` | All Zigbee2MQTT types |
+| `@ts-ha/shared/types/shelly` | Shelly Gen 2 RPC types |
+| `@ts-ha/shared/types/nanoleaf` | Nanoleaf OpenAPI types |
+| `@ts-ha/shared/types/weather` | `WeatherService` interface and data types |
+| `@ts-ha/shared/types/notification` | `NotificationService` interface and option types |

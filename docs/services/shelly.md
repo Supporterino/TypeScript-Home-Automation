@@ -13,10 +13,10 @@ The built-in `ShellyService` controls Shelly Gen 2 devices (Plus Plug S, Plus 1P
 Register devices in a factory function passed to `services.shelly` in your entry point:
 
 ```ts
-import { createEngine, ShellyService } from "ts-home-automation";
+import { createEngine, ShellyService } from "@ts-ha/core";
 
 const engine = createEngine({
-  automationsDir: "./src/automations",
+  automationsDir: "./automations",
   services: {
     shelly: ({ http, mqtt, logger }) => {
       const svc = new ShellyService(http, mqtt, logger);
@@ -37,10 +37,10 @@ await engine.start();
 You can also register a single device:
 
 ```ts
-import { createEngine, ShellyService } from "ts-home-automation";
+import { createEngine, ShellyService } from "@ts-ha/core";
 
 const engine = createEngine({
-  automationsDir: "./src/automations",
+  automationsDir: "./automations",
   services: {
     shelly: ({ http, mqtt, logger }) => {
       const svc = new ShellyService(http, mqtt, logger);
@@ -60,10 +60,10 @@ Shelly Gen2 devices also expose a native JSON-RPC channel over MQTT: commands ar
 Register an MQTT-transport device with the object-form overload, using the device's MQTT topic prefix (e.g. `"shellyplus1-a8032abe54dc"`) instead of a host:
 
 ```ts
-import { createEngine, ShellyService } from "ts-home-automation";
+import { createEngine, ShellyService } from "@ts-ha/core";
 
 const engine = createEngine({
-  automationsDir: "./src/automations",
+  automationsDir: "./automations",
   services: {
     shelly: ({ http, mqtt, logger }) => {
       const svc = new ShellyService(http, mqtt, logger);
@@ -108,12 +108,12 @@ Before registering a device with `transport: "mqtt"`, enable MQTT + RPC-over-MQT
 Every MQTT RPC request carries a `src` value that the device echoes back on the shared `<src>/rpc` response topic, so the application knows which response subscription is "ours". This value is configurable via the `MQTT_SHELLY_RPC_SRC` environment variable (default: `"ts-home-automation"`). **If multiple application instances share one broker, give each a distinct `src`** — otherwise, one instance may receive another's RPC responses.
 
 ```ts
-import { createEngine, loadConfig, ShellyService } from "ts-home-automation";
+import { createEngine, loadConfig, ShellyService } from "@ts-ha/core";
 
 const config = loadConfig();
 
 const engine = createEngine({
-  automationsDir: "./src/automations",
+  automationsDir: "./automations",
   services: {
     shelly: ({ http, mqtt, logger }) =>
       new ShellyService(http, mqtt, logger, config.mqtt.shellyRpcSrc),
@@ -158,7 +158,7 @@ status.temperature // { tC: number, tF: number }
 ### Example: auto-off after TV goes idle
 
 ```ts
-import type { ShellyService } from "ts-home-automation";
+import type { ShellyService } from "@ts-ha/core";
 
 export default class TvAutoOff extends Automation {
   readonly name = "tv-auto-off";
@@ -218,7 +218,7 @@ status.pos_control  // true if calibrated for position control
 ### Example: close shutters at sunset via cron
 
 ```ts
-import type { ShellyService } from "ts-home-automation";
+import type { ShellyService } from "@ts-ha/core";
 
 export default class SunsetShutters extends Automation {
   readonly name = "sunset-shutters";

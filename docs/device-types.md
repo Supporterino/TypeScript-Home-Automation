@@ -16,11 +16,11 @@ Use generic types when your automation should work with any device in a category
 
 ```ts
 // Generic — works with any motion sensor
-import type { OccupancyPayload } from "ts-home-automation";
+import type { OccupancyPayload } from "@ts-ha/core";
 const { occupancy } = payload as OccupancyPayload;
 
 // Brand-specific — includes motion_sensitivity and other Hue-specific fields
-import type { PhilipsHueMotionSensorPayload } from "ts-home-automation";
+import type { PhilipsHueMotionSensorPayload } from "@ts-ha/core";
 ```
 
 ---
@@ -102,4 +102,4 @@ import type { PhilipsHueMotionSensorPayload } from "ts-home-automation";
 
 ## Adding device types
 
-If you need types for a device not listed here, open a pull request or file an issue. The type files live in `src/types/` — each file is focused on a brand or category and follows the naming conventions documented in `AGENTS.md`.
+If you need types for a device not listed here, open a pull request or file an issue. The type files live under `packages/shared/src/types/` — each file is focused on a brand or category and follows the naming conventions documented in `AGENTS.md`.

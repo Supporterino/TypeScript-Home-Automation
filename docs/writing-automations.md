@@ -3,7 +3,7 @@
 Every automation is a TypeScript class that extends `Automation`. It defines a unique name, one or more triggers, and an `execute()` method that runs when any trigger fires.
 
 ```ts
-import { Automation, type Trigger, type TriggerContext } from "ts-home-automation";
+import { Automation, type Trigger, type TriggerContext } from "@ts-ha/core";
 
 export default class MyAutomation extends Automation {
   readonly name = "my-automation";
@@ -205,8 +205,8 @@ this.mqtt.publish(topic, payload)
 Optional services registered with the engine (e.g. `shelly`, `nanoleaf`, or any custom service) are accessed through `this.services`. Import the service type at the top of your automation file to use it in type parameters:
 
 ```ts
-import type { ShellyService } from "ts-home-automation";
-import type { NanoleafService } from "ts-home-automation";
+import type { ShellyService } from "@ts-ha/core";
+import type { NanoleafService } from "@ts-ha/core";
 ```
 
 Four retrieval styles are available — choose the one that fits your use case:
@@ -289,7 +289,7 @@ See [Nanoleaf](services/nanoleaf.md) for pairing and full method list.
 > **Requires configuration.** Returns `null` when no `WeatherService` is configured. Always null-check before use:
 
 ```ts
-import type { WeatherService } from "ts-home-automation";
+import type { WeatherService } from "@ts-ha/core";
 
 const weather = this.services.get<WeatherService>("weather");
 if (!weather) {

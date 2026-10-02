@@ -60,7 +60,7 @@ DEVICE_REGISTRY_FILE_PATH=./data/device-registry.json  # optional, default: ./de
 
 ```ts
 const engine = createEngine({
-  automationsDir: "./src/automations",
+  automationsDir: "./automations",
   deviceRegistry: {
     persist: true,
     filePath: "./data/device-registry.json",
@@ -111,10 +111,10 @@ The `friendly_name` set in Zigbee2MQTT (e.g. `kitchen_motion_0x1a2b`) is often h
 ### Configuration
 
 ```ts
-import { createEngine } from "ts-home-automation";
+import { createEngine } from "@ts-ha/core";
 
 const engine = createEngine({
-  automationsDir: "./src/automations",
+  automationsDir: "./automations",
   deviceRegistry: {
     names: {
       // Per-device explicit overrides
@@ -154,7 +154,7 @@ registry.getNiceName("unknown_device");         // → "unknown_device" (raw fal
 `this.deviceRegistry` is available on every automation. It returns `null` when the registry is disabled — always null-check before use:
 
 ```ts
-import { Automation, type Trigger, type TriggerContext } from "ts-home-automation";
+import { Automation, type Trigger, type TriggerContext } from "@ts-ha/core";
 
 export default class DeviceWatcher extends Automation {
   readonly name = "device-watcher";
@@ -355,8 +355,8 @@ Zigbee2MQTT devices describe themselves through `definition.exposes` — a
 Zigbee-specific shape carrying concepts (endpoints, clusters) that mean
 nothing to an HTTP light panel or a Nanoleaf panel. Rather than exposing that
 shape directly to consumers, the device registry **maps** each device's
-`exposes` into a source-neutral capability vocabulary (`src/types/capabilities.ts`,
-design.md D22) via `mapZ2MExposes()`:
+`exposes` into a source-neutral capability vocabulary (`packages/shared/src/capabilities.ts`,
+design.md D22) via `mapZ2MExposes()` (in `packages/core/src/zigbee/z2m-mapper.ts`):
 
 ```
    z2m exposes ──┐
@@ -453,5 +453,5 @@ The device metadata object returned by `getDevices()`, `getDevice()`, and all de
 All types are exported from the package:
 
 ```ts
-import type { ZigbeeDevice, ZigbeeDeviceDefinition, DeviceNiceNames } from "ts-home-automation";
+import type { ZigbeeDevice, ZigbeeDeviceDefinition, DeviceNiceNames } from "@ts-ha/core";
 ```

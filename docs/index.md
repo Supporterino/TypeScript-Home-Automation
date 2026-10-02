@@ -4,7 +4,7 @@ A lightweight, fully typed home automation framework built on MQTT and [Bun](htt
 
 ---
 
-## Why ts-home-automation?
+## Why TypeScript Home Automation?
 
 - **Pure TypeScript** — automations are ordinary classes, fully typed end-to-end
 - **MQTT-native** — designed around Zigbee2MQTT with wildcard topic support
@@ -20,17 +20,17 @@ A lightweight, fully typed home automation framework built on MQTT and [Bun](htt
 
 ### As an npm package
 
-Install `ts-home-automation` in your own project and bring your own automation files:
+Install `@ts-ha/core` in your own project and bring your own automation files:
 
 ```bash
-bun add ts-home-automation
+bun add @ts-ha/core
 ```
 
 → [Getting Started](getting-started.md)
 
-### Standalone
+### From source
 
-Clone the repo, drop automations into `src/automations/`, and run:
+Clone the repo, create an `automations/` directory, and run:
 
 ```bash
 git clone https://github.com/Supporterino/TypeScript-Home-Automation.git
@@ -57,7 +57,7 @@ bun install && bun run dev
 | [Deployment & Operations](deployment.md) | Docker, Kubernetes, production setup |
 | [Architecture](architecture.md) | How the engine works internally |
 | [Troubleshooting & FAQ](troubleshooting.md) | Common issues and solutions |
-| [npm package](https://www.npmjs.com/package/ts-home-automation) | `ts-home-automation` on npm |
+| [npm package](https://www.npmjs.com/package/@ts-ha/core) | `@ts-ha/core` on npm |
 
 ---
 

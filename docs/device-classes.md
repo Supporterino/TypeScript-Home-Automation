@@ -9,8 +9,8 @@ For common Zigbee remotes and buttons the framework provides abstract base class
 The Aqara H1 double-rocker switch (WXKG15LM / WRS-R02) exposes 12 distinct actions. Extend `AqaraH1Automation` and set `remoteName` to the device's Zigbee2MQTT friendly name:
 
 ```ts
-import { AqaraH1Automation } from "ts-home-automation";
-import type { ShellyService } from "ts-home-automation";
+import { AqaraH1Automation } from "@ts-ha/core";
+import type { ShellyService } from "@ts-ha/core";
 
 export default class LivingRoomRemote extends AqaraH1Automation {
   readonly name = "living-room-remote";
@@ -56,7 +56,7 @@ export default class LivingRoomRemote extends AqaraH1Automation {
 The IKEA STYRBAR (E2001 / E2002 / E2313) remote with four buttons. Set `remoteName` to the device's Zigbee2MQTT friendly name:
 
 ```ts
-import { IkeaStyrbarAutomation } from "ts-home-automation";
+import { IkeaStyrbarAutomation } from "@ts-ha/core";
 
 export default class BedroomRemote extends IkeaStyrbarAutomation {
   readonly name = "bedroom-remote";
@@ -103,7 +103,7 @@ export default class BedroomRemote extends IkeaStyrbarAutomation {
 The IKEA RODRET (E2201) two-button dimmer. Set `remoteName` to the Zigbee2MQTT friendly name:
 
 ```ts
-import { IkeaRodretAutomation } from "ts-home-automation";
+import { IkeaRodretAutomation } from "@ts-ha/core";
 
 export default class HallwayDimmer extends IkeaRodretAutomation {
   readonly name = "hallway-dimmer";

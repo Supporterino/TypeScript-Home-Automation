@@ -9,7 +9,7 @@ The bridge itself is source-agnostic: it owns the HAP bridge lifecycle (publish/
 ## Prerequisites
 
 - **`Engine.devices` is always present** — an unconfigured or disabled device family (no `DEVICE_REGISTRY_ENABLED`, no `ShellyService`, no `stateToggles`) simply contributes no devices; it does not prevent the bridge from starting.
-- `hap-nodejs` is already bundled as a dependency of `ts-home-automation`. No additional installation is needed.
+- `hap-nodejs` is already bundled as a dependency of `@ts-ha/core`. No additional installation is needed.
 
 ---
 
@@ -21,10 +21,10 @@ dependencies HomeKit needs, so there is no circular reference between the factor
 and the `engine` object:
 
 ```ts
-import { createEngine, HomekitService, HOMEKIT_SERVICE_KEY } from "ts-home-automation";
+import { createEngine, HomekitService, HOMEKIT_SERVICE_KEY } from "@ts-ha/core";
 
 const engine = createEngine({
-  automationsDir: "./src/automations",
+  automationsDir: "./automations",
   services: {
     [HOMEKIT_SERVICE_KEY]: ({ logger, devices }) =>
       new HomekitService(logger, devices, {
@@ -56,10 +56,10 @@ appropriate device `type` — no separate HomeKit wiring is needed, since
 `HomekitService` reads every registered device through `Engine.devices`:
 
 ```ts
-import { createEngine, HomekitService, ShellyService } from "ts-home-automation";
+import { createEngine, HomekitService, ShellyService } from "@ts-ha/core";
 
 const engine = createEngine({
-  automationsDir: "./src/automations",
+  automationsDir: "./automations",
   services: {
     shelly: ({ http, mqtt, logger }) => {
       const shelly = new ShellyService(http, mqtt, logger);
@@ -100,10 +100,10 @@ level exposes any boolean state key as a device — controllable from HomeKit
 a human-controllable interface without writing MQTT or HTTP glue:
 
 ```ts
-import { createEngine, HomekitService } from "ts-home-automation";
+import { createEngine, HomekitService } from "@ts-ha/core";
 
 const engine = createEngine({
-  automationsDir: "./src/automations",
+  automationsDir: "./automations",
   stateToggles: [
     { stateKey: "night_mode", name: "Night Mode" },
     { stateKey: "away_mode", name: "Away Mode" },

@@ -9,10 +9,10 @@ The engine supports an optional notification service for sending push notificati
 [ntfy](https://ntfy.sh/) is a free, open-source push notification service. You can use the hosted service at `ntfy.sh` or self-host your own instance.
 
 ```ts
-import { createEngine, NtfyNotificationService } from "ts-home-automation";
+import { createEngine, NtfyNotificationService } from "@ts-ha/core";
 
 const engine = createEngine({
-  automationsDir: "./src/automations",
+  automationsDir: "./automations",
   services: {
     notifications: (http, logger) =>
       new NtfyNotificationService({
@@ -96,7 +96,7 @@ When `channel` is omitted or has no matching entry in the `channels` map, the no
 Implement `NotificationService` to integrate any provider (Telegram, Pushover, Home Assistant, etc.):
 
 ```ts
-import type { NotificationService, NotificationOptions } from "ts-home-automation";
+import type { NotificationService, NotificationOptions } from "@ts-ha/core";
 
 class TelegramNotifications implements NotificationService {
   async send(options: NotificationOptions): Promise<void> {

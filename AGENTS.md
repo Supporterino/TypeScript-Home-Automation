@@ -2,34 +2,68 @@
 
 Coding conventions and instructions for AI agents working in this repository.
 
+## Workspace Layout
+
+This repository is a Bun workspace of four independently published packages under
+`packages/`:
+
+| Package | Responsibility |
+|---|---|
+| `@ts-ha/shared` | Domain/wire contracts, contract constants, pure helpers (no runtime deps) |
+| `@ts-ha/core` | Engine, services, device sources, HTTP server, MQTT, state, scheduling |
+| `@ts-ha/web-ui` | Hono routes + React/Mantine app + compiled asset manifest |
+| `@ts-ha/cli` | `DebugClient`, OpenTUI dashboard, target config, and `ts-ha run` |
+
+Dependency direction is one-way: `shared` ← `core`, `shared` ← `web-ui`,
+`cli` → {`core`, `shared`}. `core` never references `web-ui`; `web-ui` never
+references `core` (not even `import type`). `scripts/guard-deps.ts` enforces this.
+
+Each package owns its `package.json`, `tsconfig.json`, `tsconfig.build.json`, and
+test scope. Its `exports` map carries a `development` condition resolving to
+`src` (build-free dev/test) and a default resolving to `dist` (publish). A custom
+condition is selected only when passed explicitly — `bun --conditions=development`
+and `bun test --conditions=development` — and `tsc` selects it via
+`customConditions: ["development"]` (there is no `tsc --conditions` flag).
+
 ## Build / Lint / Test Commands
 
 ```bash
-bun install                  # Install dependencies
+bun install                  # Install workspace dependencies
 bun install --frozen-lockfile # CI-style install (no lockfile mutation)
-bun run dev                  # Run with hot-reload (standalone mode)
-bun run start                # Production run
-bun run typecheck            # TypeScript type checking (tsc --noEmit)
-bun run check                # Biome format + lint + import organize (auto-fix)
+bun run dev                  # Workspace dev: build UI once, watch frontend, run engine --hot
+bun run start                # Production run (ts-ha run)
+bun run typecheck            # Every package's tsc --noEmit + docs/examples
+bun run check                # Biome + guard-contracts + guard-deps
 bun run format               # Format only
 bun run lint                 # Lint only
-bun run build                # Build package to dist/ (runs prebuild hook → web UI build first)
-bun run build:web-ui         # Build only the React web UI frontend
-bun test                     # Run all tests
-bun test tests/state-manager.test.ts           # Run a single test file
-bun test --filter "topicMatches"               # Run tests matching a name pattern
+bun run build                # Build every package in dependency order (shared → core/web-ui → cli)
+bun run --filter @ts-ha/web-ui build:web-ui   # Build only the React web UI frontend
+bun run test                 # Run every package's tests in its own directory
+bun run --filter @ts-ha/core test             # Run one package's tests
+bun test packages/core/tests/state-manager.test.ts --conditions=development  # One test file
+bun test --conditions=development --filter "topicMatches"                    # Filter by name
 ```
 
-**Before committing, always run `bun run typecheck && bun run check && bun test`.**
+**Before committing, always run `bun run typecheck && bun run check && bun run test`.**
 
-Other scripts: `format:check`, `lint:fix`, `docker:build/up/down`, `prepublishOnly`.
+Other scripts: `format:check`, `lint:fix`, `docker:build/up/down`, `version`,
+`publish` (Changesets).
 
 ### Build details
 
-- **`typecheck`**: `tsc --noEmit` does **not** trigger the `prebuild` hook (`generate-icon` + `build-web-ui`).
-- **`build`**: `tsc -p tsconfig.build.json` with `prebuild` hook. Excludes `src/standalone.ts`, `src/automations/**`, and `src/core/web-ui/app/**`. Produces `dist/` with declarations and source maps.
-- **`build:web-ui`**: Compiles `src/core/web-ui/app/` (React + Mantine) via `Bun.build` into generated string constants at `src/core/web-ui/assets/app-js.ts` (git-ignored). The web UI subtree has its own `tsconfig.json` for IDE support.
-- **Test runner**: `bun test` (uses `bun:test`), not Jest/Vitest.
+- **`typecheck`**: runs each package's `tsc --noEmit` (web-ui runs both its server
+  and its nested app config) plus `tsc -p docs/examples/tsconfig.json --noEmit`.
+  It does **not** trigger any asset build.
+- **`build`**: runs each package's `build` in dependency order. `@ts-ha/web-ui`'s
+  `build` emits its asset manifest first (its `prebuild`/`prepublishOnly` hooks)
+  and then `tsc`, so its server modules compile against the generated manifest.
+  Each package emits `dist/` with declarations and source maps.
+- **`build:web-ui`**: lives in `@ts-ha/web-ui` and compiles `packages/web-ui/src/app/`
+  (React + Mantine) via `Bun.build` into generated string constants under
+  `packages/web-ui/src/assets/` (git-ignored). It passes `conditions: ["development"]`
+  to `Bun.build` so the bundle resolves `@ts-ha/shared` to source with no prior build.
+- **Test runner**: `bun test` (uses `bun:test`), not Jest/Vitest. Tests live in each
+  package's `tests/` directory and run from that package with `--conditions=development`.
 
 ## Runtime & Module System
 
@@ -41,31 +75,38 @@ Other scripts: `format:check`, `lint:fix`, `docker:build/up/down`, `prepublishOn
 
 ## Project Structure
 
-- `src/core/` — Framework core, organised into subfolders by responsibility:
-  - `engine.ts`, `automation.ts`, `automation-manager.ts` — glue layer (flat)
+- `packages/shared/src/` — `@ts-ha/shared`: contract types, contract constants
+  (`SESSION_COOKIE`, `INTERNAL_STATE_PREFIX`), pure capability helpers, and the
+  `types/` subpaths (`@ts-ha/shared/types[/...]`). No `node:` builtins, no runtime.
+- `packages/core/src/` — `@ts-ha/core`, organised into subfolders by responsibility:
+  - `engine.ts`, `automation.ts`, `automation-manager.ts`, `room-manager.ts`, `device-visibility.ts`, `config.ts` — glue layer (flat)
   - `mqtt/` — `mqtt-service.ts`, `mqtt-utils.ts`
-  - `http/` — `http-server.ts`, `http-client.ts`
+  - `http/` — `http-server.ts`, `http-client.ts`, `event-stream.ts`, `utils.ts`
   - `scheduling/` — `cron-scheduler.ts`
   - `state/` — `state-manager.ts`
   - `logging/` — `log-buffer.ts`
+  - `observability/` — `execution-recorder.ts`, execution context
+  - `events/` — `event-bus.ts`
   - `services/` — `shelly-service.ts`, `nanoleaf-service.ts`, `ntfy-notification-service.ts`, `open-meteo-service.ts`, `openweathermap-service.ts`, `homekit-service.ts`, `service-registry.ts`, `service-plugin.ts`
   - `devices/` — `aqara-h1-automation.ts`, `ikea-styrbar-automation.ts`, `ikea-rodret-automation.ts`
   - `device-sources/` — the source-neutral `DeviceSource` abstraction spanning Zigbee, Shelly, Nanoleaf, and state toggles (`device-source.ts`, `qualified-id.ts`, `zigbee-source.ts`, `shelly-source.ts`, `nanoleaf-source.ts`, `state-source.ts`, `aggregate.ts`) — exposed as `Engine.devices`, not a `ServiceRegistry` registration point
-  - `zigbee/` — `device-registry.ts` (Zigbee2MQTT device discovery and state tracking)
-  - `web-ui/` — Web dashboard served by Hono
-    - `web-ui/app/` — React + Mantine frontend (compiled by `Bun.build`, **not** `tsc`)
-    - `web-ui/assets/` — Generated JS/CSS string constants (git-ignored, rebuilt by `build:web-ui`)
-- `src/automations/` — Example automations (excluded from npm package build, included in standalone mode)
-- `src/types/` — Device and service type definitions (Zigbee2MQTT brands, Shelly, Nanoleaf, Weather, Notifications)
-- `src/cli/` — CLI tool (`ts-ha`) for managing running instances
-  - `cli/commands/` — CLI command implementations (`.ts` and `.tsx`)
-  - `cli/components/` — OpenTUI React components for the interactive dashboard
-- `scripts/` — Build scripts (e.g. `build-web-ui.ts`)
-- `tests/` — Unit tests (flat directory, `*.test.ts`)
+  - `zigbee/` — `device-registry.ts` and `z2m-mapper.ts` (Zigbee2MQTT `exposes` mapping, re-exported from core's barrel)
+- `packages/web-ui/src/` — `@ts-ha/web-ui`:
+  - `web-ui-service.ts` — the `WebUiService` plugin (structural; imports nothing from core)
+  - `web-ui-routes.ts`, `asset-routes.ts`, `components/html-shell.ts` — Hono routes
+  - `options.ts` — `WEB_UI_ENABLED` / `WEB_UI_PATH` parsing
+  - `app/` — React + Mantine frontend (compiled by `Bun.build`, **not** `tsc`)
+  - `assets/` — Generated JS/CSS string constants (git-ignored, rebuilt by `build:web-ui`)
+- `packages/cli/src/` — `@ts-ha/cli`:
+  - `commands/` — CLI command implementations (`.ts` and `.tsx`), including `run.ts`
+  - `components/` — OpenTUI React components for the interactive dashboard
+- `docs/examples/` — Type-checked example automations (compiled against `@ts-ha/core` source via a `customConditions` tsconfig).
+- `scripts/` — `guard-contracts.ts`, `guard-deps.ts`, `dev.ts`, `contract-inventory.json`.
+- `packages/*/tests/` — Unit tests, one package's tests in that package's scope.
 
 ## Key Environment Variables
 
-Full schema in `src/config.ts`. `.env.example` lists defaults. Notable env vars:
+Full schema in `packages/core/src/config.ts`. `.env.example` lists defaults. Notable env vars:
 
 | Variable | Default | Description |
 |---|---|---|
@@ -73,7 +114,7 @@ Full schema in `src/config.ts`. `.env.example` lists defaults. Notable env vars:
 | `LOG_LEVEL` | `info` | `trace` · `debug` · `info` · `warn` · `error` |
 | `HTTP_PORT` | `8080` | HTTP server port (`0` = disabled) |
 | `HTTP_TOKEN` | _(empty)_ | Bearer token / session secret for `/api/*` and the web UI. Empty = no auth. Automation source (`GET /api/automations/:name/source`) is readable under the same policy — document this prominently wherever `HTTP_TOKEN` is discussed (design.md D10, R4) |
-| `WEB_UI_ENABLED` | `false` | Enable the web UI dashboard |
+| `WEB_UI_ENABLED` | `false` | Enable the web UI dashboard. Parsed by `@ts-ha/web-ui`, not core; `ts-ha run` reads it only as a raw import gate |
 | `DEVICE_REGISTRY_ENABLED` | `false` | Enable Zigbee device discovery — controls `deviceRegistry` nullability in automations |
 | `DEVICE_REGISTRY_PERSIST` | `true` | Persist the device list and capability schema to disk, restored before the bridge republishes (breaking default change — design.md D6, R14) |
 | `AUTOMATIONS_RECURSIVE` | `false` | Scan subdirectories recursively for automation files |
@@ -87,7 +128,7 @@ Full schema in `src/config.ts`. `.env.example` lists defaults. Notable env vars:
 - **2 spaces** indent, **100 char** line width, **LF** line endings
 - Biome auto-organizes imports — don't manually reorder
 - `noForEach` is disabled but prefer `for...of` loops in practice
-- Web UI source (`src/core/web-ui/app/**`) has linting disabled via biome overrides
+- Web UI source (`packages/web-ui/src/app/**`) has linting disabled via biome overrides
 
 ## Import Conventions
 
@@ -176,14 +217,14 @@ Services accepted by `createEngine()` can be instances or factory functions `(ht
 
 ### ServicePlugin
 
-Services implementing `ServicePlugin` (`src/core/services/service-plugin.ts`) receive lifecycle hooks (`onStart`, `onStop`) and can mount HTTP routes (`registerRoutes`) via `ServiceRegistry.startAll()/stopAll()/mountRoutes()`.
+Services implementing `ServicePlugin` (`packages/core/src/services/service-plugin.ts`) receive lifecycle hooks (`onStart`, `onStop`) and can mount HTTP routes (`registerRoutes`) via `ServiceRegistry.startAll()/stopAll()/mountRoutes()`.
 
 ## Automation File Pattern
 
 ```ts
-import { Automation, type Trigger, type TriggerContext } from "../core/automation.js";
-import type { SomePayload } from "../types/zigbee/index.js";
-import type { ShellyService } from "../core/services/shelly-service.js";
+import { Automation, type Trigger, type TriggerContext } from "@ts-ha/core";
+import type { SomePayload } from "@ts-ha/shared/types";
+import type { ShellyService } from "@ts-ha/core";
 
 export default class MyAutomation extends Automation {
   readonly name = "my-automation";
@@ -242,7 +283,7 @@ describe("ClassName", () => {
 });
 ```
 
-- Tests in `tests/*.test.ts` (flat, not colocated)
+- Tests in each package's `tests/*.test.ts` (flat, not colocated)
 - Silent pino logger at module level
 - Mock factory functions: `function createMockHttp(): HttpClient`
 - Cast mocks: `{ method: mock(() => ...) } as unknown as ServiceType`
@@ -255,16 +296,16 @@ describe("ClassName", () => {
 
 The interactive dashboard (`ts-ha dashboard`) uses `@opentui/core` and `@opentui/react` for a terminal UI.
 
-- **JSX files** use `.tsx` extension — located in `src/cli/commands/` and `src/cli/components/`
+- **JSX files** use `.tsx` extension — located in `packages/cli/src/commands/` and `packages/cli/src/components/`
 - **`jsxImportSource`** is `@opentui/react` (set in `tsconfig.json`) — JSX elements are OpenTUI intrinsics (`<box>`, `<text>`, `<scrollbox>`), not HTML
 - **Never call `process.exit()`** — use `renderer.destroy()` for cleanup
 - **Text styling** uses nested modifier tags: `<strong>`, `<em>`, `<span fg="red">` inside `<text>`
 - **Hooks**: `useKeyboard`, `useRenderer`, `useTerminalDimensions`, `useTimeline` from `@opentui/react`
-- **Tab components** are separate files in `src/cli/components/` (one per tab)
-- **Shared theme** in `src/cli/components/theme.ts` (Dracula color palette)
-- **Shared types** in `src/cli/components/types.ts` (dashboard data interfaces)
+- **Tab components** are separate files in `packages/cli/src/components/` (one per tab)
+- **Shared theme** in `packages/cli/src/components/theme.ts` (Dracula color palette)
+- **Shared types** in `packages/cli/src/components/types.ts` (dashboard data interfaces)
 
-## Exports (`src/index.ts`)
+## Exports (`packages/core/src/index.ts`)
 
 - Barrel file with explicit named re-exports (no `export *`)
 - Grouped by category with section comments

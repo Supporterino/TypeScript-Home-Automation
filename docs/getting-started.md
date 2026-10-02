@@ -13,7 +13,7 @@
 Install the framework in your own project:
 
 ```bash
-bun add ts-home-automation
+bun add @ts-ha/core
 ```
 
 ### Project structure
@@ -33,7 +33,7 @@ my-home/
 ### Entry point (`src/index.ts`)
 
 ```ts
-import { createEngine } from "ts-home-automation";
+import { createEngine } from "@ts-ha/core";
 
 const engine = createEngine({
   automationsDir: new URL("./automations", import.meta.url).pathname,
@@ -52,7 +52,7 @@ await engine.start();
 ```ts
 const engine = createEngine({
   // Required: path to your automations directory
-  automationsDir: "./src/automations",
+  automationsDir: "./automations",
 
   // Optional: override environment-based config
   config: {
@@ -74,7 +74,7 @@ import {
   type Trigger,
   type TriggerContext,
   type OccupancyPayload,
-} from "ts-home-automation";
+} from "@ts-ha/core";
 
 export default class MotionLight extends Automation {
   readonly name = "motion-light";
@@ -110,7 +110,7 @@ Automations in `automationsDir` are auto-discovered on startup — just export a
 
 ---
 
-## Standalone usage
+## From source
 
 Clone the repo and work directly inside it:
 
@@ -122,15 +122,19 @@ bun install
 cp .env.example .env
 # Edit .env with your MQTT broker details
 
+mkdir -p automations
+
 bun run dev    # Hot-reload development mode
-bun run start  # Production mode
+bun run start  # Production mode (`ts-ha run`, loads ./automations)
 ```
 
-Write automations in `src/automations/` — they are discovered and registered automatically.
+Write automations in the `automations/` directory — they are discovered and
+registered automatically. No example automations ship with the packages; the
+type-checked examples live in `docs/examples/` in the repository.
 
 ---
 
-## Docker (standalone)
+## Docker
 
 A `Dockerfile` and `docker-compose.yml` are included. The Compose setup starts both the engine and a Mosquitto broker:
 

@@ -21,13 +21,21 @@ bun run dev    # Hot-reload — restarts on file changes
 
 ---
 
-## Docker (standalone)
+## Docker
 
 The repo includes a `Dockerfile` and `docker-compose.yml` that run the engine alongside a Mosquitto MQTT broker.
+
+> **Automations are not bundled.** No example automations ship in the image or
+> any package, and the compose file bind-mounts the operator-provided
+> `./automations` directory to `/app/automations`. Create it and add your own
+> automation files **before** `bun run docker:up`; because a bind mount creates
+> the missing host directory, the engine's missing-directory warning will not
+> fire and it would otherwise start with zero automations.
 
 ### Quick start
 
 ```bash
+mkdir -p automations   # add your automation files here
 bun run docker:build   # Build the image
 bun run docker:up      # Start engine + Mosquitto
 bun run docker:down    # Stop
@@ -84,7 +92,7 @@ volumes:
 
 ## Docker (consumer package)
 
-If you use `ts-home-automation` as an npm package in your own project, create a minimal Dockerfile:
+If you use `@ts-ha/core` as an npm package in your own project, create a minimal Dockerfile:
 
 ```dockerfile
 FROM oven/bun:1
@@ -206,10 +214,10 @@ Pipe stdout to your preferred log aggregator:
 
 ```bash
 # Pipe to a file
-bun run src/standalone.ts 2>&1 | tee /var/log/home-automation.log
+ts-ha run 2>&1 | tee /var/log/home-automation.log
 
 # Pipe to a log shipper (e.g., Vector, Fluent Bit)
-bun run src/standalone.ts | vector --config vector.toml
+ts-ha run | vector --config vector.toml
 ```
 
 Log levels (set via `LOG_LEVEL`):

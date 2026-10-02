@@ -1,10 +1,35 @@
 # CLI Reference
 
-The `ts-ha` CLI inspects and manages a running engine instance via its debug API. It is included as a binary in the `ts-home-automation` package.
+The `ts-ha` CLI inspects and manages a running engine instance via its debug API, and can boot a local engine with `ts-ha run`. It is provided by the `@ts-ha/cli` package (installed separately from the `@ts-ha/core` library).
 
 ```bash
 ts-ha [options] <command> <subcommand> [args]
 ```
+
+---
+
+## Run
+
+Boot a local engine in the current process — the only first-party engine runner
+(there is no separate standalone entry point):
+
+```bash
+ts-ha run                              # loads ./automations
+ts-ha run --automations /etc/automations
+ts-ha run --automations ./auto         # resolved against the working directory
+```
+
+- The automations directory defaults to `./automations` relative to the current
+  working directory; relative option values resolve the same way.
+- No example automations ship with the packages. If the resolved directory does
+  not exist, the command logs an explicit warning and startup continues with zero
+  automations (create the directory and add your own).
+- `SIGINT`/`SIGTERM` trigger a graceful engine shutdown before exit.
+- When `WEB_UI_ENABLED=true`, `run` dynamic-imports `@ts-ha/web-ui`, lets that
+  package parse `WEB_UI_ENABLED`/`WEB_UI_PATH`, and registers the plugin using the
+  core config's resolved `HTTP_TOKEN` as its auth token. `@ts-ha/web-ui` is an
+  optional peer: install it explicitly if you enable the UI under `npx` or a
+  global install.
 
 ---
 

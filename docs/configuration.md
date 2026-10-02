@@ -35,7 +35,7 @@ An annotated `.env.example` is included in the repository.
 > **Migration:**
 > ```diff
 >  const engine = createEngine({
->    automationsDir: "./src/automations",
+>    automationsDir: "./automations",
 > +  stateToggles: [{ stateKey: "night_mode", name: "Night Mode" }],
 >    services: {
 >      homekit: ({ logger, devices }) =>
@@ -63,12 +63,12 @@ An annotated `.env.example` is included in the repository.
 >  }
 > ```
 
-> **Importing from `src/core/services/homekit-sources/` is no longer
+> **Importing from `packages/core/src/services/homekit-sources/` is no longer
 > supported.** The per-family accessory source implementations that used to
 > live there (`state-source.ts` and friends) were promoted to source-neutral
-> device sources under `src/core/device-sources/` (design.md D2, D19).
+> device sources under `packages/core/src/device-sources/` (design.md D2, D19).
 > **Migration:** import the aggregate accessor (`Engine.devices`) or the
-> individual sources from `src/core/device-sources/` instead; there is no
+> individual sources from `packages/core/src/device-sources/` instead; there is no
 > drop-in rename, since the module boundary itself changed.
 
 See [Web UI](http/web-ui.md#breaking-changes) for the phase-⑥ frontend
@@ -153,10 +153,16 @@ The HTTP server serves health probes, the debug API, webhook endpoints, and opti
 
 ## Web UI
 
+The web UI is a separate package (`@ts-ha/web-ui`). It — not the core engine —
+parses these variables into its plugin options; `ts-ha run` reads
+`WEB_UI_ENABLED` only as a raw string gate before importing the package, and
+supplies the core config's resolved `HTTP_TOKEN` as the plugin's auth token.
+The core config schema contains no web UI section, regardless of these values.
+
 | Variable | Default | Description |
 |---|---|---|
 | `WEB_UI_ENABLED` | `false` | Enable the browser-based web UI dashboard |
-| `WEB_UI_PATH` | `/status` | URL path prefix for the web UI |
+| `WEB_UI_PATH` | `/status` | URL path prefix for the web UI (must start with `/`) |
 
 See [Web UI](http/web-ui.md) for full details.
 

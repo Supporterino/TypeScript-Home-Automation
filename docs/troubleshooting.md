@@ -262,7 +262,7 @@ await engine.manager.register(new MyAutomation());
 ### How do I update to a new version?
 
 ```bash
-bun update ts-home-automation
+bun update @ts-ha/core
 ```
 
 Check the [release notes](https://github.com/Supporterino/TypeScript-Home-Automation/releases) for breaking changes. The package follows semantic versioning.

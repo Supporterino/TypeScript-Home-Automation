@@ -2,7 +2,7 @@
 
 A lightweight, fully typed home automation framework built on MQTT and [Bun](https://bun.sh/). Write automations as TypeScript classes — no YAML, no UI, just code.
 
-[![npm](https://img.shields.io/npm/v/ts-home-automation)](https://www.npmjs.com/package/ts-home-automation)
+[![npm](https://img.shields.io/npm/v/@ts-ha/core)](https://www.npmjs.com/package/@ts-ha/core)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](LICENSE)
 [![Docs](https://img.shields.io/badge/docs-github%20pages-blue)](https://Supporterino.github.io/TypeScript-Home-Automation/)
 
@@ -14,11 +14,13 @@ A lightweight, fully typed home automation framework built on MQTT and [Bun](htt
 
 ## Install
 
+The engine library is `@ts-ha/core`; the runner (`ts-ha run`) is `@ts-ha/cli`.
+
 ```bash
-bun add ts-home-automation
+bun add @ts-ha/core @ts-ha/cli
 ```
 
-Or clone and run standalone:
+Or clone and run from source:
 
 ```bash
 git clone https://github.com/Supporterino/TypeScript-Home-Automation.git
@@ -31,9 +33,19 @@ Requires [Bun](https://bun.sh/) and an MQTT broker (e.g. [Mosquitto](https://mos
 
 ## Quick start
 
+Run an engine with `ts-ha run`, which loads automations from `./automations` by
+default (create the directory; no examples ship with the packages):
+
+```bash
+mkdir -p automations
+bunx ts-ha run --automations ./automations
+```
+
+Or embed the engine in your own project:
+
 ```ts
 // src/index.ts
-import { createEngine } from "ts-home-automation";
+import { createEngine } from "@ts-ha/core";
 
 const engine = createEngine({
   automationsDir: new URL("./automations", import.meta.url).pathname,
@@ -43,8 +55,9 @@ await engine.start();
 ```
 
 ```ts
-// src/automations/motion-light.ts
-import { Automation, type Trigger, type TriggerContext, type OccupancyPayload } from "ts-home-automation";
+// automations/motion-light.ts
+import { Automation, type Trigger, type TriggerContext } from "@ts-ha/core";
+import type { OccupancyPayload } from "@ts-ha/shared/types";
 
 export default class MotionLight extends Automation {
   readonly name = "motion-light";
@@ -67,7 +80,7 @@ export default class MotionLight extends Automation {
 | `MQTT_HOST` | `localhost` | MQTT broker hostname |
 | `LOG_LEVEL` | `info` | `trace` · `debug` · `info` · `warn` · `error` |
 | `HTTP_PORT` | `8080` | HTTP server port (`0` = disabled) |
-| `WEB_UI_ENABLED` | `false` | Enable the web UI dashboard |
+| `WEB_UI_ENABLED` | `false` | Enable the web UI dashboard (parsed by `@ts-ha/web-ui`; requires the optional peer installed) |
 | `DEVICE_REGISTRY_ENABLED` | `false` | Enable Zigbee device discovery and state tracking |
 
 See [Configuration](https://Supporterino.github.io/TypeScript-Home-Automation/configuration/) for all variables.

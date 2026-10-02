@@ -1,6 +1,6 @@
 # Web UI
 
-The engine includes an optional browser-based dashboard served on the same port as the HTTP server. It is a control-first interface: the landing view is a device control surface organised by room, with engine internals (automations, state, logs, HomeKit) demoted to a distinct operator section.
+The `@ts-ha/web-ui` package provides an optional browser-based dashboard served on the same port as the HTTP server. It registers itself with the engine as a `ServicePlugin` — the core engine contains no web-UI-specific code. It is a control-first interface: the landing view is a device control surface organised by room, with engine internals (automations, state, logs, HomeKit) demoted to a distinct operator section.
 
 ---
 
@@ -13,7 +13,52 @@ WEB_UI_PATH=/status   # optional, this is the default
 
 Navigate to `http://your-host:8080/status`.
 
-The web UI is disabled by default and adds zero overhead when disabled — the module is imported lazily at startup.
+`WEB_UI_ENABLED` and `WEB_UI_PATH` are parsed by `@ts-ha/web-ui`, not the core
+engine. `ts-ha run` reads `WEB_UI_ENABLED` only as a raw import gate (so a
+disabled run never loads the package), then lets the package parse its own
+options. The auth token is supplied by the runner from the core config's
+resolved `HTTP_TOKEN`; the package never reads `HTTP_TOKEN` itself.
+
+The web UI is disabled by default and adds zero overhead when disabled — the
+package is imported lazily only when enabled, and adding it to `ts-ha run` is a
+dynamic import.
+
+---
+
+## Embedding the UI in your own runner
+
+`ts-ha run` registers the web UI plugin for you. If you build your own entry
+point with `createEngine()` directly, setting `WEB_UI_ENABLED` has **no effect
+on its own** — the core engine does not know the web UI exists. Register the
+plugin explicitly, passing the core config's resolved `httpServer.token` as the
+auth token:
+
+```ts
+import { createEngine, loadConfig } from "@ts-ha/core";
+import { createWebUiService, parseWebUiOptions } from "@ts-ha/web-ui";
+
+const config = loadConfig();
+const options = parseWebUiOptions(); // reads WEB_UI_ENABLED / WEB_UI_PATH
+
+const engine = createEngine({
+  automationsDir: "./automations",
+  services: options
+    ? {
+        "web-ui": createWebUiService({
+          path: options.path,
+          token: config.httpServer.token,
+        }),
+      }
+    : {},
+});
+
+await engine.start();
+```
+
+The plugin is optional: a headless install does not need `@ts-ha/web-ui`, and a
+run that leaves it out serves no UI routes. The `onStart` hook the engine calls
+supplies the plugin's logger; request handlers read it lazily, so routes mounted
+before `onStart` are safe.
 
 ---
 

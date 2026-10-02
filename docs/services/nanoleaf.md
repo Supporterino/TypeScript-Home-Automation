@@ -22,10 +22,10 @@ Press Enter when prompted. The command prints an auth token — save it in your 
 Register Nanoleaf devices in a factory function passed to `services.nanoleaf` in your entry point:
 
 ```ts
-import { createEngine, NanoleafService } from "ts-home-automation";
+import { createEngine, NanoleafService } from "@ts-ha/core";
 
 const engine = createEngine({
-  automationsDir: "./src/automations",
+  automationsDir: "./automations",
   services: {
     nanoleaf: (http, logger) => {
       const svc = new NanoleafService(http, logger);
@@ -77,7 +77,7 @@ svc.registerMany({
 ## Example: activate a scene when motion is detected
 
 ```ts
-import type { NanoleafService } from "ts-home-automation";
+import type { NanoleafService } from "@ts-ha/core";
 
 export default class NanoleafMotion extends Automation {
   readonly name = "nanoleaf-motion";

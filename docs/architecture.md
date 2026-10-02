@@ -41,20 +41,22 @@ TypeScript Home Automation is a single-process engine that bridges MQTT messages
 
 ## Core structure
 
-The `src/core/` directory is organised into subfolders by responsibility:
+The repository is a Bun workspace of four packages; `@ts-ha/core` is organised
+into subfolders by responsibility:
 
 | Folder | Contents |
 |---|---|
-| `core/` (flat) | `engine.ts`, `automation.ts`, `automation-manager.ts` — the glue layer |
-| `core/mqtt/` | `mqtt-service.ts`, `mqtt-utils.ts` |
-| `core/http/` | `http-server.ts`, `http-client.ts` |
-| `core/scheduling/` | `cron-scheduler.ts` |
-| `core/state/` | `state-manager.ts` |
-| `core/logging/` | `log-buffer.ts` |
-| `core/services/` | `shelly-service.ts`, `nanoleaf-service.ts`, `ntfy-notification-service.ts`, `open-meteo-service.ts`, `openweathermap-service.ts`, `homekit-service.ts`, `homekit-accessory-factory.ts`, `service-plugin.ts`, `service-registry.ts` |
-| `core/devices/` | `aqara-h1-automation.ts`, `ikea-styrbar-automation.ts`, `ikea-rodret-automation.ts` |
-| `core/zigbee/` | `device-registry.ts` — Zigbee2MQTT device discovery and state tracking |
-| `core/web-ui/` | Hono app, HTML shell, React + Mantine frontend, compiled asset constants |
+| `packages/core/src/` (flat) | `engine.ts`, `automation.ts`, `automation-manager.ts` — the glue layer |
+| `packages/core/src/mqtt/` | `mqtt-service.ts`, `mqtt-utils.ts` |
+| `packages/core/src/http/` | `http-server.ts`, `http-client.ts` |
+| `packages/core/src/scheduling/` | `cron-scheduler.ts` |
+| `packages/core/src/state/` | `state-manager.ts` |
+| `packages/core/src/logging/` | `log-buffer.ts` |
+| `packages/core/src/services/` | `shelly-service.ts`, `nanoleaf-service.ts`, `ntfy-notification-service.ts`, `open-meteo-service.ts`, `openweathermap-service.ts`, `homekit-service.ts`, `homekit-accessory-factory.ts`, `service-plugin.ts`, `service-registry.ts` |
+| `packages/core/src/devices/` | `aqara-h1-automation.ts`, `ikea-styrbar-automation.ts`, `ikea-rodret-automation.ts` |
+| `packages/core/src/zigbee/` | `device-registry.ts` — Zigbee2MQTT device discovery and state tracking |
+| `packages/shared/src/` | `@ts-ha/shared` contracts, constants, and pure helpers |
+| `packages/web-ui/src/` | `@ts-ha/web-ui` Hono routes, `WebUiService` plugin, React + Mantine frontend, compiled asset constants |
 
 ---
 
@@ -106,7 +108,7 @@ A `Bun.serve()`-based HTTP server handling:
 - `/healthz`, `/readyz` — health probes (always unauthenticated)
 - `/webhook/*` — webhook trigger dispatch (optionally authenticated)
 - `/api/*` — automations, state, logs, device catalog, rooms, and the realtime event stream — authenticated when `HTTP_TOKEN` is set (see [API Reference](api-reference.md#httpserver) for the full route table)
-- `{WEB_UI_PATH}/*` (default: `/status/*`) — Hono sub-app serving the web UI's HTML shell, compiled assets, and login/logout (mounted lazily when `WEB_UI_ENABLED=true`); the `/api/*` routes above are **not** nested under this path — see [Web UI](http/web-ui.md#data-api)
+- `{WEB_UI_PATH}/*` (default: `/status/*`) — routes registered by the `@ts-ha/web-ui` package's `WebUiService` (`ServicePlugin`) when the web UI is enabled: the HTML shell, compiled assets, and login/logout. The `/api/*` routes above are **not** nested under this path — see [Web UI](http/web-ui.md#data-api)
 
 ### `ShellyService`
 
@@ -168,13 +170,17 @@ Every service and automation uses a child logger scoped with a `service` or `aut
 
 ## Module boundaries
 
-The framework is split into three categories:
+The framework is split into four independently published workspace packages:
 
-| Category | Path | Included in npm package |
+| Package | Contents | Published |
 |---|---|---|
-| Core framework | `src/core/` | Yes |
-| Public API / types | `src/index.ts`, `src/types/` | Yes |
-| Standalone runner | `src/standalone.ts` | No |
-| Example automations | `src/automations/` | No |
-| CLI tool | `src/cli/` | Yes (as `ts-ha` binary) |
-| Web UI source | `src/core/web-ui/app/` | No (compiled to assets) |
+| `@ts-ha/shared` | Domain/wire contracts, contract constants, pure helpers | Yes |
+| `@ts-ha/core` | Engine, services, device sources, HTTP server, MQTT, state, scheduling | Yes |
+| `@ts-ha/web-ui` | Hono routes, `WebUiService` plugin, React app, compiled assets | Yes |
+| `@ts-ha/cli` | `DebugClient`, `ts-ha` binary, OpenTUI dashboard, `ts-ha run` | Yes |
+
+Dependency direction is one-way: `shared` ← `core`, `shared` ← `web-ui`,
+`cli` → {`core`, `shared`}. `web-ui` imports nothing from `core` (it satisfies
+the service-plugin contract structurally); `core` never references `web-ui`.
+See `AGENTS.md` (Workspace Layout) and `scripts/guard-deps.ts`, which enforce
+this boundary.

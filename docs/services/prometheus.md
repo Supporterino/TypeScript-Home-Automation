@@ -7,7 +7,7 @@ The built-in `PrometheusMetricsService` exposes process, runtime, and per-device
 ## Prerequisites
 
 - **`DEVICE_REGISTRY_ENABLED=true`** — required for per-device Zigbee gauges. Without it the service still starts and exposes process/default metrics, but no device-level data is populated.
-- `prom-client` is already bundled as a dependency of `ts-home-automation`. No additional installation is needed.
+- `prom-client` is already bundled as a dependency of `@ts-ha/core`. No additional installation is needed.
 
 ---
 
@@ -16,10 +16,10 @@ The built-in `PrometheusMetricsService` exposes process, runtime, and per-device
 Pass a `PrometheusMetricsService` factory to the `services.metrics` field in your entry point:
 
 ```ts
-import { createEngine, PrometheusMetricsService } from "ts-home-automation";
+import { createEngine, PrometheusMetricsService } from "@ts-ha/core";
 
 const engine = createEngine({
-  automationsDir: "./src/automations",
+  automationsDir: "./automations",
   services: {
     metrics: (http, logger) => new PrometheusMetricsService(logger),
   },
@@ -163,7 +163,7 @@ Add a scrape job to your `prometheus.yml`:
 
 ```yaml
 scrape_configs:
-  - job_name: "ts-home-automation"
+  - job_name: "ts-ha"
     scrape_interval: 15s
     static_configs:
       - targets: ["localhost:8080"]
