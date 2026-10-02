@@ -128,12 +128,21 @@ export interface WeatherLocation {
  * ```
  */
 export interface WeatherService {
-  /** Get current weather conditions. */
-  getCurrent(): Promise<CurrentWeather>;
+  /**
+   * Get current weather conditions.
+   *
+   * @param location Optional per-call location overriding the service's
+   *   configured default. Providers that bake a location into their
+   *   constructor still use it when this is omitted.
+   */
+  getCurrent(location?: WeatherLocation): Promise<CurrentWeather>;
 
   /**
    * Get daily forecast.
    * @param days Number of days to forecast (1-7, provider may limit)
+   * @param location Optional per-call location overriding the service's
+   *   configured default. Trailing so existing `getForecast(n)` callers are
+   *   unaffected.
    */
-  getForecast(days?: number): Promise<DailyForecast[]>;
+  getForecast(days?: number, location?: WeatherLocation): Promise<DailyForecast[]>;
 }

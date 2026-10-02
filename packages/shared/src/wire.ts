@@ -7,6 +7,8 @@
  * (design.md D1; specs/packaging "Shared Owns The Contracts").
  */
 
+import type { CurrentWeather, DailyForecast, WeatherLocation } from "./types/weather.js";
+
 /**
  * Readiness/mqtt/engine check flags returned by `GET /api/status` and
  * `GET /readyz`.
@@ -80,3 +82,100 @@ export interface SerializedDevice {
 
 /** Alias used by the CLI dashboard for the same device wire shape. */
 export type DeviceInfo = SerializedDevice;
+
+// ---------------------------------------------------------------------------
+// Energy (`GET /api/energy`)
+// ---------------------------------------------------------------------------
+
+/**
+ * One device's contribution to the home-wide energy view.
+ *
+ * `powerWatts` and `energyWh` are absent — not zero — when the device reports
+ * no such reading, so a non-metering device is distinguishable from one
+ * drawing a genuine zero (specs/energy-monitoring).
+ */
+export interface EnergyDeviceBreakdown {
+  /** The device's qualified identifier. */
+  qualifiedId: string;
+  /** Human-readable display name, for presenting the breakdown. */
+  displayName: string;
+  /** Instantaneous power in watts, when the device declares a reading. */
+  powerWatts?: number;
+  /** Cumulative consumption in watt-hours, when the device declares a reading. */
+  energyWh?: number;
+  /** Whether the device is currently reachable. Unreachable devices are not summed. */
+  available: boolean;
+}
+
+/** One timestamped sample of the home's instantaneous power total. */
+export interface EnergyHistorySample {
+  /** Epoch milliseconds at which the sample was taken. */
+  timestamp: number;
+  /** Home instantaneous power in watts at that time. */
+  powerWatts: number;
+}
+
+/**
+ * Response body of `GET /api/energy` (specs/energy-monitoring "Energy Endpoint
+ * Contract").
+ */
+export interface EnergyData {
+  /** Home instantaneous power across reachable metering devices, in watts. */
+  powerWatts: number;
+  /** Home cumulative consumption across reachable metering devices, in watt-hours. */
+  energyWh: number;
+  /** Per-device contributions; empty when no device meters energy. */
+  breakdown: EnergyDeviceBreakdown[];
+  /** Rolling history, oldest first; empty when history is disabled. */
+  history: EnergyHistorySample[];
+}
+
+// ---------------------------------------------------------------------------
+// Weather (`GET /api/weather`)
+// ---------------------------------------------------------------------------
+
+/**
+ * Response body of `GET /api/weather` for a resolvable location
+ * (specs/weather-services "HTTP Exposure").
+ */
+export interface WeatherData {
+  /** The location the data was resolved for. */
+  location: WeatherLocation;
+  /** Current conditions. */
+  current: CurrentWeather;
+  /** Daily forecast, ordered by date ascending. */
+  forecast: DailyForecast[];
+}
+
+/**
+ * Marker the weather surface reports when it cannot produce conditions because
+ * the feature is unconfigured rather than errored — no service registered, or
+ * no default and no supplied location (specs/weather-services).
+ */
+export interface WeatherUnavailable {
+  available: false;
+  /** Why no weather can be produced. */
+  reason: "service_unregistered" | "no_location";
+}
+
+// ---------------------------------------------------------------------------
+// Room batch command (`POST /api/rooms/:id/command`)
+// ---------------------------------------------------------------------------
+
+/** Per-device outcome of a room batch command (design.md D5). */
+export type RoomCommandOutcome = "applied" | "skipped" | "failed";
+
+/** One member's result within a room batch-command response. */
+export interface RoomCommandResult {
+  /** The member's qualified identifier. */
+  qualifiedId: string;
+  /** What happened when the command was dispatched to this member. */
+  outcome: RoomCommandOutcome;
+}
+
+/**
+ * Response body of `POST /api/rooms/:id/command`: one result per room member
+ * (design.md D5). The batch is best-effort — the response never promises
+ * atomicity across members.
+ */
+export type RoomBatchCommandResponse = RoomCommandResult[];
