@@ -1,0 +1,70 @@
+/**
+ * Notification priority levels.
+ */
+export type NotificationPriority = "min" | "low" | "default" | "high" | "urgent";
+
+/**
+ * Options for sending a notification.
+ */
+export interface NotificationOptions {
+  /** Notification title. */
+  title: string;
+  /** Notification body message. */
+  message: string;
+  /** Priority level (defaults to "default"). */
+  priority?: NotificationPriority;
+  /** Tags / emoji shortcodes (e.g. ["warning", "thermometer"]). */
+  tags?: string[];
+  /**
+   * Named destination channel within the notification service.
+   *
+   * When provided, the service routes the notification to the channel
+   * registered under this name instead of the default channel. If the
+   * name is not found the service falls back to its default channel.
+   *
+   * The exact meaning is provider-specific:
+   * - **ntfy.sh**: maps to an ntfy topic string
+   * - **Telegram**: could map to a chat ID
+   * - **email**: could map to a recipient address
+   *
+   * Omit this field to use the service's default channel.
+   */
+  channel?: string;
+}
+
+/**
+ * Abstract interface for notification services.
+ *
+ * Implement this interface to integrate any push notification provider
+ * (ntfy.sh, Pushover, Telegram, email, etc.) into the automation engine.
+ *
+ * The engine accepts an optional `NotificationService` — if none is
+ * provided, `this.notify` in automations will be a no-op that logs
+ * a warning.
+ *
+ * @example
+ * ```ts
+ * import { createEngine, NtfyNotificationService } from "@ts-ha/core";
+ *
+ * const engine = createEngine({
+ *   automationsDir: "...",
+ *   services: {
+ *     notifications: (http, logger) =>
+ *       new NtfyNotificationService({
+ *         topic: "my-home-alerts",
+ *         http,
+ *         logger,
+ *       }),
+ *   },
+ * });
+ * ```
+ */
+export interface NotificationService {
+  /**
+   * Send a notification.
+   *
+   * Implementations should handle errors gracefully and not throw
+   * unless the failure is unrecoverable.
+   */
+  send(options: NotificationOptions): Promise<void>;
+}

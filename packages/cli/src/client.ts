@@ -1,0 +1,222 @@
+import type { SerializedDevice } from "@ts-ha/shared";
+
+export type { SerializedDevice } from "@ts-ha/shared";
+
+/**
+ * HTTP client for the engine's debug API.
+ */
+export class DebugClient {
+  private readonly baseUrl: string;
+  private readonly token: string | undefined;
+
+  constructor(host: string, token?: string) {
+    this.baseUrl = host.startsWith("http") ? host : `http://${host}`;
+    this.token = token;
+  }
+
+  // -------------------------------------------------------------------------
+  // Automations
+  // -------------------------------------------------------------------------
+
+  async getReadiness(): Promise<{
+    status: string;
+    checks: { mqtt: boolean; engine: boolean };
+    startedAt: number | null;
+    tz: string | null;
+  }> {
+    // Readiness endpoint is unauthenticated, use raw fetch
+    const url = `${this.baseUrl}/readyz`;
+    let response: Response;
+    try {
+      response = await fetch(url);
+    } catch (err) {
+      throw new Error(
+        `Failed to connect to ${this.baseUrl}. Is the engine running?\n${(err as Error).message}`,
+      );
+    }
+    return (await response.json()) as {
+      status: string;
+      checks: { mqtt: boolean; engine: boolean };
+      startedAt: number | null;
+      tz: string | null;
+    };
+  }
+
+  async listAutomations(): Promise<{
+    automations: {
+      name: string;
+      enabled: boolean;
+      triggers: { type: string; [key: string]: unknown }[];
+    }[];
+    count: number;
+  }> {
+    return this.get("/api/automations");
+  }
+
+  async getAutomation(name: string): Promise<{
+    name: string;
+    enabled: boolean;
+    triggers: { type: string; [key: string]: unknown }[];
+  }> {
+    return this.get(`/api/automations/${encodeURIComponent(name)}`);
+  }
+
+  /** Enable or disable a single automation by name. */
+  async setAutomationEnabled(
+    name: string,
+    enabled: boolean,
+  ): Promise<{
+    name: string;
+    enabled: boolean;
+    triggers: { type: string; [key: string]: unknown }[];
+  }> {
+    return this.request(`/api/automations/${encodeURIComponent(name)}/enabled`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...this.authHeaders() },
+      body: JSON.stringify({ enabled }),
+    });
+  }
+
+  /** Read the current contents of the file an automation was loaded from. */
+  async getAutomationSource(name: string): Promise<{ name: string; source: string }> {
+    return this.get(`/api/automations/${encodeURIComponent(name)}/source`);
+  }
+
+  // -------------------------------------------------------------------------
+  // State
+  // -------------------------------------------------------------------------
+
+  async listState(): Promise<{ state: Record<string, unknown>; count: number }> {
+    return this.get("/api/state");
+  }
+
+  async getState(key: string): Promise<{ key: string; value: unknown; exists: boolean }> {
+    return this.get(`/api/state/${encodeURIComponent(key)}`);
+  }
+
+  async setState(
+    key: string,
+    value: unknown,
+  ): Promise<{ key: string; value: unknown; previous: unknown }> {
+    return this.request(`/api/state/${encodeURIComponent(key)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...this.authHeaders() },
+      body: JSON.stringify(value),
+    });
+  }
+
+  async deleteState(key: string): Promise<{ key: string; deleted: boolean }> {
+    return this.request(`/api/state/${encodeURIComponent(key)}`, {
+      method: "DELETE",
+    });
+  }
+
+  // -------------------------------------------------------------------------
+  // Devices
+  // -------------------------------------------------------------------------
+
+  async listDevices(): Promise<{ devices: SerializedDevice[]; count: number }> {
+    return this.get("/api/devices");
+  }
+
+  async getDevice(friendlyName: string): Promise<SerializedDevice> {
+    return this.get(`/api/devices/${encodeURIComponent(friendlyName)}`);
+  }
+
+  // -------------------------------------------------------------------------
+  // HomeKit
+  // -------------------------------------------------------------------------
+
+  async getHomekitStatus(): Promise<{
+    running: boolean;
+    bridgeName: string;
+    port: number;
+    username: string;
+    persistPath: string;
+    accessoryCount: number;
+    pinCode: string;
+  } | null> {
+    return this.get<{
+      running: boolean;
+      bridgeName: string;
+      port: number;
+      username: string;
+      persistPath: string;
+      accessoryCount: number;
+      pinCode: string;
+    }>("/api/homekit/status").catch(() => null);
+  }
+
+  // -------------------------------------------------------------------------
+  // Logs
+  // -------------------------------------------------------------------------
+
+  async getLogs(options?: { automation?: string; level?: string; limit?: number }): Promise<{
+    entries: { level: number; time: number; msg: string; [key: string]: unknown }[];
+    count: number;
+  }> {
+    const params = new URLSearchParams();
+    if (options?.automation) params.set("automation", options.automation);
+    if (options?.level) params.set("level", options.level);
+    if (options?.limit) params.set("limit", String(options.limit));
+
+    const query = params.toString();
+    return this.get(`/api/logs${query ? `?${query}` : ""}`);
+  }
+
+  // -------------------------------------------------------------------------
+  // Trigger
+  // -------------------------------------------------------------------------
+
+  async triggerAutomation(
+    name: string,
+    context: { type: string; [key: string]: unknown },
+  ): Promise<{ status: string; automation: string; type: string }> {
+    return this.request(`/api/automations/${encodeURIComponent(name)}/trigger`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...this.authHeaders() },
+      body: JSON.stringify(context),
+    });
+  }
+
+  // -------------------------------------------------------------------------
+  // Internal
+  // -------------------------------------------------------------------------
+
+  private authHeaders(): Record<string, string> {
+    if (!this.token) return {};
+    return { Authorization: `Bearer ${this.token}` };
+  }
+
+  private async get<T>(path: string): Promise<T> {
+    return this.request<T>(path, { method: "GET" });
+  }
+
+  private async request<T>(path: string, init: RequestInit): Promise<T> {
+    const url = `${this.baseUrl}${path}`;
+
+    // Merge auth headers with any existing headers
+    const headers = {
+      ...this.authHeaders(),
+      ...(init.headers as Record<string, string> | undefined),
+    };
+
+    let response: Response;
+    try {
+      response = await fetch(url, { ...init, headers });
+    } catch (err) {
+      throw new Error(
+        `Failed to connect to ${this.baseUrl}. Is the engine running?\n${(err as Error).message}`,
+      );
+    }
+
+    const body = await response.json();
+
+    if (!response.ok) {
+      const msg = (body as { error?: string }).error ?? `HTTP ${response.status}`;
+      throw new Error(msg);
+    }
+
+    return body as T;
+  }
+}

@@ -1,0 +1,59 @@
+{
+  "name": "@ts-ha/web-ui",
+  "version": "0.1.0",
+  "description": "Web UI service plugin and React/Mantine application for TypeScript Home Automation",
+  "type": "module",
+  "private": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "development": {
+        "types": "./src/index.ts",
+        "import": "./src/index.ts"
+      },
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "build:web-ui": "bun run scripts/generate-icon.ts && bun run scripts/build-web-ui.ts",
+    "prebuild": "bun run build:web-ui",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p src/app/tsconfig.json",
+    "pretypecheck": "bun run build:web-ui",
+    "test": "bun test --conditions=development",
+    "pretest": "bun run build:web-ui",
+    "prepublishOnly": "bun run build"
+  },
+  "license": "GPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Supporterino/TypeScript-Home-Automation.git",
+    "directory": "packages/web-ui"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@mantine/core": "^9.0.2",
+    "@mantine/hooks": "^9.0.2",
+    "@tabler/icons-react": "^3.41.1",
+    "@ts-ha/shared": "workspace:*",
+    "hono": "^4.12.14",
+    "pino": "^10.3.1",
+    "prismjs": "^1.30.0",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5"
+  },
+  "devDependencies": {
+    "@types/prismjs": "^1.26.6",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3"
+  }
+}

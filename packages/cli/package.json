@@ -1,0 +1,57 @@
+{
+  "name": "@ts-ha/cli",
+  "version": "0.1.0",
+  "description": "Command-line interface and terminal dashboard for TypeScript Home Automation",
+  "type": "module",
+  "private": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "ts-ha": "./dist/index.js"
+  },
+  "exports": {
+    ".": {
+      "development": {
+        "types": "./src/index.ts",
+        "import": "./src/index.ts"
+      },
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test --conditions=development",
+    "prepublishOnly": "bun run build"
+  },
+  "license": "GPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Supporterino/TypeScript-Home-Automation.git",
+    "directory": "packages/cli"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@opentui/core": "^0.4.0",
+    "@opentui/react": "^0.4.0",
+    "@ts-ha/core": "workspace:*",
+    "@ts-ha/shared": "workspace:*",
+    "react": "^19.2.5"
+  },
+  "peerDependencies": {
+    "@ts-ha/web-ui": "workspace:*"
+  },
+  "peerDependenciesMeta": {
+    "@ts-ha/web-ui": {
+      "optional": true
+    }
+  }
+}

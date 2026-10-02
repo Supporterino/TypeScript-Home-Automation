@@ -15,8 +15,9 @@ docs/.cache
 # Persisted state
 state.json
 
-# Generated web UI asset manifest (rebuilt by `bun run build:web-ui`)
-src/core/web-ui/assets/manifest.ts
+# Generated web UI asset manifest + icon (rebuilt by `bun run build:web-ui`)
+packages/web-ui/src/assets/manifest.ts
+packages/web-ui/src/assets/icon-svg.ts
 
 # Environment variables
 .env

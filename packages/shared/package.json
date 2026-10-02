@@ -1,0 +1,79 @@
+{
+  "name": "@ts-ha/shared",
+  "version": "0.1.0",
+  "description": "Shared domain and wire contracts for the TypeScript Home Automation workspace",
+  "type": "module",
+  "private": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "development": {
+        "types": "./src/index.ts",
+        "import": "./src/index.ts"
+      },
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./types": {
+      "development": {
+        "types": "./src/types/index.ts",
+        "import": "./src/types/index.ts"
+      },
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/types/index.js"
+    },
+    "./types/shelly": {
+      "development": {
+        "types": "./src/types/shelly.ts",
+        "import": "./src/types/shelly.ts"
+      },
+      "types": "./dist/types/shelly.d.ts",
+      "import": "./dist/types/shelly.js"
+    },
+    "./types/nanoleaf": {
+      "development": {
+        "types": "./src/types/nanoleaf.ts",
+        "import": "./src/types/nanoleaf.ts"
+      },
+      "types": "./dist/types/nanoleaf.d.ts",
+      "import": "./dist/types/nanoleaf.js"
+    },
+    "./types/weather": {
+      "development": {
+        "types": "./src/types/weather.ts",
+        "import": "./src/types/weather.ts"
+      },
+      "types": "./dist/types/weather.d.ts",
+      "import": "./dist/types/weather.js"
+    },
+    "./types/notification": {
+      "development": {
+        "types": "./src/types/notification.ts",
+        "import": "./src/types/notification.ts"
+      },
+      "types": "./dist/types/notification.d.ts",
+      "import": "./dist/types/notification.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test --conditions=development",
+    "prepublishOnly": "bun run build"
+  },
+  "license": "GPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Supporterino/TypeScript-Home-Automation.git",
+    "directory": "packages/shared"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

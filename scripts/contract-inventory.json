@@ -1,0 +1,293 @@
+{
+  "$comment": "Shared-contract inventory derived from the actual cross-package usage of core, webUi and cli. Each entry must have exactly one declaration site under packages/shared/src; consumers must not re-declare it. Verified by scripts/guard-contracts.ts.",
+  "contracts": [
+    {
+      "name": "Capability",
+      "kind": "interface",
+      "definedIn": "packages/shared/src/capabilities.ts",
+      "consumers": ["core", "webUi"]
+    },
+    {
+      "name": "CapabilityAccess",
+      "kind": "interface",
+      "definedIn": "packages/shared/src/capabilities.ts",
+      "consumers": ["core", "webUi"]
+    },
+    {
+      "name": "CapabilityRange",
+      "kind": "interface",
+      "definedIn": "packages/shared/src/capabilities.ts",
+      "consumers": ["core", "webUi"]
+    },
+    {
+      "name": "CapabilityValueType",
+      "kind": "type",
+      "definedIn": "packages/shared/src/capabilities.ts",
+      "consumers": ["core", "webUi"]
+    },
+    {
+      "name": "readBooleanCapabilityValue",
+      "kind": "function",
+      "definedIn": "packages/shared/src/capabilities.ts",
+      "consumers": ["core", "webUi"]
+    },
+    {
+      "name": "composeBooleanCapabilityValue",
+      "kind": "function",
+      "definedIn": "packages/shared/src/capabilities.ts",
+      "consumers": ["core", "webUi"]
+    },
+    {
+      "name": "SESSION_COOKIE",
+      "kind": "const",
+      "definedIn": "packages/shared/src/constants.ts",
+      "consumers": ["core", "webUi"]
+    },
+    {
+      "name": "INTERNAL_STATE_PREFIX",
+      "kind": "const",
+      "definedIn": "packages/shared/src/constants.ts",
+      "consumers": ["core", "webUi"]
+    },
+    {
+      "name": "LogEntry",
+      "kind": "interface",
+      "definedIn": "packages/shared/src/log-entry.ts",
+      "consumers": ["core", "webUi", "cli"]
+    },
+    {
+      "name": "ObservationMode",
+      "kind": "type",
+      "definedIn": "packages/shared/src/device.ts",
+      "consumers": ["core", "webUi"]
+    },
+    {
+      "name": "DeviceObservation",
+      "kind": "interface",
+      "definedIn": "packages/shared/src/device.ts",
+      "consumers": ["core", "webUi"]
+    },
+    {
+      "name": "DeviceDescriptor",
+      "kind": "interface",
+      "definedIn": "packages/shared/src/device.ts",
+      "consumers": ["core", "webUi"]
+    },
+    {
+      "name": "TriggerContext",
+      "kind": "type",
+      "definedIn": "packages/shared/src/automation.ts",
+      "consumers": ["core", "webUi"]
+    },
+    {
+      "name": "ZigbeeDevice",
+      "kind": "interface",
+      "definedIn": "packages/shared/src/types/zigbee/bridge.ts",
+      "consumers": ["core"]
+    },
+    {
+      "name": "ZigbeeDeviceDefinition",
+      "kind": "interface",
+      "definedIn": "packages/shared/src/types/zigbee/bridge.ts",
+      "consumers": ["core"]
+    },
+    {
+      "name": "ZigbeeDeviceType",
+      "kind": "type",
+      "definedIn": "packages/shared/src/types/zigbee/bridge.ts",
+      "consumers": ["core"]
+    },
+    {
+      "name": "ZigbeeInterviewState",
+      "kind": "type",
+      "definedIn": "packages/shared/src/types/zigbee/bridge.ts",
+      "consumers": ["core"]
+    },
+    {
+      "name": "ExecutionOutcome",
+      "kind": "type",
+      "definedIn": "packages/shared/src/execution.ts",
+      "consumers": ["core", "webUi"]
+    },
+    {
+      "name": "ExecutionRecord",
+      "kind": "interface",
+      "definedIn": "packages/shared/src/execution.ts",
+      "consumers": ["core", "webUi"]
+    },
+    {
+      "name": "ObservedWrites",
+      "kind": "interface",
+      "definedIn": "packages/shared/src/execution.ts",
+      "consumers": ["core"]
+    },
+    {
+      "name": "Room",
+      "kind": "interface",
+      "definedIn": "packages/shared/src/room.ts",
+      "consumers": ["core", "webUi"]
+    },
+    {
+      "name": "RoomMember",
+      "kind": "interface",
+      "definedIn": "packages/shared/src/room.ts",
+      "consumers": ["core", "webUi"]
+    },
+    {
+      "name": "RoomWithMembers",
+      "kind": "interface",
+      "definedIn": "packages/shared/src/room.ts",
+      "consumers": ["core", "webUi"]
+    },
+    {
+      "name": "RequiredServiceStatus",
+      "kind": "interface",
+      "definedIn": "packages/shared/src/relationships.ts",
+      "consumers": ["core", "webUi"]
+    },
+    {
+      "name": "AutomationRelationships",
+      "kind": "interface",
+      "definedIn": "packages/shared/src/relationships.ts",
+      "consumers": ["core", "webUi"]
+    },
+    {
+      "name": "StateChangedEvent",
+      "kind": "interface",
+      "definedIn": "packages/shared/src/events.ts",
+      "consumers": ["core", "webUi"]
+    },
+    {
+      "name": "LogEntryEvent",
+      "kind": "interface",
+      "definedIn": "packages/shared/src/events.ts",
+      "consumers": ["core", "webUi"]
+    },
+    {
+      "name": "AutomationEnabledEvent",
+      "kind": "interface",
+      "definedIn": "packages/shared/src/events.ts",
+      "consumers": ["core", "webUi"]
+    },
+    {
+      "name": "ReadinessChangedEvent",
+      "kind": "interface",
+      "definedIn": "packages/shared/src/events.ts",
+      "consumers": ["core", "webUi"]
+    },
+    {
+      "name": "FellBehindEvent",
+      "kind": "interface",
+      "definedIn": "packages/shared/src/events.ts",
+      "consumers": ["core", "webUi"]
+    },
+    {
+      "name": "DeviceStateChangedEvent",
+      "kind": "interface",
+      "definedIn": "packages/shared/src/events.ts",
+      "consumers": ["core", "webUi"]
+    },
+    {
+      "name": "DeviceReachabilityChangedEvent",
+      "kind": "interface",
+      "definedIn": "packages/shared/src/events.ts",
+      "consumers": ["core", "webUi"]
+    },
+    {
+      "name": "DeviceAppearedEvent",
+      "kind": "interface",
+      "definedIn": "packages/shared/src/events.ts",
+      "consumers": ["core", "webUi"]
+    },
+    {
+      "name": "DeviceDisappearedEvent",
+      "kind": "interface",
+      "definedIn": "packages/shared/src/events.ts",
+      "consumers": ["core", "webUi"]
+    },
+    {
+      "name": "AutomationExecutionCompletedEvent",
+      "kind": "interface",
+      "definedIn": "packages/shared/src/events.ts",
+      "consumers": ["core", "webUi"]
+    },
+    {
+      "name": "RoomChangedEvent",
+      "kind": "interface",
+      "definedIn": "packages/shared/src/events.ts",
+      "consumers": ["core", "webUi"]
+    },
+    {
+      "name": "RoomMembershipChangedEvent",
+      "kind": "interface",
+      "definedIn": "packages/shared/src/events.ts",
+      "consumers": ["core", "webUi"]
+    },
+    {
+      "name": "DeviceVisibilityChangedEvent",
+      "kind": "interface",
+      "definedIn": "packages/shared/src/events.ts",
+      "consumers": ["core", "webUi"]
+    },
+    {
+      "name": "StreamEvent",
+      "kind": "type",
+      "definedIn": "packages/shared/src/events.ts",
+      "consumers": ["core", "webUi"]
+    },
+    {
+      "name": "StreamEventListener",
+      "kind": "type",
+      "definedIn": "packages/shared/src/events.ts",
+      "consumers": ["core"]
+    },
+    {
+      "name": "StatusChecks",
+      "kind": "interface",
+      "definedIn": "packages/shared/src/wire.ts",
+      "consumers": ["webUi"]
+    },
+    {
+      "name": "StatusData",
+      "kind": "interface",
+      "definedIn": "packages/shared/src/wire.ts",
+      "consumers": ["webUi"]
+    },
+    {
+      "name": "TriggerDef",
+      "kind": "interface",
+      "definedIn": "packages/shared/src/wire.ts",
+      "consumers": ["webUi"]
+    },
+    {
+      "name": "Automation",
+      "kind": "interface",
+      "definedIn": "packages/shared/src/wire.ts",
+      "consumers": ["webUi"]
+    },
+    {
+      "name": "AutomationInfo",
+      "kind": "interface",
+      "definedIn": "packages/shared/src/wire.ts",
+      "consumers": ["cli"]
+    },
+    {
+      "name": "HomekitStatus",
+      "kind": "interface",
+      "definedIn": "packages/shared/src/wire.ts",
+      "consumers": ["core", "webUi", "cli"]
+    },
+    {
+      "name": "SerializedDevice",
+      "kind": "interface",
+      "definedIn": "packages/shared/src/wire.ts",
+      "consumers": ["cli"]
+    },
+    {
+      "name": "DeviceInfo",
+      "kind": "type",
+      "definedIn": "packages/shared/src/wire.ts",
+      "consumers": ["cli"]
+    }
+  ]
+}

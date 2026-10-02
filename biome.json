@@ -24,11 +24,19 @@
     }
   },
   "files": {
-    "includes": ["src/**", "tests/**", "*.json", "!src/core/web-ui/assets/manifest.ts"]
+    "includes": [
+      "packages/*/src/**",
+      "packages/*/tests/**",
+      "docs/examples/**",
+      "scripts/**",
+      "*.json",
+      "!packages/web-ui/src/assets/manifest.ts",
+      "!packages/web-ui/src/assets/icon-svg.ts"
+    ]
   },
   "overrides": [
     {
-      "includes": ["src/core/web-ui/app/**"],
+      "includes": ["packages/web-ui/src/app/**"],
       "linter": {
         "enabled": false
       }

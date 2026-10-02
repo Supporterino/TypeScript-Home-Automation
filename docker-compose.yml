@@ -27,6 +27,9 @@ services:
       - HTTP_PORT=8080
     volumes:
       - homekit-persist:/data/homekit-persist
+      # Operator-provided automations. No examples ship in the image; create
+      # ./automations on the host before starting the stack.
+      - ./automations:/app/automations
     healthcheck:
       test: ["CMD", "bun", "-e", "const r = await fetch('http://localhost:8080/readyz'); process.exit(r.ok ? 0 : 1)"]
       interval: 10s
