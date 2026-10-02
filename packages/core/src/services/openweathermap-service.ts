@@ -81,8 +81,13 @@ interface OWMOneCallResponse {
 export class OpenWeatherMapService implements WeatherService {
   private readonly baseUrl: string;
 
-  /** Cached API response with TTL. */
-  private cache: { data: OWMOneCallResponse; fetchedAt: number } | null = null;
+  /** Cached API response with TTL, keyed by the resolved coordinates. */
+  private cache: {
+    data: OWMOneCallResponse;
+    fetchedAt: number;
+    latitude: number;
+    longitude: number;
+  } | null = null;
 
   /** Cache TTL in milliseconds (default: 5 minutes). */
   private readonly cacheTtlMs = 5 * 60 * 1000;
@@ -95,8 +100,8 @@ export class OpenWeatherMapService implements WeatherService {
     this.baseUrl = config.baseUrl ?? "https://api.openweathermap.org";
   }
 
-  async getCurrent(): Promise<CurrentWeather> {
-    const data = await this.fetchOneCall();
+  async getCurrent(location?: WeatherLocation): Promise<CurrentWeather> {
+    const data = await this.fetchOneCall(location);
     const c = data.current;
     if (c === null || typeof c !== "object") {
       throw new Error("OpenWeatherMap response is missing the expected `current` section");
@@ -122,8 +127,8 @@ export class OpenWeatherMapService implements WeatherService {
     };
   }
 
-  async getForecast(days = 5): Promise<DailyForecast[]> {
-    const data = await this.fetchOneCall();
+  async getForecast(days = 5, location?: WeatherLocation): Promise<DailyForecast[]> {
+    const data = await this.fetchOneCall(location);
     if (!Array.isArray(data.daily)) {
       throw new Error("OpenWeatherMap response is missing the expected `daily` forecast array");
     }
@@ -156,13 +161,20 @@ export class OpenWeatherMapService implements WeatherService {
     });
   }
 
-  private async fetchOneCall(): Promise<OWMOneCallResponse> {
-    // Return cached data if still fresh
-    if (this.cache && Date.now() - this.cache.fetchedAt < this.cacheTtlMs) {
+  private async fetchOneCall(location?: WeatherLocation): Promise<OWMOneCallResponse> {
+    const { latitude, longitude } = location ?? this.config.location;
+
+    // Return cached data if still fresh for the same coordinates; an
+    // override request must not serve another location's cached response.
+    if (
+      this.cache &&
+      Date.now() - this.cache.fetchedAt < this.cacheTtlMs &&
+      this.cache.latitude === latitude &&
+      this.cache.longitude === longitude
+    ) {
       return this.cache.data;
     }
 
-    const { latitude, longitude } = this.config.location;
     const url = `${this.baseUrl}/data/3.0/onecall?lat=${latitude}&lon=${longitude}&units=metric&appid=${this.config.apiKey}`;
 
     this.logger.debug({ latitude, longitude }, "Fetching OpenWeatherMap data");
@@ -174,7 +186,7 @@ export class OpenWeatherMapService implements WeatherService {
       throw new Error(errMsg);
     }
 
-    this.cache = { data: response.data, fetchedAt: Date.now() };
+    this.cache = { data: response.data, fetchedAt: Date.now(), latitude, longitude };
     return response.data;
   }
 }

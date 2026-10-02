@@ -155,6 +155,83 @@ describe("ShellyDeviceSource", () => {
     source.stop();
   });
 
+  it("maps cumulative active energy into state and declares the Wh capability for a metering device", () => {
+    const http = createMockHttp({});
+    const shelly = new ShellyService(http, mqttMock.mqtt, logger);
+    shelly.register("mqtt_plug", { transport: "mqtt", topicPrefix: "shellyplus1-abc" });
+    const source = new ShellyDeviceSource(shelly, mqttMock.mqtt, logger, 1_000_000);
+    source.start();
+
+    mqttMock.emit("shellyplus1-abc/events/rpc", {
+      method: "NotifyStatus",
+      params: {
+        "switch:0": {
+          output: true,
+          apower: 12,
+          voltage: 230,
+          current: 0.05,
+          aenergy: { total: 1234.5, by_minute: [], minute_ts: 1_700_000_000 },
+        },
+      },
+    });
+
+    const device = source.get("mqtt_plug");
+    expect(device?.state.energy).toBe(1234.5);
+
+    const energy = device?.capabilities.find((c) => c.property === "energy");
+    expect(energy?.valueType).toBe("numeric");
+    expect(energy?.unit).toBe("Wh");
+    expect(energy?.access).toEqual({ readable: true, writable: false });
+
+    source.stop();
+  });
+
+  it("keeps a reported zero cumulative energy as a present, metered reading", () => {
+    const http = createMockHttp({});
+    const shelly = new ShellyService(http, mqttMock.mqtt, logger);
+    shelly.register("mqtt_plug", { transport: "mqtt", topicPrefix: "shellyplus1-abc" });
+    const source = new ShellyDeviceSource(shelly, mqttMock.mqtt, logger, 1_000_000);
+    source.start();
+
+    mqttMock.emit("shellyplus1-abc/events/rpc", {
+      method: "NotifyStatus",
+      params: {
+        "switch:0": {
+          output: true,
+          apower: 0,
+          voltage: 230,
+          current: 0,
+          aenergy: { total: 0, by_minute: [], minute_ts: 1_700_000_000 },
+        },
+      },
+    });
+
+    const device = source.get("mqtt_plug");
+    expect(device?.state.energy).toBe(0);
+    expect(device?.capabilities.some((c) => c.property === "energy")).toBe(true);
+
+    source.stop();
+  });
+
+  it("omits the energy property and capability for a device that reports no cumulative energy", () => {
+    const http = createMockHttp({});
+    const shelly = new ShellyService(http, mqttMock.mqtt, logger);
+    shelly.register("mqtt_plug", { transport: "mqtt", topicPrefix: "shellyplus1-abc" });
+    const source = new ShellyDeviceSource(shelly, mqttMock.mqtt, logger, 1_000_000);
+    source.start();
+
+    mqttMock.emit("shellyplus1-abc/events/rpc", {
+      method: "NotifyStatus",
+      params: { "switch:0": { output: true, apower: 0, voltage: 230, current: 0 } },
+    });
+
+    const device = source.get("mqtt_plug");
+    expect(device?.state).not.toHaveProperty("energy");
+    expect(device?.capabilities.some((c) => c.property === "energy")).toBe(false);
+
+    source.stop();
+  });
+
   it("picks up a device registered after the source has started", () => {
     const http = createMockHttp({ output: false });
     const shelly = new ShellyService(http, mqttMock.mqtt, logger);

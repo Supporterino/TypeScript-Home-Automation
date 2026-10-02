@@ -132,6 +132,39 @@ describe("OpenMeteoService", () => {
     expect(url).toContain("longitude=8.7");
   });
 
+  it("uses a supplied location override for the outgoing request", async () => {
+    const http = createMockHttp(OPEN_METEO_RESPONSE);
+    const service = new OpenMeteoService(
+      { location: { latitude: 49.4, longitude: 8.7 } },
+      http,
+      logger,
+    );
+
+    await service.getCurrent({ latitude: 10.5, longitude: -20.25 });
+    const url = (http.get as ReturnType<typeof mock>).mock.calls[0][0] as string;
+    expect(url).toContain("latitude=10.5");
+    expect(url).toContain("longitude=-20.25");
+    expect(url).not.toContain("latitude=49.4");
+  });
+
+  it("does not serve a cached response for a different location", async () => {
+    const http = createMockHttp(OPEN_METEO_RESPONSE);
+    const service = new OpenMeteoService(
+      { location: { latitude: 49.4, longitude: 8.7 } },
+      http,
+      logger,
+    );
+
+    await service.getCurrent();
+    await service.getCurrent({ latitude: 1, longitude: 2 });
+
+    const calls = (http.get as ReturnType<typeof mock>).mock.calls;
+    expect(calls).toHaveLength(2);
+    expect(calls[0][0] as string).toContain("latitude=49.4");
+    expect(calls[1][0] as string).toContain("latitude=1");
+    expect(calls[1][0] as string).toContain("longitude=2");
+  });
+
   it("maps WMO codes to conditions", async () => {
     // Test various WMO codes by modifying the response
     const codes: [number, WeatherCondition][] = [
@@ -295,6 +328,39 @@ describe("OpenWeatherMapService", () => {
     expect(url).toContain("lat=49.4");
     expect(url).toContain("lon=8.7");
     expect(url).toContain("units=metric");
+  });
+
+  it("uses a supplied location override for the outgoing request", async () => {
+    const http = createMockHttp(OWM_RESPONSE);
+    const service = new OpenWeatherMapService(
+      { apiKey: "k", location: { latitude: 49.4, longitude: 8.7 } },
+      http,
+      logger,
+    );
+
+    await service.getCurrent({ latitude: 10.5, longitude: -20.25 });
+    const url = (http.get as ReturnType<typeof mock>).mock.calls[0][0] as string;
+    expect(url).toContain("lat=10.5");
+    expect(url).toContain("lon=-20.25");
+    expect(url).not.toContain("lat=49.4");
+  });
+
+  it("does not serve a cached response for a different location", async () => {
+    const http = createMockHttp(OWM_RESPONSE);
+    const service = new OpenWeatherMapService(
+      { apiKey: "k", location: { latitude: 49.4, longitude: 8.7 } },
+      http,
+      logger,
+    );
+
+    await service.getCurrent();
+    await service.getCurrent({ latitude: 1, longitude: 2 });
+
+    const calls = (http.get as ReturnType<typeof mock>).mock.calls;
+    expect(calls).toHaveLength(2);
+    expect(calls[0][0] as string).toContain("lat=49.4");
+    expect(calls[1][0] as string).toContain("lat=1");
+    expect(calls[1][0] as string).toContain("lon=2");
   });
 
   it("maps OWM conditions", async () => {

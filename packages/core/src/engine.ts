@@ -11,6 +11,7 @@ import { StateDeviceSource, type StateToggleConfig } from "./device-sources/stat
 import { ZigbeeGroupDeviceSource } from "./device-sources/zigbee-group-source.js";
 import { ZigbeeDeviceSource } from "./device-sources/zigbee-source.js";
 import { DeviceVisibility } from "./device-visibility.js";
+import { EnergyAggregator } from "./energy/energy-aggregator.js";
 import { EventBus } from "./events/event-bus.js";
 import { HttpClient } from "./http/http-client.js";
 import { HttpServer } from "./http/http-server.js";
@@ -339,6 +340,13 @@ export interface Engine {
    * like `devices` and `rooms`.
    */
   readonly deviceVisibility: DeviceVisibility;
+
+  /**
+   * The home-wide energy aggregator sampling the unified device sources
+   * (design.md D6, D7). Always present, like `devices`. Started after the
+   * device sources so its first sample observes a populated device surface.
+   */
+  readonly energy: EnergyAggregator;
 }
 
 /**
@@ -589,6 +597,21 @@ export function createEngine(options: EngineOptions): Engine {
     logger.child({ service: "devices" }),
   );
 
+  // Home-wide energy aggregation (design.md D6, D7; specs/energy-monitoring).
+  // Constructed after `deviceSources` because it reads the aggregate on each
+  // sample, and before the HTTP server so `start()` can hand the server its
+  // reference alongside the other setters. Its sampling timer is started
+  // after `deviceSources.start()`, so the first sample observes a populated
+  // device surface, and stopped both on rollback and on normal shutdown.
+  const energyAggregator = new EnergyAggregator(
+    deviceSources,
+    {
+      sampleIntervalMs: config.energy.sampleIntervalMs,
+      historyMinutes: config.energy.historyMinutes,
+    },
+    logger.child({ service: "energy" }),
+  );
+
   // User-defined rooms span every unified device source, so they are
   // constructed right after `deviceSources` — before HomekitService, the
   // HTTP server, and automation discovery — for the same reason
@@ -696,6 +719,7 @@ export function createEngine(options: EngineOptions): Engine {
     devices: deviceSources,
     rooms: roomManager,
     deviceVisibility,
+    energy: energyAggregator,
 
     async start(): Promise<void> {
       if (started) {
@@ -719,6 +743,8 @@ export function createEngine(options: EngineOptions): Engine {
         httpServer?.setRoomManager(roomManager);
         httpServer?.setDeviceVisibility(deviceVisibility);
         httpServer?.setEventStream(eventBus, streamLogger);
+        httpServer?.setEnergyAggregator(energyAggregator);
+        httpServer?.setWeatherService(weatherService, config.weather);
 
         // Mount routes from service plugins before the server starts listening.
         // This is the single point at which optional services — including the
@@ -743,6 +769,10 @@ export function createEngine(options: EngineOptions): Engine {
         // Started before automation discovery, so no automation's onStart()
         // ever observes a partially constructed device surface (task 6.13a).
         await deviceSources.start();
+
+        // Sampled only once the sources are running, so the first sample
+        // observes the same device surface automations will.
+        energyAggregator.start();
 
         // Bridges device changes onto the event stream's device categories
         // (design.md D1; tasks 7.4, 7.5). Re-wired on every start() since
@@ -782,6 +812,11 @@ export function createEngine(options: EngineOptions): Engine {
         }
         try {
           cron.stopAll();
+        } catch {
+          /* swallow */
+        }
+        try {
+          energyAggregator.stop();
         } catch {
           /* swallow */
         }
@@ -841,6 +876,7 @@ export function createEngine(options: EngineOptions): Engine {
         emitReadinessIfChanged();
         await safe(() => manager.stopAll(), "stop-automations");
         await safe(() => cron.stopAll(), "stop-cron");
+        await safe(() => energyAggregator.stop(), "stop-energy-aggregator");
         await safe(() => deviceSources.stop(), "stop-device-sources");
         // Run onStop() lifecycle hooks for all registered ServicePlugins.
         await safe(() => serviceRegistry.stopAll(), "stop-service-plugins");

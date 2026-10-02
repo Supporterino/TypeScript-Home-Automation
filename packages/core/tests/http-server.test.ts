@@ -1,6 +1,22 @@
 import { describe, expect, it, mock } from "bun:test";
+import type {
+  Capability,
+  DeviceDescriptor,
+  EnergyData,
+  RoomBatchCommandResponse,
+  WeatherData,
+} from "@ts-ha/shared";
+import type {
+  CurrentWeather,
+  DailyForecast,
+  WeatherLocation,
+  WeatherService,
+} from "@ts-ha/shared/types/weather";
 import pino from "pino";
+import { WEATHER_MAX_FORECAST_DAYS } from "../src/config.js";
+import { validateCommand } from "../src/device-sources/command-validation.js";
 import { DeviceVisibility } from "../src/device-visibility.js";
+import type { EnergyAggregator } from "../src/energy/energy-aggregator.js";
 import { EventBus } from "../src/events/event-bus.js";
 import { HttpServer } from "../src/http/http-server.js";
 import { LogBuffer } from "../src/logging/log-buffer.js";
@@ -1286,6 +1302,357 @@ describe("HttpServer — /api/rooms", () => {
   });
 });
 
+// ── Room batch command (design.md D5; tasks 5.1–5.4) ──────────────────────
+
+const ON_CAPABILITY: Capability = {
+  kind: "switch",
+  property: "on",
+  access: { readable: true, writable: true },
+  valueType: "boolean",
+};
+
+const LEVEL_CAPABILITY: Capability = {
+  kind: "numeric",
+  property: "level",
+  access: { readable: true, writable: true },
+  valueType: "numeric",
+  range: { min: 0, max: 100 },
+};
+
+const READ_ONLY_CAPABILITY: Capability = {
+  kind: "sensor",
+  property: "temperature",
+  access: { readable: true, writable: false },
+  valueType: "numeric",
+};
+
+function makeDescriptor(qualifiedId: string, capabilities: Capability[]): DeviceDescriptor {
+  const [source, id] = qualifiedId.split(":");
+  return {
+    source,
+    id,
+    qualifiedId,
+    displayName: qualifiedId,
+    state: {},
+    capabilities,
+    reachable: true,
+    observation: { mode: "push", observedAt: 0 },
+    hidden: false,
+  };
+}
+
+/**
+ * A server whose room manager and device accessor share one stub aggregate,
+ * so membership resolution and command dispatch agree. The stub's `command`
+ * runs the real `validateCommand`, making task 5.4's "validation is not
+ * bypassed" observable end to end.
+ */
+function makeBatchServer(members: DeviceDescriptor[]) {
+  const aggregate = {
+    list: mock(() => members),
+    get: mock((qid: string) => members.find((m) => m.qualifiedId === qid)),
+    command: mock(async (qid: string, properties: Record<string, unknown>) => {
+      const device = members.find((m) => m.qualifiedId === qid);
+      if (!device) return { status: "not_found" as const };
+      const result = validateCommand(device.capabilities, properties);
+      return result.ok
+        ? { status: "ok" as const }
+        : { status: "invalid" as const, error: result.error };
+    }),
+  } as unknown as import("../src/device-sources/aggregate.js").AggregateDeviceSource;
+
+  const state = new StateManager(logger, { persist: false });
+  const rooms = new RoomManager(state, aggregate, logger);
+  const server = makeServer();
+  server.setRoomManager(rooms);
+  server.setDeviceSources(aggregate);
+  return { server, rooms, aggregate };
+}
+
+function roomWithMembers(rooms: RoomManager, qualifiedIds: string[]) {
+  const created = rooms.createRoom("Office");
+  if (created.status !== "ok") throw new Error("unreachable");
+  for (const qualifiedId of qualifiedIds) rooms.assignDevice(qualifiedId, created.room.id);
+  return created.room;
+}
+
+function commandBody(properties: unknown): RequestInit & {
+  headers: Record<string, string>;
+} {
+  return {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(properties),
+  };
+}
+
+describe("HttpServer — POST /api/rooms/:id/command", () => {
+  it("returns 503 when no room manager is configured", async () => {
+    const server = makeServer();
+    const res = await req(server, "/api/rooms/abc/command", commandBody({ on: true }));
+    expect(res.status).toBe(503);
+  });
+
+  it("returns 404 for an unknown room", async () => {
+    const { server } = makeBatchServer([]);
+    const res = await req(server, "/api/rooms/nope/command", commandBody({ on: true }));
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 400 for an invalid or non-object body without dispatching", async () => {
+    const { server, rooms, aggregate } = makeBatchServer([
+      makeDescriptor("zigbee:lamp", [ON_CAPABILITY]),
+    ]);
+    const room = roomWithMembers(rooms, ["zigbee:lamp"]);
+
+    const invalidJson = await req(server, `/api/rooms/${room.id}/command`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "not json",
+    });
+    expect(invalidJson.status).toBe(400);
+
+    const nonObject = await req(server, `/api/rooms/${room.id}/command`, commandBody([1, 2, 3]));
+    expect(nonObject.status).toBe(400);
+
+    expect(aggregate.command).not.toHaveBeenCalled();
+  });
+
+  it("applies the command to capable members and skips incapable ones", async () => {
+    const members = [
+      makeDescriptor("zigbee:lamp", [ON_CAPABILITY]),
+      makeDescriptor("zigbee:sensor", [READ_ONLY_CAPABILITY]),
+    ];
+    const { server, rooms, aggregate } = makeBatchServer(members);
+    const room = roomWithMembers(rooms, ["zigbee:lamp", "zigbee:sensor"]);
+
+    const res = await req(server, `/api/rooms/${room.id}/command`, commandBody({ on: false }));
+    expect(res.status).toBe(200);
+
+    const body = (await res.json()) as RoomBatchCommandResponse;
+    expect(body).toEqual([
+      { qualifiedId: "zigbee:lamp", outcome: "applied" },
+      { qualifiedId: "zigbee:sensor", outcome: "skipped" },
+    ]);
+    expect(aggregate.command).toHaveBeenCalledTimes(1);
+    const [qualifiedId, properties] = (aggregate.command as ReturnType<typeof mock>).mock.calls[0];
+    expect(qualifiedId).toBe("zigbee:lamp");
+    expect(properties).toEqual({ on: false });
+  });
+
+  it("reports an unavailable member as skipped without dispatching it", async () => {
+    const { server, rooms, aggregate } = makeBatchServer([
+      makeDescriptor("zigbee:lamp", [ON_CAPABILITY]),
+    ]);
+    const room = roomWithMembers(rooms, ["zigbee:lamp", "zigbee:ghost"]);
+
+    const res = await req(server, `/api/rooms/${room.id}/command`, commandBody({ on: true }));
+    expect(res.status).toBe(200);
+
+    const body = (await res.json()) as RoomBatchCommandResponse;
+    expect(body).toEqual([
+      { qualifiedId: "zigbee:lamp", outcome: "applied" },
+      { qualifiedId: "zigbee:ghost", outcome: "skipped" },
+    ]);
+    expect(aggregate.command).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports a dispatch failure without aborting the rest of the batch", async () => {
+    const members = [
+      makeDescriptor("zigbee:a", [ON_CAPABILITY]),
+      makeDescriptor("zigbee:b", [ON_CAPABILITY]),
+    ];
+    const { server, rooms, aggregate } = makeBatchServer(members);
+    (aggregate.command as unknown as ReturnType<typeof mock>).mockImplementation(
+      async (qid: string) => {
+        if (qid === "zigbee:b") throw new Error("transport exploded");
+        return { status: "ok" as const };
+      },
+    );
+    const room = roomWithMembers(rooms, ["zigbee:a", "zigbee:b"]);
+
+    const res = await req(server, `/api/rooms/${room.id}/command`, commandBody({ on: true }));
+    expect(res.status).toBe(200);
+
+    const body = (await res.json()) as RoomBatchCommandResponse;
+    expect(body).toEqual([
+      { qualifiedId: "zigbee:a", outcome: "applied" },
+      { qualifiedId: "zigbee:b", outcome: "failed" },
+    ]);
+  });
+
+  it("routes through per-source validation, so an invalid command surfaces as failed", async () => {
+    const { server, rooms, aggregate } = makeBatchServer([
+      makeDescriptor("zigbee:dimmer", [LEVEL_CAPABILITY]),
+    ]);
+    const room = roomWithMembers(rooms, ["zigbee:dimmer"]);
+
+    const res = await req(server, `/api/rooms/${room.id}/command`, commandBody({ level: 500 }));
+    expect(res.status).toBe(200);
+
+    const body = (await res.json()) as RoomBatchCommandResponse;
+    expect(body).toEqual([{ qualifiedId: "zigbee:dimmer", outcome: "failed" }]);
+    expect(aggregate.command).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ── Weather endpoint (design.md D8; tasks 6.1–6.3) ────────────────────────
+
+const CURRENT_WEATHER: CurrentWeather = {
+  temperature: 20,
+  feelsLike: 19,
+  humidity: 50,
+  pressure: 1013,
+  condition: "clear",
+  description: "clear sky",
+  wind: { speed: 1.5, direction: 90 },
+  cloudCover: 10,
+  timestamp: 1000,
+};
+
+const DAILY_FORECAST: DailyForecast[] = [
+  {
+    date: "2026-03-30",
+    tempHigh: 22,
+    tempLow: 12,
+    condition: "clear",
+    description: "clear sky",
+    precipitationChance: 0.1,
+    wind: { speed: 1.5, direction: 90 },
+  },
+];
+
+function makeWeatherService() {
+  return {
+    getCurrent: mock(async (_location?: WeatherLocation) => CURRENT_WEATHER),
+    getForecast: mock(async (_days?: number, _location?: WeatherLocation) => DAILY_FORECAST),
+  } as unknown as WeatherService;
+}
+
+describe("HttpServer — GET /api/weather", () => {
+  it("responds 404 with an unavailable marker when no service is registered", async () => {
+    const server = makeServer();
+    const res = await req(server, "/api/weather");
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ available: false, reason: "service_unregistered" });
+  });
+
+  it("returns current conditions and forecast for the configured default location", async () => {
+    const server = makeServer();
+    const service = makeWeatherService();
+    server.setWeatherService(service, { latitude: 49.4, longitude: 8.7, forecastDays: 3 });
+
+    const res = await req(server, "/api/weather");
+    expect(res.status).toBe(200);
+
+    const body = (await res.json()) as WeatherData;
+    expect(body.location).toEqual({ latitude: 49.4, longitude: 8.7 });
+    expect(body.current).toEqual(CURRENT_WEATHER);
+    expect(body.forecast).toEqual(DAILY_FORECAST);
+
+    expect((service.getCurrent as ReturnType<typeof mock>).mock.calls[0][0]).toEqual({
+      latitude: 49.4,
+      longitude: 8.7,
+    });
+    expect((service.getForecast as ReturnType<typeof mock>).mock.calls[0]).toEqual([
+      3,
+      { latitude: 49.4, longitude: 8.7 },
+    ]);
+  });
+
+  it("uses a client-supplied location override over the configured default", async () => {
+    const server = makeServer();
+    const service = makeWeatherService();
+    server.setWeatherService(service, { latitude: 49.4, longitude: 8.7, forecastDays: 3 });
+
+    const res = await req(server, "/api/weather?lat=10.5&lon=-20.25");
+    expect(res.status).toBe(200);
+
+    const body = (await res.json()) as WeatherData;
+    expect(body.location).toEqual({ latitude: 10.5, longitude: -20.25 });
+    expect((service.getCurrent as ReturnType<typeof mock>).mock.calls[0][0]).toEqual({
+      latitude: 10.5,
+      longitude: -20.25,
+    });
+  });
+
+  it("responds 400 when neither a default nor a supplied location exists", async () => {
+    const server = makeServer();
+    server.setWeatherService(makeWeatherService(), { forecastDays: 3 });
+
+    const res = await req(server, "/api/weather");
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ available: false, reason: "no_location" });
+  });
+
+  it("falls back to the default when only one coordinate is supplied", async () => {
+    const server = makeServer();
+    const service = makeWeatherService();
+    server.setWeatherService(service, {
+      latitude: 49.4,
+      longitude: 8.7,
+      forecastDays: 3,
+    });
+
+    const res = await req(server, "/api/weather?lat=10.5");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as WeatherData;
+    expect(body.location).toEqual({ latitude: 49.4, longitude: 8.7 });
+  });
+
+  it("responds 400 when only one coordinate is supplied and no default exists", async () => {
+    const server = makeServer();
+    server.setWeatherService(makeWeatherService(), { forecastDays: 3 });
+
+    const res = await req(server, "/api/weather?lon=8.7");
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ available: false, reason: "no_location" });
+  });
+
+  it("falls back to the default when the supplied coordinates are out of range", async () => {
+    const server = makeServer();
+    const service = makeWeatherService();
+    server.setWeatherService(service, {
+      latitude: 49.4,
+      longitude: 8.7,
+      forecastDays: 3,
+    });
+
+    const res = await req(server, "/api/weather?lat=999&lon=0");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as WeatherData;
+    expect(body.location).toEqual({ latitude: 49.4, longitude: 8.7 });
+  });
+
+  it("falls back to the default when the supplied coordinates are not numeric", async () => {
+    const server = makeServer();
+    const service = makeWeatherService();
+    server.setWeatherService(service, {
+      latitude: 49.4,
+      longitude: 8.7,
+      forecastDays: 3,
+    });
+
+    const res = await req(server, "/api/weather?lat=abc&lon=8.7");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as WeatherData;
+    expect(body.location).toEqual({ latitude: 49.4, longitude: 8.7 });
+  });
+
+  it("clamps a requested forecast horizon to the configured maximum", async () => {
+    const server = makeServer();
+    const service = makeWeatherService();
+    server.setWeatherService(service, { latitude: 49.4, longitude: 8.7, forecastDays: 2 });
+
+    const res = await req(server, `/api/weather?days=30`);
+    expect(res.status).toBe(200);
+
+    expect((service.getForecast as ReturnType<typeof mock>).mock.calls[0][0]).toBe(
+      WEATHER_MAX_FORECAST_DAYS,
+    );
+  });
+});
+
 describe("HttpServer — PUT/DELETE /api/device-catalog/:qualifiedId/room", () => {
   it("returns 503 when no room manager is configured", async () => {
     const server = makeServer();
@@ -1491,6 +1858,71 @@ describe("HttpServer — webhooks", () => {
     const res = await req(server, "/webhook/sensors/motion", { method: "POST" });
     expect(res.status).toBe(200);
     expect(called).toBe(true);
+  });
+});
+
+// ── API: Energy endpoint ───────────────────────────────────────────────────
+
+describe("HttpServer — GET /api/energy", () => {
+  const populated: EnergyData = {
+    powerWatts: 35,
+    energyWh: 4000,
+    breakdown: [
+      {
+        qualifiedId: "shelly:plug",
+        displayName: "Plug",
+        powerWatts: 35,
+        energyWh: 4000,
+        available: true,
+      },
+      { qualifiedId: "shelly:offline", displayName: "Offline", available: false },
+    ],
+    history: [
+      { timestamp: 1000, powerWatts: 30 },
+      { timestamp: 2000, powerWatts: 35 },
+    ],
+  };
+
+  function withEnergy(server: HttpServer, data: EnergyData): HttpServer {
+    server.setEnergyAggregator({ snapshot: () => data } as unknown as EnergyAggregator);
+    return server;
+  }
+
+  it("returns 503 when no aggregator is wired", async () => {
+    const server = makeServer();
+    const res = await req(server, "/api/energy");
+    expect(res.status).toBe(503);
+  });
+
+  it("returns the aggregated energy view matching the shared wire shape", async () => {
+    const server = withEnergy(makeServer(), populated);
+    const res = await req(server, "/api/energy");
+    expect(res.status).toBe(200);
+
+    const body = (await res.json()) as EnergyData;
+    expect(body).toEqual(populated);
+    expect(body.breakdown[1]?.available).toBe(false);
+    expect(body.history.map((sample) => sample.timestamp)).toEqual([1000, 2000]);
+  });
+
+  it("responds with zero totals and an empty breakdown when no device meters energy", async () => {
+    const empty: EnergyData = { powerWatts: 0, energyWh: 0, breakdown: [], history: [] };
+    const server = withEnergy(makeServer(), empty);
+    const res = await req(server, "/api/energy");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual(empty);
+  });
+
+  it("requires the same authentication as every other /api/* route", async () => {
+    const server = withEnergy(makeServer({ token: "secret" }), populated);
+
+    const unauthorized = await req(server, "/api/energy");
+    expect(unauthorized.status).toBe(401);
+
+    const authorized = await req(server, "/api/energy", {
+      headers: { Authorization: "Bearer secret" },
+    });
+    expect(authorized.status).toBe(200);
   });
 });
 

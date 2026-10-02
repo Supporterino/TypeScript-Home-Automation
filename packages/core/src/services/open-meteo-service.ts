@@ -73,8 +73,14 @@ interface OMCurrentResponse {
 export class OpenMeteoService implements WeatherService {
   private readonly baseUrl: string;
 
-  /** Cached API response with TTL. */
-  private cache: { data: OMCurrentResponse; fetchedAt: number; forecastDays: number } | null = null;
+  /** Cached API response with TTL, keyed by the resolved coordinates. */
+  private cache: {
+    data: OMCurrentResponse;
+    fetchedAt: number;
+    forecastDays: number;
+    latitude: number;
+    longitude: number;
+  } | null = null;
 
   /** Cache TTL in milliseconds (default: 5 minutes). */
   private readonly cacheTtlMs = 5 * 60 * 1000;
@@ -87,8 +93,8 @@ export class OpenMeteoService implements WeatherService {
     this.baseUrl = config.baseUrl ?? "https://api.open-meteo.com";
   }
 
-  async getCurrent(): Promise<CurrentWeather> {
-    const data = await this.fetchData(1);
+  async getCurrent(location?: WeatherLocation): Promise<CurrentWeather> {
+    const data = await this.fetchData(1, location);
     const c = data.current;
     if (c === null || typeof c !== "object") {
       throw new Error("Open-Meteo response is missing the expected `current` section");
@@ -112,8 +118,8 @@ export class OpenMeteoService implements WeatherService {
     };
   }
 
-  async getForecast(days = 5): Promise<DailyForecast[]> {
-    const data = await this.fetchData(Math.min(days, 16));
+  async getForecast(days = 5, location?: WeatherLocation): Promise<DailyForecast[]> {
+    const data = await this.fetchData(Math.min(days, 16), location);
     const d = data.daily;
     if (d === null || typeof d !== "object" || !Array.isArray(d.time)) {
       throw new Error("Open-Meteo response is missing the expected `daily` forecast arrays");
@@ -149,17 +155,25 @@ export class OpenMeteoService implements WeatherService {
     return result;
   }
 
-  private async fetchData(forecastDays: number): Promise<OMCurrentResponse> {
-    // Return cached data if still fresh and covers enough forecast days
+  private async fetchData(
+    forecastDays: number,
+    location?: WeatherLocation,
+  ): Promise<OMCurrentResponse> {
+    const { latitude, longitude } = location ?? this.config.location;
+
+    // Return cached data if still fresh, for the same coordinates, and
+    // covering enough forecast days. Including the coordinates keeps an
+    // override request from serving another location's cached response.
     if (
       this.cache &&
       Date.now() - this.cache.fetchedAt < this.cacheTtlMs &&
-      this.cache.forecastDays >= forecastDays
+      this.cache.forecastDays >= forecastDays &&
+      this.cache.latitude === latitude &&
+      this.cache.longitude === longitude
     ) {
       return this.cache.data;
     }
 
-    const { latitude, longitude } = this.config.location;
     const params = [
       `latitude=${latitude}`,
       `longitude=${longitude}`,
@@ -180,7 +194,7 @@ export class OpenMeteoService implements WeatherService {
       throw new Error(errMsg);
     }
 
-    this.cache = { data: response.data, fetchedAt: Date.now(), forecastDays };
+    this.cache = { data: response.data, fetchedAt: Date.now(), forecastDays, latitude, longitude };
     return response.data;
   }
 }

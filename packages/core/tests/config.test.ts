@@ -1,5 +1,29 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
-import { loadConfig } from "../src/config.js";
+import { loadConfig, WEATHER_MAX_FORECAST_DAYS } from "../src/config.js";
+
+/**
+ * Runs `loadConfig` with `process.exit` stubbed to throw, and returns the exit
+ * code it was asked to exit with. Restores both globals afterwards.
+ */
+function captureExit(run: () => void): { exitCode: number | undefined } {
+  const originalExit = process.exit;
+  const originalError = console.error;
+  let exitCode: number | undefined;
+  process.exit = ((code?: number) => {
+    exitCode = code;
+    throw new Error("process.exit called");
+  }) as typeof process.exit;
+  console.error = mock(() => {});
+
+  try {
+    expect(run).toThrow("process.exit called");
+  } finally {
+    process.exit = originalExit;
+    console.error = originalError;
+  }
+
+  return { exitCode };
+}
 
 describe("loadConfig", () => {
   const originalEnv = { ...process.env };
@@ -20,6 +44,11 @@ describe("loadConfig", () => {
     delete process.env.DEVICE_REGISTRY_FILE_PATH;
     delete process.env.SHELLY_POLL_MS;
     delete process.env.NANOLEAF_POLL_MS;
+    delete process.env.ENERGY_SAMPLE_MS;
+    delete process.env.ENERGY_HISTORY_MINUTES;
+    delete process.env.WEATHER_LATITUDE;
+    delete process.env.WEATHER_LONGITUDE;
+    delete process.env.WEATHER_FORECAST_DAYS;
   });
 
   afterEach(() => {
@@ -48,6 +77,13 @@ describe("loadConfig", () => {
       expect(config.httpServer.port).toBe(8080);
       expect(config.deviceRegistry.persist).toBe(true);
       expect(config.services).toEqual({});
+      // Energy history defaults on: sample every minute over a one-day window.
+      expect(config.energy.sampleIntervalMs).toBe(60000);
+      expect(config.energy.historyMinutes).toBe(1440);
+      // Weather has no default location until both coordinates are set.
+      expect(config.weather.latitude).toBeUndefined();
+      expect(config.weather.longitude).toBeUndefined();
+      expect(config.weather.forecastDays).toBe(3);
     });
   });
 
@@ -280,6 +316,86 @@ describe("loadConfig", () => {
       const config = loadConfig();
       expect(config.httpServer).not.toHaveProperty("webUi");
       expect(JSON.stringify(config.httpServer)).not.toContain("/dashboard");
+    });
+  });
+
+  describe("energy config", () => {
+    it("reads ENERGY_SAMPLE_MS and ENERGY_HISTORY_MINUTES from env", () => {
+      process.env.ENERGY_SAMPLE_MS = "30000";
+      process.env.ENERGY_HISTORY_MINUTES = "60";
+      const config = loadConfig();
+      expect(config.energy.sampleIntervalMs).toBe(30000);
+      expect(config.energy.historyMinutes).toBe(60);
+    });
+
+    it("normalizes a zero ENERGY_SAMPLE_MS to the default interval", () => {
+      process.env.ENERGY_SAMPLE_MS = "0";
+      const config = loadConfig();
+      expect(config.energy.sampleIntervalMs).toBe(60000);
+    });
+
+    it("accepts ENERGY_HISTORY_MINUTES=0 to disable history", () => {
+      process.env.ENERGY_HISTORY_MINUTES = "0";
+      const config = loadConfig();
+      expect(config.energy.historyMinutes).toBe(0);
+    });
+
+    it("rejects a negative ENERGY_SAMPLE_MS", () => {
+      process.env.ENERGY_SAMPLE_MS = "-1";
+      expect(captureExit(() => loadConfig()).exitCode).toBe(1);
+    });
+
+    it("rejects a negative ENERGY_HISTORY_MINUTES", () => {
+      process.env.ENERGY_HISTORY_MINUTES = "-1";
+      expect(captureExit(() => loadConfig()).exitCode).toBe(1);
+    });
+  });
+
+  describe("weather config", () => {
+    it("reads both coordinates from env", () => {
+      process.env.WEATHER_LATITUDE = "52.52";
+      process.env.WEATHER_LONGITUDE = "13.405";
+      const config = loadConfig();
+      expect(config.weather.latitude).toBe(52.52);
+      expect(config.weather.longitude).toBe(13.405);
+    });
+
+    it("leaves the location unset when only one coordinate is provided", () => {
+      process.env.WEATHER_LATITUDE = "52.52";
+      const config = loadConfig();
+      expect(config.weather.latitude).toBeUndefined();
+      expect(config.weather.longitude).toBeUndefined();
+    });
+
+    it("treats an empty coordinate as unset", () => {
+      process.env.WEATHER_LATITUDE = "";
+      process.env.WEATHER_LONGITUDE = "";
+      const config = loadConfig();
+      expect(config.weather.latitude).toBeUndefined();
+      expect(config.weather.longitude).toBeUndefined();
+    });
+
+    it("clamps WEATHER_FORECAST_DAYS to the documented maximum", () => {
+      process.env.WEATHER_FORECAST_DAYS = "30";
+      const config = loadConfig();
+      expect(config.weather.forecastDays).toBe(WEATHER_MAX_FORECAST_DAYS);
+    });
+
+    it("rejects a non-numeric WEATHER_FORECAST_DAYS", () => {
+      process.env.WEATHER_FORECAST_DAYS = "soon";
+      expect(captureExit(() => loadConfig()).exitCode).toBe(1);
+    });
+
+    it("rejects a latitude outside its valid range", () => {
+      process.env.WEATHER_LATITUDE = "91";
+      process.env.WEATHER_LONGITUDE = "13.405";
+      expect(captureExit(() => loadConfig()).exitCode).toBe(1);
+    });
+
+    it("rejects a longitude outside its valid range", () => {
+      process.env.WEATHER_LATITUDE = "52.52";
+      process.env.WEATHER_LONGITUDE = "181";
+      expect(captureExit(() => loadConfig()).exitCode).toBe(1);
     });
   });
 });

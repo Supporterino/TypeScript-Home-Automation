@@ -1,11 +1,22 @@
 /// <reference types="bun" />
+import type {
+  Capability,
+  RoomBatchCommandResponse,
+  RoomCommandOutcome,
+  WeatherData,
+  WeatherUnavailable,
+} from "@ts-ha/shared";
+import type { WeatherLocation, WeatherService } from "@ts-ha/shared/types/weather";
 import { type Context, Hono } from "hono";
 import { getCookie } from "hono/cookie";
 import type { Logger } from "pino";
 import type { TriggerContext } from "../automation.js";
 import type { AutomationManager } from "../automation-manager.js";
+import { WEATHER_MAX_FORECAST_DAYS } from "../config.js";
 import type { AggregateDeviceSource } from "../device-sources/aggregate.js";
+import { flattenByProperty } from "../device-sources/command-validation.js";
 import type { DeviceVisibility } from "../device-visibility.js";
+import type { EnergyAggregator } from "../energy/energy-aggregator.js";
 import type { EventBus } from "../events/event-bus.js";
 import type { LogBuffer, LogQuery } from "../logging/log-buffer.js";
 import type { MqttService } from "../mqtt/mqtt-service.js";
@@ -31,6 +42,19 @@ interface WebhookRoute {
   path: string;
   methods: Set<string>;
   handler: WebhookHandler;
+}
+
+/**
+ * Default location and forecast horizon the weather endpoint
+ * (`GET /api/weather`) uses when a request supplies none (design.md D8).
+ */
+export interface WeatherEndpointDefaults {
+  /** Configured default latitude, absent unless both coordinates are set. */
+  latitude?: number;
+  /** Configured default longitude, absent unless both coordinates are set. */
+  longitude?: number;
+  /** Configured default forecast horizon, already clamped by config. */
+  forecastDays: number;
 }
 
 /**
@@ -63,11 +87,14 @@ interface WebhookRoute {
  * - `DELETE /api/device-catalog/:qualifiedId/room` — Clear a device's room assignment
  * - `PUT  /api/device-catalog/:qualifiedId/hidden` — Mark a device hidden
  * - `DELETE /api/device-catalog/:qualifiedId/hidden` — Mark a device visible
+ * - `GET  /api/energy`                     — Aggregated energy view (power, totals, breakdown, history)
+ * - `GET  /api/weather`                    — Current weather conditions and forecast
  * - `GET  /api/rooms`                      — List rooms with membership
  * - `GET  /api/rooms/unassigned`           — Devices belonging to no room
  * - `POST /api/rooms`                      — Create a room
  * - `PUT  /api/rooms/:id`                  — Rename a room
  * - `DELETE /api/rooms/:id`                — Delete a room
+ * - `POST /api/rooms/:id/command`          — Issue one command to every capable room member
  * - `GET  /api/events`                     — Realtime server-sent event stream
  *
  * `GET /api/devices` and `GET /api/devices/:friendlyName` (Zigbee-only) are
@@ -88,6 +115,9 @@ export class HttpServer {
   private deviceSources: AggregateDeviceSource | null = null;
   private roomManager: RoomManager | null = null;
   private deviceVisibility: DeviceVisibility | null = null;
+  private energyAggregator: EnergyAggregator | null = null;
+  private weatherService: WeatherService | null = null;
+  private weatherDefaults: WeatherEndpointDefaults | null = null;
   private eventStreamHub: EventStreamHub | null = null;
   private readonly honoApp: Hono;
 
@@ -139,6 +169,27 @@ export class HttpServer {
    */
   setDeviceVisibility(visibility: DeviceVisibility): void {
     this.deviceVisibility = visibility;
+  }
+
+  /**
+   * Wire the energy endpoints (`/api/energy`) to the engine's
+   * `EnergyAggregator`. Called by the engine after construction; the
+   * aggregator is always present, like `engine.devices` (design.md D6).
+   */
+  setEnergyAggregator(aggregator: EnergyAggregator): void {
+    this.energyAggregator = aggregator;
+  }
+
+  /**
+   * Wire the weather endpoint (`GET /api/weather`) to an optional
+   * `WeatherService` plus the configured default location and forecast
+   * horizon. Called by the engine after construction; `service` is `null`
+   * when no weather service is registered, and the endpoint then reports the
+   * feature unavailable with `404` rather than erroring (design.md D8).
+   */
+  setWeatherService(service: WeatherService | null, defaults: WeatherEndpointDefaults): void {
+    this.weatherService = service;
+    this.weatherDefaults = defaults;
   }
 
   /**
@@ -732,6 +783,51 @@ export class HttpServer {
       return c.json({ id, deleted: true });
     });
 
+    // Issues one command to every room member whose declared capabilities
+    // permit the requested property (design.md D5; specs/http-server "Room
+    // Batch Command Endpoint"). Best-effort by construction: each capable
+    // member is dispatched through `DeviceSource.command()` — never
+    // bypassing validation — and a member's failure never aborts the batch.
+    // Members that do not support the property are reported skipped rather
+    // than failing the request.
+    app.post("/api/rooms/:id/command", async (c) => {
+      if (!this.roomManager || !this.deviceSources) {
+        return c.json({ error: "Not available" }, 503);
+      }
+
+      const id = decodeURIComponent(c.req.param("id"));
+      const room = this.roomManager.listRooms().find((candidate) => candidate.id === id);
+      if (!room) return c.json({ error: "Room not found", id }, 404);
+
+      let body: unknown;
+      try {
+        body = await c.req.json();
+      } catch {
+        return c.json({ error: "Invalid JSON body" }, 400);
+      }
+      if (body === null || typeof body !== "object" || Array.isArray(body)) {
+        return c.json({ error: "Command body must be a JSON object of properties" }, 400);
+      }
+
+      const command = body as Record<string, unknown>;
+      const requestedProperties = Object.keys(command);
+      const results: RoomBatchCommandResponse = [];
+
+      for (const member of room.members) {
+        results.push({
+          qualifiedId: member.qualifiedId,
+          outcome: await this.dispatchRoomMember(
+            member.qualifiedId,
+            member.device?.capabilities ?? null,
+            command,
+            requestedProperties,
+          ),
+        });
+      }
+
+      return c.json(results);
+    });
+
     // Assign/unassign a device's room, addressed by qualified identifier —
     // alongside the device-catalog read and command endpoints above, rather
     // than under /api/rooms, since a device belongs to at most one room and
@@ -787,6 +883,140 @@ export class HttpServer {
       return c.json({ qualifiedId, hidden: false });
     });
 
+    // ── API: Energy ─────────────────────────────────────────────────────────
+    //
+    // The aggregated home energy view (design.md D6; specs/energy-monitoring,
+    // specs/http-server "Energy Endpoint"). Sits behind the `/api/*` auth
+    // middleware above like every other API route, and remains useful on a
+    // deployment with no metering devices: the aggregator reports zero totals
+    // and an empty breakdown rather than failing. `503` is purely defensive —
+    // the engine always wires the aggregator.
+
+    app.get("/api/energy", (c) => {
+      if (!this.energyAggregator) return c.json({ error: "Not available" }, 503);
+      return c.json(this.energyAggregator.snapshot());
+    });
+
+    // ── API: Weather ────────────────────────────────────────────────────────
+    //
+    // Current conditions and forecast from the registered weather service
+    // (design.md D8; specs/weather-services "HTTP Exposure", specs/http-server
+    // "Weather Endpoint"). The location is supplied by the client (both `lat`
+    // and `lon`) or falls back to the configured default; when neither exists
+    // the request is rejected as a client error rather than guessing. The
+    // forecast horizon is clamped to {@link WEATHER_MAX_FORECAST_DAYS}, and no
+    // location ever reaches the service as `undefined`.
+
+    app.get("/api/weather", async (c) => {
+      if (!this.weatherService) {
+        const unavailable: WeatherUnavailable = {
+          available: false,
+          reason: "service_unregistered",
+        };
+        return c.json(unavailable, 404);
+      }
+
+      const location = this.resolveWeatherLocation(c.req.query("lat"), c.req.query("lon"));
+      if (!location) {
+        const unavailable: WeatherUnavailable = { available: false, reason: "no_location" };
+        return c.json(unavailable, 400);
+      }
+
+      const requestedDays = this.parseForecastDays(c.req.query("days"));
+      const days = Math.min(
+        requestedDays ?? this.weatherDefaults?.forecastDays ?? 1,
+        WEATHER_MAX_FORECAST_DAYS,
+      );
+
+      try {
+        const current = await this.weatherService.getCurrent(location);
+        const forecast = await this.weatherService.getForecast(days, location);
+        return c.json({ location, current, forecast } satisfies WeatherData);
+      } catch (err) {
+        this.logger.error({ err, location }, "Weather service request failed");
+        return c.json({ error: "Weather service unavailable" }, 502);
+      }
+    });
+
     return app;
+  }
+
+  /**
+   * Resolve the location for a weather request: the client-supplied
+   * coordinates when both are present and in range, otherwise the configured
+   * default when both are set, otherwise `null` (design.md D8). An incomplete
+   * or invalid pair is treated as no client location, so it falls back to the
+   * default rather than rejecting a request the default could serve.
+   */
+  private resolveWeatherLocation(
+    latParam: string | undefined,
+    lonParam: string | undefined,
+  ): WeatherLocation | null {
+    const hasLat = latParam !== undefined && latParam.trim() !== "";
+    const hasLon = lonParam !== undefined && lonParam.trim() !== "";
+    if (hasLat && hasLon) {
+      const latitude = Number(latParam);
+      const longitude = Number(lonParam);
+      if (
+        Number.isFinite(latitude) &&
+        Number.isFinite(longitude) &&
+        latitude >= -90 &&
+        latitude <= 90 &&
+        longitude >= -180 &&
+        longitude <= 180
+      ) {
+        return { latitude, longitude };
+      }
+    }
+
+    const { latitude, longitude } = this.weatherDefaults ?? {};
+    if (latitude === undefined || longitude === undefined) return null;
+    return { latitude, longitude };
+  }
+
+  /**
+   * Parse the `days` query param into a positive integer, or `null` when it
+   * is absent or malformed so the configured default applies.
+   */
+  private parseForecastDays(daysParam: string | undefined): number | null {
+    if (daysParam === undefined) return null;
+    const days = Number.parseInt(daysParam, 10);
+    if (!Number.isFinite(days) || days < 1) return null;
+    return days;
+  }
+
+  /**
+   * Dispatch one room batch member, mapping capability support and the
+   * source-neutral dispatch outcome to the wire outcome (design.md D5).
+   *
+   * A member whose descriptor is unavailable, or whose capabilities do not
+   * declare every requested property as writable, is never dispatched and is
+   * reported `skipped` — an unavailable member declares no capability, so it
+   * is incapable rather than failed (design.md D5; specs/http-server
+   * "Incapable members are skipped, not failed"). Anything other than an `ok`
+   * dispatch is a `failed` member; one member's failure is contained here so
+   * it cannot abort the batch.
+   */
+  private async dispatchRoomMember(
+    qualifiedId: string,
+    capabilities: Capability[] | null,
+    command: Record<string, unknown>,
+    requestedProperties: string[],
+  ): Promise<RoomCommandOutcome> {
+    if (!capabilities) return "skipped";
+
+    const byProperty = flattenByProperty(capabilities);
+    const supportsAll = requestedProperties.every(
+      (property) => byProperty.get(property)?.access.writable === true,
+    );
+    if (!supportsAll) return "skipped";
+
+    try {
+      const outcome = await this.deviceSources?.command(qualifiedId, command);
+      return outcome?.status === "ok" ? "applied" : "failed";
+    } catch (err) {
+      this.logger.error({ err, qualifiedId }, "Room batch command dispatch failed");
+      return "failed";
+    }
   }
 }

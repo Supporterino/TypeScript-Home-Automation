@@ -176,6 +176,11 @@ export { ZigbeeDeviceSource } from "./device-sources/zigbee-source.js";
 export { AqaraH1Automation } from "./devices/aqara-h1-automation.js";
 export { IkeaRodretAutomation } from "./devices/ikea-rodret-automation.js";
 export { IkeaStyrbarAutomation } from "./devices/ikea-styrbar-automation.js";
+// Home-wide energy aggregation (design.md D6, D7; specs/energy-monitoring)
+export {
+  EnergyAggregator,
+  type EnergyAggregatorOptions,
+} from "./energy/energy-aggregator.js";
 // Engine factory
 export {
   createEngine,

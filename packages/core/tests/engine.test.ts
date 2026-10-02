@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, mock } from "bun:test";
+import { afterEach, describe, expect, it, jest, mock } from "bun:test";
 import pino from "pino";
 import { Automation, type Trigger } from "../src/automation.js";
 import { createEngine, type Engine } from "../src/engine.js";
@@ -802,6 +802,46 @@ describe("createEngine", () => {
       engine.deviceVisibility.hide("zigbee:0xaaa");
 
       expect(received.some((e) => (e as { category: string }).category === "state")).toBe(false);
+    });
+  });
+
+  // ── Energy aggregation (design.md D6, D7; tasks 4.1–4.4) ──────────────────
+
+  describe("energy aggregation", () => {
+    it("always exposes engine.energy", () => {
+      engine = createTestEngine();
+      expect(engine.energy).toBeDefined();
+      expect(typeof engine.energy.snapshot).toBe("function");
+      expect(typeof engine.energy.start).toBe("function");
+      expect(typeof engine.energy.stop).toBe("function");
+    });
+
+    it("starts the aggregator during startup and takes an immediate sample", async () => {
+      engine = createTestEngine();
+      const originalStart = engine.energy.start.bind(engine.energy);
+      const startSpy = mock(() => originalStart());
+      (engine.energy as unknown as { start: unknown }).start = startSpy;
+
+      await engine.start();
+
+      expect(startSpy).toHaveBeenCalledTimes(1);
+      expect(engine.energy.snapshot().history.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it("stops the aggregator's sampling timer on shutdown", async () => {
+      jest.useFakeTimers();
+      try {
+        engine = createTestEngine();
+        await engine.start();
+        const afterStart = engine.energy.snapshot().history.length;
+
+        await engine.stop();
+        jest.advanceTimersByTime(120_000);
+
+        expect(engine.energy.snapshot().history).toHaveLength(afterStart);
+      } finally {
+        jest.useRealTimers();
+      }
     });
   });
 });

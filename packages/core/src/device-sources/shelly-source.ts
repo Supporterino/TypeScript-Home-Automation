@@ -271,7 +271,21 @@ export class ShellyDeviceSource implements DeviceSource {
       return { position: cover.current_pos, state: cover.state };
     }
     const sw = raw as unknown as ShellySwitchStatus;
-    return { on: sw.output, power: sw.apower, voltage: sw.voltage, current: sw.current };
+    const state: Record<string, unknown> = {
+      on: sw.output,
+      power: sw.apower,
+      voltage: sw.voltage,
+      current: sw.current,
+    };
+    // Cumulative active energy, mapped from `aenergy.total` (Wh). A device
+    // without metering omits the whole `aenergy` object; only a finite
+    // reading is surfaced, so the property's presence itself distinguishes a
+    // metering device from one that merely reports nothing (design.md D7).
+    const total = sw.aenergy?.total;
+    if (typeof total === "number" && Number.isFinite(total)) {
+      state.energy = total;
+    }
+    return state;
   }
 
   private updateTracked(device: ShellyDevice, patch: Partial<TrackedShellyState>): void {
@@ -306,13 +320,19 @@ export class ShellyDeviceSource implements DeviceSource {
       reachable: true,
       observation: { mode: "polled" as const, observedAt: Date.now() },
     };
+    // Shelly has no metering flag, so a device is "metered" only once it has
+    // actually reported a cumulative reading (design.md D7). Until then — and
+    // for devices that never report one — the energy capability is omitted,
+    // never declared with a zero.
+    const metered =
+      typeof tracked.state.energy === "number" && Number.isFinite(tracked.state.energy);
     return {
       source: this.id,
       id: device.name,
       qualifiedId: qualifyDeviceId(this.id, device.name),
       displayName: device.name,
       state: tracked.state,
-      capabilities: shellyCapabilitiesFor(device.type),
+      capabilities: shellyCapabilitiesFor(device.type, { metered }),
       reachable: tracked.reachable,
       observation: tracked.observation,
       // Stamped by `AggregateDeviceSource` (design.md D8) — a source does

@@ -25,6 +25,25 @@ function booleanEnv(defaultValue: boolean) {
   }, z.boolean());
 }
 
+/**
+ * Optional numeric environment variable. Unset, empty, `null`, and `undefined`
+ * all resolve to `undefined` so an unset weather coordinate never coerces to
+ * `0`; any other value is coerced to a number and range-checked.
+ */
+function optionalNumberEnv(min: number, max: number) {
+  return z.preprocess(
+    (val) => (val === undefined || val === null || val === "" ? undefined : val),
+    z.coerce.number().min(min).max(max).optional(),
+  );
+}
+
+/**
+ * Hard ceiling on `weather.forecastDays`. The weather endpoint also clamps a
+ * client-requested horizon to this value, so a single request can never fan
+ * out unboundedly.
+ */
+export const WEATHER_MAX_FORECAST_DAYS = 7;
+
 const configSchema = z.object({
   mqtt: z.object({
     host: z.string().default("localhost"),
@@ -74,6 +93,40 @@ const configSchema = z.object({
     /** Refresh interval, in milliseconds, for the Nanoleaf device source. */
     nanoleafPollMs: z.coerce.number().int().positive().default(10000),
   }),
+  energy: z.object({
+    /**
+     * Milliseconds between rolling power-history samples. `0` would sample
+     * without bound, so it is normalized to the default rather than accepted.
+     */
+    sampleIntervalMs: z.coerce
+      .number()
+      .int()
+      .min(0)
+      .default(60000)
+      .transform((value) => (value === 0 ? 60000 : value)),
+    /** Rolling history window, in minutes. `0` disables history. */
+    historyMinutes: z.coerce.number().int().min(0).default(1440),
+  }),
+  weather: z
+    .object({
+      /** Default latitude in decimal degrees; unset unless both coordinates are set. */
+      latitude: optionalNumberEnv(-90, 90),
+      /** Default longitude in decimal degrees; unset unless both coordinates are set. */
+      longitude: optionalNumberEnv(-180, 180),
+      /** Default forecast horizon, clamped to {@link WEATHER_MAX_FORECAST_DAYS}. */
+      forecastDays: z.coerce
+        .number()
+        .int()
+        .min(1)
+        .default(3)
+        .transform((days) => Math.min(days, WEATHER_MAX_FORECAST_DAYS)),
+    })
+    .transform((weather) => {
+      if (weather.latitude === undefined || weather.longitude === undefined) {
+        return { ...weather, latitude: undefined, longitude: undefined };
+      }
+      return weather;
+    }),
   httpServer: z.object({
     /** Port for the HTTP server (health probes + webhooks). Set to 0 to disable. */
     port: z.coerce.number().int().min(0).default(8080),
@@ -125,6 +178,15 @@ export function loadConfig(): Config {
     devices: {
       shellyPollMs: process.env.SHELLY_POLL_MS,
       nanoleafPollMs: process.env.NANOLEAF_POLL_MS,
+    },
+    energy: {
+      sampleIntervalMs: process.env.ENERGY_SAMPLE_MS,
+      historyMinutes: process.env.ENERGY_HISTORY_MINUTES,
+    },
+    weather: {
+      latitude: process.env.WEATHER_LATITUDE,
+      longitude: process.env.WEATHER_LONGITUDE,
+      forecastDays: process.env.WEATHER_FORECAST_DAYS,
     },
     httpServer: {
       port: process.env.HTTP_PORT,
