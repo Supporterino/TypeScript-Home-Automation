@@ -72,6 +72,54 @@ test: ✅ Add state trigger filter tests
 
 ---
 
+## Releases and versioning
+
+The four `@ts-ha/*` packages are versioned and published independently with
+[Changesets](https://changesets.dev). The pipeline lives in
+`.github/workflows/release.yml` and runs on every push to `main`.
+
+### Adding a changeset
+
+Every user-visible change should ship with a changeset:
+
+```bash
+bunx changeset
+```
+
+Select the affected package(s) and the bump type (patch / minor / major). This writes a
+`.changeset/*.md` file — commit it alongside the change. `updateInternalDependencies` is
+`patch`, so packages that depend on a bumped package are bumped too.
+
+### The release flow
+
+1. When a changeset lands on `main`, the Release workflow runs `changeset version` on its own
+   branch: it consumes the `.changeset/*.md` files, bumps each `package.json`, updates the
+   CHANGELOGs, and opens or updates the `chore: release` pull request.
+2. Merging that PR triggers the workflow again. No changesets remain, so it runs
+   `bun run publish` (`scripts/resolve-workspace-protocol.ts` plus `changeset publish`),
+   which rewrites `workspace:*` ranges to concrete `^<version>` ranges, publishes the new
+   versions, then creates git tags and GitHub releases.
+
+Versions are never edited by hand — they move only when a changeset lands on `main`, are
+applied inside the release PR, and are pushed to npm when that PR merges.
+
+### npm authentication (trusted publishing)
+
+Publishing uses npm Trusted Publishing (OIDC), so there is no long-lived `NPM_TOKEN`. The
+workflow grants `id-token: write`, and npm exchanges GitHub's OIDC token for a short-lived
+publish credential.
+
+Two conditions must hold, or npm reports a misleading `E404` on the `PUT`:
+
+- Each package has a Trusted Publisher configured on npmjs.com (GitHub Actions →
+  `Supporterino/TypeScript-Home-Automation` → workflow `release.yml`).
+- The workflow does **not** set `registry-url` on `actions/setup-node`. `registry-url` writes
+  `//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}` into `.npmrc`; with no token present
+  that is an empty credential, which makes npm skip the OIDC exchange entirely. For the same
+  reason, do not reintroduce `NPM_TOKEN` / `NODE_AUTH_TOKEN` environment variables.
+
+---
+
 ## Adding a new device type
 
 1. Identify the device's Zigbee2MQTT payload schema from [the z2m device page](https://www.zigbee2mqtt.io/supported-devices/)
