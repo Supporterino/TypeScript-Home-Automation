@@ -270,6 +270,74 @@ export interface ShellyCoverConfig {
 }
 
 // ---------------------------------------------------------------------------
+// Component inventory (Shelly.GetComponents)
+// ---------------------------------------------------------------------------
+
+/**
+ * The kind of a recognized Shelly component that maps to a logical device.
+ *
+ * Only `switch` and `cover` components are enumerated; an `outlet` is a
+ * registration-level distinction applied to a device's switch components.
+ */
+export type ShellyComponentKind = "switch" | "cover";
+
+/**
+ * One recognized `switch:N` / `cover:N` entry in a device's component
+ * inventory, with the channel and configured name normalised out of the raw
+ * `key` / `config` payload.
+ */
+export interface ShellyComponentStatus {
+  /** Raw component key as reported by the device (e.g. "switch:2", "cover:0"). */
+  key: string;
+  /** Component kind derived from the key prefix. */
+  kind: ShellyComponentKind;
+  /** Component channel derived from the key suffix. */
+  channel: number;
+  /** Configured component name (from `config.name`), or null when unset. */
+  name: string | null;
+  /** Component status payload (from `status`), present when requested. */
+  status?: Record<string, unknown>;
+}
+
+/**
+ * The component-inventory response describing the switch/cover components a
+ * device exposes. `total` counts every component the device reports
+ * (including unsupported kinds such as `input:N`), so callers can page the
+ * full inventory rather than trusting a single response.
+ */
+export interface ShellyComponentsStatus {
+  /** Recognized switch/cover components on this page. */
+  components: ShellyComponentStatus[];
+  /** Total number of components the device reported across all pages. */
+  total: number;
+  /** Offset of this page within the device's full inventory. */
+  offset?: number;
+  /**
+   * Raw number of components on this page, including unrecognized kinds the
+   * inventory returned. Pagination advances by this value, not by the count of
+   * recognized components, so an inventory whose unsupported kinds sort ahead of
+   * its switch/cover components is still fully enumerated.
+   */
+  returned?: number;
+}
+
+/**
+ * A discovered component's normalised descriptor, used to materialize one
+ * logical device per component channel. Metering is derived from the
+ * component's own cumulative energy reading, not the device's.
+ */
+export interface ShellyDiscoveredComponent {
+  /** Component channel. */
+  channel: number;
+  /** Component kind. */
+  kind: ShellyComponentKind;
+  /** Configured component name, or null when unset. */
+  name: string | null;
+  /** Whether the component reported a finite cumulative energy reading. */
+  metered: boolean;
+}
+
+// ---------------------------------------------------------------------------
 // MQTT RPC transport (Shelly Gen2 RPC-over-MQTT)
 // ---------------------------------------------------------------------------
 
