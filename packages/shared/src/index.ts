@@ -17,4 +17,5 @@ export * from "./log-entry.js";
 export * from "./relationships.js";
 export * from "./room.js";
 export type * from "./types/index.js";
+export * from "./wall.js";
 export * from "./wire.js";

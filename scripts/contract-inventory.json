@@ -140,6 +140,42 @@
       "consumers": ["core", "webUi"]
     },
     {
+      "name": "WallProfile",
+      "kind": "interface",
+      "definedIn": "packages/shared/src/wall.ts",
+      "consumers": ["core", "webUi"]
+    },
+    {
+      "name": "WallProfileConfig",
+      "kind": "interface",
+      "definedIn": "packages/shared/src/wall.ts",
+      "consumers": ["core", "webUi"]
+    },
+    {
+      "name": "WallWidget",
+      "kind": "interface",
+      "definedIn": "packages/shared/src/wall.ts",
+      "consumers": ["core", "webUi"]
+    },
+    {
+      "name": "WallWidgetType",
+      "kind": "type",
+      "definedIn": "packages/shared/src/wall.ts",
+      "consumers": ["webUi"]
+    },
+    {
+      "name": "WallOrientation",
+      "kind": "type",
+      "definedIn": "packages/shared/src/wall.ts",
+      "consumers": ["webUi"]
+    },
+    {
+      "name": "WallChangeKind",
+      "kind": "type",
+      "definedIn": "packages/shared/src/wall.ts",
+      "consumers": ["core", "webUi"]
+    },
+    {
       "name": "RequiredServiceStatus",
       "kind": "interface",
       "definedIn": "packages/shared/src/relationships.ts",
@@ -225,6 +261,12 @@
     },
     {
       "name": "DeviceVisibilityChangedEvent",
+      "kind": "interface",
+      "definedIn": "packages/shared/src/events.ts",
+      "consumers": ["core", "webUi"]
+    },
+    {
+      "name": "WallChangedEvent",
       "kind": "interface",
       "definedIn": "packages/shared/src/events.ts",
       "consumers": ["core", "webUi"]

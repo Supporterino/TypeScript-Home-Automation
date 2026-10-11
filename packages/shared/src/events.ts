@@ -11,6 +11,7 @@ import type { DeviceDescriptor, DeviceObservation } from "./device.js";
 import type { ExecutionOutcome } from "./execution.js";
 import type { LogEntry } from "./log-entry.js";
 import type { Room } from "./room.js";
+import type { WallChangeKind } from "./wall.js";
 
 /**
  * A raw, non-reserved state key changed (design.md D20; task 5.7).
@@ -154,6 +155,21 @@ export interface DeviceVisibilityChangedEvent {
   hidden: boolean;
 }
 
+/**
+ * A wall profile was created, updated, or deleted (design.md D9; task 1.3).
+ *
+ * `name` identifies the profile (its stable identifier and address) and `kind`
+ * the change. Profiles are stored in the state store's reserved internal
+ * namespace, which is deliberately not streamed as raw state, so a profile
+ * change is delivered through this category only — never also as a raw state
+ * key change (specs/realtime-events "Wall Profile Changes Are Broadcast").
+ */
+export interface WallChangedEvent {
+  category: "wall";
+  name: string;
+  kind: WallChangeKind;
+}
+
 /** Every event the stream can deliver. */
 export type StreamEvent =
   | StateChangedEvent
@@ -168,6 +184,7 @@ export type StreamEvent =
   | AutomationExecutionCompletedEvent
   | RoomChangedEvent
   | RoomMembershipChangedEvent
-  | DeviceVisibilityChangedEvent;
+  | DeviceVisibilityChangedEvent
+  | WallChangedEvent;
 
 export type StreamEventListener = (event: StreamEvent) => void;

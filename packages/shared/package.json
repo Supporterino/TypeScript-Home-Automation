@@ -23,6 +23,14 @@
       "types": "./dist/types/index.d.ts",
       "import": "./dist/types/index.js"
     },
+    "./wall-schema": {
+      "development": {
+        "types": "./src/wall-schema.ts",
+        "import": "./src/wall-schema.ts"
+      },
+      "types": "./dist/wall-schema.d.ts",
+      "import": "./dist/wall-schema.js"
+    },
     "./types/shelly": {
       "development": {
         "types": "./src/types/shelly.ts",
@@ -75,5 +83,8 @@
   },
   "publishConfig": {
     "access": "public"
+  },
+  "dependencies": {
+    "zod": "^4.3.6"
   }
 }

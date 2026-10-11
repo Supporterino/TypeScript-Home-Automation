@@ -4,6 +4,14 @@ import { join } from "node:path";
 
 const SRC_DIR = join(import.meta.dir, "..", "src");
 
+/**
+ * Runtime dependencies `@ts-ha/shared` may import. `zod` is pure,
+ * dependency-free, and browser-safe, and carries the wall-profile schema
+ * shared by the server and the browser editor (design.md D10) — the single
+ * exception to shared's otherwise dependency-free source.
+ */
+const ALLOWED_RUNTIME_IMPORTS = new Set(["zod"]);
+
 async function collectSourceFiles(dir: string): Promise<string[]> {
   const entries = await readdir(dir, { withFileTypes: true });
   const files: string[] = [];
@@ -44,7 +52,7 @@ describe("@ts-ha/shared import-time safety", () => {
     expect(offending).toEqual([]);
   });
 
-  it("contains no non-relative runtime imports (no runtime dependencies)", async () => {
+  it("contains no non-relative runtime imports beyond the browser-safe allowlist", async () => {
     const files = await collectSourceFiles(SRC_DIR);
     const offending: Array<{ file: string; specifier: string }> = [];
     // Matches static imports and dynamic imports with a string specifier.
@@ -53,7 +61,9 @@ describe("@ts-ha/shared import-time safety", () => {
       const content = stripComments(await readFile(file, "utf8"));
       for (const match of content.matchAll(importPattern)) {
         const specifier = match[1];
-        if (!specifier.startsWith(".")) offending.push({ file, specifier });
+        if (!specifier.startsWith(".") && !ALLOWED_RUNTIME_IMPORTS.has(specifier)) {
+          offending.push({ file, specifier });
+        }
       }
     }
     expect(offending).toEqual([]);
