@@ -127,6 +127,28 @@ describe("groupOnOffCommand", () => {
     };
     expect(groupOnOffCommand([member("zigbee:sensor", [sensor])], true)).toEqual([]);
   });
+
+  it("groups every capable member and excludes report-only members", () => {
+    const sensor: Capability = {
+      kind: "sensor",
+      property: "temperature",
+      access: ro,
+      valueType: "numeric",
+    };
+
+    const groups = groupOnOffCommand(
+      [
+        member("shelly:a", [capability()]),
+        member("zigbee:sensor", [sensor]),
+        member("shelly:b", [capability()]),
+      ],
+      false,
+    );
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0]?.members.map((m) => m.qualifiedId)).toEqual(["shelly:a", "shelly:b"]);
+    expect(groups[0]?.value).toBe(false);
+  });
 });
 
 describe("mergeRoomCommandResults", () => {

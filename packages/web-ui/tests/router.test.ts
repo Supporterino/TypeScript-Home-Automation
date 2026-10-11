@@ -6,6 +6,7 @@ import {
   devicesPath,
   energyPath,
   homekitPath,
+  isFullBleedView,
   isOverviewView,
   isUnder,
   logsPath,
@@ -18,6 +19,8 @@ import {
   statePath,
   stripBasePath,
   unassignedDevicesPath,
+  wallPath,
+  wallsPath,
   weatherPath,
 } from "../src/app/lib/router.js";
 
@@ -103,6 +106,17 @@ describe("matchRoute", () => {
     expect(matchRoute("/weather")).toEqual({ view: "weather", params: {} });
   });
 
+  it("matches the walls editor index", () => {
+    expect(matchRoute("/walls")).toEqual({ view: "walls", params: {} });
+  });
+
+  it("matches a wall by name, decoding the delimiter", () => {
+    expect(matchRoute("/wall/kitchen%20wall")).toEqual({
+      view: "wall",
+      params: { name: "kitchen wall" },
+    });
+  });
+
   it("resolves an unknown top-level segment to not-found", () => {
     expect(matchRoute("/nonexistent").view).toBe("not-found");
   });
@@ -186,6 +200,34 @@ describe("isOverviewView", () => {
   });
 });
 
+describe("isFullBleedView", () => {
+  it("is true only for the wall view", () => {
+    expect(isFullBleedView("wall")).toBe(true);
+  });
+
+  it("is false for every chrome-bearing view, including the walls editor", () => {
+    for (const view of [
+      "overview",
+      "rooms",
+      "room",
+      "devices",
+      "unassigned-devices",
+      "device-detail",
+      "automations",
+      "automation-detail",
+      "state",
+      "logs",
+      "homekit",
+      "energy",
+      "weather",
+      "walls",
+      "not-found",
+    ] as const) {
+      expect(isFullBleedView(view)).toBe(false);
+    }
+  });
+});
+
 describe("path builders round-trip through matchRoute", () => {
   it("overviewPath", () => {
     expect(resolveRoute(overviewPath("/status"), "/status").view).toBe("overview");
@@ -230,6 +272,15 @@ describe("path builders round-trip through matchRoute", () => {
   it("energyPath and weatherPath", () => {
     expect(resolveRoute(energyPath("/status"), "/status").view).toBe("energy");
     expect(resolveRoute(weatherPath("/status"), "/status").view).toBe("weather");
+  });
+
+  it("wallsPath", () => {
+    expect(resolveRoute(wallsPath("/status"), "/status")).toEqual({ view: "walls", params: {} });
+  });
+
+  it("wallPath round-trips a profile name containing the space delimiter", () => {
+    const match = resolveRoute(wallPath("/status", "kitchen wall"), "/status");
+    expect(match).toEqual({ view: "wall", params: { name: "kitchen wall" } });
   });
 
   it("every builder produces a path beneath a root-mounted base path", () => {

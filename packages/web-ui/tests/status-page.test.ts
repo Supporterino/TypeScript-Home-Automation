@@ -110,6 +110,8 @@ describe("WebUiService — view segment allowlist", () => {
       "/status/homekit",
       "/status/energy",
       "/status/weather",
+      "/status/walls",
+      "/status/wall/kitchen",
     ])("GET %s serves the dashboard shell", async (path) => {
       const app = await makeApp();
       const res = await req(app, path);

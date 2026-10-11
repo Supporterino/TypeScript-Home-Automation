@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { join } from "node:path";
 import { Hono } from "hono";
 import pino from "pino";
+import { WALL_CHUNK_MARKER } from "../src/app/wall/registry.js";
 import {
   type BuiltAsset,
   base64ToBytes,
@@ -258,6 +259,51 @@ describe("no development-mode branch", () => {
       output = "";
     }
     expect(output.trim()).toBe("");
+  });
+});
+
+// ── Wall chunk laziness ───────────────────────────────────────────────────────
+
+describe("wall chunk laziness", () => {
+  it("keeps the wall chunk marker out of first paint and inside a lazy chunk", () => {
+    // The wall grid and every widget renderer — and the shared widget
+    // registry they resolve through — must load together in one lazy chunk
+    // that is never first paint (design.md D6; task 5.12). The marker is
+    // rendered onto the wall grid's root element, so its presence is a
+    // durable signal of what the build actually shipped.
+    const jsAssets = ASSETS.filter((a) => a.contentType === "application/javascript");
+    const decoded = jsAssets.map((asset) => ({
+      asset,
+      text: Buffer.from(asset.rawBase64, "base64").toString("utf8"),
+    }));
+
+    const carrying = decoded.filter(({ text }) => text.includes(WALL_CHUNK_MARKER));
+    expect(carrying.length).toBeGreaterThanOrEqual(1);
+
+    for (const { asset } of carrying) {
+      expect(asset.firstPaint).toBe(false);
+    }
+    for (const { asset, text } of decoded) {
+      if (asset.firstPaint) expect(text).not.toContain(WALL_CHUNK_MARKER);
+    }
+  });
+
+  it("keeps the wall validation schema, and zod, out of first paint", () => {
+    // design.md D6/D24 and proposal.md require the wall-profile schema to be
+    // contained to the wall's lazy chunk. The editor and registry reach it via
+    // `@ts-ha/shared/wall-schema`, never the root barrel, so no first-paint
+    // asset may carry zod's runtime or the schema's message strings.
+    const markers = ["ZodError", "_zod", "invalid_type"];
+    const firstPaintJs = ASSETS.filter(
+      (asset) => asset.contentType === "application/javascript" && asset.firstPaint,
+    );
+    expect(firstPaintJs.length).toBeGreaterThanOrEqual(1);
+    for (const asset of firstPaintJs) {
+      const text = Buffer.from(asset.rawBase64, "base64").toString("utf8");
+      for (const marker of markers) {
+        expect(text).not.toContain(marker);
+      }
+    }
   });
 });
 

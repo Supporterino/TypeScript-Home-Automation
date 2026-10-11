@@ -521,4 +521,18 @@ describe("normalizeStreamEvent", () => {
       hidden: false,
     });
   });
+
+  it("normalises a wall event, defaulting an unrecognised kind", () => {
+    expect(normalizeStreamEvent({ category: "wall", name: "kitchen", kind: "deleted" })).toEqual({
+      category: "wall",
+      name: "kitchen",
+      kind: "deleted",
+    });
+
+    expect(normalizeStreamEvent({ category: "wall", name: "kitchen", kind: "bogus" })).toEqual({
+      category: "wall",
+      name: "kitchen",
+      kind: "updated",
+    });
+  });
 });
