@@ -416,6 +416,11 @@ type WebhookHandler = (context: {
 | `PUT` | `/api/rooms/:id` | Yes | Rename a room (`{ name }`) |
 | `DELETE` | `/api/rooms/:id` | Yes | Delete a room — its devices become unassigned |
 | `POST` | `/api/rooms/:id/command` | Yes | Issue one property command to every capable member of a room (best-effort, per-device outcomes) |
+| `GET` | `/api/walls` | Yes | List wall profiles |
+| `GET` | `/api/walls/:name` | Yes | Read one wall profile (`404` if unknown) |
+| `POST` | `/api/walls` | Yes | Create a wall profile (`{ name, config }`) |
+| `PUT` | `/api/walls/:name` | Yes | Update or rename a wall profile (`{ name?, config? }`) |
+| `DELETE` | `/api/walls/:name` | Yes | Delete a wall profile |
 | `GET` | `/api/energy` | Yes | Aggregated home energy view — instantaneous power, cumulative total, per-device breakdown, rolling history |
 | `GET` | `/api/weather` | Yes | Current conditions and forecast for a configured default or client-supplied location |
 | `GET` | `/api/events` | Yes | Realtime server-sent event stream |
@@ -427,6 +432,8 @@ type WebhookHandler = (context: {
 Room creation and rename return `409` for a name already in use. Unknown room or unknown device-room assignment target returns `404`. Rooms are user-defined groupings that span every device source; a device belongs to at most one room, and an absent member (unpaired, or its source disabled) is retained and reported unavailable rather than dropped (design.md D14).
 
 `POST /api/rooms/:id/command` accepts the same flat JSON object of properties as the single-device command endpoint (e.g. `{ "on": false }`). It resolves the room's members, dispatches to each member whose declared capabilities permit the requested property through the same validated `DeviceSource.command()` path as the single-device endpoint, and returns one result per member — `applied`, `skipped` (the member does not declare a writable capability for the property, or its descriptor is unavailable), or `failed` (dispatch rejected). The response is best-effort and never promises atomicity across members; a malformed body returns `400`, an unknown room `404`, and an engine with no room manager `503`.
+
+Wall profiles are owner-authored compositions for a wall-mounted display, addressed by their unique name and stored in the reserved internal namespace (`$internal:wall:<name>`) through their own `/api/walls` surface — so they persist across a restart, are rejected on write through the state API, and are not enumerated by `GET /api/state`. Creating or renaming a profile to a name already in use returns `409` and leaves the existing profile unchanged; an unknown profile returns `404`; a configuration that fails the shared wall-profile schema (grid bounds, known widget types, placement validity) returns `400` and nothing is persisted; deleting a profile affects no other. Every create, update, or delete is broadcast as the typed `wall` realtime event, never as a raw state key change. See [Web UI → Wall displays](http/web-ui.md#wall-displays).
 
 `GET /api/energy` returns `powerWatts` (sum across reachable devices declaring an instantaneous-power reading), `energyWh` (sum across reachable devices declaring a cumulative-energy reading, normalized to watt-hours), a `breakdown` of per-device contributions with `available`, and a `history` array of timestamped `powerWatts` samples (empty when history is disabled or no samples have been taken). It responds successfully with zero totals and an empty breakdown when no device meters energy. See [Configuration](configuration.md#energy-monitoring) for `ENERGY_SAMPLE_MS` and `ENERGY_HISTORY_MINUTES`.
 

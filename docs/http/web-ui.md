@@ -114,6 +114,8 @@ UI is mounted at `/` (design.md D7):
 | `/homekit` | Operator HomeKit view |
 | `/energy` | Energy view — instantaneous power, cumulative total, per-device breakdown, trend |
 | `/weather` | Weather view — current conditions and forecast |
+| `/walls` | Wall editor — list, create, rename, delete, and configure wall profiles |
+| `/wall/:name` | Wall display — a profile rendered full-bleed, with no application chrome |
 | `/login`, `/logout` | Authentication |
 
 A path beneath the UI's mount path that matches none of these — a typo, or a
@@ -220,6 +222,62 @@ not declare, so the view sends **one batch request per property family**
 (e.g. one for `on`, one for `state`) and merges the per-member outcomes. It
 is not one request per device; a room with any number of devices across the
 two families costs at most two requests.
+
+---
+
+## Wall displays
+
+A wall display is a full-bleed surface for a wall-mounted touchscreen: a named
+profile of curated widgets, configured once by the owner and then rendered
+read-only. Unlike every other view, `/wall/:name` is rendered **outside** the
+application shell, so it has no header, no navigation rail, and no footer and
+its widgets use the whole panel (design.md D3).
+
+A **profile** is addressed by its name and holds a composition of widgets on a
+fixed 12-column grid; each widget declares its position and span (`{x, y, w, h}`),
+and a profile may carry a per-orientation layout so it reflows between portrait
+and landscape without a second profile. Profiles are stored in the state store's
+reserved internal namespace (`$internal:wall:<name>`) through a dedicated
+`/api/walls` CRUD surface, so they survive a restart, are rejected on write
+through the state API, and are not listed by the State view (design.md D2).
+Creating or renaming a profile to
+a name already in use is rejected; a saved configuration is validated against the
+shared wall-profile schema on the server (and reused by the editor for
+client-side validation), so a malformed composition is rejected rather than
+persisted (design.md D10).
+
+The widget catalog covers: a clock/date readout (client clock — no server data);
+current weather and, when the registered service provides it, a forecast;
+instantaneous and cumulative energy; a room's devices with an all-on/all-off room
+command; the user's favorites; a single configured device; a status/presence
+summary; and one or more scene buttons that trigger an existing automation through
+the same manual-trigger path the admin interface uses (design.md D8). Device
+controls reuse the standard device tile enlarged by a size token so every wall
+control meets the touch-target minimum — there is no second device presentation,
+and a wall control reconciles and reverts exactly as it does elsewhere
+(design.md D7). A widget whose backing feature is unconfigured — for example
+weather with no weather service registered — reports that inside its own area and
+never prevents the rest of the profile from rendering.
+
+The wall itself is **read-only**: it presents no control for adding, removing, or
+editing a widget. Profiles are created and configured at `/walls`, an ENGINE
+navigation entry with its own reloadable URL. When a profile is saved or deleted,
+the `wall` realtime event reaches every open wall displaying it, which re-renders
+without a reload; a profile deleted while open — or one that never existed — is
+replaced with an explanatory state and a route back to the editor rather than a
+blank panel (design.md D9).
+
+### Kiosk limitations
+
+A wall is expected to run unattended for long periods. It relies on the data
+layer's existing resilience — reconnect-then-resnapshot with a fallback poll, and
+bounded buffers — and its clock is derived from the client, so it keeps correct
+local time even with the engine unreachable (design.md D11). The remaining
+always-on concerns are deliberately left to the host device: **screen wake-lock,
+a wall-specific fullscreen/PWA manifest, and burn-in mitigation are not provided**
+by the application. The session cookie is also session-scoped, so a panel that is
+rebooted rather than kept open requires a re-login; a wall-specific long-lived,
+revocable credential is a possible follow-up, not part of this surface.
 
 ---
 
@@ -332,7 +390,9 @@ The dashboard fetches an initial snapshot from `GET /api/status`,
 a `404` there as "not configured"), then opens `GET /api/events` and applies
 incremental deltas. The Energy and Weather views fetch their own endpoints
 (`GET /api/energy`, `GET /api/weather`) lazily when opened — they are not part
-of first paint — and refetch on stream reconnect. See
+of first paint — and refetch on stream reconnect. The wall editor and wall
+display likewise fetch profiles from `GET /api/walls` / `GET /api/walls/:name`
+only when opened, off first paint. See
 [Realtime updates](#realtime-updates) above.
 
 ---

@@ -87,6 +87,19 @@ See [Configuration](https://Supporterino.github.io/TypeScript-Home-Automation/co
 
 ---
 
+## Wall displays
+
+With the web UI enabled, a home can run one or more wall-mounted panels. Each is
+a named **wall profile** — a curated composition of widgets (clock, weather,
+energy, room and device controls, favorites, status, scene buttons) — rendered
+full-bleed, with no dashboard chrome, at `{WEB_UI_PATH}/wall/:name`. Profiles are
+created and configured at `{WEB_UI_PATH}/walls`, persist across restarts in the
+reserved state namespace, and are served over `/api/walls`. Screen wake-lock,
+fullscreen/PWA, and burn-in mitigation are intentionally left to the host tablet.
+See [Web UI → Wall displays](https://Supporterino.github.io/TypeScript-Home-Automation/http/web-ui/#wall-displays).
+
+---
+
 ## Documentation
 
 | | |

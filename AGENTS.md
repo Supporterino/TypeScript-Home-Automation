@@ -9,7 +9,7 @@ This repository is a Bun workspace of four independently published packages unde
 
 | Package | Responsibility |
 |---|---|
-| `@ts-ha/shared` | Domain/wire contracts, contract constants, pure helpers (no runtime deps) |
+| `@ts-ha/shared` | Domain/wire contracts, contract constants, pure helpers, and pure browser-safe validation schemas (no runtime deps beyond a pure validator) |
 | `@ts-ha/core` | Engine, services, device sources, HTTP server, MQTT, state, scheduling |
 | `@ts-ha/web-ui` | Hono routes + React/Mantine app + compiled asset manifest |
 | `@ts-ha/cli` | `DebugClient`, OpenTUI dashboard, target config, and `ts-ha run` |
@@ -76,8 +76,10 @@ Other scripts: `format:check`, `lint:fix`, `docker:build/up/down`, `version`,
 ## Project Structure
 
 - `packages/shared/src/` — `@ts-ha/shared`: contract types, contract constants
-  (`SESSION_COOKIE`, `INTERNAL_STATE_PREFIX`), pure capability helpers, and the
-  `types/` subpaths (`@ts-ha/shared/types[/...]`). No `node:` builtins, no runtime.
+  (`SESSION_COOKIE`, `INTERNAL_STATE_PREFIX`), pure capability helpers, pure
+  browser-safe validation schemas, and the `types/` subpaths
+  (`@ts-ha/shared/types[/...]`). No `node:` builtins; the only runtime is a pure
+  validator (`zod`).
 - `packages/core/src/` — `@ts-ha/core`, organised into subfolders by responsibility:
   - `engine.ts`, `automation.ts`, `automation-manager.ts`, `room-manager.ts`, `device-visibility.ts`, `config.ts` — glue layer (flat)
   - `mqtt/` — `mqtt-service.ts`, `mqtt-utils.ts`
