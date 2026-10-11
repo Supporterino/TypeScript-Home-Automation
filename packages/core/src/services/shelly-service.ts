@@ -1,9 +1,13 @@
 import type {
+  ShellyComponentKind,
+  ShellyComponentStatus,
+  ShellyComponentsStatus,
   ShellyCoverConfig,
   ShellyCoverState,
   ShellyCoverStatus,
   ShellyDeviceInfo,
   ShellyDeviceType,
+  ShellyDiscoveredComponent,
   ShellyMqttRpcResponse,
   ShellySwitchConfig,
   ShellySwitchSetResult,
@@ -19,6 +23,13 @@ const DEFAULT_MQTT_RPC_SRC = "ts-home-automation";
 
 /** Fixed timeout for a single Shelly MQTT RPC request, in milliseconds. */
 const MQTT_RPC_TIMEOUT_MS = 5000;
+
+/**
+ * Timeout for one HTTP `Shelly.GetComponents` page, in milliseconds. Discovery
+ * happens at startup and is awaited, so a single unreachable device must not
+ * stall engine startup on the general-purpose 30s HTTP default.
+ */
+const COMPONENT_DISCOVERY_TIMEOUT_MS = 5000;
 
 /**
  * A registered Shelly device's transport, HTTP identity, or MQTT identity, and
@@ -45,6 +56,12 @@ export interface ShellyDevice {
    * "shellyplus1-a8032abe54dc"). Present when `transport === "mqtt"`.
    */
   topicPrefix?: string;
+  /**
+   * The component channel this record addresses. Present on channel-scoped
+   * records materialized by the device source; absent on — and therefore `0`
+   * for — a plain registration, preserving single-component behavior.
+   */
+  channel?: number;
 }
 
 /** Options accepted by the object-form `register()` overload for MQTT devices. */
@@ -99,6 +116,71 @@ interface PendingMqttRpc {
 }
 
 /**
+ * Parse one raw `Shelly.GetComponents` entry into a typed component status.
+ * Returns `null` for unrecognized kinds (`input:N`, `light:N`, …) or malformed
+ * entries, so the caller can page the inventory without treating an unsupported
+ * component as an error.
+ */
+function parseShellyComponent(raw: unknown): ShellyComponentStatus | null {
+  if (raw === null || typeof raw !== "object") return null;
+
+  const key = (raw as { key?: unknown }).key;
+  if (typeof key !== "string") return null;
+  const match = /^(switch|cover):(\d+)$/.exec(key);
+  if (!match) return null;
+  const kind = match[1] as ShellyComponentKind;
+  const channel = Number.parseInt(match[2], 10);
+
+  const config = (raw as { config?: unknown }).config;
+  const rawName =
+    config !== null && typeof config === "object" ? (config as { name?: unknown }).name : undefined;
+  const name = typeof rawName === "string" && rawName.length > 0 ? rawName : null;
+
+  const rawStatus = (raw as { status?: unknown }).status;
+  const status =
+    rawStatus !== null && typeof rawStatus === "object" && !Array.isArray(rawStatus)
+      ? (rawStatus as Record<string, unknown>)
+      : undefined;
+
+  return status ? { key, kind, channel, name, status } : { key, kind, channel, name };
+}
+
+/**
+ * Parse a raw `Shelly.GetComponents` response into the shared
+ * {@link ShellyComponentsStatus} shape — one `ShellyComponentStatus` per
+ * recognized switch/cover entry, plus the raw page size needed to page the full
+ * inventory. Returns `null` when the shape is unsupported so discovery can stop
+ * without throwing.
+ */
+function parseGetComponentsPage(response: unknown, offset: number): ShellyComponentsStatus | null {
+  if (response === null || typeof response !== "object") return null;
+  const rawComponents = (response as { components?: unknown }).components;
+  if (!Array.isArray(rawComponents)) return null;
+
+  const components: ShellyComponentStatus[] = [];
+  for (const raw of rawComponents) {
+    const component = parseShellyComponent(raw);
+    if (component) components.push(component);
+  }
+
+  const rawTotal = (response as { total?: unknown }).total;
+  const total = typeof rawTotal === "number" && Number.isFinite(rawTotal) ? rawTotal : 0;
+
+  return { components, total, offset, returned: rawComponents.length };
+}
+
+/**
+ * Whether a recognized component reported a finite cumulative energy reading in
+ * its status, which marks its channel as metered.
+ */
+function componentIsMetered(status: Record<string, unknown> | undefined): boolean {
+  const aenergy = status?.aenergy;
+  if (aenergy === null || typeof aenergy !== "object") return false;
+  const total = (aenergy as { total?: unknown }).total;
+  return typeof total === "number" && Number.isFinite(total);
+}
+
+/**
  * Service for interacting with Shelly Gen 2 devices over either their HTTP
  * RPC API or their native RPC-over-MQTT channel.
  *
@@ -120,6 +202,16 @@ interface PendingMqttRpc {
  */
 export class ShellyService {
   private readonly devices: Map<string, ShellyDevice> = new Map();
+
+  /**
+   * Channel-scoped records materialized by the device source after component
+   * discovery, kept separate from `devices` so `getDevices()` stays the public
+   * registration-only view (design.md D1).
+   */
+  private readonly channelDevices: Map<string, ShellyDevice> = new Map();
+
+  /** Reverse index from a channel record's logical name to the registration it was materialized from. */
+  private readonly channelBaseNames: Map<string, string> = new Map();
 
   /**
    * Handlers fired when a device is registered. Uses a plain `Set` (mirroring
@@ -248,6 +340,82 @@ export class ShellyService {
   }
 
   /**
+   * @internal
+   *
+   * Materialize a channel-scoped record for a component discovered on an
+   * already-registered device. Called by the Shelly device source after
+   * component discovery — not part of the public registration API.
+   *
+   * The record inherits its base registration's transport identity and is
+   * stored in a separate internal map, so `getDevices()` keeps returning
+   * registrations only. It does **not** fire `onDeviceRegistered` listeners;
+   * discovery must not re-enter registration or it would loop (design.md D1).
+   *
+   * @param baseName Name of the registration the component belongs to
+   * @param channel Component channel the record addresses
+   * @param options The channel record's logical `name` and effective `type`
+   */
+  registerChannel(
+    baseName: string,
+    channel: number,
+    options: { name: string; type: ShellyDeviceType },
+  ): void {
+    const base = this.devices.get(baseName);
+    if (!base) {
+      throw new Error(
+        `Cannot materialize a channel record for unregistered Shelly device "${baseName}".`,
+      );
+    }
+
+    const record: ShellyDevice = {
+      ...base,
+      name: options.name,
+      type: options.type,
+      channel,
+    };
+    this.channelDevices.set(options.name, record);
+    this.channelBaseNames.set(options.name, baseName);
+    this.logger.debug(
+      { base: baseName, name: options.name, channel, type: options.type },
+      "Shelly channel record materialized",
+    );
+  }
+
+  /**
+   * @internal
+   *
+   * Remove channel records materialized for `baseName` whose logical name is no
+   * longer among the source's current entries, so a component rename does not
+   * leave the old id commandable forever. Records for retained entries are
+   * kept: the source passes their ids in `keepNames`.
+   *
+   * @param baseName Name of the registration whose records should be pruned
+   * @param keepNames Logical names that must remain resolvable
+   */
+  pruneChannels(baseName: string, keepNames: ReadonlySet<string>): void {
+    for (const [name, recordBase] of this.channelBaseNames) {
+      if (recordBase !== baseName) continue;
+      if (keepNames.has(name)) continue;
+      this.channelDevices.delete(name);
+      this.channelBaseNames.delete(name);
+      this.logger.debug({ base: baseName, name }, "Shelly channel record pruned");
+    }
+  }
+
+  /**
+   * @internal
+   *
+   * Drop every channel record materialized by the device source. Called when
+   * the source stops, so a stop/start within the same service lifetime cannot
+   * resolve a command through a stale record — for example after a component
+   * relocates away from the channel a record was materialized for.
+   */
+  clearChannelRecords(): void {
+    this.channelDevices.clear();
+    this.channelBaseNames.clear();
+  }
+
+  /**
    * Return a read-only snapshot of all currently registered devices, including
    * their name, transport, normalized host or topic prefix, and type.
    */
@@ -281,7 +449,7 @@ export class ShellyService {
    * @returns The switch state before the command
    */
   async turnOn(name: string, toggleAfter?: number): Promise<ShellySwitchSetResult> {
-    const params: Record<string, unknown> = { id: 0, on: true };
+    const params: Record<string, unknown> = { id: this.channelOf(name), on: true };
     if (toggleAfter !== undefined) {
       params.toggle_after = toggleAfter;
     }
@@ -297,7 +465,7 @@ export class ShellyService {
    * @returns The switch state before the command
    */
   async turnOff(name: string, toggleAfter?: number): Promise<ShellySwitchSetResult> {
-    const params: Record<string, unknown> = { id: 0, on: false };
+    const params: Record<string, unknown> = { id: this.channelOf(name), on: false };
     if (toggleAfter !== undefined) {
       params.toggle_after = toggleAfter;
     }
@@ -313,7 +481,7 @@ export class ShellyService {
    */
   async toggle(name: string): Promise<ShellySwitchSetResult> {
     this.logger.info({ device: name }, "Toggling Shelly switch");
-    return this.rpc<ShellySwitchSetResult>(name, "Switch.Toggle", { id: 0 });
+    return this.rpc<ShellySwitchSetResult>(name, "Switch.Toggle", { id: this.channelOf(name) });
   }
 
   // -------------------------------------------------------------------------
@@ -327,7 +495,7 @@ export class ShellyService {
    * @param duration Optional: stop after N seconds (partial open)
    */
   async coverOpen(name: string, duration?: number): Promise<void> {
-    const params: Record<string, unknown> = { id: 0 };
+    const params: Record<string, unknown> = { id: this.channelOf(name) };
     if (duration !== undefined) {
       params.duration = duration;
     }
@@ -342,7 +510,7 @@ export class ShellyService {
    * @param duration Optional: stop after N seconds (partial close)
    */
   async coverClose(name: string, duration?: number): Promise<void> {
-    const params: Record<string, unknown> = { id: 0 };
+    const params: Record<string, unknown> = { id: this.channelOf(name) };
     if (duration !== undefined) {
       params.duration = duration;
     }
@@ -357,7 +525,7 @@ export class ShellyService {
    */
   async coverStop(name: string): Promise<void> {
     this.logger.info({ device: name }, "Stopping Shelly cover");
-    await this.rpc(name, "Cover.Stop", { id: 0 });
+    await this.rpc(name, "Cover.Stop", { id: this.channelOf(name) });
   }
 
   /**
@@ -376,7 +544,7 @@ export class ShellyService {
       );
     }
     this.logger.info({ device: name, position: clamped }, "Moving Shelly cover to position");
-    await this.rpc(name, "Cover.GoToPosition", { id: 0, pos: clamped });
+    await this.rpc(name, "Cover.GoToPosition", { id: this.channelOf(name), pos: clamped });
   }
 
   /**
@@ -395,7 +563,7 @@ export class ShellyService {
       );
     }
     this.logger.info({ device: name, offset: clamped }, "Moving Shelly cover by relative offset");
-    await this.rpc(name, "Cover.GoToPosition", { id: 0, rel: clamped });
+    await this.rpc(name, "Cover.GoToPosition", { id: this.channelOf(name), rel: clamped });
   }
 
   /**
@@ -404,7 +572,7 @@ export class ShellyService {
    * @param name Device friendly name
    */
   async getCoverStatus(name: string): Promise<ShellyCoverStatus> {
-    return this.rpc<ShellyCoverStatus>(name, "Cover.GetStatus", { id: 0 });
+    return this.rpc<ShellyCoverStatus>(name, "Cover.GetStatus", { id: this.channelOf(name) });
   }
 
   /**
@@ -413,7 +581,7 @@ export class ShellyService {
    * @param name Device friendly name
    */
   async getCoverConfig(name: string): Promise<ShellyCoverConfig> {
-    return this.rpc<ShellyCoverConfig>(name, "Cover.GetConfig", { id: 0 });
+    return this.rpc<ShellyCoverConfig>(name, "Cover.GetConfig", { id: this.channelOf(name) });
   }
 
   /**
@@ -424,7 +592,7 @@ export class ShellyService {
    */
   async coverCalibrate(name: string): Promise<void> {
     this.logger.warn({ device: name }, "Starting Shelly cover calibration");
-    await this.rpc(name, "Cover.Calibrate", { id: 0 });
+    await this.rpc(name, "Cover.Calibrate", { id: this.channelOf(name) });
   }
 
   /**
@@ -457,7 +625,7 @@ export class ShellyService {
    * @param name Device friendly name
    */
   async getStatus(name: string): Promise<ShellySwitchStatus> {
-    return this.rpc<ShellySwitchStatus>(name, "Switch.GetStatus", { id: 0 });
+    return this.rpc<ShellySwitchStatus>(name, "Switch.GetStatus", { id: this.channelOf(name) });
   }
 
   /**
@@ -466,7 +634,7 @@ export class ShellyService {
    * @param name Device friendly name
    */
   async getConfig(name: string): Promise<ShellySwitchConfig> {
-    return this.rpc<ShellySwitchConfig>(name, "Switch.GetConfig", { id: 0 });
+    return this.rpc<ShellySwitchConfig>(name, "Switch.GetConfig", { id: this.channelOf(name) });
   }
 
   /**
@@ -520,6 +688,86 @@ export class ShellyService {
   }
 
   // -------------------------------------------------------------------------
+  // Component discovery
+  // -------------------------------------------------------------------------
+
+  /**
+   * Enumerate the switch/cover components a device exposes via
+   * `Shelly.GetComponents`, paging the inventory until every reported
+   * component has been covered (design.md D2).
+   *
+   * Only `switch:N` / `cover:N` components are recognized; a component's
+   * configured name comes from its `config.name` and its metering from a
+   * finite `status.aenergy.total`. Because a partial inventory is not a valid
+   * inventory, any page that fails or parses as unsupported discards the whole
+   * result — returning `[]` so the caller falls back to a single channel-0
+   * component rather than describing only the pages already read (design.md D2).
+   *
+   * @param name Device friendly name
+   * @returns The recognized components, in inventory order
+   */
+  async discoverComponents(name: string): Promise<ShellyDiscoveredComponent[]> {
+    const discovered: ShellyDiscoveredComponent[] = [];
+    const seen = new Set<string>();
+    let offset = 0;
+
+    while (true) {
+      let response: unknown;
+      try {
+        response = await this.rpc<unknown>(
+          name,
+          "Shelly.GetComponents",
+          {
+            include: ["status", "config"],
+            offset,
+          },
+          COMPONENT_DISCOVERY_TIMEOUT_MS,
+        );
+      } catch (err) {
+        this.logger.warn(
+          { err, device: name, offset },
+          "Shelly component discovery failed — falling back to a single channel-0 component",
+        );
+        return [];
+      }
+
+      const page = parseGetComponentsPage(response, offset);
+      if (!page) {
+        this.logger.warn(
+          { device: name, offset },
+          "Shelly component discovery returned an unsupported response — falling back to a single channel-0 component",
+        );
+        return [];
+      }
+
+      for (const component of page.components) {
+        const key = `${component.kind}:${component.channel}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        discovered.push({
+          channel: component.channel,
+          kind: component.kind,
+          name: component.name,
+          metered: componentIsMetered(component.status),
+        });
+      }
+
+      // Page on the raw component count, not the recognized subset: a page can
+      // carry unsupported kinds (`input:*`) that sort ahead of switch/cover, so
+      // advancing by the recognized count would re-read or skip inventory
+      // (design.md D2).
+      const returned = page.returned ?? page.components.length;
+      // Stop on the last page or an empty page (which would otherwise let
+      // `offset` stall and loop forever).
+      if (returned === 0) break;
+      if (offset + returned >= page.total) break;
+      offset += returned;
+    }
+
+    return discovered;
+  }
+
+  // -------------------------------------------------------------------------
   // Internal helpers
   // -------------------------------------------------------------------------
 
@@ -536,17 +784,29 @@ export class ShellyService {
   }
 
   /**
-   * Look up a registered device by name.
-   * Throws if the device is not registered.
+   * Look up a device by name, resolving both public registrations and the
+   * internal channel map so channel-scoped records are commandable through the
+   * same public methods. A channel record takes precedence so a single-component
+   * device whose sole component lives at a non-zero channel can keep the base
+   * registration's identity while still threading that channel. Throws if the
+   * name is unknown.
    */
   private getDevice(name: string): ShellyDevice {
-    const device = this.devices.get(name);
+    const device = this.channelDevices.get(name) ?? this.devices.get(name);
     if (!device) {
       throw new Error(
         `Shelly device "${name}" is not registered. Call shelly.register("${name}", "<ip>") first.`,
       );
     }
     return device;
+  }
+
+  /**
+   * The component channel a device's commands target. A plain registration
+   * carries no channel and defaults to `0`.
+   */
+  private channelOf(name: string): number {
+    return this.getDevice(name).channel ?? 0;
   }
 
   /**
@@ -557,12 +817,18 @@ export class ShellyService {
    * @param name Device friendly name
    * @param method RPC method (e.g. "Switch.Set")
    * @param params RPC method parameters
+   * @param timeoutMs Optional HTTP timeout; omitted calls use the client default
    */
-  private async rpc<T>(name: string, method: string, params?: Record<string, unknown>): Promise<T> {
+  private async rpc<T>(
+    name: string,
+    method: string,
+    params?: Record<string, unknown>,
+    timeoutMs?: number,
+  ): Promise<T> {
     const device = this.getDevice(name);
     return device.transport === "mqtt"
       ? this.mqttRpc<T>(device, method, params)
-      : this.httpRpc<T>(device, method, params);
+      : this.httpRpc<T>(device, method, params, timeoutMs);
   }
 
   /**
@@ -572,15 +838,24 @@ export class ShellyService {
     device: ShellyDevice,
     method: string,
     params?: Record<string, unknown>,
+    timeoutMs?: number,
   ): Promise<T> {
     const name = device.name;
     const searchParams = params
-      ? new URLSearchParams(Object.entries(params).map(([key, value]) => [key, String(value)]))
+      ? new URLSearchParams(
+          Object.entries(params).map(([key, value]) => [
+            key,
+            value !== null && typeof value === "object" ? JSON.stringify(value) : String(value),
+          ]),
+        )
       : undefined;
     const query = searchParams ? `?${searchParams.toString()}` : "";
     const url = `http://${device.host}/rpc/${method}${query}`;
 
-    const response = await this.http.get<T>(url);
+    const response =
+      timeoutMs !== undefined
+        ? await this.http.request<T>(url, { method: "GET", timeout: timeoutMs })
+        : await this.http.get<T>(url);
 
     if (!response.ok) {
       const errMsg = `Shelly RPC ${method} failed for "${name}" (${device.host}): HTTP ${response.status}`;

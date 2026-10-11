@@ -766,6 +766,11 @@ export function createEngine(options: EngineOptions): Engine {
         };
         await serviceRegistry.startAll(coreCtx);
 
+        // MQTT must be connected before device sources start: a source that
+        // discovers components over MQTT publishes an RPC request through
+        // MqttService, which is a no-op while disconnected.
+        await mqtt.connect();
+
         // Started before automation discovery, so no automation's onStart()
         // ever observes a partially constructed device surface (task 6.13a).
         await deviceSources.start();
@@ -778,11 +783,9 @@ export function createEngine(options: EngineOptions): Engine {
         // (design.md D1; tasks 7.4, 7.5). Re-wired on every start() since
         // `deviceSources.stop()` clears its listener set; seeding from
         // `list()` here means whatever's already known at this point in
-        // startup (typically nothing yet, since MQTT has not connected)
-        // never itself emits a spurious `device_appeared`.
+        // startup never itself emits a spurious `device_appeared`.
         wireDeviceEvents(deviceSources, eventBus);
 
-        await mqtt.connect();
         deviceRegistry?.start();
         const recursive = options.recursive ?? config.automations.recursive;
         await manager.discoverAndRegister(options.automationsDir, recursive);

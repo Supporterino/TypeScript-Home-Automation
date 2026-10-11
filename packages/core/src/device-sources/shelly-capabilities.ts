@@ -97,15 +97,20 @@ const COVER_CAPABILITIES: Capability[] = [
 ];
 
 /**
- * Returns the authored capability description for a Shelly device type.
- * Every Shelly device satisfies the rich descriptor requirement in full —
+ * Returns the authored capability description for a single component channel
+ * of a Shelly device. `type` is that channel's effective kind — `cover` for a
+ * discovered cover component, else the registration's `switch`/`outlet`
+ * distinction applied to a discovered switch component — so discovery supplies
+ * `switch` vs `cover` while the outlet flag comes from registration (design.md
+ * D5). Every Shelly device satisfies the rich descriptor requirement in full —
  * it never renders less capably than a Zigbee device merely because its
  * capabilities are authored rather than discovered.
  *
- * `metered` states whether the device has actually reported a cumulative
- * energy reading. Shelly publishes no metering flag on a device, so the
- * source derives it from the observed reading and passes it in; without it
- * the energy capability is omitted rather than declared for every switch.
+ * `metered` states whether *this channel* has actually reported a cumulative
+ * energy reading. Shelly publishes no metering flag, so the source derives it
+ * per channel from that channel's observed reading and passes it in; without
+ * it the energy capability is omitted rather than declared for every switch,
+ * so channels of one device with mixed metering are described independently.
  */
 export function shellyCapabilitiesFor(
   type: ShellyDeviceType,

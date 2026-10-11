@@ -110,11 +110,15 @@ export type {
 } from "@ts-ha/shared/types/notification";
 // Shelly Gen 2 types
 export type {
+  ShellyComponentKind,
+  ShellyComponentStatus,
+  ShellyComponentsStatus,
   ShellyCoverConfig,
   ShellyCoverError,
   ShellyCoverState,
   ShellyCoverStatus,
   ShellyDeviceInfo,
+  ShellyDiscoveredComponent,
   ShellyEnergyCounters,
   ShellySwitchConfig,
   ShellySwitchError,
