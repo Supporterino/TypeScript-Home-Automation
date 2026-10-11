@@ -34,6 +34,7 @@ import {
   StateManager,
   type StateManagerOptions,
 } from "./state/state-manager.js";
+import { WALL_PREFIX, WallManager } from "./wall-manager.js";
 import {
   type DeviceNiceNames,
   DeviceRegistry,
@@ -336,6 +337,12 @@ export interface Engine {
   readonly rooms: RoomManager;
 
   /**
+   * Named wall profiles for the full-bleed wall surface (design.md D2).
+   * Always present, like `rooms`.
+   */
+  readonly walls: WallManager;
+
+  /**
    * The persisted, per-device hidden flag (design.md D7). Always present,
    * like `devices` and `rooms`.
    */
@@ -417,12 +424,13 @@ export function createEngine(options: EngineOptions): Engine {
     flushIntervalMs: options.state?.flushIntervalMs ?? config.state.flushIntervalMs,
   });
 
-  // State/automation/room categories: every state mutation is routed to
+  // State/automation/room/wall categories: every state mutation is routed to
   // exactly one typed category. Reserved keys under the automation-enabled
   // namespace become "automation" events; reserved keys under the room
-  // namespaces become "room"/"room_membership" deltas; every other reserved
-  // key is excluded from the stream entirely (design.md D20; task 5.7).
-  // Everything else is an ordinary "state" event.
+  // namespaces become "room"/"room_membership" deltas; reserved keys under the
+  // wall namespace become "wall" events; every other reserved key is excluded
+  // from the stream entirely (design.md D20; task 5.7). Everything else is an
+  // ordinary "state" event.
   stateManager.onAnyChange((key, newValue, oldValue) => {
     if (key.startsWith(AUTOMATION_ENABLED_PREFIX)) {
       const name = key.slice(AUTOMATION_ENABLED_PREFIX.length);
@@ -441,6 +449,13 @@ export function createEngine(options: EngineOptions): Engine {
         qualifiedId,
         roomId: (newValue as string | undefined) ?? null,
       });
+      return;
+    }
+    if (key.startsWith(WALL_PREFIX)) {
+      const name = key.slice(WALL_PREFIX.length);
+      const kind =
+        oldValue === undefined ? "created" : newValue === undefined ? "deleted" : "updated";
+      eventBus.emit({ category: "wall", name, kind });
       return;
     }
     if (isReservedStateKey(key)) {
@@ -622,6 +637,11 @@ export function createEngine(options: EngineOptions): Engine {
     logger.child({ service: "rooms" }),
   );
 
+  // Named wall profiles depend only on the state store: a profile is
+  // addressed and stored by name in the reserved namespace, with no device
+  // knowledge (design.md D2, D9).
+  const wallManager = new WallManager(stateManager, logger.child({ service: "walls" }));
+
   // HomekitService reads every device family through `deviceSources` now
   // (task 6.16b) — it no longer needs mqtt, deviceRegistry, shelly, or state
   // directly, so it cannot use the generic resolveService helper only
@@ -718,6 +738,7 @@ export function createEngine(options: EngineOptions): Engine {
     deviceRegistry,
     devices: deviceSources,
     rooms: roomManager,
+    walls: wallManager,
     deviceVisibility,
     energy: energyAggregator,
 
@@ -741,6 +762,7 @@ export function createEngine(options: EngineOptions): Engine {
         httpServer?.setManagers(stateManager, manager, logBuffer);
         httpServer?.setDeviceSources(deviceSources);
         httpServer?.setRoomManager(roomManager);
+        httpServer?.setWallManager(wallManager);
         httpServer?.setDeviceVisibility(deviceVisibility);
         httpServer?.setEventStream(eventBus, streamLogger);
         httpServer?.setEnergyAggregator(energyAggregator);

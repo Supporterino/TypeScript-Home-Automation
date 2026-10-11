@@ -288,6 +288,18 @@ export {
   StateManager,
   type StateManagerOptions,
 } from "./state/state-manager.js";
+// Named wall profiles for the full-bleed wall surface (design.md D2)
+export {
+  type CreateWallResult,
+  type DeleteWallResult,
+  type UpdateWallResult,
+  WALL_PREFIX,
+  WallManager,
+  type WallProfile,
+  type WallProfileConfig,
+  type WallWidget,
+  wallKey,
+} from "./wall-manager.js";
 // Zigbee2MQTT device registry
 export {
   type DeviceAddedHandler,

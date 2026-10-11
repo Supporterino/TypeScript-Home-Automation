@@ -23,6 +23,7 @@ import type { MqttService } from "../mqtt/mqtt-service.js";
 import type { RoomManager } from "../room-manager.js";
 import type { ServiceRegistry } from "../services/service-registry.js";
 import { isReservedStateKey, type StateManager } from "../state/state-manager.js";
+import type { WallManager, WallProfileConfig } from "../wall-manager.js";
 import { EventStreamHub } from "./event-stream.js";
 import { levelNameToNumber, SESSION_COOKIE } from "./utils.js";
 
@@ -95,6 +96,11 @@ export interface WeatherEndpointDefaults {
  * - `PUT  /api/rooms/:id`                  — Rename a room
  * - `DELETE /api/rooms/:id`                — Delete a room
  * - `POST /api/rooms/:id/command`          — Issue one command to every capable room member
+ * - `GET  /api/walls`                      — List wall profiles
+ * - `GET  /api/walls/:name`                — Read a wall profile
+ * - `POST /api/walls`                      — Create a wall profile
+ * - `PUT  /api/walls/:name`                — Update (including rename) a wall profile
+ * - `DELETE /api/walls/:name`              — Delete a wall profile
  * - `GET  /api/events`                     — Realtime server-sent event stream
  *
  * `GET /api/devices` and `GET /api/devices/:friendlyName` (Zigbee-only) are
@@ -114,6 +120,7 @@ export class HttpServer {
   private logBuffer: LogBuffer | null = null;
   private deviceSources: AggregateDeviceSource | null = null;
   private roomManager: RoomManager | null = null;
+  private wallManager: WallManager | null = null;
   private deviceVisibility: DeviceVisibility | null = null;
   private energyAggregator: EnergyAggregator | null = null;
   private weatherService: WeatherService | null = null;
@@ -159,6 +166,15 @@ export class HttpServer {
    */
   setRoomManager(rooms: RoomManager): void {
     this.roomManager = rooms;
+  }
+
+  /**
+   * Wire the wall-profile endpoints (`/api/walls`) to the engine's
+   * {@link WallManager}. Called by the engine after construction;
+   * `engine.walls` is always present, so this is called unconditionally.
+   */
+  setWallManager(walls: WallManager): void {
+    this.wallManager = walls;
   }
 
   /**
@@ -781,6 +797,110 @@ export class HttpServer {
       const result = this.roomManager.deleteRoom(id);
       if (result === "not_found") return c.json({ error: "Room not found", id }, 404);
       return c.json({ id, deleted: true });
+    });
+
+    // ── API: Walls ──────────────────────────────────────────────────────────
+    //
+    // Named wall profiles for the full-bleed wall surface (design.md D2;
+    // specs/wall-display "Named Wall Profiles", specs/http-server "Wall
+    // Profile Endpoints"). A profile is addressed by its name, which is also
+    // its stable identifier; the config is validated on write inside
+    // WallManager, so an invalid composition is rejected before persisting.
+
+    app.get("/api/walls", (c) => {
+      if (!this.wallManager) return c.json({ error: "Not available" }, 503);
+      const walls = this.wallManager.listWalls();
+      return c.json({ walls, count: walls.length });
+    });
+
+    app.get("/api/walls/:name", (c) => {
+      if (!this.wallManager) return c.json({ error: "Not available" }, 503);
+      const name = c.req.param("name");
+      const wall = this.wallManager.getWall(name);
+      if (!wall) return c.json({ error: "Wall not found", name }, 404);
+      return c.json(wall);
+    });
+
+    app.post("/api/walls", async (c) => {
+      if (!this.wallManager) return c.json({ error: "Not available" }, 503);
+
+      let body: unknown;
+      try {
+        body = await c.req.json();
+      } catch {
+        return c.json({ error: "Invalid JSON body" }, 400);
+      }
+      if (body === null || typeof body !== "object" || Array.isArray(body)) {
+        return c.json({ error: "Body must be an object" }, 400);
+      }
+      const parsed = body as { name?: unknown; config?: unknown };
+      if (typeof parsed.name !== "string" || parsed.name.length === 0) {
+        return c.json({ error: "Body must be { name: string, config: object }" }, 400);
+      }
+      if (
+        parsed.config === null ||
+        typeof parsed.config !== "object" ||
+        Array.isArray(parsed.config)
+      ) {
+        return c.json({ error: "Body must be { name: string, config: object }" }, 400);
+      }
+
+      const result = this.wallManager.createWall(parsed.name, parsed.config as WallProfileConfig);
+      if (result.status === "duplicate_name") {
+        return c.json({ error: result.message, name: parsed.name }, 409);
+      }
+      if (result.status === "invalid_config") return c.json({ error: result.message }, 400);
+      return c.json(result.wall, 201);
+    });
+
+    app.put("/api/walls/:name", async (c) => {
+      if (!this.wallManager) return c.json({ error: "Not available" }, 503);
+      const name = c.req.param("name");
+
+      let body: unknown;
+      try {
+        body = await c.req.json();
+      } catch {
+        return c.json({ error: "Invalid JSON body" }, 400);
+      }
+      if (body === null || typeof body !== "object" || Array.isArray(body)) {
+        return c.json({ error: "Body must be an object" }, 400);
+      }
+      const parsed = body as { name?: unknown; config?: unknown };
+      if (
+        parsed.name !== undefined &&
+        (typeof parsed.name !== "string" || parsed.name.length === 0)
+      ) {
+        return c.json({ error: "Body 'name' must be a non-empty string" }, 400);
+      }
+      if (
+        parsed.config !== undefined &&
+        (parsed.config === null ||
+          typeof parsed.config !== "object" ||
+          Array.isArray(parsed.config))
+      ) {
+        return c.json({ error: "Body 'config' must be an object" }, 400);
+      }
+
+      const input: { name?: string; config?: WallProfileConfig } = {};
+      if (typeof parsed.name === "string") input.name = parsed.name;
+      if (parsed.config !== undefined) input.config = parsed.config as WallProfileConfig;
+
+      const result = this.wallManager.updateWall(name, input);
+      if (result.status === "not_found") return c.json({ error: "Wall not found", name }, 404);
+      if (result.status === "duplicate_name") {
+        return c.json({ error: result.message, name }, 409);
+      }
+      if (result.status === "invalid_config") return c.json({ error: result.message }, 400);
+      return c.json(result.wall);
+    });
+
+    app.delete("/api/walls/:name", (c) => {
+      if (!this.wallManager) return c.json({ error: "Not available" }, 503);
+      const name = c.req.param("name");
+      const result = this.wallManager.deleteWall(name);
+      if (result === "not_found") return c.json({ error: "Wall not found", name }, 404);
+      return c.json({ name, deleted: true });
     });
 
     // Issues one command to every room member whose declared capabilities
