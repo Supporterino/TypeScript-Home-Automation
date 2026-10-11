@@ -1,6 +1,6 @@
 # Shelly Devices
 
-The built-in `ShellyService` controls Shelly Gen 2 devices (Plus Plug S, Plus 1PM Mini, Plus 2PM, etc.) over either their local HTTP RPC API or their native RPC-over-MQTT channel. No cloud account or internet connection required.
+The built-in `ShellyService` controls Shelly Gen 2 devices (Plus Plug S, Plus 1PM Mini, Plus 2PM, Pro 4PM, etc.) over either their local HTTP RPC API or their native RPC-over-MQTT channel. No cloud account or internet connection required. Multi-component Pro-series appliances are enumerated component-by-component — see [Multi-component devices](#multi-component-devices).
 
 > **Breaking change:** `ShellyService`'s constructor now takes `(http, mqtt, logger)` instead of `(http, logger)`, and its engine service-factory signature changed from `(http, logger) => ShellyService` to a single context object `(ctx: ShellyServiceContext) => ShellyService` where `ctx = { http, mqtt, logger }` — mirroring the existing `homekit` factory pattern. Update any code constructing `ShellyService` directly or registering it as a factory-form engine service.
 
@@ -125,7 +125,82 @@ MQTT RPC requests have a fixed 5-second timeout (not configurable) — if a devi
 
 ---
 
+## Multi-component devices
+
+Shelly Pro-series appliances are multi-component: a single physical device exposes
+several independent `switch:N` / `cover:N` channels (for example, a **Pro 4PM**
+exposes `switch:0` through `switch:3`). Register such a device **once** — the
+device source enumerates its components and presents each channel as its own
+logical device.
+
+```ts
+svc.register("pro_4pm", "192.168.1.60");                 // HTTP
+svc.register("pro_4pm_shop", {                           // MQTT
+  transport: "mqtt",
+  topicPrefix: "shellypro4pm-a8032abe54dc",
+});
+```
+
+### Per-channel logical devices
+
+At startup the source queries each device's component inventory
+(`Shelly.GetComponents`, paging through the **entire** inventory — a response is
+capped at one page and may sort switch components onto a later page) and
+materializes one **logical device per component**, each with its own descriptor,
+state, capability description, and HomeKit accessory. A four-switch Pro 4PM
+appears as four switches; a device that exposes only `switch:0` is unchanged.
+
+- **Awaited discovery:** `start()` completes component discovery for every
+  already-registered device before returning, so enumeration is complete once the
+  engine is up. A device does not appear until its discovery resolves. Devices
+  registered after startup are discovered asynchronously and appear when resolved.
+- **MQTT transport:** one subscription per physical device, but each
+  `NotifyStatus` is dispatched by its actual component key — a `switch:2`
+  notification updates only channel 2.
+- **HTTP transport:** every component channel is polled independently.
+- **Commands** are addressed to a logical channel via that channel's identity
+  (see below); the RPC carries the channel as its component `id`.
+- **Device-level queries** (`getDeviceInfo`, `getSysStatus`, `reboot`) remain
+  device-scoped and channel-independent.
+
+### Channel identity
+
+Identities are stable across restarts for the same physical device, channel, and
+component name, and are the names you pass to the `ShellyService` command methods
+(and the ids the device source exposes):
+
+- A device that exposes **exactly one** component keeps the **base registration
+  name** as its identity — existing single-channel deployments are unchanged.
+- A device with **multiple** components uses the component's configured name
+  **when it is present and unique across every registered device**; otherwise the
+  identity falls back to `<base>_<channel>`. Residual collisions are resolved
+  deterministically: two component kinds sharing one channel use
+  `<base>_<kind>_<channel>`, and any remaining clash gets a numeric suffix. The
+  display name is the configured name when present, else a channel-qualified
+  `<base> <channel>` (kind-qualified when two kinds share a channel), so two
+  channels of one appliance never display identically.
+- For an expanded multi-component device, the **base registration is not a logical
+  device**: a command naming it is rejected as not found. Only device-level
+  queries resolve against it.
+
+> **Renaming a component on the device is treated as a new identity.** Persisted
+> room/visibility state for the old id is orphaned, and the HomeKit accessory is
+> created under a new persistence key (`shelly:<id>`), which requires a fresh
+> pairing. This is the deliberate trade-off of using human-meaningful component
+> names over opaque numeric ids.
+
+### Discovery failure
+
+Component discovery is best-effort and never blocks registration. If the
+inventory cannot be queried, returns an unexpected shape, or yields no recognized
+switch/cover components, the device falls back to a single channel-0 component
+using its declared registration type — i.e. the pre-multi-channel behavior.
+
+---
+
 ## Switch methods
+
+For a multi-component device, `name` is the channel's logical identity (a configured component name, or `<base>_<channel>`) — see [Channel identity](#channel-identity). The RPC targets that channel's component `id`.
 
 | Method | Returns | Description |
 |---|---|---|
@@ -183,7 +258,7 @@ export default class TvAutoOff extends Automation {
 
 ## Cover / shutter methods
 
-For Shelly Plus 2PM devices configured in roller mode:
+For Shelly Plus 2PM devices configured in roller mode (and the cover channels of multi-component appliances). For a multi-component device, `name` is the channel's logical identity — see [Channel identity](#channel-identity).
 
 | Method | Returns | Description |
 |---|---|---|
