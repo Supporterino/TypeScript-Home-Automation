@@ -4,7 +4,6 @@
 .git
 .github
 .changeset
-.ctx
 .idea
 .opencode
 docs
