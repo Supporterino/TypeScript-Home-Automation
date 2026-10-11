@@ -22,6 +22,7 @@ import { HttpServer } from "../src/http/http-server.js";
 import { LogBuffer } from "../src/logging/log-buffer.js";
 import { RoomManager } from "../src/room-manager.js";
 import { StateManager } from "../src/state/state-manager.js";
+import { WallManager } from "../src/wall-manager.js";
 
 const logger = pino({ level: "silent" });
 
@@ -1299,6 +1300,319 @@ describe("HttpServer — /api/rooms", () => {
     expect(body.rooms[0].members).toEqual([
       { qualifiedId: "zigbee:0xunpaired", available: false, device: null },
     ]);
+  });
+});
+
+// ── Walls ─────────────────────────────────────────────────────────────────
+
+/** A real `WallManager` over an in-memory `StateManager`. */
+function makeWallManager() {
+  const state = new StateManager(logger, { persist: false });
+  return new WallManager(state, logger);
+}
+
+const VALID_WALL_CONFIG = {
+  widgets: [{ id: "clock", type: "clock", config: {}, x: 0, y: 0, w: 6, h: 2 }],
+};
+
+/** A config whose sole widget overflows the 12-column grid. */
+const INVALID_WALL_CONFIG = {
+  widgets: [{ id: "wide", type: "clock", config: {}, x: 6, y: 0, w: 8, h: 1 }],
+};
+
+/** A config whose sole room widget is missing its required `roomId` (design.md D10). */
+const INVALID_WIDGET_CONFIG = {
+  widgets: [{ id: "room", type: "room", config: {}, x: 0, y: 0, w: 6, h: 5 }],
+};
+
+function jsonBody(body: unknown): RequestInit {
+  return {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  };
+}
+
+describe("HttpServer — /api/walls", () => {
+  it("returns 503 when no wall manager is configured", async () => {
+    const server = makeServer();
+    const res = await req(server, "/api/walls");
+    expect(res.status).toBe(503);
+  });
+
+  it("lists wall profiles", async () => {
+    const server = makeServer();
+    const walls = makeWallManager();
+    walls.createWall("kitchen", VALID_WALL_CONFIG);
+    server.setWallManager(walls);
+
+    const res = await req(server, "/api/walls");
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.count).toBe(1);
+    expect(body.walls[0].name).toBe("kitchen");
+  });
+
+  it("creates a profile and returns 201 with the stored profile", async () => {
+    const server = makeServer();
+    server.setWallManager(makeWallManager());
+
+    const res = await req(
+      server,
+      "/api/walls",
+      jsonBody({ name: "kitchen", config: VALID_WALL_CONFIG }),
+    );
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body.name).toBe("kitchen");
+    expect(typeof body.version).toBe("number");
+    expect(body.config.widgets).toHaveLength(1);
+  });
+
+  it("reads a profile by name", async () => {
+    const server = makeServer();
+    const walls = makeWallManager();
+    walls.createWall("kitchen", VALID_WALL_CONFIG);
+    server.setWallManager(walls);
+
+    const res = await req(server, "/api/walls/kitchen");
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.name).toBe("kitchen");
+  });
+
+  it("returns 404 reading an unknown profile", async () => {
+    const server = makeServer();
+    server.setWallManager(makeWallManager());
+
+    const res = await req(server, "/api/walls/nope");
+    expect(res.status).toBe(404);
+    const body = await res.json();
+    expect(body.error).toBe("Wall not found");
+    expect(body.name).toBe("nope");
+  });
+
+  it("returns 409 creating a duplicate and leaves the existing profile unchanged", async () => {
+    const server = makeServer();
+    const walls = makeWallManager();
+    walls.createWall("kitchen", VALID_WALL_CONFIG);
+    server.setWallManager(walls);
+
+    const res = await req(
+      server,
+      "/api/walls",
+      jsonBody({ name: "kitchen", config: { widgets: [] } }),
+    );
+    expect(res.status).toBe(409);
+    expect(walls.getWall("kitchen")?.config.widgets).toHaveLength(1);
+  });
+
+  it("returns 400 for a missing name and for an invalid JSON body", async () => {
+    const server = makeServer();
+    server.setWallManager(makeWallManager());
+
+    const missingName = await req(server, "/api/walls", jsonBody({ config: VALID_WALL_CONFIG }));
+    expect(missingName.status).toBe(400);
+
+    const missingConfig = await req(server, "/api/walls", jsonBody({ name: "kitchen" }));
+    expect(missingConfig.status).toBe(400);
+
+    const invalidJson = await req(server, "/api/walls", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "not json",
+    });
+    expect(invalidJson.status).toBe(400);
+  });
+
+  it("returns 400 for a null JSON body on create and update", async () => {
+    const server = makeServer();
+    const walls = makeWallManager();
+    walls.createWall("kitchen", VALID_WALL_CONFIG);
+    server.setWallManager(walls);
+
+    const create = await req(server, "/api/walls", jsonBody(null));
+    expect(create.status).toBe(400);
+    expect((await create.json()).error).toBe("Body must be an object");
+
+    const update = await req(server, "/api/walls/kitchen", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: "null",
+    });
+    expect(update.status).toBe(400);
+    expect((await update.json()).error).toBe("Body must be an object");
+    expect(walls.getWall("kitchen")?.config.widgets).toHaveLength(1);
+  });
+
+  it("returns 400 for an invalid config and persists nothing", async () => {
+    const server = makeServer();
+    const walls = makeWallManager();
+    server.setWallManager(walls);
+
+    const res = await req(
+      server,
+      "/api/walls",
+      jsonBody({ name: "broken", config: INVALID_WALL_CONFIG }),
+    );
+    expect(res.status).toBe(400);
+    expect(walls.getWall("broken")).toBeNull();
+  });
+
+  it("returns 400 for a semantically invalid widget config and persists nothing", async () => {
+    const server = makeServer();
+    const walls = makeWallManager();
+    server.setWallManager(walls);
+
+    const res = await req(
+      server,
+      "/api/walls",
+      jsonBody({ name: "broken", config: INVALID_WIDGET_CONFIG }),
+    );
+    expect(res.status).toBe(400);
+    expect(walls.getWall("broken")).toBeNull();
+    expect(walls.listWalls()).toHaveLength(0);
+  });
+
+  it("updates a profile's config", async () => {
+    const server = makeServer();
+    const walls = makeWallManager();
+    walls.createWall("kitchen", VALID_WALL_CONFIG);
+    server.setWallManager(walls);
+
+    const res = await req(server, "/api/walls/kitchen", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ config: { widgets: [] } }),
+    });
+    expect(res.status).toBe(200);
+    expect(walls.getWall("kitchen")?.config.widgets).toEqual([]);
+  });
+
+  it("renames a profile via PUT", async () => {
+    const server = makeServer();
+    const walls = makeWallManager();
+    walls.createWall("kitchen", VALID_WALL_CONFIG);
+    server.setWallManager(walls);
+
+    const res = await req(server, "/api/walls/kitchen", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "hall" }),
+    });
+    expect(res.status).toBe(200);
+    expect(walls.getWall("hall")?.name).toBe("hall");
+    expect(walls.getWall("kitchen")).toBeNull();
+  });
+
+  it("returns 404 updating an unknown profile", async () => {
+    const server = makeServer();
+    server.setWallManager(makeWallManager());
+
+    const res = await req(server, "/api/walls/nope", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "x" }),
+    });
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 409 renaming to a name already in use", async () => {
+    const server = makeServer();
+    const walls = makeWallManager();
+    walls.createWall("kitchen", VALID_WALL_CONFIG);
+    walls.createWall("hall", VALID_WALL_CONFIG);
+    server.setWallManager(walls);
+
+    const res = await req(server, "/api/walls/kitchen", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "hall" }),
+    });
+    expect(res.status).toBe(409);
+    expect(walls.getWall("kitchen")?.name).toBe("kitchen");
+  });
+
+  it("returns 400 for a non-string name and for an invalid config on update", async () => {
+    const server = makeServer();
+    const walls = makeWallManager();
+    walls.createWall("kitchen", VALID_WALL_CONFIG);
+    server.setWallManager(walls);
+
+    const badName = await req(server, "/api/walls/kitchen", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: 5 }),
+    });
+    expect(badName.status).toBe(400);
+
+    const badConfig = await req(server, "/api/walls/kitchen", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ config: INVALID_WALL_CONFIG }),
+    });
+    expect(badConfig.status).toBe(400);
+    expect(walls.getWall("kitchen")?.config.widgets).toHaveLength(1);
+  });
+
+  it("deletes a profile", async () => {
+    const server = makeServer();
+    const walls = makeWallManager();
+    walls.createWall("kitchen", VALID_WALL_CONFIG);
+    server.setWallManager(walls);
+
+    const res = await req(server, "/api/walls/kitchen", { method: "DELETE" });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toEqual({ name: "kitchen", deleted: true });
+    expect(walls.getWall("kitchen")).toBeNull();
+  });
+
+  it("returns 404 deleting an unknown profile", async () => {
+    const server = makeServer();
+    server.setWallManager(makeWallManager());
+
+    const res = await req(server, "/api/walls/nope", { method: "DELETE" });
+    expect(res.status).toBe(404);
+  });
+
+  it("addresses a profile whose name contains a literal percent sign", async () => {
+    const server = makeServer();
+    const walls = makeWallManager();
+    walls.createWall("50%", VALID_WALL_CONFIG);
+    server.setWallManager(walls);
+
+    const read = await req(server, "/api/walls/50%25");
+    expect(read.status).toBe(200);
+    expect((await read.json()).name).toBe("50%");
+
+    const update = await req(server, "/api/walls/50%25", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ config: { widgets: [] } }),
+    });
+    expect(update.status).toBe(200);
+    expect(walls.getWall("50%")?.config.widgets).toEqual([]);
+
+    const remove = await req(server, "/api/walls/50%25", { method: "DELETE" });
+    expect(remove.status).toBe(200);
+    expect(walls.getWall("50%")).toBeNull();
+  });
+
+  it("returns 404 rather than 500 for an unknown name containing a percent sign", async () => {
+    const server = makeServer();
+    server.setWallManager(makeWallManager());
+
+    const res = await req(server, "/api/walls/unknown%25name");
+    expect(res.status).toBe(404);
+  });
+
+  it("refuses an unauthenticated request when a token is configured", async () => {
+    const server = makeServer({ token: "secret" });
+    server.setWallManager(makeWallManager());
+
+    const res = await req(server, "/api/walls");
+    expect(res.status).toBe(401);
   });
 });
 

@@ -781,6 +781,65 @@ describe("createEngine", () => {
     });
   });
 
+  // ── Walls (design.md D2, D9) ──────────────────────────────────────────────
+
+  describe("walls", () => {
+    const wallConfig = {
+      widgets: [{ id: "clock", type: "clock" as const, config: {}, x: 0, y: 0, w: 6, h: 2 }],
+    };
+
+    it("always exposes engine.walls", () => {
+      engine = createTestEngine();
+      expect(engine.walls).toBeDefined();
+      expect(typeof engine.walls.createWall).toBe("function");
+    });
+
+    it("emits a wall created event and no state event for the reserved key (task 2.4)", async () => {
+      engine = createTestEngine();
+      await engine.start();
+
+      const received: unknown[] = [];
+      engine.events.subscribe((e) => received.push(e));
+
+      const result = engine.walls.createWall("kitchen", wallConfig);
+      if (result.status !== "ok") throw new Error("unreachable");
+
+      expect(received).toEqual([{ category: "wall", name: "kitchen", kind: "created" }]);
+      expect(received.some((e) => (e as { category: string }).category === "state")).toBe(false);
+    });
+
+    it("emits a wall updated event when a profile's config changes", async () => {
+      engine = createTestEngine();
+      await engine.start();
+      engine.walls.createWall("kitchen", wallConfig);
+
+      const received: unknown[] = [];
+      engine.events.subscribe((e) => received.push(e));
+
+      engine.walls.updateWall("kitchen", {
+        config: {
+          widgets: [{ id: "clock", type: "clock", config: {}, x: 0, y: 0, w: 12, h: 2 }],
+        },
+      });
+
+      expect(received).toEqual([{ category: "wall", name: "kitchen", kind: "updated" }]);
+    });
+
+    it("emits a wall deleted event on delete, with no state event", async () => {
+      engine = createTestEngine();
+      await engine.start();
+      engine.walls.createWall("kitchen", wallConfig);
+
+      const received: unknown[] = [];
+      engine.events.subscribe((e) => received.push(e));
+
+      engine.walls.deleteWall("kitchen");
+
+      expect(received).toEqual([{ category: "wall", name: "kitchen", kind: "deleted" }]);
+      expect(received.some((e) => (e as { category: string }).category === "state")).toBe(false);
+    });
+  });
+
   // ── Device visibility (task 5.3) ─────────────────────────────────────────
 
   describe("device visibility", () => {
