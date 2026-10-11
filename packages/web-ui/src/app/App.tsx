@@ -22,6 +22,7 @@ import { ErrorBoundary } from "./components/ErrorBoundary.js";
 import { DesktopSidebar, MobileBottomBar } from "./components/Nav.js";
 import { useAuth } from "./hooks/useAuth.js";
 import { DataStoreProvider, useDataStore } from "./lib/data-store.js";
+import { isFullBleedView } from "./lib/router.js";
 import { RouterProvider, useRouter } from "./lib/router-context.js";
 import { NotFoundView } from "./views/NotFoundView.js";
 import { OverviewView } from "./views/OverviewView.js";
@@ -56,6 +57,12 @@ const EnergyView = lazy(() =>
 );
 const WeatherView = lazy(() =>
   import("./views/WeatherView.js").then((m) => ({ default: m.WeatherView })),
+);
+const WallViewLazy = lazy(() =>
+  import("./views/WallView.js").then((m) => ({ default: m.WallView })),
+);
+const WallsView = lazy(() =>
+  import("./views/WallsView.js").then((m) => ({ default: m.WallsView })),
 );
 
 // Configuration injected by the server into the <html> element's data attributes
@@ -138,13 +145,31 @@ function RouteOutlet() {
       return <EnergyView />;
     case "weather":
       return <WeatherView />;
+    case "walls":
+      return <WallsView />;
     default:
       return <NotFoundView />;
   }
 }
 
 function Shell() {
-  const { pathname } = useRouter();
+  const { pathname, route } = useRouter();
+
+  // The wall is the one full-bleed view (design.md D3; specs/web-ui
+  // "Full-Bleed Wall Rendering"): it renders directly, with no `AppShell`
+  // header/navbar/footer, so its widgets use the whole panel. Every other view
+  // takes the shell path below unchanged. The store provider above still wraps
+  // it — the wall needs the data layer — and the boundary/suspense wrap matches
+  // the shell path's, so a chunk load or render failure behaves identically.
+  if (isFullBleedView(route.view)) {
+    return (
+      <ErrorBoundary key={pathname}>
+        <Suspense fallback={<Loader size="sm" mt="xl" />}>
+          <WallViewLazy name={route.params.name ?? ""} />
+        </Suspense>
+      </ErrorBoundary>
+    );
+  }
 
   return (
     <AppShell

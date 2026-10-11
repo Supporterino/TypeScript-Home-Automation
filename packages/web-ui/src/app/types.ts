@@ -31,6 +31,8 @@ export type {
   StreamEvent,
   TriggerContext,
   TriggerDef,
+  WallProfile,
+  WallProfileConfig,
 } from "@ts-ha/shared";
 
 export type StateMap = Record<string, unknown>;

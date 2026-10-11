@@ -18,6 +18,8 @@ import type {
   StateMap,
   StatusData,
   TriggerContext,
+  WallProfile,
+  WallProfileConfig,
 } from "./types.js";
 
 let _token = "";
@@ -235,6 +237,55 @@ export function sendRoomCommand(
     method: "POST",
     body: JSON.stringify(properties),
   });
+}
+
+// ── Walls ───────────────────────────────────────────────────────────────
+
+export async function fetchWalls(): Promise<WallProfile[]> {
+  const res = await apiFetch<{ walls: WallProfile[]; count: number }>("/api/walls");
+  return res.walls;
+}
+
+export function fetchWall(name: string): Promise<WallProfile> {
+  return apiFetch<WallProfile>(`/api/walls/${encodeURIComponent(name)}`);
+}
+
+/**
+ * Fetches a wall profile, resolving `null` when the profile does not exist
+ * (the endpoint answers `404`). Mirrors {@link fetchHomekitStatus}'s
+ * null-on-404 pattern, but only a 404 means "absent" — every other failure
+ * still throws, so a transport error is never mistaken for a missing profile
+ * (design.md D9; specs/wall-display "An unknown profile explains itself").
+ */
+export async function fetchWallOrNull(name: string): Promise<WallProfile | null> {
+  const res = await apiFetchResponse(`/api/walls/${encodeURIComponent(name)}`);
+  if (res.status === 404) return null;
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(body.error ?? `HTTP ${res.status}`);
+  }
+  return res.json() as Promise<WallProfile>;
+}
+
+export function createWall(name: string, config: WallProfileConfig): Promise<WallProfile> {
+  return apiFetch<WallProfile>("/api/walls", {
+    method: "POST",
+    body: JSON.stringify({ name, config }),
+  });
+}
+
+export function updateWall(
+  name: string,
+  input: { name?: string; config?: WallProfileConfig },
+): Promise<WallProfile> {
+  return apiFetch<WallProfile>(`/api/walls/${encodeURIComponent(name)}`, {
+    method: "PUT",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function deleteWall(name: string): Promise<void> {
+  await apiFetch(`/api/walls/${encodeURIComponent(name)}`, { method: "DELETE" });
 }
 
 // ── HomeKit ─────────────────────────────────────────────────────────────

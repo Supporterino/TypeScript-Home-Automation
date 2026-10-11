@@ -23,6 +23,12 @@ interface Props {
   /** Renders at a smaller scale for a tile's primary control. */
   compact?: boolean;
   /**
+   * Explicit Mantine size for the rendered control, overriding the
+   * `compact` scale. Used by the wall tile's size token to enlarge controls
+   * to the wall's minimum touch target (design.md D7).
+   */
+  size?: "sm" | "md" | "lg";
+  /**
    * Controlled optimistic value. When paired with `onChange`, the caller owns
    * the optimistic state and this component renders it instead of its own —
    * the tile lifts one hook so its embedded control and on/off chip resolve
@@ -47,10 +53,12 @@ export function CapabilityControl({
   device,
   capability,
   compact,
+  size,
   value: controlledValue,
   onChange,
   error: controlledError,
 }: Props) {
+  const controlSize = size ?? (compact ? "sm" : "md");
   const confirmedValue = device.state[capability.property];
   const optimistic = useOptimisticDeviceProperty(
     device.qualifiedId,
@@ -69,7 +77,7 @@ export function CapabilityControl({
   const control = (() => {
     if (!capability.access.writable) {
       return (
-        <Text size={compact ? "sm" : "md"} fw={600}>
+        <Text size={controlSize} fw={600}>
           {formatReadoutValue(value, capability.unit)}
         </Text>
       );
@@ -84,7 +92,7 @@ export function CapabilityControl({
         // (design.md D1, D2; specs/web-ui "Device Control Interface").
         return (
           <Switch
-            size={compact ? "sm" : "md"}
+            size={controlSize}
             checked={readBooleanCapabilityValue(capability, value)}
             disabled={disabled}
             onChange={(e) =>
@@ -100,7 +108,7 @@ export function CapabilityControl({
         const numericValue = typeof value === "number" ? value : min;
         return (
           <Slider
-            size={compact ? "sm" : "md"}
+            size={controlSize}
             min={min}
             max={max}
             step={capability.step ?? 1}
@@ -116,7 +124,7 @@ export function CapabilityControl({
         const options = (capability.permittedValues ?? []).map((v) => String(v));
         return (
           <Select
-            size={compact ? "sm" : "md"}
+            size={controlSize}
             data={options}
             value={typeof value === "string" || typeof value === "number" ? String(value) : null}
             disabled={disabled}
@@ -131,7 +139,7 @@ export function CapabilityControl({
       case "text":
         return (
           <TextInput
-            size={compact ? "sm" : "md"}
+            size={controlSize}
             defaultValue={typeof value === "string" ? value : ""}
             disabled={disabled}
             onBlur={(e) => setValue(e.currentTarget.value)}
@@ -141,7 +149,7 @@ export function CapabilityControl({
 
       default:
         return (
-          <Text size={compact ? "sm" : "md"} c="dimmed">
+          <Text size={controlSize} c="dimmed">
             {formatReadoutValue(value, capability.unit)}
           </Text>
         );

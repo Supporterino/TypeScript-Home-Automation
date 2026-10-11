@@ -27,6 +27,8 @@ export type ViewName =
   | "homekit"
   | "energy"
   | "weather"
+  | "wall"
+  | "walls"
   | "not-found";
 
 export interface RouteMatch {
@@ -61,6 +63,8 @@ const ROUTE_TABLE: { pattern: string; view: ViewName }[] = [
   { pattern: "/homekit", view: "homekit" },
   { pattern: "/energy", view: "energy" },
   { pattern: "/weather", view: "weather" },
+  { pattern: "/walls", view: "walls" },
+  { pattern: "/wall/:name", view: "wall" },
 ];
 
 function splitSegments(path: string): string[] {
@@ -154,6 +158,17 @@ export function isOverviewView(pathname: string, basePath: string): boolean {
   return resolveRoute(pathname, basePath).view === "overview";
 }
 
+/**
+ * Whether `view` renders full-bleed, without the application chrome (design.md
+ * D3; specs/web-ui "Full-Bleed Wall Rendering"). The wall is the only view that
+ * does so — every other view keeps the `AppShell` header, navigation, and
+ * footer. Pure and dependency-free so `App.tsx`'s render branch is a single
+ * inspectable decision and the test can assert it directly.
+ */
+export function isFullBleedView(view: ViewName): boolean {
+  return view === "wall";
+}
+
 // ── Path builders — the inverse of matching, used by links and navigation ──
 
 function joinBasePath(basePath: string, suffix: string): string {
@@ -210,6 +225,14 @@ export function energyPath(basePath: string): string {
 
 export function weatherPath(basePath: string): string {
   return joinBasePath(basePath, "/weather");
+}
+
+export function wallsPath(basePath: string): string {
+  return joinBasePath(basePath, "/walls");
+}
+
+export function wallPath(basePath: string, name: string): string {
+  return joinBasePath(basePath, `/wall/${encodeURIComponent(name)}`);
 }
 
 // ── Mobile bottom bar — control-only (design.md D10, D13) ──────────────────

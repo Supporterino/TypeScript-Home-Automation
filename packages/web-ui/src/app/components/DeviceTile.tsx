@@ -44,6 +44,7 @@ import { useRouter } from "../lib/router-context.js";
 import { useNow } from "../lib/use-now.js";
 import { useOptimisticDeviceProperty } from "../lib/use-optimistic-property.js";
 import type { DeviceDescriptor } from "../types.js";
+import { type WallTileSize, wallTileMetrics } from "../wall/scale.js";
 import { CapabilityControl, formatReadoutValue } from "./CapabilityControl.js";
 
 /**
@@ -115,16 +116,17 @@ function ActionSlot({ action }: { action: ReactNode }) {
  * optimistic write and stream reconciliation, so a change is reflected across
  * clients.
  */
-function FavoriteToggle({ device }: { device: DeviceDescriptor }) {
+function FavoriteToggle({ device, wall }: { device: DeviceDescriptor; wall?: boolean }) {
   const { isFavorite, toggleFavorite } = useDataStore();
   const favorite = isFavorite(device.qualifiedId);
   const [error, setError] = useState<string | null>(null);
+  const iconSize = wall ? 20 : 14;
 
   const button = (
     <ActionIcon
       variant="subtle"
       color={error ? "red" : favorite ? "yellow" : "gray"}
-      size="sm"
+      size={wall ? 48 : "sm"}
       aria-label={favorite ? "Remove from favorites" : "Add to favorites"}
       aria-pressed={favorite}
       onClick={async () => {
@@ -136,7 +138,7 @@ function FavoriteToggle({ device }: { device: DeviceDescriptor }) {
         }
       }}
     >
-      {favorite ? <IconStarFilled size={14} /> : <IconStar size={14} />}
+      {favorite ? <IconStarFilled size={iconSize} /> : <IconStar size={iconSize} />}
     </ActionIcon>
   );
 
@@ -156,19 +158,20 @@ function FavoriteToggle({ device }: { device: DeviceDescriptor }) {
  * caller-supplied `action` in the tile's corner slot, so a room's own
  * unassign control and this toggle can coexist.
  */
-function VisibilityToggle({ device }: { device: DeviceDescriptor }) {
+function VisibilityToggle({ device, wall }: { device: DeviceDescriptor; wall?: boolean }) {
   const { hideDevice, unhideDevice } = useDataStore();
+  const iconSize = wall ? 20 : 14;
   return (
     <ActionIcon
       variant="subtle"
       color="gray"
-      size="sm"
+      size={wall ? 48 : "sm"}
       aria-label={device.hidden ? "Unhide device" : "Hide device"}
       onClick={() => {
         void (device.hidden ? unhideDevice(device.qualifiedId) : hideDevice(device.qualifiedId));
       }}
     >
-      {device.hidden ? <IconEye size={14} /> : <IconEyeOff size={14} />}
+      {device.hidden ? <IconEye size={iconSize} /> : <IconEyeOff size={iconSize} />}
     </ActionIcon>
   );
 }
@@ -177,6 +180,12 @@ interface AvailableProps {
   device: DeviceDescriptor;
   /** Rendered in the tile's corner slot, e.g. a room's unassign control in edit mode (design.md D6, D7). */
   action?: ReactNode;
+  /**
+   * Size token. `"wall"` enlarges padding and interactive controls to the
+   * wall's minimum touch target while preserving the default rendering
+   * exactly (design.md D7; specs/wall-display "Touch Operation").
+   */
+  size?: WallTileSize;
 }
 
 interface UnavailableProps {
@@ -184,6 +193,8 @@ interface UnavailableProps {
   unavailable: true;
   qualifiedId: string;
   action?: ReactNode;
+  /** See {@link AvailableProps.size}. */
+  size?: WallTileSize;
 }
 
 type Props = AvailableProps | UnavailableProps;
@@ -195,24 +206,32 @@ type Props = AvailableProps | UnavailableProps;
  * current (design.md D6; specs/web-ui "Unavailable member is visible but
  * distinct"; task 9.3).
  */
-function UnavailableTile({ qualifiedId, action }: UnavailableProps) {
+function UnavailableTile({ qualifiedId, action, size }: UnavailableProps) {
+  const wall = size === "wall";
+  const metrics = wall ? wallTileMetrics("wall") : null;
   return (
     <Paper
       className="ambient-e1"
       withBorder
-      p="sm"
+      p={metrics?.padding ?? "sm"}
       radius="lg"
       opacity={0.6}
       style={{ borderStyle: "dashed" }}
     >
       <Group justify="space-between" wrap="nowrap" gap="xs" align="flex-start">
-        <Text size="sm" c="dimmed" ff="monospace" truncate style={{ flex: 1, minWidth: 0 }}>
+        <Text
+          size={wall ? "md" : "sm"}
+          c="dimmed"
+          ff="monospace"
+          truncate
+          style={{ flex: 1, minWidth: 0 }}
+        >
           {qualifiedId}
         </Text>
         {action && <ActionSlot action={action} />}
       </Group>
       <Group gap={4} wrap="nowrap" mt={6}>
-        <IconPlugOff size={13} color="var(--danger)" aria-hidden />
+        <IconPlugOff size={wall ? 16 : 13} color="var(--danger)" aria-hidden />
         <Badge color="gray" variant="light" size="sm">
           Unavailable
         </Badge>
@@ -229,9 +248,11 @@ export function DeviceTile(props: Props) {
   return <AvailableTile {...props} />;
 }
 
-function AvailableTile({ device, action }: AvailableProps) {
+function AvailableTile({ device, action, size }: AvailableProps) {
   const { navigate, basePath } = useRouter();
   const now = useNow();
+  const wall = size === "wall";
+  const metrics = wall ? wallTileMetrics("wall") : null;
   const isGroup = device.source === "zigbee-group";
   const ranking = rankDeviceTile(device.capabilities);
   const flat = flattenCapabilities(device.capabilities);
@@ -276,7 +297,7 @@ function AvailableTile({ device, action }: AvailableProps) {
     <Paper
       className="ambient-e1"
       withBorder
-      p="sm"
+      p={metrics?.padding ?? "sm"}
       radius="lg"
       opacity={device.hidden ? 0.7 : 1}
       style={{
@@ -295,7 +316,7 @@ function AvailableTile({ device, action }: AvailableProps) {
           : undefined
       }
     >
-      <Stack gap={6}>
+      <Stack gap={wall ? "sm" : 6}>
         <Group justify="space-between" wrap="nowrap" gap="xs" align="flex-start">
           <Group gap={4} wrap="nowrap" style={{ minWidth: 0, flex: 1 }}>
             {isGroup && (
@@ -305,11 +326,11 @@ function AvailableTile({ device, action }: AvailableProps) {
                   aria-label="Group of devices"
                   style={{ display: "flex", color: "var(--text-muted)" }}
                 >
-                  <IconUsersGroup size={14} aria-hidden />
+                  <IconUsersGroup size={wall ? 18 : 14} aria-hidden />
                 </span>
               </Tooltip>
             )}
-            <Text size="sm" fw={600} truncate title={device.displayName}>
+            <Text size={wall ? "md" : "sm"} fw={600} truncate title={device.displayName}>
               {device.displayName}
             </Text>
           </Group>
@@ -317,8 +338,8 @@ function AvailableTile({ device, action }: AvailableProps) {
             action={
               <>
                 {action}
-                <FavoriteToggle device={device} />
-                <VisibilityToggle device={device} />
+                <FavoriteToggle device={device} wall={wall} />
+                <VisibilityToggle device={device} wall={wall} />
               </>
             }
           />
@@ -327,7 +348,7 @@ function AvailableTile({ device, action }: AvailableProps) {
         {actionCapability ? (
           <Group gap="xs" wrap="nowrap" align="center">
             <div
-              style={{ flex: 1, minWidth: 0 }}
+              style={{ flex: 1, minWidth: 0, minHeight: metrics?.control }}
               onClick={(e) => e.stopPropagation()}
               onKeyDown={(e) => e.stopPropagation()}
             >
@@ -335,6 +356,7 @@ function AvailableTile({ device, action }: AvailableProps) {
                 device={device}
                 capability={actionCapability}
                 compact
+                size={metrics?.controlSize}
                 value={actionControl.value}
                 onChange={actionControl.setValue}
                 error={actionControl.error}
@@ -366,7 +388,11 @@ function AvailableTile({ device, action }: AvailableProps) {
               </Badge>
             )}
             <Group gap={3} wrap="nowrap">
-              <StateGlyph icon={state.observation.icon} size={11} token={state.observation.token} />
+              <StateGlyph
+                icon={state.observation.icon}
+                size={wall ? 16 : 11}
+                token={state.observation.token}
+              />
               <Text
                 size="xs"
                 style={{ color: `var(${state.observation.token})` }}
@@ -380,8 +406,8 @@ function AvailableTile({ device, action }: AvailableProps) {
 
           <Button
             variant="subtle"
-            size="compact-xs"
-            rightSection={<IconChevronRight size={12} />}
+            size={wall ? "md" : "compact-xs"}
+            rightSection={<IconChevronRight size={wall ? 18 : 12} />}
             aria-label={`Open ${device.displayName} details`}
             onClick={(e) => {
               e.stopPropagation();

@@ -34,6 +34,8 @@ export const UI_VIEW_SEGMENTS = [
   "homekit",
   "energy",
   "weather",
+  "wall",
+  "walls",
 ] as const;
 
 /**

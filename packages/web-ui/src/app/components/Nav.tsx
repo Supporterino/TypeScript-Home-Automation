@@ -4,7 +4,8 @@
  * Information Architecture", "Responsive Navigation"; tasks 8.2, 8.7).
  *
  * A control group (favorites, overview, rooms, unassigned, all devices) and
- * an operator group (automations, state, logs, HomeKit, energy, weather). The
+ * an operator group (automations, state, logs, HomeKit, energy, weather, walls
+ * editor). The
  * desktop sidebar shows both, each collapsible; the Favorites sub-list only
  * appears when the user has favorites, and is labelled distinctly from the
  * rooms. The mobile bottom bar shows only the control group's fixed three
@@ -23,6 +24,7 @@ import {
   IconChevronRight,
   IconCloud,
   IconDatabase,
+  IconDeviceScreen,
   IconDeviceUnknown,
   IconDoorEnter,
   IconFileText,
@@ -51,6 +53,7 @@ import {
   roomsPath,
   statePath,
   unassignedDevicesPath,
+  wallsPath,
   weatherPath,
 } from "../lib/router.js";
 import { Link, useRouter } from "../lib/router-context.js";
@@ -201,6 +204,18 @@ export function DesktopSidebar() {
                 label="Weather"
                 leftSection={<IconCloud size={16} />}
                 active={isUnder(pathname, weatherPath(basePath))}
+                component="div"
+              />
+            </Link>
+            <Link to={wallsPath(basePath)} style={{ textDecoration: "none" }}>
+              <NavLink
+                label="Walls"
+                leftSection={<IconDeviceScreen size={16} />}
+                // The `/wall/:name` surface is deliberately not a navigation
+                // destination (specs/web-ui "The wall is not a navigation
+                // destination"); only the editor's own `/walls` route lights
+                // this entry.
+                active={isUnder(pathname, wallsPath(basePath))}
                 component="div"
               />
             </Link>

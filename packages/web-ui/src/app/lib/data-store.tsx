@@ -21,8 +21,9 @@
  * Deliberately thin on logic: event application here is a handful of map
  * mutations per category, with everything genuinely decision-worthy (tile
  * ranking, revert deadlines, coalescing, reserved-key filtering, log
- * filtering) already extracted into the pure modules alongside this file
- * (design.md D23). This file itself is accepted as manually verified.
+ * filtering, log-ring bounding, device-event reduction) already extracted
+ * into the pure modules alongside this file (design.md D23). This file itself
+ * is accepted as manually verified.
  */
 import {
   createContext,
@@ -63,12 +64,14 @@ import type {
 } from "../types.js";
 import { normalizeStreamEvent } from "../utils/normalize.js";
 import { CommandCoalescer, coalescingKey } from "./command-coalescing.js";
+import { reduceDeviceEvent } from "./device-reduction.js";
 import {
   FAVORITES_STATE_KEY,
   favoritesFromState,
   isFavorite as isFavoriteInList,
   toggleFavorite as toggleFavoriteInList,
 } from "./favorites.js";
+import { applyLogRingBuffer, LOG_BUFFER_CAPACITY } from "./log-ring-buffer.js";
 import { computeRevertDeadlineMs, POLLED_DEFAULT_DEADLINE_MS } from "./revert-deadline.js";
 
 /** One coalesced device-property command request (design.md D31). */
@@ -99,9 +102,6 @@ interface OverrideTimer {
   token: symbol;
   timer: ReturnType<typeof setTimeout>;
 }
-
-/** How many log entries the in-memory ring buffer retains (mirrors the server's own LogBuffer default order of magnitude). */
-const LOG_BUFFER_CAPACITY = 500;
 
 /** How often the fallback poll re-snapshots while the stream is degraded. */
 const FALLBACK_POLL_MS = 5000;
@@ -179,11 +179,6 @@ interface DataStoreValue {
 }
 
 const DataStoreContext = createContext<DataStoreValue | null>(null);
-
-function applyLogRingBuffer(logs: LogEntry[], entry: LogEntry): LogEntry[] {
-  const next = [...logs, entry];
-  return next.length > LOG_BUFFER_CAPACITY ? next.slice(next.length - LOG_BUFFER_CAPACITY) : next;
-}
 
 export function DataStoreProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<StatusData | null>(null);
@@ -459,46 +454,15 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
           );
           break;
         }
-        case "device_state": {
-          setDevicesByQualifiedId((prev) => {
-            const existing = prev.get(event.qualifiedId);
-            if (!existing) return prev;
-            const next = new Map(prev);
-            next.set(event.qualifiedId, {
-              ...existing,
-              state: { ...existing.state, ...event.properties },
-              observation: event.observation,
-            });
-            return next;
-          });
-          clearConfirmedOverrides(event.qualifiedId, event.properties);
-          break;
-        }
-        case "device_reachability": {
-          setDevicesByQualifiedId((prev) => {
-            const existing = prev.get(event.qualifiedId);
-            if (!existing) return prev;
-            const next = new Map(prev);
-            next.set(event.qualifiedId, { ...existing, reachable: event.reachable });
-            return next;
-          });
-          break;
-        }
-        case "device_appeared": {
-          setDevicesByQualifiedId((prev) => {
-            const next = new Map(prev);
-            next.set(event.device.qualifiedId, event.device);
-            return next;
-          });
-          break;
-        }
-        case "device_disappeared": {
-          setDevicesByQualifiedId((prev) => {
-            if (!prev.has(event.qualifiedId)) return prev;
-            const next = new Map(prev);
-            next.delete(event.qualifiedId);
-            return next;
-          });
+        case "device_state":
+        case "device_reachability":
+        case "device_appeared":
+        case "device_disappeared":
+        case "device_visibility": {
+          setDevicesByQualifiedId((prev) => reduceDeviceEvent(prev, event));
+          if (event.category === "device_state") {
+            clearConfirmedOverrides(event.qualifiedId, event.properties);
+          }
           break;
         }
         case "room": {
@@ -532,16 +496,6 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
             const next = new Map(prev);
             if (event.roomId) next.set(event.qualifiedId, event.roomId);
             else next.delete(event.qualifiedId);
-            return next;
-          });
-          break;
-        }
-        case "device_visibility": {
-          setDevicesByQualifiedId((prev) => {
-            const existing = prev.get(event.qualifiedId);
-            if (!existing) return prev;
-            const next = new Map(prev);
-            next.set(event.qualifiedId, { ...existing, hidden: event.hidden });
             return next;
           });
           break;

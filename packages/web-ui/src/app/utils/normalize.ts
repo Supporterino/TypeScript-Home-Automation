@@ -369,6 +369,13 @@ export function normalizeStreamEvent(value: unknown): NormalizedStreamEvent {
         qualifiedId: asString(rec.qualifiedId),
         hidden: asBoolean(rec.hidden),
       };
+    case "wall": {
+      const kind =
+        rec.kind === "created" || rec.kind === "updated" || rec.kind === "deleted"
+          ? rec.kind
+          : "updated";
+      return { category: "wall", name: asString(rec.name), kind };
+    }
     default:
       return { category: "unknown" };
   }
