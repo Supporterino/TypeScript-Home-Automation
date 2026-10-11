@@ -590,4 +590,359 @@ describe("ShellyService", () => {
       expect(http.get).not.toHaveBeenCalled();
     });
   });
+
+  describe("channel-scoped devices", () => {
+    const getUrls = (): string[] =>
+      (http.get as ReturnType<typeof mock>).mock.calls.map((call: unknown[]) => call[0] as string);
+
+    beforeEach(() => {
+      shelly.register("pro4pm", "192.168.1.70", "outlet");
+    });
+
+    it("materializes a channel record outside the public inventory", () => {
+      shelly.registerChannel("pro4pm", 2, { name: "pro4pm_lamp", type: "outlet" });
+      expect(shelly.getDevices().map((d) => d.name)).toEqual(["pro4pm"]);
+    });
+
+    it("does not fire onDeviceRegistered for a channel record", () => {
+      const cb = mock(() => {});
+      shelly.onDeviceRegistered(cb);
+      shelly.registerChannel("pro4pm", 1, { name: "pro4pm_1", type: "switch" });
+      expect(cb).toHaveBeenCalledTimes(0);
+    });
+
+    it("rejects a channel record for an unregistered base", () => {
+      expect(() => shelly.registerChannel("unknown", 0, { name: "x", type: "switch" })).toThrow(
+        /unregistered Shelly device/,
+      );
+    });
+
+    it("threads a channel-2 record into switch RPC params", async () => {
+      shelly.registerChannel("pro4pm", 2, { name: "pro4pm_2", type: "switch" });
+      await shelly.turnOn("pro4pm_2");
+      await shelly.turnOff("pro4pm_2");
+      await shelly.toggle("pro4pm_2");
+      for (const url of getUrls()) {
+        expect(url).toContain("id=2");
+      }
+    });
+
+    it("defaults a plain registration to channel 0", async () => {
+      await shelly.turnOn("pro4pm");
+      expect(getUrls()[0]).toContain("id=0");
+    });
+
+    it("threads the channel into cover RPC params", async () => {
+      shelly.register("shutter", "192.168.1.60", "cover");
+      shelly.registerChannel("shutter", 1, { name: "shutter_1", type: "cover" });
+      await shelly.coverOpen("shutter_1");
+      await shelly.coverClose("shutter_1");
+      await shelly.coverStop("shutter_1");
+      await shelly.coverGoToPosition("shutter_1", 50);
+      await shelly.coverMoveRelative("shutter_1", -20);
+      await shelly.coverCalibrate("shutter_1");
+      for (const url of getUrls()) {
+        expect(url).toContain("id=1");
+      }
+    });
+
+    it("scopes getStatus/getConfig to the channel but leaves device queries unscoped", async () => {
+      shelly.registerChannel("pro4pm", 3, { name: "pro4pm_3", type: "switch" });
+      await shelly.getStatus("pro4pm_3");
+      await shelly.getConfig("pro4pm_3");
+      await shelly.getDeviceInfo("pro4pm_3");
+      await shelly.getSysStatus("pro4pm_3");
+      await shelly.reboot("pro4pm_3");
+      const urls = getUrls();
+      expect(urls[0]).toContain("/rpc/Switch.GetStatus");
+      expect(urls[0]).toContain("id=3");
+      expect(urls[1]).toContain("/rpc/Switch.GetConfig");
+      expect(urls[1]).toContain("id=3");
+      expect(urls[2]).toContain("/rpc/Shelly.GetDeviceInfo");
+      expect(urls[2]).not.toContain("id=");
+      expect(urls[3]).toContain("/rpc/Sys.GetStatus");
+      expect(urls[3]).not.toContain("id=");
+      expect(urls[4]).toContain("/rpc/Shelly.Reboot");
+      expect(urls[4]).not.toContain("id=");
+    });
+
+    it("resolves device-level queries against the base registration too", async () => {
+      await shelly.getDeviceInfo("pro4pm");
+      expect(getUrls()[0]).toBe("http://192.168.1.70/rpc/Shelly.GetDeviceInfo");
+    });
+
+    it("prunes channel records that no longer have a source entry", async () => {
+      shelly.registerChannel("pro4pm", 0, { name: "left", type: "outlet" });
+      shelly.registerChannel("pro4pm", 1, { name: "right", type: "outlet" });
+
+      shelly.pruneChannels("pro4pm", new Set(["left"]));
+
+      await expect(shelly.turnOn("right")).rejects.toThrow(/not registered/);
+      await expect(shelly.turnOn("left")).resolves.toBeDefined();
+    });
+  });
+
+  describe("MQTT channel addressing", () => {
+    it("publishes the channel in params.id for a non-zero channel", async () => {
+      shelly.register("pro4pm", { transport: "mqtt", topicPrefix: "shellypro4pm-abc" });
+      shelly.registerChannel("pro4pm", 1, { name: "pro4pm_1", type: "switch" });
+
+      const promise = shelly.turnOn("pro4pm_1");
+      const request = mqtt.publishedPayloads[0] as {
+        id: number;
+        method: string;
+        params: { id: number };
+      };
+      expect(request.method).toBe("Switch.Set");
+      expect(request.params.id).toBe(1);
+
+      mqtt.handlersByTopic.get("ts-home-automation/rpc")?.("ts-home-automation/rpc", {
+        id: request.id,
+        result: { was_on: false },
+      });
+      expect(await promise).toEqual({ was_on: false });
+    });
+  });
+
+  describe("component discovery", () => {
+    function createPagedHttp(pages: Record<string, unknown>): HttpClient {
+      const respond = (url: string): Promise<HttpResponse> => {
+        const offset = new URL(url).searchParams.get("offset") ?? "0";
+        return Promise.resolve({
+          status: 200,
+          ok: true,
+          headers: new Headers(),
+          data: pages[offset],
+        } as HttpResponse);
+      };
+      return {
+        get: mock((url: string) => respond(url)),
+        post: mock(() => Promise.resolve({} as HttpResponse)),
+        put: mock(() => Promise.resolve({} as HttpResponse)),
+        patch: mock(() => Promise.resolve({} as HttpResponse)),
+        del: mock(() => Promise.resolve({} as HttpResponse)),
+        request: mock((url: string) => respond(url)),
+      } as unknown as HttpClient;
+    }
+
+    it("pages the inventory and enumerates four switches across two pages", async () => {
+      http = createPagedHttp({
+        "0": {
+          components: [
+            { key: "switch:0", status: { aenergy: { total: 1 } }, config: { name: "One" } },
+            { key: "switch:1", status: {}, config: { name: "Two" } },
+          ],
+          total: 4,
+        },
+        "2": {
+          components: [
+            { key: "switch:2", status: { aenergy: { total: 3 } }, config: { name: "Three" } },
+            { key: "switch:3", status: {}, config: {} },
+          ],
+          total: 4,
+        },
+      });
+      shelly = new ShellyService(http, mqtt, logger);
+      shelly.register("pro4pm", "192.168.1.70");
+
+      const components = await shelly.discoverComponents("pro4pm");
+
+      expect(components.map((c) => c.channel)).toEqual([0, 1, 2, 3]);
+      expect(components.every((c) => c.kind === "switch")).toBe(true);
+      expect(components.map((c) => c.name)).toEqual(["One", "Two", "Three", null]);
+      expect(components.map((c) => c.metered)).toEqual([true, false, true, false]);
+
+      const urls = (http.request as ReturnType<typeof mock>).mock.calls.map(
+        (call: unknown[]) => call[0] as string,
+      );
+      expect(urls).toHaveLength(2);
+      expect(urls[0]).toContain("Shelly.GetComponents");
+      expect(urls[0]).toContain("offset=0");
+      expect(urls[0]).toContain("include=");
+      expect(urls[1]).toContain("offset=2");
+    });
+
+    it("pages by raw page size when unsupported kinds fill an earlier page", async () => {
+      const inputs = Array.from({ length: 9 }, (_, i) => ({ key: `input:${i}` }));
+      http = createPagedHttp({
+        "0": {
+          components: [...inputs, { key: "switch:0", status: {}, config: {} }],
+          total: 12,
+        },
+        "10": {
+          components: [{ key: "input:9" }, { key: "switch:1", status: {}, config: {} }],
+          total: 12,
+        },
+      });
+      shelly = new ShellyService(http, mqtt, logger);
+      shelly.register("big", "192.168.1.70");
+
+      const components = await shelly.discoverComponents("big");
+
+      expect(components.map((c) => c.channel)).toEqual([0, 1]);
+      const urls = (http.request as ReturnType<typeof mock>).mock.calls.map(
+        (call: unknown[]) => call[0] as string,
+      );
+      expect(urls).toHaveLength(2);
+      expect(urls[0]).toContain("offset=0");
+      expect(urls[1]).toContain("offset=10");
+    });
+
+    it("bounds discovery with a short HTTP timeout while commands keep the default", async () => {
+      http = createPagedHttp({
+        "0": {
+          components: [{ key: "switch:0", status: {}, config: { name: "One" } }],
+          total: 1,
+        },
+      });
+      shelly = new ShellyService(http, mqtt, logger);
+      shelly.register("pro4pm", "192.168.1.70");
+
+      await shelly.discoverComponents("pro4pm");
+      await shelly.turnOn("pro4pm");
+
+      const requestCalls = (http.request as ReturnType<typeof mock>).mock.calls;
+      const getCalls = (http.get as ReturnType<typeof mock>).mock.calls;
+      expect(requestCalls).toHaveLength(1);
+      expect(requestCalls[0][0]).toContain("Shelly.GetComponents");
+      expect(requestCalls[0][1]).toEqual({ method: "GET", timeout: 5000 });
+      // A normal command still takes the default-timeout convenience path.
+      expect(getCalls).toHaveLength(1);
+      expect(getCalls[0][0]).toContain("Switch.Set");
+    });
+
+    it("JSON-encodes array params so component discovery survives over HTTP", async () => {
+      http = createPagedHttp({
+        "0": {
+          components: [{ key: "switch:0", status: {}, config: { name: "One" } }],
+          total: 1,
+        },
+      });
+      shelly = new ShellyService(http, mqtt, logger);
+      shelly.register("pro4pm", "192.168.1.70");
+
+      await shelly.discoverComponents("pro4pm");
+
+      const url = new URL((http.request as ReturnType<typeof mock>).mock.calls[0][0] as string);
+      expect(JSON.parse(url.searchParams.get("include") ?? "null")).toEqual(["status", "config"]);
+      expect(url.searchParams.get("offset")).toBe("0");
+    });
+
+    it("recognizes a mixed switch/cover response", async () => {
+      http = createPagedHttp({
+        "0": {
+          components: [
+            { key: "switch:0", config: { name: "Lamp" }, status: { aenergy: { total: 2 } } },
+            { key: "cover:0", config: { name: "Blind" }, status: { aenergy: { total: 7 } } },
+            { key: "input:0", config: { name: "Button" } },
+          ],
+          total: 3,
+        },
+      });
+      shelly = new ShellyService(http, mqtt, logger);
+      shelly.register("pro2pm", "192.168.1.71");
+
+      const components = await shelly.discoverComponents("pro2pm");
+
+      expect(components).toEqual([
+        { channel: 0, kind: "switch", name: "Lamp", metered: true },
+        { channel: 0, kind: "cover", name: "Blind", metered: true },
+      ]);
+    });
+
+    it("returns an empty result for malformed, empty, or unsupported responses", async () => {
+      const malformed: Array<unknown> = [
+        undefined,
+        {},
+        { components: "nope", total: 3 },
+        { components: [], total: 0 },
+        { components: [{ key: "input:0" }, { key: "switch" }, null], total: 3 },
+      ];
+      for (const body of malformed) {
+        http = createPagedHttp({ "0": body });
+        shelly = new ShellyService(http, mqtt, logger);
+        shelly.register("plug", "192.168.1.50");
+        await expect(shelly.discoverComponents("plug")).resolves.toEqual([]);
+      }
+    });
+
+    it("does not loop when a page reports more components but returns none", async () => {
+      http = createPagedHttp({ "0": { components: [], total: 25 } });
+      shelly = new ShellyService(http, mqtt, logger);
+      shelly.register("plug", "192.168.1.50");
+
+      await expect(shelly.discoverComponents("plug")).resolves.toEqual([]);
+      expect((http.request as ReturnType<typeof mock>).mock.calls).toHaveLength(1);
+    });
+
+    it("returns an empty result when a later page fails after an earlier page succeeded", async () => {
+      const firstPage: HttpResponse = {
+        status: 200,
+        ok: true,
+        headers: new Headers(),
+        data: {
+          components: [
+            { key: "switch:0", status: {}, config: { name: "One" } },
+            { key: "switch:1", status: {}, config: { name: "Two" } },
+          ],
+          total: 4,
+        },
+      };
+      // Page 2 either rejects (throwing RPC) or returns a malformed body. Both
+      // must abandon the partial inventory rather than return page 1 alone.
+      const laterPages: Array<(url: string) => Promise<HttpResponse>> = [
+        () => Promise.reject(new Error("page 2 request failed")),
+        () =>
+          Promise.resolve({
+            status: 200,
+            ok: true,
+            headers: new Headers(),
+            data: { components: "malformed", total: 4 },
+          } as HttpResponse),
+      ];
+
+      for (const laterPage of laterPages) {
+        const http = {
+          get: mock(() => Promise.resolve({} as HttpResponse)),
+          post: mock(() => Promise.resolve({} as HttpResponse)),
+          put: mock(() => Promise.resolve({} as HttpResponse)),
+          patch: mock(() => Promise.resolve({} as HttpResponse)),
+          del: mock(() => Promise.resolve({} as HttpResponse)),
+          request: mock((url: string) => {
+            const offset = new URL(url).searchParams.get("offset") ?? "0";
+            return offset === "0" ? Promise.resolve(firstPage) : laterPage(url);
+          }),
+        } as unknown as HttpClient;
+        shelly = new ShellyService(http, mqtt, logger);
+        shelly.register("pro4pm", "192.168.1.70");
+
+        await expect(shelly.discoverComponents("pro4pm")).resolves.toEqual([]);
+        expect((http.request as ReturnType<typeof mock>).mock.calls).toHaveLength(2);
+      }
+    });
+
+    it("returns an empty result when the RPC itself fails", async () => {
+      const errorResponse: HttpResponse = {
+        status: 500,
+        ok: false,
+        headers: new Headers(),
+        data: {},
+      };
+      const errorHttp = {
+        get: mock(() => Promise.resolve(errorResponse)),
+        post: mock(() => Promise.resolve(errorResponse)),
+        put: mock(() => Promise.resolve(errorResponse)),
+        patch: mock(() => Promise.resolve(errorResponse)),
+        del: mock(() => Promise.resolve(errorResponse)),
+        request: mock(() => Promise.resolve(errorResponse)),
+      } as unknown as HttpClient;
+      shelly = new ShellyService(errorHttp, mqtt, logger);
+      shelly.register("plug", "192.168.1.50");
+
+      await expect(shelly.discoverComponents("plug")).resolves.toEqual([]);
+      // The empty result must come from the failed `request` RPC, not from a
+      // missing mock method throwing a TypeError.
+      expect((errorHttp.request as ReturnType<typeof mock>).mock.calls).toHaveLength(1);
+    });
+  });
 });

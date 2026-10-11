@@ -532,14 +532,41 @@ describe("createEngine", () => {
         },
         stateToggles: [{ stateKey: "night_mode", name: "Night Mode" }],
       });
+      (engine.mqtt as { connect: unknown }).connect = mock(() => Promise.resolve());
+      (engine.mqtt as { disconnect: unknown }).disconnect = mock(() => Promise.resolve());
+
+      const originalDiscover = engine.manager.discoverAndRegister.bind(engine.manager);
+      let devicesAtDiscovery = -1;
+      (engine.manager as unknown as { discoverAndRegister: unknown }).discoverAndRegister = mock(
+        async (...args: [string, boolean?]) => {
+          devicesAtDiscovery = engine.devices.list().length;
+          return originalDiscover(...args);
+        },
+      );
+
+      await engine.start();
+
+      expect(devicesAtDiscovery).toBe(1);
+    });
+
+    it("connects MQTT before starting device sources (component discovery needs a live client)", async () => {
+      engine = createTestEngine();
+      const order: string[] = [];
+
       (engine.mqtt as { connect: unknown }).connect = mock(() => {
-        // At the point MQTT connects, device sources must already be running.
-        expect(engine.devices.list()).toHaveLength(1);
+        order.push("mqtt.connect");
         return Promise.resolve();
       });
-      (engine.mqtt as { disconnect: unknown }).disconnect = mock(() => Promise.resolve());
+
+      const originalStart = engine.devices.start.bind(engine.devices);
+      (engine.devices as unknown as { start: unknown }).start = mock(() => {
+        order.push("devices.start");
+        return originalStart();
+      });
+
       await engine.start();
-      expect(engine.mqtt.connect as ReturnType<typeof mock>).toHaveBeenCalledTimes(1);
+
+      expect(order).toEqual(["mqtt.connect", "devices.start"]);
     });
 
     it("stops device sources during shutdown, releasing their subscriptions", async () => {

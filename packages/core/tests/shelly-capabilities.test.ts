@@ -29,4 +29,40 @@ describe("shellyCapabilitiesFor", () => {
     const metered = shellyCapabilitiesFor("outlet", { metered: true }).map((c) => c.property);
     expect(metered).toEqual(["on", "power", "voltage", "current", "energy"]);
   });
+
+  describe("per-channel composition (task 4.1)", () => {
+    it("describes two channels of one device independently: only the metered channel declares energy", () => {
+      const metered = shellyCapabilitiesFor("switch", { metered: true });
+      const nonMetered = shellyCapabilitiesFor("switch", { metered: false });
+
+      expect(metered.some((c) => c.property === "energy")).toBe(true);
+      expect(nonMetered.some((c) => c.property === "energy")).toBe(false);
+      expect(metered.filter((c) => c.property !== "energy")).toEqual(nonMetered);
+    });
+
+    it("yields the outlet kind for a switch channel of an outlet-registered device", () => {
+      const capabilities = shellyCapabilitiesFor("outlet", { metered: true });
+      const onOff = capabilities.find((c) => c.property === "on");
+
+      expect(onOff?.kind).toBe("outlet");
+      expect(capabilities.some((c) => c.property === "position")).toBe(false);
+    });
+
+    it("yields the switch kind for a switch channel of a switch-registered device", () => {
+      const onOff = shellyCapabilitiesFor("switch", { metered: true }).find(
+        (c) => c.property === "on",
+      );
+
+      expect(onOff?.kind).toBe("switch");
+    });
+
+    it("yields position and movement state, not on/off, for a cover channel", () => {
+      const capabilities = shellyCapabilitiesFor("cover", { metered: true });
+      const properties = capabilities.map((c) => c.property);
+
+      expect(properties).toEqual(["position", "state"]);
+      expect(properties).not.toContain("on");
+      expect(properties).not.toContain("energy");
+    });
+  });
 });

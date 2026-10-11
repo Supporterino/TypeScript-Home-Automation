@@ -9,6 +9,7 @@
 import { beforeAll, describe, expect, it, mock } from "bun:test";
 import type { Capability } from "@ts-ha/shared";
 import type { DeviceDescriptor } from "../src/device-sources/device-source.js";
+import { shellyCapabilitiesFor } from "../src/device-sources/shelly-capabilities.js";
 
 // ---------------------------------------------------------------------------
 // 1. Lightweight hap-nodejs mock
@@ -442,5 +443,56 @@ describe("createAccessoryFromDescriptor", () => {
       );
       expect(created?.accessory.UUID).toBe("uuid-state:night_mode");
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Multi-channel Shelly fan-out (task 4.2): one accessory per channel, keyed by
+// the descriptor's `shelly:<id>` seed. A rename changes the id and therefore
+// the accessory identity, which forces a re-pair.
+// ---------------------------------------------------------------------------
+
+describe("Shelly multi-channel HomeKit fan-out (task 4.2)", () => {
+  const channelIds = [
+    "pro4pm_channel_0",
+    "pro4pm_channel_1",
+    "pro4pm_channel_2",
+    "pro4pm_channel_3",
+  ];
+
+  function shellyChannel(id: string, displayName: string): DeviceDescriptor {
+    return descriptor({
+      source: "shelly",
+      id,
+      qualifiedId: `shelly:${id}`,
+      displayName,
+      capabilities: shellyCapabilitiesFor("switch"),
+    });
+  }
+
+  it("builds four distinct accessories for one four-switch device (one per channel)", () => {
+    const created = channelIds.map((id, channel) =>
+      factory.createAccessoryFromDescriptor(shellyChannel(id, `pro4pm ${channel}`), () => {}),
+    );
+
+    expect(created.every((accessory) => accessory !== null)).toBe(true);
+    const uuids = created.map((accessory) => accessory?.accessory.UUID);
+    expect(uuids).toEqual(channelIds.map((id) => `uuid-shelly:${id}`));
+    expect(new Set(uuids).size).toBe(4);
+  });
+
+  it("yields a different persistence key when a component is renamed, forcing a re-pair", () => {
+    const before = factory.createAccessoryFromDescriptor(
+      shellyChannel("kitchen_light", "kitchen_light"),
+      () => {},
+    );
+    const after = factory.createAccessoryFromDescriptor(
+      shellyChannel("kitchen_lamp", "kitchen_lamp"),
+      () => {},
+    );
+
+    expect(before?.accessory.UUID).toBe("uuid-shelly:kitchen_light");
+    expect(after?.accessory.UUID).toBe("uuid-shelly:kitchen_lamp");
+    expect(before?.accessory.UUID).not.toBe(after?.accessory.UUID);
   });
 });
