@@ -5,11 +5,35 @@ const SHORTCUTS = [
   {
     section: "Navigation",
     items: [
-      { key: "1-4", desc: "Switch tabs" },
+      { key: "1-7", desc: "Switch tabs" },
       { key: "↑/↓ or j/k", desc: "Navigate lists / scroll" },
       { key: "r", desc: "Force refresh" },
       { key: "?", desc: "Toggle this help" },
       { key: "q / Esc", desc: "Quit (or close modal)" },
+    ],
+  },
+  {
+    section: "Overview Tab",
+    items: [
+      { key: "1", desc: "Status plus slow-polled energy and weather" },
+      { key: "live", desc: "Devices, rooms, state, and logs update from the event stream" },
+    ],
+  },
+  {
+    section: "Devices Tab",
+    items: [
+      { key: "Enter", desc: "Expand a device / actuate the selected control" },
+      { key: "h/l", desc: "Select a control" },
+      { key: "space", desc: "Toggle a boolean / cycle an enum" },
+      { key: "+/-", desc: "Adjust a numeric control" },
+      { key: "e", desc: "Edit a text control" },
+    ],
+  },
+  {
+    section: "Rooms Tab",
+    items: [
+      { key: "Enter", desc: "Expand a room's members" },
+      { key: "c", desc: "Batch-command a room (<property> <value>)" },
     ],
   },
   {

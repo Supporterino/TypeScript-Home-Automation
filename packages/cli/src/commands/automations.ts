@@ -1,5 +1,10 @@
 import type { DebugClient } from "../client.js";
-import { formatTable, formatTrigger, summarizeTriggers } from "../format.js";
+import {
+  formatTable,
+  formatTrigger,
+  summarizeTriggerContext,
+  summarizeTriggers,
+} from "../format.js";
 
 export async function listAutomations(client: DebugClient, json: boolean): Promise<void> {
   const result = await client.listAutomations();
@@ -104,4 +109,87 @@ export async function getAutomationSource(
   }
 
   console.log(result.source);
+}
+
+/** Show an automation's retained execution records. */
+export async function getAutomationHistory(
+  client: DebugClient,
+  name: string,
+  json: boolean,
+): Promise<void> {
+  const result = await client.getAutomationHistory(name);
+
+  if (json) {
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+
+  if (result.history.length === 0) {
+    console.log(`No execution records for "${name}".`);
+    return;
+  }
+
+  const rows = result.history.map((record) => [
+    new Date(record.startedAt).toISOString(),
+    summarizeTriggerContext(record.trigger),
+    `${record.durationMs}ms`,
+    record.outcome,
+    record.error ?? "",
+  ]);
+
+  console.log(formatTable(["STARTED", "TRIGGER", "DURATION", "OUTCOME", "ERROR"], rows));
+  console.log(`\n${result.history.length} record(s)`);
+}
+
+/** Show an automation's declared and observed relationships. */
+export async function getAutomationRelationships(
+  client: DebugClient,
+  name: string,
+  json: boolean,
+): Promise<void> {
+  const result = await client.getAutomationRelationships(name);
+
+  if (json) {
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+
+  console.log(`Name:     ${result.name}`);
+
+  console.log("\nDeclared required services:");
+  if (result.declared.requiredServices.length === 0) {
+    console.log("  (none)");
+  } else {
+    for (const service of result.declared.requiredServices) {
+      console.log(`  ${service.name.padEnd(16)}${service.registered ? "registered" : "missing"}`);
+    }
+  }
+
+  console.log("\nDeclared related devices:");
+  if (result.declared.relatedDevices.length === 0) {
+    console.log("  (none)");
+  } else {
+    for (const device of result.declared.relatedDevices) {
+      console.log(`  ${device}`);
+    }
+  }
+
+  console.log("\nDeclared watched state keys:");
+  if (result.declared.watchedStateKeys.length === 0) {
+    console.log("  (none)");
+  } else {
+    for (const key of result.declared.watchedStateKeys) {
+      console.log(`  ${key}`);
+    }
+  }
+
+  console.log("\nObserved written state keys:");
+  if (result.observed.writtenStateKeys.length === 0) {
+    console.log("  (none)");
+  } else {
+    for (const key of result.observed.writtenStateKeys) {
+      console.log(`  ${key}`);
+    }
+    if (result.observed.truncated) console.log("  (truncated)");
+  }
 }

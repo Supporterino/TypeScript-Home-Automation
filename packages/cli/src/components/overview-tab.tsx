@@ -1,4 +1,5 @@
 import { useTerminalDimensions } from "@opentui/react";
+import { energySummary, weatherSummary } from "../dashboard-model.js";
 import { summarizeTriggers } from "../format.js";
 import { COLORS, formatUptime, formatValue, levelColor, levelName, valueColor } from "./theme.js";
 import type { DashboardData } from "./types.js";
@@ -10,6 +11,8 @@ export function OverviewTab({ data }: { data: DashboardData }) {
   const mqttOk = readiness.checks.mqtt;
   const homekitRunning = data.homekit?.running ?? null;
   const keyWidth = Math.max(20, Math.floor(width * 0.35));
+  const energy = energySummary(data.energy);
+  const weather = weatherSummary(data.weather);
 
   return (
     <box flexDirection="column" flexGrow={1} width="100%">
@@ -39,6 +42,40 @@ export function OverviewTab({ data }: { data: DashboardData }) {
         <text>
           TZ: <span fg={COLORS.comment}>{readiness.tz ?? "system default"}</span>
         </text>
+      </box>
+
+      {/* Energy (slow-polled; not streamed) */}
+      <SectionHeader title="Energy" count={energy?.deviceCount ?? 0} width={width} />
+      <box flexDirection="column" paddingLeft={2}>
+        {energy === null ? (
+          <text fg={COLORS.comment}>(unavailable)</text>
+        ) : (
+          <text>
+            Power: <span fg={COLORS.cyan}>{energy.powerWatts} W</span> Consumption:{" "}
+            <span fg={COLORS.cyan}>{energy.energyWh} Wh</span> Devices:{" "}
+            <span fg={COLORS.cyan}>{energy.deviceCount}</span>
+          </text>
+        )}
+      </box>
+
+      {/* Weather (slow-polled; not streamed) */}
+      <SectionHeader title="Weather" count={weather.forecast.length} width={width} />
+      <box flexDirection="column" paddingLeft={2}>
+        <text fg={weather.available ? COLORS.fg : COLORS.comment}>{weather.message}</text>
+        {weather.current && (
+          <text fg={COLORS.comment}>Feels like {weather.current.feelsLike}°C</text>
+        )}
+        {weather.forecast.map((day) => (
+          <box key={day.date} flexDirection="row">
+            <text fg={COLORS.comment} width={12}>
+              {day.date}
+            </text>
+            <text fg={COLORS.fg} width={16}>
+              {day.tempLow}–{day.tempHigh}°C
+            </text>
+            <text fg={COLORS.comment}>{day.description}</text>
+          </box>
+        ))}
       </box>
 
       {/* Automations summary */}

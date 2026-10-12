@@ -3,6 +3,8 @@
 import { DebugClient } from "./client.js";
 import {
   getAutomation,
+  getAutomationHistory,
+  getAutomationRelationships,
   getAutomationSource,
   listAutomations,
   setAutomationEnabled,
@@ -10,74 +12,34 @@ import {
 } from "./commands/automations.js";
 import { addConfig, listConfig, removeConfig, switchConfig } from "./commands/config.js";
 import { runDashboard } from "./commands/dashboard.js";
-import { getDevice, listDevices } from "./commands/devices.js";
+import {
+  assignDeviceRoom,
+  getDevice,
+  listDevices,
+  sendDeviceCommand,
+  setDeviceHidden,
+  unassignDeviceRoom,
+} from "./commands/devices.js";
+import { showEnergy } from "./commands/energy.js";
 import { getLogs } from "./commands/logs.js";
 import { pairNanoleaf } from "./commands/nanoleaf.js";
+import {
+  assignRoom,
+  createRoom,
+  deleteRoom,
+  getRoom,
+  listRooms,
+  renameRoom,
+  sendRoomCommand,
+  unassignRoom,
+} from "./commands/rooms.js";
 import { runCommand } from "./commands/run.js";
 import { deleteState, getState, listState, setState } from "./commands/state.js";
+import { createWall, deleteWall, getWall, listWalls, updateWall } from "./commands/walls.js";
+import { showWeather } from "./commands/weather.js";
 import { getActiveTarget } from "./config.js";
-
-const USAGE = `
-ts-ha — CLI for managing a running TypeScript Home Automation engine
-
-Usage:
-  ts-ha [options] <command> <subcommand> [args]
-
-Commands:
-  run [--automations <dir>]           Run a local engine (default: ./automations)
-  automations list                    List all registered automations
-  automations get <name>              Get details for a specific automation
-  automations trigger <name> <ctx>    Manually trigger an automation
-  automations enable <name>           Enable a disabled automation
-  automations disable <name>          Disable an automation (full stop)
-  automations source <name>           Print the automation's source file
-
-  devices list                        List all tracked Zigbee2MQTT devices
-  devices get <friendly_name>         Get full detail for a single device
-
-  state list                          List all state keys and values
-  state get <key>                     Get a single state value
-  state set <key> <value>             Set a state value (JSON-parsed)
-  state delete <key>                  Delete a state key
-
-  logs [options]                      View recent log entries
-    --automation <name>               Filter by automation name
-    --level <level>                   Filter by min level (trace/debug/info/warn/error/fatal)
-    --limit <n>                       Number of entries (default: 50)
-    -f, --follow                      Stream new log entries continuously
-
-  dashboard                            Live status dashboard
-    --interval <seconds>              Refresh interval (default: 5)
-
-  config list                         List saved targets
-  config add <name> <host> [token]    Add or update a target
-  config use <name>                   Set the active target
-  config remove <name>                Remove a saved target
-
-Options:
-  --host <host:port>                  Override target host (default: from active config)
-  --token <token>                     Override auth token
-  --automations <dir>                 Automations directory for "run" (default: ./automations)
-  --json                              Output raw JSON
-  --help                              Show this help message
-
-Short aliases:
-  a = automations, dv = devices, s = state, l = logs, d = dashboard, c = config
-  ls = list, rm/del = delete
-
-Trigger examples:
-  ts-ha a trigger my-auto '{"type":"mqtt","topic":"z2m/sensor","payload":{"occupancy":true}}'
-  ts-ha a trigger my-auto '{"type":"cron"}'
-  ts-ha a trigger my-auto '{"type":"state","key":"night_mode","newValue":true}'
-
-Examples:
-  ts-ha state list
-  ts-ha state set night_mode true
-  ts-ha automations get motion-light-schedule
-  ts-ha logs --automation contact-sensor-alarm --level warn
-  ts-ha config add prod 192.168.1.100:8080 my-secret-token
-  ts-ha --json a ls
-`.trim();
+import { normalizeListSubcommand } from "./subcommand.js";
+import { USAGE } from "./usage.js";
 
 interface ParsedArgs {
   host: string | undefined;
@@ -242,7 +204,8 @@ async function main(): Promise<void> {
     const client = await resolveClient(host, token);
 
     if (command === "automations" || command === "a") {
-      if (subcommand === "list" || subcommand === "ls") {
+      const sub = normalizeListSubcommand(subcommand);
+      if (sub === "list") {
         await listAutomations(client, json);
       } else if (subcommand === "get") {
         const name = args[0];
@@ -282,28 +245,192 @@ async function main(): Promise<void> {
           process.exit(1);
         }
         await getAutomationSource(client, name, json);
+      } else if (subcommand === "history") {
+        const name = args[0];
+        if (!name) {
+          console.error("Usage: ts-ha automations history <name>");
+          process.exit(1);
+        }
+        await getAutomationHistory(client, name, json);
+      } else if (subcommand === "relationships") {
+        const name = args[0];
+        if (!name) {
+          console.error("Usage: ts-ha automations relationships <name>");
+          process.exit(1);
+        }
+        await getAutomationRelationships(client, name, json);
       } else {
         console.error(`Unknown subcommand: automations ${subcommand}`);
-        console.error("Available: list, get, trigger, enable, disable, source");
+        console.error(
+          "Available: list, get, trigger, enable, disable, source, history, relationships",
+        );
         process.exit(1);
       }
     } else if (command === "devices" || command === "dv") {
-      if (subcommand === "list" || subcommand === "ls") {
+      const sub = normalizeListSubcommand(subcommand);
+      if (sub === "list") {
         await listDevices(client, json);
       } else if (subcommand === "get") {
-        const friendlyName = args[0];
-        if (!friendlyName) {
-          console.error("Usage: ts-ha devices get <friendly_name>");
+        const query = args[0];
+        if (!query) {
+          console.error("Usage: ts-ha devices get <qualifiedId>");
           process.exit(1);
         }
-        await getDevice(client, friendlyName, json);
+        await getDevice(client, query, json);
+      } else if (subcommand === "command") {
+        const query = args[0];
+        const property = args[1];
+        const value = args[2];
+        if (!query || !property || value === undefined) {
+          console.error("Usage: ts-ha devices command <device> <property> <value>");
+          process.exit(1);
+        }
+        await sendDeviceCommand(client, query, property, value, json);
+      } else if (subcommand === "hide" || subcommand === "unhide") {
+        const query = args[0];
+        if (!query) {
+          console.error(`Usage: ts-ha devices ${subcommand} <device>`);
+          process.exit(1);
+        }
+        await setDeviceHidden(client, query, subcommand === "hide", json);
+      } else if (subcommand === "assign") {
+        const query = args[0];
+        const roomId = args[1];
+        if (!query || !roomId) {
+          console.error("Usage: ts-ha devices assign <device> <roomId>");
+          process.exit(1);
+        }
+        await assignDeviceRoom(client, query, roomId, json);
+      } else if (subcommand === "unassign") {
+        const query = args[0];
+        if (!query) {
+          console.error("Usage: ts-ha devices unassign <device>");
+          process.exit(1);
+        }
+        await unassignDeviceRoom(client, query, json);
       } else {
         console.error(`Unknown subcommand: devices ${subcommand}`);
-        console.error("Available: list, get");
+        console.error("Available: list, get, command, hide, unhide, assign, unassign");
         process.exit(1);
       }
+    } else if (command === "rooms") {
+      const sub = normalizeListSubcommand(subcommand);
+      if (sub === "list") {
+        await listRooms(client, json);
+      } else if (subcommand === "get") {
+        const id = args[0];
+        if (!id) {
+          console.error("Usage: ts-ha rooms get <id>");
+          process.exit(1);
+        }
+        await getRoom(client, id, json);
+      } else if (subcommand === "create") {
+        const name = args[0];
+        if (!name) {
+          console.error("Usage: ts-ha rooms create <name>");
+          process.exit(1);
+        }
+        await createRoom(client, name, json);
+      } else if (subcommand === "rename") {
+        const id = args[0];
+        const name = args[1];
+        if (!id || !name) {
+          console.error("Usage: ts-ha rooms rename <id> <name>");
+          process.exit(1);
+        }
+        await renameRoom(client, id, name, json);
+      } else if (
+        subcommand === "rm" ||
+        subcommand === "remove" ||
+        subcommand === "delete" ||
+        subcommand === "del"
+      ) {
+        const id = args[0];
+        if (!id) {
+          console.error("Usage: ts-ha rooms rm <id>");
+          process.exit(1);
+        }
+        await deleteRoom(client, id, json);
+      } else if (subcommand === "command") {
+        const id = args[0];
+        const property = args[1];
+        const value = args[2];
+        if (!id || !property || value === undefined) {
+          console.error("Usage: ts-ha rooms command <id> <property> <value>");
+          process.exit(1);
+        }
+        await sendRoomCommand(client, id, property, value, json);
+      } else if (subcommand === "assign") {
+        const query = args[0];
+        const roomId = args[1];
+        if (!query || !roomId) {
+          console.error("Usage: ts-ha rooms assign <device> <roomId>");
+          process.exit(1);
+        }
+        await assignRoom(client, query, roomId, json);
+      } else if (subcommand === "unassign") {
+        const query = args[0];
+        if (!query) {
+          console.error("Usage: ts-ha rooms unassign <device>");
+          process.exit(1);
+        }
+        await unassignRoom(client, query, json);
+      } else {
+        console.error(`Unknown subcommand: rooms ${subcommand}`);
+        console.error("Available: list, get, create, rename, rm, command, assign, unassign");
+        process.exit(1);
+      }
+    } else if (command === "walls") {
+      const sub = normalizeListSubcommand(subcommand);
+      if (sub === "list") {
+        await listWalls(client, json);
+      } else if (subcommand === "get") {
+        const name = args[0];
+        if (!name) {
+          console.error("Usage: ts-ha walls get <name>");
+          process.exit(1);
+        }
+        await getWall(client, name, json);
+      } else if (subcommand === "create") {
+        const name = args[0];
+        const config = args[1];
+        if (!name || !config) {
+          console.error("Usage: ts-ha walls create <name> '<json config>'");
+          process.exit(1);
+        }
+        await createWall(client, name, config, json);
+      } else if (subcommand === "update") {
+        const name = args[0];
+        const config = args[1];
+        if (!name || !config) {
+          console.error("Usage: ts-ha walls update <name> '<json config>'");
+          process.exit(1);
+        }
+        await updateWall(client, name, config, json);
+      } else if (
+        subcommand === "rm" ||
+        subcommand === "remove" ||
+        subcommand === "delete" ||
+        subcommand === "del"
+      ) {
+        const name = args[0];
+        if (!name) {
+          console.error("Usage: ts-ha walls rm <name>");
+          process.exit(1);
+        }
+        await deleteWall(client, name, json);
+      } else {
+        console.error(`Unknown subcommand: walls ${subcommand}`);
+        console.error("Available: list, get, create, update, rm");
+        process.exit(1);
+      }
+    } else if (command === "energy") {
+      await showEnergy(client, json);
+    } else if (command === "weather") {
+      await showWeather(client, json);
     } else if (command === "state" || command === "s") {
-      if (subcommand === "list" || subcommand === "ls") {
+      const sub = normalizeListSubcommand(subcommand);
+      if (sub === "list") {
         await listState(client, json);
       } else if (subcommand === "get") {
         const key = args[0];
@@ -350,7 +477,7 @@ async function main(): Promise<void> {
     } else {
       console.error(`Unknown command: ${command}`);
       console.error(
-        "Available: run, automations (a), devices (dv), state (s), logs (l), dashboard (d), nanoleaf, config (c)",
+        "Available: run, automations (a), devices (dv), rooms, walls, energy, weather, state (s), logs (l), dashboard (d), nanoleaf, config (c)",
       );
       process.exit(1);
     }

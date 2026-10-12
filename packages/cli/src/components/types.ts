@@ -1,12 +1,21 @@
 /**
  * Shared types for dashboard components.
  *
- * Wire-response DTOs (`LogEntry`, `HomekitStatus`, `AutomationInfo`,
- * `DeviceInfo`) come from `@ts-ha/shared`; only dashboard aggregation shapes
- * are declared here (design.md D1).
+ * Wire-response DTOs (`LogEntry`, `HomekitStatus`, `Automation`,
+ * `DeviceDescriptor`) come from `@ts-ha/shared`; only dashboard aggregation
+ * shapes are declared here (design.md D1).
  */
 
-import type { AutomationInfo, DeviceInfo, HomekitStatus, LogEntry } from "@ts-ha/shared";
+import type {
+  Automation,
+  DeviceDescriptor,
+  EnergyData,
+  HomekitStatus,
+  LogEntry,
+  RoomWithMembers,
+  WeatherData,
+  WeatherUnavailable,
+} from "@ts-ha/shared";
 
 export interface ReadinessData {
   status: string;
@@ -16,7 +25,7 @@ export interface ReadinessData {
 }
 
 export interface AutomationsData {
-  automations: AutomationInfo[];
+  automations: Automation[];
   count: number;
 }
 
@@ -31,20 +40,30 @@ export interface LogsData {
 }
 
 export interface DevicesData {
-  devices: DeviceInfo[];
+  devices: DeviceDescriptor[];
   count: number;
-  /** `false` when the device registry is disabled (503 response from engine). */
-  available: boolean;
+  /** Identifiers of the sources that contributed devices. */
+  sources: string[];
+}
+
+export interface RoomsData {
+  rooms: RoomWithMembers[];
+  count: number;
 }
 
 export interface DashboardData {
   readiness: ReadinessData;
   automations: AutomationsData;
   devices: DevicesData;
+  rooms: RoomsData;
   state: StateData;
   logs: LogsData;
   /** `null` when the HomeKit service is not configured. */
   homekit: HomekitStatus | null;
+  /** `null` until the first (slow) poll resolves; energy is not streamed. */
+  energy: EnergyData | null;
+  /** `null` until the first poll resolves; weather is not streamed. */
+  weather: WeatherData | WeatherUnavailable | null;
   error: string | null;
   lastRefresh: number;
 }
