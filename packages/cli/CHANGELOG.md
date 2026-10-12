@@ -1,5 +1,12 @@
 # @ts-ha/cli
 
+## 0.2.2
+
+### Patch Changes
+
+- Updated dependencies [d939550]
+  - @ts-ha/web-ui@0.5.0
+
 ## 0.2.1
 
 ### Patch Changes
