@@ -252,12 +252,40 @@ instantaneous and cumulative energy; a room's devices with an all-on/all-off roo
 command; the user's favorites; a single configured device; a status/presence
 summary; and one or more scene buttons that trigger an existing automation through
 the same manual-trigger path the admin interface uses (design.md D8). Device
-controls reuse the standard device tile enlarged by a size token so every wall
-control meets the touch-target minimum — there is no second device presentation,
-and a wall control reconciles and reverts exactly as it does elsewhere
-(design.md D7). A widget whose backing feature is unconfigured — for example
-weather with no weather service registered — reports that inside its own area and
-never prevents the rest of the profile from rendering.
+controls reuse the standard device tile in a **wall kiosk mode** — a size token
+that enlarges controls to the touch-target minimum, plus a presentation switch
+that omits the favorite, hide/unhide, and open-detail affordances and, for a
+toggle primary, makes the whole card the actuation target (a value-setting
+primary keeps its embedded control, since a bare tile activation cannot express
+the value). This is **not** a second device presentation:
+the capability ranking, optimistic override, and non-color state encoding stay
+single-source, so a wall control reflects, reconciles, and reverts exactly as it
+does elsewhere. (This is a wall-only revisit of `add-wall-display` design D7; the
+dashboard tile keeps its explicit open-detail affordance.) A widget whose backing
+feature is unconfigured — for example weather with no weather service registered
+— reports that inside its own area and never prevents the rest of the profile
+from rendering.
+
+### Glanceability
+
+A wall is composed to be read from across a room. Card heights follow each
+widget's declared span through a bounded row unit that reserves the panel
+padding and inter-row gutters
+(`clamp(72px, (panelHeight − chrome) / occupiedRows, 112px)`) rather than
+stretching to fill the panel, so a small control is never inflated; a profile
+that occupies fewer rows than fill the panel keeps its natural height and is
+**centered**, while one taller than the panel is top-aligned and scrollable
+rather than clipped. Cards are separated from each other, and inset from the
+panel edge, by a single gutter of `clamp(16px, 2vmin, 24px)`. The wall uses a
+larger type ramp than the dashboard — ambient readouts render at 32–64 px,
+labels at 16–20 px, and no body text below 16 px — and splits widgets into two grammars: **ambient** readouts
+(clock, weather, energy, status) render chrome-less with large type directly on
+the background, while **control** widgets (room, favorites, device, scene) render
+as opaque surface tiles whose whole card is the touch target. A widget title
+header is shown only when the profile explicitly configures one; otherwise the
+widget's own content labels it. The wall's density, row-unit bounds, gutter, and
+type ramp are recorded as a design-system page override
+(`design-system/ts-ha/pages/wall.md`).
 
 The wall itself is **read-only**: it presents no control for adding, removing, or
 editing a widget. Profiles are created and configured at `/walls`, an ENGINE

@@ -98,6 +98,7 @@ Other scripts: `format:check`, `lint:fix`, `docker:build/up/down`, `version`,
   - `web-ui-routes.ts`, `asset-routes.ts`, `components/html-shell.ts` — Hono routes
   - `options.ts` — `WEB_UI_ENABLED` / `WEB_UI_PATH` parsing
   - `app/` — React + Mantine frontend (compiled by `Bun.build`, **not** `tsc`)
+  - `app/wall/` — the lazy, full-bleed wall surface (own chunk; must stay out of first paint). A bounded row unit (`clamp(72px, (panelHeight − chrome) / occupiedRows, 112px)`, reserving padding + inter-row gutters) sizes cards to their span and centers a short composition (top-aligns + scrolls a taller one); a single `clamp(16px, 2vmin, 24px)` gutter; a larger type ramp (`wall/type-ramp.ts`, no wall body text below 16px); and an `ambient` (clock/weather/energy/status, chrome-less) vs `control` (room/favorites/device/scene, surface tile) grammar fixed per widget type in `wall/registry.ts`. Device tiles run the shared `components/DeviceTile.tsx` in a wall kiosk mode (`size="wall"`, `wall/scale.ts`) that suppresses favorite/hide-unhide/open-detail and makes the whole card actuate a toggle — a wall-only revisit of `add-wall-display` design D7; ranking, optimistic override, and state encoding stay single-source.
   - `assets/` — Generated JS/CSS string constants (git-ignored, rebuilt by `build:web-ui`)
 - `packages/cli/src/` — `@ts-ha/cli`:
   - `commands/` — CLI command implementations (`.ts` and `.tsx`), including `run.ts`

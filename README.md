@@ -94,8 +94,14 @@ a named **wall profile** — a curated composition of widgets (clock, weather,
 energy, room and device controls, favorites, status, scene buttons) — rendered
 full-bleed, with no dashboard chrome, at `{WEB_UI_PATH}/wall/:name`. Profiles are
 created and configured at `{WEB_UI_PATH}/walls`, persist across restarts in the
-reserved state namespace, and are served over `/api/walls`. Screen wake-lock,
-fullscreen/PWA, and burn-in mitigation are intentionally left to the host tablet.
+reserved state namespace, and are served over `/api/walls`. The wall is composed
+to be glanceable from across a room: cards size to their declared span, ambient
+readouts (clock, weather, energy, status) render chrome-less while control
+widgets (room, favorites, device, scene) render as touch tiles, and device tiles
+run in a kiosk mode that drops device-management and open-detail affordances
+while keeping the same actuation and state semantics as the dashboard. Screen
+wake-lock, fullscreen/PWA, and burn-in mitigation are intentionally left to the
+host tablet.
 See [Web UI → Wall displays](https://Supporterino.github.io/TypeScript-Home-Automation/http/web-ui/#wall-displays).
 
 ---
