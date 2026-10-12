@@ -39,13 +39,6 @@ export interface Automation {
   triggers: TriggerDef[];
 }
 
-/** Automation summary as consumed by the CLI dashboard (same API, looser trigger typing). */
-export interface AutomationInfo {
-  name: string;
-  enabled: boolean;
-  triggers: { type: string; [key: string]: unknown }[];
-}
-
 /**
  * Runtime status snapshot for the HomeKit bridge, returned by
  * `GET /api/homekit/status`.
@@ -66,22 +59,6 @@ export interface HomekitStatus {
   /** Network interfaces/IPs the bridge advertises mDNS on (from `bind` option). */
   bind?: string | string[];
 }
-
-/** A Zigbee device as returned by the device APIs, with its live merged state. */
-export interface SerializedDevice {
-  friendly_name: string;
-  nice_name: string;
-  ieee_address: string;
-  type: string;
-  supported: boolean;
-  interview_state: string;
-  power_source?: string | null;
-  state: Record<string, unknown> | null;
-  definition: { model: string; vendor: string; description: string } | null;
-}
-
-/** Alias used by the CLI dashboard for the same device wire shape. */
-export type DeviceInfo = SerializedDevice;
 
 // ---------------------------------------------------------------------------
 // Energy (`GET /api/energy`)

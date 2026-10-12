@@ -5,7 +5,7 @@
       "name": "Capability",
       "kind": "interface",
       "definedIn": "packages/shared/src/capabilities.ts",
-      "consumers": ["core", "webUi"]
+      "consumers": ["core", "webUi", "cli"]
     },
     {
       "name": "CapabilityAccess",
@@ -23,19 +23,19 @@
       "name": "CapabilityValueType",
       "kind": "type",
       "definedIn": "packages/shared/src/capabilities.ts",
-      "consumers": ["core", "webUi"]
+      "consumers": ["core", "webUi", "cli"]
     },
     {
       "name": "readBooleanCapabilityValue",
       "kind": "function",
       "definedIn": "packages/shared/src/capabilities.ts",
-      "consumers": ["core", "webUi"]
+      "consumers": ["webUi", "cli"]
     },
     {
       "name": "composeBooleanCapabilityValue",
       "kind": "function",
       "definedIn": "packages/shared/src/capabilities.ts",
-      "consumers": ["core", "webUi"]
+      "consumers": ["webUi", "cli"]
     },
     {
       "name": "SESSION_COOKIE",
@@ -71,13 +71,13 @@
       "name": "DeviceDescriptor",
       "kind": "interface",
       "definedIn": "packages/shared/src/device.ts",
-      "consumers": ["core", "webUi"]
+      "consumers": ["core", "webUi", "cli"]
     },
     {
       "name": "TriggerContext",
       "kind": "type",
       "definedIn": "packages/shared/src/automation.ts",
-      "consumers": ["core", "webUi"]
+      "consumers": ["core", "webUi", "cli"]
     },
     {
       "name": "ZigbeeDevice",
@@ -113,7 +113,7 @@
       "name": "ExecutionRecord",
       "kind": "interface",
       "definedIn": "packages/shared/src/execution.ts",
-      "consumers": ["core", "webUi"]
+      "consumers": ["core", "webUi", "cli"]
     },
     {
       "name": "ObservedWrites",
@@ -125,7 +125,7 @@
       "name": "Room",
       "kind": "interface",
       "definedIn": "packages/shared/src/room.ts",
-      "consumers": ["core", "webUi"]
+      "consumers": ["core", "webUi", "cli"]
     },
     {
       "name": "RoomMember",
@@ -137,19 +137,19 @@
       "name": "RoomWithMembers",
       "kind": "interface",
       "definedIn": "packages/shared/src/room.ts",
-      "consumers": ["core", "webUi"]
+      "consumers": ["core", "webUi", "cli"]
     },
     {
       "name": "WallProfile",
       "kind": "interface",
       "definedIn": "packages/shared/src/wall.ts",
-      "consumers": ["core", "webUi"]
+      "consumers": ["core", "webUi", "cli"]
     },
     {
       "name": "WallProfileConfig",
       "kind": "interface",
       "definedIn": "packages/shared/src/wall.ts",
-      "consumers": ["core", "webUi"]
+      "consumers": ["core", "webUi", "cli"]
     },
     {
       "name": "WallWidget",
@@ -185,7 +185,7 @@
       "name": "AutomationRelationships",
       "kind": "interface",
       "definedIn": "packages/shared/src/relationships.ts",
-      "consumers": ["core", "webUi"]
+      "consumers": ["core", "webUi", "cli"]
     },
     {
       "name": "StateChangedEvent",
@@ -275,7 +275,7 @@
       "name": "StreamEvent",
       "kind": "type",
       "definedIn": "packages/shared/src/events.ts",
-      "consumers": ["core", "webUi"]
+      "consumers": ["core", "webUi", "cli"]
     },
     {
       "name": "StreamEventListener",
@@ -305,13 +305,7 @@
       "name": "Automation",
       "kind": "interface",
       "definedIn": "packages/shared/src/wire.ts",
-      "consumers": ["webUi"]
-    },
-    {
-      "name": "AutomationInfo",
-      "kind": "interface",
-      "definedIn": "packages/shared/src/wire.ts",
-      "consumers": ["cli"]
+      "consumers": ["webUi", "cli"]
     },
     {
       "name": "HomekitStatus",
@@ -320,16 +314,34 @@
       "consumers": ["core", "webUi", "cli"]
     },
     {
-      "name": "SerializedDevice",
+      "name": "EnergyData",
       "kind": "interface",
       "definedIn": "packages/shared/src/wire.ts",
-      "consumers": ["cli"]
+      "consumers": ["core", "webUi", "cli"]
     },
     {
-      "name": "DeviceInfo",
+      "name": "WeatherData",
+      "kind": "interface",
+      "definedIn": "packages/shared/src/wire.ts",
+      "consumers": ["core", "webUi", "cli"]
+    },
+    {
+      "name": "WeatherUnavailable",
+      "kind": "interface",
+      "definedIn": "packages/shared/src/wire.ts",
+      "consumers": ["core", "webUi", "cli"]
+    },
+    {
+      "name": "RoomCommandResult",
+      "kind": "interface",
+      "definedIn": "packages/shared/src/wire.ts",
+      "consumers": ["webUi", "cli"]
+    },
+    {
+      "name": "RoomBatchCommandResponse",
       "kind": "type",
       "definedIn": "packages/shared/src/wire.ts",
-      "consumers": ["cli"]
+      "consumers": ["core", "webUi", "cli"]
     }
   ]
 }
