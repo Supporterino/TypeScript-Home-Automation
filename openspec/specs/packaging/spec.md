@@ -131,11 +131,17 @@ definition MUST live in `@ts-ha/shared`.
 
 `@ts-ha/shared` MUST contain no runtime code beyond trivial type guards,
 constants, or pure helpers that encode a rule two or more packages must agree
-on. Such contract constants include cross-package runtime literals two or more
+on, and pure, browser-safe validation schemas that encode a contract's shape.
+Such contract constants include cross-package runtime literals two or more
 packages must agree on, such as the session cookie name; such pure helpers
-include the capability boolean read/compose rule. Source-specific transformation
-logic (for example, mapping Zigbee2MQTT `exposes` into the capability
-vocabulary) MUST remain in `@ts-ha/core`.
+include the capability boolean read/compose rule; such validation schemas
+include the wall-profile configuration schema that both the server and the
+editor validate against. A validation dependency admitted under this clause
+MUST be pure and browser-safe — it MUST NOT pull engine, HTTP, or framework
+runtime into a browser bundle — and MUST encode only a contract's shape, not
+source-specific transformation logic. Source-specific transformation logic (for
+example, mapping Zigbee2MQTT `exposes` into the capability vocabulary) MUST
+remain in `@ts-ha/core`.
 
 The inventory of shared contracts MUST be derived from the actual cross-package
 usage of `@ts-ha/core`, `@ts-ha/web-ui`, and `@ts-ha/cli` — both types imported
@@ -143,6 +149,12 @@ across a boundary and wire-response DTOs a consumer declares locally that name a
 payload the engine or a service produces — not from a hand-maintained list. A
 type referenced by a consumer package that is not a private implementation
 detail of one package MUST have exactly one definition site in `@ts-ha/shared`.
+
+Because the CLI consumes the unified device descriptor, automation summary, and
+capability vocabulary, the legacy Zigbee-only wire DTOs `SerializedDevice`,
+`DeviceInfo`, and `AutomationInfo` MUST NOT be defined in `@ts-ha/shared` or
+anywhere else: they had no consumer remaining once the CLI stopped addressing the
+removed `/api/devices` endpoints.
 
 Purely client-private view state (for example dashboard aggregation or
 optimistic-update bookkeeping that names no wire payload) is exempt and MAY
@@ -161,8 +173,16 @@ package — `/types`, `/types/shelly`, `/types/nanoleaf`, `/types/weather`, and
 #### Scenario: Shared has no heavy runtime
 
 - **WHEN** `@ts-ha/shared` is imported by a browser bundle
-- **THEN** it contributes only types and contract constants, not engine, HTTP, or
-  framework runtime
+- **THEN** it contributes only types, contract constants, pure helpers, and pure
+  validation schemas — not engine, HTTP, or framework runtime
+
+#### Scenario: A shared validation schema carries only a pure validator
+
+- **WHEN** `@ts-ha/shared` exports a validation schema for a contract two or more
+  packages must agree on
+- **THEN** the schema's runtime dependency is pure and browser-safe, and
+  importing `@ts-ha/shared` into a browser bundle still contributes no engine,
+  HTTP, or framework runtime
 
 #### Scenario: A pure contract helper has one definition
 
@@ -200,9 +220,15 @@ package — `/types`, `/types/shelly`, `/types/nanoleaf`, `/types/weather`, and
 #### Scenario: The CLI does not mirror wire contracts
 
 - **WHEN** the CLI needs a wire response shape such as `LogEntry`,
-  `HomekitStatus`, `AutomationInfo`, `DeviceInfo`, or a device descriptor
+  `HomekitStatus`, `Automation`, `DeviceDescriptor`, or a capability
 - **THEN** it imports the declaration from `@ts-ha/shared` rather than declaring a
   parallel copy in `packages/cli/src`
+
+#### Scenario: Legacy Zigbee-only DTOs are retired
+
+- **WHEN** `SerializedDevice`, `DeviceInfo`, or `AutomationInfo` is referenced
+- **THEN** no declaration exists, because the CLI consumes the device descriptor,
+  automation summary, and capability vocabulary instead
 
 #### Scenario: Client-private view state may stay local
 
