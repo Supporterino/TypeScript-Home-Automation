@@ -62,6 +62,32 @@ Every widget type carries a fixed grammar; a frame draws chrome accordingly
   a title; otherwise the widget's own content labels it. The type label is never
   a fallback header.
 
+### Device card archetypes (layered on the widget grammar)
+
+The grammar above chooses the surface a **widget** draws. Inside a device card
+(a `device` widget, or a tile within `room` / `favorites`), the card's shape is
+refined further from the device's ranked capabilities — its *archetype*:
+
+- **Light** — an on/off toggle **and** a brightness control (a slider with a
+  persistent `%` readout) coexisting on one card (see the rule-break below).
+- **Toggle** — an on/off-only device: the whole card is the toggle.
+- **Cover** — transport controls (open / close, and stop only when the device
+  declares a writable property that can express it) in place of a position
+  slider.
+- **Readout** — a device with no actuatable property: one large value and one
+  quiet label, and **no surface at all**.
+- **Default** — a device the ranking does not classify above keeps the shared
+  dashboard tile's behaviour unchanged.
+
+Surface choice therefore follows the archetype, not solely the `ambient` /
+`control` grammar. The grammar still governs the *widget* default, while a
+**readout device card draws no card surface of its own** — no `Paper`, no
+border, no background. A single-device (`device`) widget has a chrome-less
+frame, so a readout there sits its value and label directly on `--bg` like the
+clock and weather. A readout tile nested in a `room` or `favorites` card draws
+no surface of its own but **inherits the enclosing widget's surface** (the
+control grammar's `--surface`), since that frame still draws its own surface.
+
 ## Device tile on the wall (revisits `add-wall-display` design D7)
 
 The wall uses the **same** shared device tile as the dashboard — one
@@ -73,15 +99,29 @@ affordance visibility and the tap target:
 - **Whole-card actuation:** for an actuatable device the whole card is the
   target. For an on/off primary the card toggles; a value-setting primary
   (position, brightness, setpoint, enum) keeps its embedded control, since a
-  bare tap cannot express a value.
-- **Read-only devices** render as a readout with **no** navigation affordance.
-- **Unchanged:** capability ranking, optimistic override (`reflect → reconcile →
-  revert on failure, with the failure surfaced`), and non-color state encoding
-  (push / polled + age / unreachable) are the single shared implementation.
+  bare tap cannot express a value. The **light** archetype is the exception: its
+  brightness slider already occupies the card, so it does not whole-card-actuate
+  and the explicit on/off toggle is the affordance.
+- **Read-only devices** render as a chrome-less **readout** with **no**
+  navigation affordance.
+- **Unchanged:** capability ranking and the optimistic override (`reflect →
+  reconcile → revert on failure, with the failure surfaced`) are the single
+  shared implementation.
+- **Observation is quieter:** the wall keeps the non-color state encoding — the
+  icon shape and token still distinguish push, polled/stale, and unreachable —
+  but demotes the observation to a glyph-only indicator. The state label
+  (including the `polled · 3m` age) is retained only as `title` / `aria-label`,
+  not visible card text. The dashboard keeps the visible label and age.
 
 This is a deliberate, wall-only departure from MASTER's "Explicit open-detail
 affordance" rule and from `add-wall-display` D7; the dashboard tile keeps its
 open-detail affordance.
+
+A light card carries **two** controls on one card — a brightness control and an
+on/off toggle. This is a second, deliberate wall-only departure, this time from
+MASTER's Device Tile rule ("one dominant primary action **or** readout"); the
+dashboard tile keeps the single dominant action. MASTER's Device Tile rule is
+referenced here, not changed.
 
 ## Room accents
 
