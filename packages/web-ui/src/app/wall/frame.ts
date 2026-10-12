@@ -4,7 +4,7 @@
  * and the opt-in title rule are reachable by `bun test` without a DOM, while
  * {@link WidgetFrame} stays a thin wrapper.
  */
-import type { WallWidget } from "@ts-ha/shared";
+import type { WallWidget, WallWidgetType } from "@ts-ha/shared";
 import type { WallWidgetGrammar } from "./registry.js";
 
 /**
@@ -38,6 +38,19 @@ export function wallFrameChrome(grammar: WallWidgetGrammar): WallFrameChrome {
     radius: "var(--radius-tile)",
     padding: "var(--space-4)",
   };
+}
+
+/**
+ * Whether the frame draws a widget's card surface. The `device` widget's frame
+ * is chrome-less: its single device card owns the surface (or, for a readout
+ * archetype, deliberately draws none), so the frame must not draw a second one
+ * (design.md D2, D4; specs/wall-display "A card is a single surface"). Every
+ * other type keeps the grammar-derived surface, so the mapping in
+ * {@link wallFrameChrome} is unchanged.
+ */
+export function wallFrameDrawsSurface(type: WallWidgetType, grammar: WallWidgetGrammar): boolean {
+  if (type === "device") return false;
+  return wallFrameChrome(grammar).surface;
 }
 
 /**

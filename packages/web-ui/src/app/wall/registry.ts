@@ -23,6 +23,14 @@ import { WeatherWidget } from "./widgets/WeatherWidget.js";
 /** Props every wall widget renderer receives: its own configuration and placement. */
 export interface WallWidgetProps {
   widget: WallWidget;
+  /**
+   * Whether the frame draws the card's surface, so a widget's nested device
+   * tiles must render with no surface of their own and a card stays a single
+   * surface (design.md D2; specs/wall-display "A card is a single surface").
+   * The `device` widget's frame is chrome-less, so it passes `false` and its
+   * tile owns the surface.
+   */
+  contained?: boolean;
 }
 
 /** A `{w, h}` span in grid cells. */

@@ -11,11 +11,12 @@
  */
 import { ScrollArea, SimpleGrid, Stack, Text } from "@mantine/core";
 import { useDataStore } from "../../lib/data-store.js";
+import type { WallWidgetProps } from "../registry.js";
 import { WALL_BODY_FONT_SIZE } from "../type-ramp.js";
 import { favoriteDevices } from "./favorites-model.js";
 import { WallDeviceTile } from "./WallDeviceTile.js";
 
-export function FavoritesWidget() {
+export function FavoritesWidget({ contained }: WallWidgetProps) {
   const { favorites, devicesByQualifiedId } = useDataStore();
   const devices = favoriteDevices(favorites, devicesByQualifiedId);
 
@@ -32,7 +33,7 @@ export function FavoritesWidget() {
       <ScrollArea style={{ flex: 1, minHeight: 0 }}>
         <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs" pr="xs">
           {devices.map((device) => (
-            <WallDeviceTile key={device.qualifiedId} device={device} />
+            <WallDeviceTile key={device.qualifiedId} device={device} contained={contained} />
           ))}
         </SimpleGrid>
       </ScrollArea>

@@ -47,6 +47,7 @@ import {
 import { DeviceTile } from "../components/DeviceTile.js";
 import { isOperableDevice } from "../lib/capability-ranking.js";
 import { useDataStore } from "../lib/data-store.js";
+import { humanizeDeviceName } from "../lib/humanize-name.js";
 import {
   classifyRoomCommandResults,
   groupOnOffCommand,
@@ -267,7 +268,10 @@ export function RoomView({ roomId }: { roomId: string }) {
         <Select
           label="Assign a device to this room"
           placeholder="Choose a device"
-          data={unassignedDevices.map((d) => ({ value: d.qualifiedId, label: d.displayName }))}
+          data={unassignedDevices.map((d) => ({
+            value: d.qualifiedId,
+            label: humanizeDeviceName(d.displayName),
+          }))}
           value={assignTarget}
           onChange={setAssignTarget}
           searchable

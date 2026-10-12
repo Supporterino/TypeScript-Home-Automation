@@ -37,6 +37,7 @@ import {
 import type { ReactNode } from "react";
 import { useState } from "react";
 import { useDataStore } from "../lib/data-store.js";
+import { humanizeDeviceName } from "../lib/humanize-name.js";
 import {
   automationsPath,
   type ControlView,
@@ -90,7 +91,7 @@ export function DesktopSidebar() {
                   return (
                     <Link key={device.qualifiedId} to={path} style={{ textDecoration: "none" }}>
                       <NavLink
-                        label={device.displayName}
+                        label={humanizeDeviceName(device.displayName)}
                         leftSection={<IconStar size={16} />}
                         active={isUnder(pathname, path)}
                         component="div"

@@ -15,7 +15,7 @@ import type { WallWidgetProps } from "../registry.js";
 import { WALL_BODY_FONT_SIZE } from "../type-ramp.js";
 import { WallDeviceTile } from "./WallDeviceTile.js";
 
-export function DeviceWidget({ widget }: WallWidgetProps) {
+export function DeviceWidget({ widget, contained }: WallWidgetProps) {
   const { devicesByQualifiedId } = useDataStore();
   const qualifiedId =
     typeof widget.config.qualifiedId === "string" ? widget.config.qualifiedId : "";
@@ -31,5 +31,5 @@ export function DeviceWidget({ widget }: WallWidgetProps) {
     );
   }
 
-  return <WallDeviceTile device={device} />;
+  return <WallDeviceTile device={device} contained={contained} />;
 }

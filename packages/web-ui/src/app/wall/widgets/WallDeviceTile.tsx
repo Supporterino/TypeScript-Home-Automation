@@ -13,15 +13,28 @@ import { DeviceTile } from "../../components/DeviceTile.js";
 import type { DeviceDescriptor } from "../../types.js";
 
 type Props =
-  | { device: DeviceDescriptor; action?: ReactNode }
-  | { unavailable: true; qualifiedId: string; action?: ReactNode };
+  | { device: DeviceDescriptor; action?: ReactNode; contained?: boolean }
+  | { unavailable: true; qualifiedId: string; action?: ReactNode; contained?: boolean };
 
 export function WallDeviceTile(props: Props) {
   if ("unavailable" in props) {
     return (
-      <DeviceTile unavailable qualifiedId={props.qualifiedId} action={props.action} size="wall" />
+      <DeviceTile
+        unavailable
+        qualifiedId={props.qualifiedId}
+        action={props.action}
+        contained={props.contained}
+        size="wall"
+      />
     );
   }
 
-  return <DeviceTile device={props.device} action={props.action} size="wall" />;
+  return (
+    <DeviceTile
+      device={props.device}
+      action={props.action}
+      contained={props.contained}
+      size="wall"
+    />
+  );
 }

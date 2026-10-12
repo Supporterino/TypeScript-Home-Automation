@@ -287,3 +287,46 @@ export function rankDeviceTile(capabilities: Capability[]): TileRanking {
   const readout = selectPrimaryReadout(capabilities, action);
   return { action, readout };
 }
+
+/** The stop-like permitted values a cover can be commanded to (design.md D6). */
+const COVER_STOP_TOKENS: ReadonlySet<string> = new Set(["stop"]);
+
+/** The stop-like permitted value a capability declares, preserving its authored case (design.md D6). */
+function findStopToken(values: (string | number)[] | undefined): string | undefined {
+  return (values ?? []).find(
+    (value): value is string =>
+      typeof value === "string" && COVER_STOP_TOKENS.has(value.trim().toLowerCase()),
+  );
+}
+
+/** The property and value of the stop command a cover's transport capability accepts (design.md D6). */
+export interface CoverStopCommand {
+  property: string;
+  value: string;
+}
+
+/**
+ * The exact stop command a device declares, or `null` when no writable transport
+ * property can express stop (design.md D6; specs/wall-display "Cover Transport
+ * Controls"). Detection stays conservative so it never endorses a command
+ * validation would reject:
+ *
+ * - a writable enum whose permitted values include a stop-like token yields that
+ *   exact authored value (so a device expecting `"STOP"` is not sent `"stop"`), and
+ * - a writable `state` enum with no enumerated values (Zigbee covers) yields the
+ *   canonical `"stop"`, since the schema leaves the value unconstrained.
+ *
+ * A writable `state` enum that enumerates values *without* stop, and a read-only
+ * movement state (Shelly covers), cannot express stop and return `null`.
+ */
+export function coverStopCommand(capabilities: Capability[]): CoverStopCommand | null {
+  for (const c of flattenCapabilities(capabilities)) {
+    if (!c.access.writable || c.valueType !== "enum") continue;
+    const token = findStopToken(c.permittedValues);
+    if (token !== undefined) return { property: c.property, value: token };
+    if (c.property === "state" && c.permittedValues === undefined) {
+      return { property: c.property, value: "stop" };
+    }
+  }
+  return null;
+}

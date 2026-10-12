@@ -1,12 +1,14 @@
 /**
- * The wall-profile editor (task 6.2; design.md D5; specs/wall-display "Wall
+ * The wall-profile editor (task 6.2; design.md D5, D9; specs/wall-display "Wall
  * Configuration Editor"). A full-screen modal within `/walls` — the wall is not
  * a route the editor lives under — that composes a profile's base layout: add
  * a widget of any registered type, configure it, and move/resize it with
  * cell/span controls that are keyboard-accessible and need no drag. Every
  * mutation is delegated to the pure `model.ts` functions, and saving funnels
  * through `submitProfileDraft`, so an invalid draft is rejected inline and
- * never reaches the API.
+ * never reaches the API. The widget list is a responsive grid (two columns on a
+ * wide viewport, one narrow) so a long profile stays scannable without
+ * horizontal scrolling; each widget stays a self-contained card.
  *
  * Lives in the lazy `wall` chunk; imported only from `WallsView`.
  */
@@ -147,7 +149,7 @@ export function WallEditor({ profile, onClose, onSaved }: WallEditorProps) {
             No widgets yet — add one above.
           </Text>
         ) : (
-          <Stack gap="sm">
+          <SimpleGrid cols={{ base: 1, md: 2 }} spacing="sm">
             {config.widgets.map((widget) => (
               <WidgetRow
                 key={widget.id}
@@ -159,7 +161,7 @@ export function WallEditor({ profile, onClose, onSaved }: WallEditorProps) {
                 onRemove={() => edit(removeWidget(config, widget.id))}
               />
             ))}
-          </Stack>
+          </SimpleGrid>
         )}
       </Stack>
     </Modal>

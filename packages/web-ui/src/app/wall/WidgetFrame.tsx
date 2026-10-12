@@ -8,7 +8,7 @@
  */
 import { Box, Paper, Text } from "@mantine/core";
 import type { WallWidget } from "@ts-ha/shared";
-import { wallFrameChrome, widgetTitle } from "./frame.js";
+import { wallFrameChrome, wallFrameDrawsSurface, widgetTitle } from "./frame.js";
 import { getWidgetDescriptor } from "./registry.js";
 import { WALL_LABEL_FONT_SIZE } from "./type-ramp.js";
 
@@ -17,6 +17,7 @@ export function WidgetFrame({ widget }: { widget: WallWidget }) {
   const Renderer = descriptor.renderer;
   const title = widgetTitle(widget);
   const chrome = wallFrameChrome(descriptor.grammar);
+  const drawsSurface = wallFrameDrawsSurface(widget.type, descriptor.grammar);
 
   const content = (
     <>
@@ -26,12 +27,12 @@ export function WidgetFrame({ widget }: { widget: WallWidget }) {
         </Text>
       )}
       <Box style={{ flex: 1, minHeight: 0 }}>
-        <Renderer widget={widget} />
+        <Renderer widget={widget} contained={drawsSurface} />
       </Box>
     </>
   );
 
-  if (!chrome.surface) {
+  if (!drawsSurface) {
     return (
       <Box
         h="100%"

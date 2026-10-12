@@ -1,4 +1,6 @@
 import { describe, expect, it, mock } from "bun:test";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import {
   WALL_GRID_COLUMNS,
   WALL_GRID_MAX_ROWS,
@@ -253,6 +255,43 @@ describe("validateProfileDraft", () => {
       expect(result.errors).toHaveLength(1);
       expect(result.errors[0]).toContain(id);
     }
+  });
+});
+
+describe("widget list layout (task 7.1)", () => {
+  const EDITOR = join(import.meta.dir, "..", "src/app/wall/editor/WallEditor.tsx");
+
+  /** Removes block and line comments so prose is not mistaken for markup. */
+  function stripComments(content: string): string {
+    return content.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
+  }
+
+  async function editorSource(): Promise<string> {
+    return stripComments(await readFile(EDITOR, "utf8"));
+  }
+
+  it("lays the widget list out in a responsive grid — two columns wide, one narrow", async () => {
+    const source = await editorSource();
+    // A profile with many widgets is laid out two-up on a wide viewport; the
+    // same grid collapses to a single column below the `md` breakpoint.
+    expect(source).toContain("<SimpleGrid");
+    expect(source).toContain("cols={{ base: 1, md: 2 }}");
+    expect(source).toContain("config.widgets.map((widget) =>");
+  });
+
+  it("keeps each widget a self-contained card with its own surface", async () => {
+    const source = await editorSource();
+    // Every mapped widget renders through WidgetRow, which draws its own Paper.
+    expect(source).toContain("<WidgetRow");
+    expect(source).toContain("<Paper withBorder");
+  });
+
+  it("does not introduce horizontal scrolling on a narrow viewport", async () => {
+    const source = await editorSource();
+    // The grid wraps rather than overflowing; the list uses no scroll area,
+    // non-wrapping row, or horizontal scroll container.
+    expect(source).not.toContain("ScrollArea");
+    expect(source).not.toMatch(/overflowX|whiteSpace:\s*"nowrap"|wrap="nowrap"/);
   });
 });
 

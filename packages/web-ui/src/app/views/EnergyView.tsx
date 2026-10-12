@@ -34,6 +34,7 @@ import {
   sparklineLabel,
   sparklinePoints,
 } from "../lib/energy.js";
+import { humanizeDeviceName } from "../lib/humanize-name.js";
 
 /** Coalesces a burst of device events into one endpoint refetch. */
 const REFETCH_DEBOUNCE_MS = 750;
@@ -210,7 +211,7 @@ export function EnergyView() {
                   <Group justify="space-between" wrap="nowrap" gap="sm">
                     <Group gap={6} wrap="nowrap" style={{ minWidth: 0 }}>
                       <Text size="sm" fw={500} truncate>
-                        {device.displayName}
+                        {humanizeDeviceName(device.displayName)}
                       </Text>
                       {!device.available && (
                         <Badge

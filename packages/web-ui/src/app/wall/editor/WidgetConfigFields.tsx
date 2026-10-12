@@ -10,6 +10,7 @@
 import { Select, Stack, Text, TextInput } from "@mantine/core";
 import type { WallWidget } from "@ts-ha/shared";
 import { useDataStore } from "../../lib/data-store.js";
+import { humanizeDeviceName } from "../../lib/humanize-name.js";
 
 export interface WidgetConfigFieldsProps {
   widget: WallWidget;
@@ -42,7 +43,7 @@ export function WidgetConfigFields({ widget, onChange }: WidgetConfigFieldsProps
 
     case "device": {
       const devices = [...devicesByQualifiedId.values()].sort((a, b) =>
-        a.displayName.localeCompare(b.displayName),
+        humanizeDeviceName(a.displayName).localeCompare(humanizeDeviceName(b.displayName)),
       );
       return (
         <Stack gap="xs">
@@ -53,7 +54,7 @@ export function WidgetConfigFields({ widget, onChange }: WidgetConfigFieldsProps
             onChange={(value) => onChange({ qualifiedId: value ?? "" })}
             data={devices.map((device) => ({
               value: device.qualifiedId,
-              label: device.displayName,
+              label: humanizeDeviceName(device.displayName),
             }))}
           />
           <TextInput

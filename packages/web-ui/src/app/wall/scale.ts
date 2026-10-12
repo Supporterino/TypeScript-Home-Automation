@@ -107,3 +107,17 @@ export function deviceTileText(size: WallTileSize = "default"): DeviceTileText {
   }
   return { chip: "xs", body: "sm" };
 }
+
+/**
+ * Whether a device tile renders its observation as a visible label (with the
+ * polled age), keyed by size token. The wall demotes the observation to a
+ * non-textual indicator — glyph only, label retained as `title`/`aria-label`
+ * (design.md D5; specs/wall-display "Observation is a quiet indicator"). The
+ * dashboard keeps the visible label, including a polled device's age, as the
+ * unmodified web-ui capability requires (specs/web-ui "A tile MUST indicate ...
+ * the age of the observation when polled"). Unlike {@link deviceTilePresentation}
+ * this only changes the label's visibility, never the state encoding.
+ */
+export function deviceTileObservationText(size: WallTileSize = "default"): boolean {
+  return size !== "wall";
+}

@@ -10,6 +10,7 @@ import { CapabilityControl } from "../components/CapabilityControl.js";
 import { flattenCapabilities } from "../lib/capability-ranking.js";
 import { useDataStore } from "../lib/data-store.js";
 import { formatAge, isObservationStale } from "../lib/format.js";
+import { humanizeDeviceName } from "../lib/humanize-name.js";
 import { deviceDetailPath } from "../lib/router.js";
 import { useRouter } from "../lib/router-context.js";
 import { useNow } from "../lib/use-now.js";
@@ -54,7 +55,15 @@ export function DeviceDetailView({ qualifiedId }: { qualifiedId: string }) {
       <Group justify="space-between" wrap="wrap">
         <Group gap="xs" wrap="nowrap">
           {isGroup && <IconUsersGroup size={20} color="var(--mantine-color-dimmed)" />}
-          <Title order={2}>{device.displayName}</Title>
+          <Stack gap={0}>
+            <Title order={2}>{humanizeDeviceName(device.displayName)}</Title>
+            {/* The raw identifier stays visible so an operator can still see
+                the value that addresses, routes to, and commands the device
+                (design.md D8; specs/web-ui "Device Name Presentation"). */}
+            <Text size="xs" c="dimmed" ff="monospace">
+              {qualifiedId}
+            </Text>
+          </Stack>
         </Group>
         <Group gap="xs">
           <Badge variant="light">{isGroup ? "group" : device.source}</Badge>
@@ -120,7 +129,7 @@ export function DeviceDetailView({ qualifiedId }: { qualifiedId: string }) {
                   color={member?.hidden ? "gray" : "ambient"}
                   onClick={() => navigate(deviceDetailPath(basePath, memberId))}
                 >
-                  {member?.displayName ?? memberId}
+                  {member ? humanizeDeviceName(member.displayName) : memberId}
                   {member?.hidden ? " (hidden)" : ""}
                 </Button>
               );

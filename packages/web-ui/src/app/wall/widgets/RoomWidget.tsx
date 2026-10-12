@@ -26,7 +26,7 @@ import { WALL_BODY_FONT_SIZE } from "../type-ramp.js";
 import { actuatableRoomMembers } from "./room-model.js";
 import { WallDeviceTile } from "./WallDeviceTile.js";
 
-export function RoomWidget({ widget }: WallWidgetProps) {
+export function RoomWidget({ widget, contained }: WallWidgetProps) {
   const { rooms, applyOptimisticOverride, revertOptimisticOverride } = useDataStore();
   const roomId = typeof widget.config.roomId === "string" ? widget.config.roomId : "";
   const room = rooms.find((candidate) => candidate.id === roomId);
@@ -157,7 +157,11 @@ export function RoomWidget({ widget }: WallWidgetProps) {
           <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs" pr="xs">
             {availableMembers.map((member) =>
               member.device ? (
-                <WallDeviceTile key={member.qualifiedId} device={member.device} />
+                <WallDeviceTile
+                  key={member.qualifiedId}
+                  device={member.device}
+                  contained={contained}
+                />
               ) : null,
             )}
             {unavailableMembers.map((member) => (
@@ -165,6 +169,7 @@ export function RoomWidget({ widget }: WallWidgetProps) {
                 key={member.qualifiedId}
                 unavailable
                 qualifiedId={member.qualifiedId}
+                contained={contained}
               />
             ))}
           </SimpleGrid>

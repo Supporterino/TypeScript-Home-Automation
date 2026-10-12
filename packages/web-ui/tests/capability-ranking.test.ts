@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import type { Capability } from "@ts-ha/shared";
 import {
+  coverStopCommand,
   flattenCapabilities,
   isOperableDevice,
   rankDeviceTile,
@@ -267,5 +268,95 @@ describe("rankDeviceTile", () => {
     ]);
     expect(ranking.action).toBeNull();
     expect(ranking.readout).toBeNull();
+  });
+});
+
+describe("coverStopCommand (design D6)", () => {
+  it("returns the stop property and the exact permitted value for a Zigbee cover", () => {
+    const capabilities: Capability[] = [
+      {
+        kind: "cover",
+        access: rw,
+        valueType: "composite",
+        features: [
+          numeric("position"),
+          {
+            kind: "enum",
+            property: "state",
+            access: rw,
+            valueType: "enum",
+            permittedValues: ["open", "close", "stop"],
+          },
+        ],
+      },
+    ];
+    expect(coverStopCommand(capabilities)).toEqual({ property: "state", value: "stop" });
+  });
+
+  it("preserves the authored case of a stop-like permitted value", () => {
+    const capabilities: Capability[] = [
+      {
+        kind: "enum",
+        property: "state",
+        access: rw,
+        valueType: "enum",
+        permittedValues: ["OPEN", "CLOSE", "STOP"],
+      },
+    ];
+    expect(coverStopCommand(capabilities)).toEqual({ property: "state", value: "STOP" });
+  });
+
+  it("defaults to the canonical stop value for an unconstrained writable state enum", () => {
+    const capabilities: Capability[] = [
+      numeric("position"),
+      { kind: "enum", property: "state", access: rw, valueType: "enum" },
+    ];
+    expect(coverStopCommand(capabilities)).toEqual({ property: "state", value: "stop" });
+  });
+
+  it("finds a stop-like permitted value on a non-state transport enum", () => {
+    const capabilities: Capability[] = [
+      {
+        kind: "enum",
+        property: "action",
+        access: rw,
+        valueType: "enum",
+        permittedValues: ["raise", "lower", "stop"],
+      },
+    ];
+    expect(coverStopCommand(capabilities)).toEqual({ property: "action", value: "stop" });
+  });
+
+  it("returns null for a Shelly cover whose movement state is read-only", () => {
+    const capabilities: Capability[] = [
+      numeric("position"),
+      {
+        kind: "enum",
+        property: "state",
+        access: ro,
+        valueType: "enum",
+        permittedValues: ["open", "closed", "opening", "closing", "stopped", "calibrating"],
+      },
+    ];
+    expect(coverStopCommand(capabilities)).toBeNull();
+  });
+
+  it("returns null when a writable state enum enumerates no stop value", () => {
+    const capabilities: Capability[] = [
+      numeric("position"),
+      {
+        kind: "enum",
+        property: "state",
+        access: rw,
+        valueType: "enum",
+        permittedValues: ["open", "close"],
+      },
+    ];
+    expect(coverStopCommand(capabilities)).toBeNull();
+  });
+
+  it("returns null for a device with no transport property", () => {
+    expect(coverStopCommand([numeric("temperature", ro, "°C")])).toBeNull();
+    expect(coverStopCommand([])).toBeNull();
   });
 });
