@@ -11,6 +11,7 @@
  */
 import { ScrollArea, SimpleGrid, Stack, Text } from "@mantine/core";
 import { useDataStore } from "../../lib/data-store.js";
+import { WALL_BODY_FONT_SIZE } from "../type-ramp.js";
 import { favoriteDevices } from "./favorites-model.js";
 import { WallDeviceTile } from "./WallDeviceTile.js";
 
@@ -20,7 +21,7 @@ export function FavoritesWidget() {
 
   if (devices.length === 0) {
     return (
-      <Text size="sm" c="dimmed">
+      <Text fz={WALL_BODY_FONT_SIZE} c="dimmed">
         No favorite devices. Star a device to show it here.
       </Text>
     );

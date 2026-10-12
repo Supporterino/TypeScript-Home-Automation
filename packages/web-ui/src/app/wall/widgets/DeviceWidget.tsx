@@ -12,6 +12,7 @@
 import { Stack, Text } from "@mantine/core";
 import { useDataStore } from "../../lib/data-store.js";
 import type { WallWidgetProps } from "../registry.js";
+import { WALL_BODY_FONT_SIZE } from "../type-ramp.js";
 import { WallDeviceTile } from "./WallDeviceTile.js";
 
 export function DeviceWidget({ widget }: WallWidgetProps) {
@@ -23,7 +24,7 @@ export function DeviceWidget({ widget }: WallWidgetProps) {
   if (!device) {
     return (
       <Stack h="100%" justify="center">
-        <Text size="sm" c="dimmed">
+        <Text fz={WALL_BODY_FONT_SIZE} c="dimmed">
           {qualifiedId ? `Device "${qualifiedId}" is not available.` : "No device configured."}
         </Text>
       </Stack>

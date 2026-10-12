@@ -31,10 +31,19 @@ export interface WallWidgetSpan {
   h: number;
 }
 
+/**
+ * A widget's card grammar (design.md D2). `ambient` readouts render chrome-less
+ * directly on the background; `control` widgets render as a surface tile whose
+ * whole card is the touch target.
+ */
+export type WallWidgetGrammar = "ambient" | "control";
+
 /** One widget type's declarative description, resolved by the grid and editor (design.md D6). */
 export interface WallWidgetDescriptor {
   type: WallWidgetType;
   label: string;
+  /** Whether the type renders as an ambient readout or a control surface (design.md D2). */
+  grammar: WallWidgetGrammar;
   /** The default `{w, h}` a newly added widget of this type gets. */
   defaults: WallWidgetSpan;
   /** The smallest `{w, h}` the editor may place this type at (specs/wall-display "A widget cannot be under-sized"). */
@@ -76,7 +85,8 @@ export const WALL_WIDGET_REGISTRY: Readonly<Record<WallWidgetType, WallWidgetDes
     clock: {
       type: "clock",
       label: "Clock",
-      defaults: { w: 4, h: 2 },
+      grammar: "ambient",
+      defaults: { w: 6, h: 3 },
       min: { w: 3, h: 2 },
       max: { w: 8, h: 4 },
       configSchema: WALL_WIDGET_CONFIG_SCHEMAS.clock,
@@ -85,7 +95,8 @@ export const WALL_WIDGET_REGISTRY: Readonly<Record<WallWidgetType, WallWidgetDes
     weather: {
       type: "weather",
       label: "Weather",
-      defaults: { w: 4, h: 4 },
+      grammar: "ambient",
+      defaults: { w: 3, h: 3 },
       min: { w: 3, h: 3 },
       max: { w: 8, h: 8 },
       configSchema: WALL_WIDGET_CONFIG_SCHEMAS.weather,
@@ -94,6 +105,7 @@ export const WALL_WIDGET_REGISTRY: Readonly<Record<WallWidgetType, WallWidgetDes
     energy: {
       type: "energy",
       label: "Energy",
+      grammar: "ambient",
       defaults: { w: 4, h: 4 },
       min: { w: 3, h: 3 },
       max: { w: 8, h: 8 },
@@ -103,7 +115,8 @@ export const WALL_WIDGET_REGISTRY: Readonly<Record<WallWidgetType, WallWidgetDes
     room: {
       type: "room",
       label: "Room",
-      defaults: { w: 6, h: 5 },
+      grammar: "control",
+      defaults: { w: 6, h: 4 },
       min: { w: 4, h: 4 },
       max: { w: 12, h: 10 },
       configSchema: WALL_WIDGET_CONFIG_SCHEMAS.room,
@@ -112,6 +125,7 @@ export const WALL_WIDGET_REGISTRY: Readonly<Record<WallWidgetType, WallWidgetDes
     favorites: {
       type: "favorites",
       label: "Favorites",
+      grammar: "control",
       defaults: { w: 6, h: 4 },
       min: { w: 3, h: 3 },
       max: { w: 12, h: 8 },
@@ -121,7 +135,8 @@ export const WALL_WIDGET_REGISTRY: Readonly<Record<WallWidgetType, WallWidgetDes
     device: {
       type: "device",
       label: "Device",
-      defaults: { w: 3, h: 3 },
+      grammar: "control",
+      defaults: { w: 2, h: 2 },
       min: { w: 2, h: 2 },
       max: { w: 6, h: 6 },
       configSchema: WALL_WIDGET_CONFIG_SCHEMAS.device,
@@ -130,6 +145,7 @@ export const WALL_WIDGET_REGISTRY: Readonly<Record<WallWidgetType, WallWidgetDes
     status: {
       type: "status",
       label: "Status",
+      grammar: "ambient",
       defaults: { w: 4, h: 3 },
       min: { w: 3, h: 2 },
       max: { w: 8, h: 6 },
@@ -139,7 +155,8 @@ export const WALL_WIDGET_REGISTRY: Readonly<Record<WallWidgetType, WallWidgetDes
     scene: {
       type: "scene",
       label: "Scene",
-      defaults: { w: 3, h: 2 },
+      grammar: "control",
+      defaults: { w: 2, h: 2 },
       min: { w: 2, h: 2 },
       max: { w: 6, h: 4 },
       configSchema: WALL_WIDGET_CONFIG_SCHEMAS.scene,

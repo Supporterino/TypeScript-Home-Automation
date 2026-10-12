@@ -38,13 +38,19 @@ import {
   type DeviceTileOnOffState,
   deviceTileOnOffFromCapabilityValue,
   deviceTileState,
+  deviceTileToggledValue,
 } from "../lib/device-tile-state.js";
 import { deviceDetailPath } from "../lib/router.js";
 import { useRouter } from "../lib/router-context.js";
 import { useNow } from "../lib/use-now.js";
 import { useOptimisticDeviceProperty } from "../lib/use-optimistic-property.js";
 import type { DeviceDescriptor } from "../types.js";
-import { type WallTileSize, wallTileMetrics } from "../wall/scale.js";
+import {
+  deviceTilePresentation,
+  deviceTileText,
+  type WallTileSize,
+  wallTileMetrics,
+} from "../wall/scale.js";
 import { CapabilityControl, formatReadoutValue } from "./CapabilityControl.js";
 
 /**
@@ -80,11 +86,11 @@ function StateGlyph({
 }
 
 /** The on/off label + filled/outline power glyph — the non-color on/off channel (task 9.2). */
-function OnOffChip({ state }: { state: DeviceTileOnOffState }) {
+function OnOffChip({ state, textSize }: { state: DeviceTileOnOffState; textSize: string }) {
   return (
     <Group gap={4} wrap="nowrap" align="center">
       <StateGlyph icon={state.icon} size={15} token={state.token} />
-      <Text size="xs" fw={600} style={{ color: `var(${state.token})` }}>
+      <Text size={textSize} fw={600} style={{ color: `var(${state.token})` }}>
         {state.label}
       </Text>
     </Group>
@@ -253,6 +259,8 @@ function AvailableTile({ device, action, size }: AvailableProps) {
   const now = useNow();
   const wall = size === "wall";
   const metrics = wall ? wallTileMetrics("wall") : null;
+  const presentation = deviceTilePresentation(size);
+  const tileText = deviceTileText(size);
   const isGroup = device.source === "zigbee-group";
   const ranking = rankDeviceTile(device.capabilities);
   const flat = flattenCapabilities(device.capabilities);
@@ -264,11 +272,17 @@ function AvailableTile({ device, action, size }: AvailableProps) {
     ? flat.find((c) => c.property === ranking.readout?.capability.property)
     : undefined;
 
-  // A tile with no ranked action is read-only: the whole tile activates the
-  // detail view (specs/web-ui "A read-only tile still opens detail"). A tile
-  // with a control opens detail only through its explicit affordance, so the
-  // embedded control is never mistaken for it (task 9.1).
+  // A tile with no ranked action is read-only. On the dashboard the whole tile
+  // then activates the detail view (specs/web-ui "A read-only tile still opens
+  // detail"). On the wall a read-only device is a readout with no navigation
+  // (specs/wall-display "A sensor is read-only"). A tile with a control opens
+  // detail only through its explicit affordance, so the embedded control is
+  // never mistaken for it (task 9.1).
   const readOnly = !actionCapability;
+  const wholeCardToggle =
+    presentation.wholeCardActuation &&
+    actionCapability !== undefined &&
+    ranking.action?.kind === "on_off";
   const state = deviceTileState(device, now);
 
   // One optimistic resolution for the tile's primary action, shared by the
@@ -293,6 +307,30 @@ function AvailableTile({ device, action, size }: AvailableProps) {
     navigate(deviceDetailPath(basePath, device.qualifiedId));
   }
 
+  // The whole-card action: on the wall an operable on/off device toggles from a
+  // tap anywhere outside its embedded control, which stopPropagation keeps from
+  // double-firing; on the dashboard a read-only tile opens detail. The tap
+  // target is the only presentation difference — the command still flows
+  // through the same optimistic hook the embedded control uses.
+  function togglePrimary() {
+    if (!actionCapability) return;
+    actionControl.setValue(deviceTileToggledValue(actionCapability, actionControl.value));
+  }
+
+  const cardAction = wholeCardToggle
+    ? togglePrimary
+    : presentation.readOnlyNavigation && readOnly
+      ? openDetail
+      : null;
+
+  // Accessibility: the wall whole-card toggle is a pointer-only redundant
+  // affordance. Its embedded control is a focusable Mantine Switch carrying the
+  // correct role and state, so it is the single accessible activation — the
+  // card must not also take role="button"/a tab stop, which ARIA forbids around
+  // an interactive descendant. The dashboard read-only card keeps its
+  // role="button" because it contains no interactive descendant.
+  const cardKeyboardAction = wholeCardToggle ? null : cardAction;
+
   return (
     <Paper
       className="ambient-e1"
@@ -301,17 +339,17 @@ function AvailableTile({ device, action, size }: AvailableProps) {
       radius="lg"
       opacity={device.hidden ? 0.7 : 1}
       style={{
-        cursor: readOnly ? "pointer" : "default",
+        cursor: cardAction ? "pointer" : "default",
         position: "relative",
         borderStyle: device.hidden ? "dashed" : undefined,
       }}
-      onClick={readOnly ? openDetail : undefined}
-      role={readOnly ? "button" : undefined}
-      tabIndex={readOnly ? 0 : undefined}
+      onClick={cardAction ?? undefined}
+      role={cardKeyboardAction ? "button" : undefined}
+      tabIndex={cardKeyboardAction ? 0 : undefined}
       onKeyDown={
-        readOnly
+        cardKeyboardAction
           ? (e) => {
-              if (e.key === "Enter" || e.key === " ") openDetail();
+              if (e.key === "Enter" || e.key === " ") cardKeyboardAction();
             }
           : undefined
       }
@@ -334,15 +372,17 @@ function AvailableTile({ device, action, size }: AvailableProps) {
               {device.displayName}
             </Text>
           </Group>
-          <ActionSlot
-            action={
-              <>
-                {action}
-                <FavoriteToggle device={device} wall={wall} />
-                <VisibilityToggle device={device} wall={wall} />
-              </>
-            }
-          />
+          {(action != null || presentation.favorite || presentation.visibility) && (
+            <ActionSlot
+              action={
+                <>
+                  {action}
+                  {presentation.favorite && <FavoriteToggle device={device} wall={wall} />}
+                  {presentation.visibility && <VisibilityToggle device={device} wall={wall} />}
+                </>
+              }
+            />
+          )}
         </Group>
 
         {actionCapability ? (
@@ -362,20 +402,20 @@ function AvailableTile({ device, action, size }: AvailableProps) {
                 error={actionControl.error}
               />
             </div>
-            {onOff && <OnOffChip state={onOff} />}
+            {onOff && <OnOffChip state={onOff} textSize={tileText.chip} />}
           </Group>
         ) : readoutCapability ? (
           <Text size="xl" fw={700} style={{ fontFamily: "var(--font-display)" }}>
             {formatReadoutValue(device.state[readoutCapability.property], readoutCapability.unit)}
           </Text>
         ) : (
-          <Text size="sm" c="dimmed">
+          <Text size={tileText.body} c="dimmed">
             No controls
           </Text>
         )}
 
         {actionCapability && readoutCapability && (
-          <Text size="sm" c="dimmed">
+          <Text size={tileText.body} c="dimmed">
             {formatReadoutValue(device.state[readoutCapability.property], readoutCapability.unit)}
           </Text>
         )}
@@ -394,7 +434,7 @@ function AvailableTile({ device, action, size }: AvailableProps) {
                 token={state.observation.token}
               />
               <Text
-                size="xs"
+                size={tileText.chip}
                 style={{ color: `var(${state.observation.token})` }}
                 truncate
                 title={state.observation.label}
@@ -404,18 +444,20 @@ function AvailableTile({ device, action, size }: AvailableProps) {
             </Group>
           </Group>
 
-          <Button
-            variant="subtle"
-            size={wall ? "md" : "compact-xs"}
-            rightSection={<IconChevronRight size={wall ? 18 : 12} />}
-            aria-label={`Open ${device.displayName} details`}
-            onClick={(e) => {
-              e.stopPropagation();
-              openDetail();
-            }}
-          >
-            Details
-          </Button>
+          {presentation.detail && (
+            <Button
+              variant="subtle"
+              size={wall ? "md" : "compact-xs"}
+              rightSection={<IconChevronRight size={wall ? 18 : 12} />}
+              aria-label={`Open ${device.displayName} details`}
+              onClick={(e) => {
+                e.stopPropagation();
+                openDetail();
+              }}
+            >
+              Details
+            </Button>
+          )}
         </Group>
       </Stack>
     </Paper>

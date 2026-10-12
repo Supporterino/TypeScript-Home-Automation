@@ -12,6 +12,7 @@ import { useState } from "react";
 import { manualTriggerContext, triggerAutomation } from "../../api.js";
 import { useDataStore } from "../../lib/data-store.js";
 import type { WallWidgetProps } from "../registry.js";
+import { WALL_BODY_FONT_SIZE } from "../type-ramp.js";
 import { sceneTriggerRequest } from "./scene-model.js";
 
 export function SceneWidget({ widget }: WallWidgetProps) {
@@ -39,7 +40,7 @@ export function SceneWidget({ widget }: WallWidgetProps) {
 
   if (!automationName) {
     return (
-      <Text size="sm" c="dimmed">
+      <Text fz={WALL_BODY_FONT_SIZE} c="dimmed">
         No automation configured.
       </Text>
     );
@@ -57,7 +58,7 @@ export function SceneWidget({ widget }: WallWidgetProps) {
         {label}
       </Button>
       {error && (
-        <Text size="xs" c="red">
+        <Text fz={WALL_BODY_FONT_SIZE} c="red">
           {error}
         </Text>
       )}

@@ -20,6 +20,7 @@ import { type ReactNode, useCallback, useEffect, useRef, useState } from "react"
 import { fetchWeather } from "../../api.js";
 import { useDataStore } from "../../lib/data-store.js";
 import { unavailableMessage, windDirectionLabel } from "../../lib/weather.js";
+import { WALL_BODY_FONT_SIZE, WALL_LABEL_FONT_SIZE, WALL_METRIC_FONT_SIZE } from "../type-ramp.js";
 import { weatherForecastDays, weatherWidgetState } from "./weather-model.js";
 
 type WeatherCondition = WeatherData["current"]["condition"];
@@ -86,21 +87,22 @@ export function WeatherWidget() {
 
   if (state.status === "error") {
     return (
-      <Alert color="red" title="Weather unavailable" p="xs">
-        {state.message}
+      <Alert color="red" p="xs">
+        <Text fz={WALL_LABEL_FONT_SIZE} fw={600}>
+          Weather unavailable
+        </Text>
+        <Text fz={WALL_BODY_FONT_SIZE}>{state.message}</Text>
       </Alert>
     );
   }
 
   if (state.status === "unavailable") {
     return (
-      <Alert
-        color="ambient"
-        title="Weather is not configured"
-        p="xs"
-        data-testid="wall-weather-unconfigured"
-      >
-        <Text size="xs">{unavailableMessage(state.reason)}</Text>
+      <Alert color="ambient" p="xs" data-testid="wall-weather-unconfigured">
+        <Text fz={WALL_LABEL_FONT_SIZE} fw={600}>
+          Weather is not configured
+        </Text>
+        <Text fz={WALL_BODY_FONT_SIZE}>{unavailableMessage(state.reason)}</Text>
       </Alert>
     );
   }
@@ -117,11 +119,15 @@ export function WeatherWidget() {
         <Stack gap={0}>
           <Text
             fw={700}
-            style={{ fontFamily: "var(--font-display)", fontSize: 28, lineHeight: 1.1 }}
+            style={{
+              fontFamily: "var(--font-display)",
+              fontSize: WALL_METRIC_FONT_SIZE,
+              lineHeight: 1.1,
+            }}
           >
             {Math.round(current.temperature)}°C
           </Text>
-          <Text size="xs" c="dimmed" tt="capitalize">
+          <Text fz={WALL_LABEL_FONT_SIZE} c="dimmed" tt="capitalize">
             {current.description}
           </Text>
         </Stack>
@@ -129,14 +135,14 @@ export function WeatherWidget() {
 
       <Group gap="lg" wrap="nowrap">
         <Group gap={4} wrap="nowrap">
-          <IconDroplet size={13} aria-hidden />
-          <Text size="xs" ff="monospace">
+          <IconDroplet size={18} aria-hidden />
+          <Text fz={WALL_BODY_FONT_SIZE} ff="monospace">
             {Math.round(current.humidity)}%
           </Text>
         </Group>
         <Group gap={4} wrap="nowrap">
-          <IconWind size={13} aria-hidden />
-          <Text size="xs" ff="monospace">
+          <IconWind size={18} aria-hidden />
+          <Text fz={WALL_BODY_FONT_SIZE} ff="monospace">
             {current.wind.speed.toFixed(1)} m/s {windDirectionLabel(current.wind.direction)}
           </Text>
         </Group>
@@ -146,13 +152,13 @@ export function WeatherWidget() {
         <Group gap="md" wrap="nowrap" justify="space-between" data-testid="wall-weather-forecast">
           {forecast.map((day) => (
             <Stack key={day.date} gap={2} align="center">
-              <Text size="xs" c="dimmed" ff="monospace">
+              <Text fz={WALL_BODY_FONT_SIZE} c="dimmed" ff="monospace">
                 {day.label}
               </Text>
               <span style={{ color: "var(--info)", display: "flex" }} aria-hidden>
-                {conditionIcon(day.condition, 22)}
+                {conditionIcon(day.condition, 26)}
               </span>
-              <Text size="xs" ff="monospace">
+              <Text fz={WALL_BODY_FONT_SIZE} ff="monospace">
                 {day.high}°/{day.low}°
               </Text>
             </Stack>

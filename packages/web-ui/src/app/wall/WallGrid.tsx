@@ -1,39 +1,39 @@
 /**
- * The full-bleed 12-column wall grid (design.md D4, D6; specs/wall-display
- * "Widget Grid Layout", "Widget Catalog"). Maps a profile's placements to CSS
- * grid and dispatches each cell to its registry renderer inside a frame. A
- * widget whose renderer throws is contained by a per-widget
- * {@link ErrorBoundary}, so one broken widget never takes down the profile.
+ * The full-bleed 12-column wall grid (design.md D1, D4, D6; specs/wall-display
+ * "Widget Grid Layout", "Widget Catalog", "Wall Glanceability"). Maps a
+ * profile's placements to CSS grid and dispatches each cell to its registry
+ * renderer inside a frame. Rows use a bounded unit derived from the measured
+ * panel height so a widget's height tracks its span, and the composition is
+ * centered vertically. A widget whose renderer throws is contained by a
+ * per-widget {@link ErrorBoundary}, so one broken widget never takes down the
+ * profile.
  */
 import { Box } from "@mantine/core";
-import { WALL_GRID_COLUMNS, type WallProfileConfig } from "@ts-ha/shared";
+import { useElementSize } from "@mantine/hooks";
+import type { WallProfileConfig } from "@ts-ha/shared";
 import { ErrorBoundary } from "../components/ErrorBoundary.js";
-import { gridPlacementStyle, resolveLayout } from "./grid.js";
+import { gridPlacementStyle, resolveLayout, wallGridStyle } from "./grid.js";
 import { WALL_CHUNK_MARKER } from "./registry.js";
 import { useOrientation } from "./use-orientation.js";
 import { WidgetFrame } from "./WidgetFrame.js";
 
-const GRID_GAP_PX = 12;
+/** The panel's inner height in CSS pixels; `0` before a DOM exists. */
+function panelHeight(): number {
+  return typeof window === "undefined" ? 0 : window.innerHeight;
+}
 
 export function WallGrid({ config }: { config: WallProfileConfig }) {
   const orientation = useOrientation();
   const widgets = resolveLayout(config, orientation);
+  // Measured live by ResizeObserver so a same-orientation viewport change (a
+  // desktop resize, a kiosk toolbar auto-hiding) re-resolves the row unit and
+  // the fit decision; the viewport height is the fallback until the first
+  // measurement, so the first paint is not sized to zero.
+  const { ref, height } = useElementSize<HTMLDivElement>();
+  const style = wallGridStyle({ widgets, availableHeight: height || panelHeight() });
 
   return (
-    <Box
-      data-wall-chunk={WALL_CHUNK_MARKER}
-      style={{
-        display: "grid",
-        gridTemplateColumns: `repeat(${WALL_GRID_COLUMNS}, minmax(0, 1fr))`,
-        gridAutoRows: "minmax(0, 1fr)",
-        gap: GRID_GAP_PX,
-        width: "100vw",
-        height: "100dvh",
-        padding: GRID_GAP_PX,
-        boxSizing: "border-box",
-        overflow: "hidden",
-      }}
-    >
+    <Box ref={ref} data-wall-chunk={WALL_CHUNK_MARKER} style={style}>
       {widgets.map((widget) => (
         <div key={widget.id} style={{ ...gridPlacementStyle(widget), minWidth: 0, minHeight: 0 }}>
           <ErrorBoundary>

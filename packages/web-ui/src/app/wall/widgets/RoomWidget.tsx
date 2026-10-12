@@ -22,6 +22,7 @@ import {
 } from "../../lib/room-command.js";
 import type { DeviceDescriptor } from "../../types.js";
 import type { WallWidgetProps } from "../registry.js";
+import { WALL_BODY_FONT_SIZE } from "../type-ramp.js";
 import { actuatableRoomMembers } from "./room-model.js";
 import { WallDeviceTile } from "./WallDeviceTile.js";
 
@@ -36,7 +37,7 @@ export function RoomWidget({ widget }: WallWidgetProps) {
 
   if (!room) {
     return (
-      <Text size="sm" c="dimmed">
+      <Text fz={WALL_BODY_FONT_SIZE} c="dimmed">
         {roomId ? `Room "${roomId}" is not configured.` : "No room configured."}
       </Text>
     );
@@ -136,7 +137,7 @@ export function RoomWidget({ widget }: WallWidgetProps) {
       )}
 
       {commandError && (
-        <Text size="sm" c="red">
+        <Text fz={WALL_BODY_FONT_SIZE} c="red">
           {commandError}
         </Text>
       )}
@@ -148,7 +149,7 @@ export function RoomWidget({ widget }: WallWidgetProps) {
       )}
 
       {availableMembers.length === 0 && unavailableMembers.length === 0 ? (
-        <Text size="sm" c="dimmed">
+        <Text fz={WALL_BODY_FONT_SIZE} c="dimmed">
           No devices in this room yet.
         </Text>
       ) : (

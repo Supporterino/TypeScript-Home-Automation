@@ -10,7 +10,7 @@
  */
 
 import type { Capability } from "@ts-ha/shared";
-import { readBooleanCapabilityValue } from "@ts-ha/shared";
+import { composeBooleanCapabilityValue, readBooleanCapabilityValue } from "@ts-ha/shared";
 import type { DeviceDescriptor } from "../types.js";
 import { flattenCapabilities, pickOnOffCapability } from "./capability-ranking.js";
 import { formatAge, isObservationStale } from "./format.js";
@@ -96,6 +96,22 @@ export function deviceTileOnOffFromCapabilityValue(
   value: unknown,
 ): DeviceTileOnOffState {
   return deviceTileOnOffFromValue(readBooleanCapabilityValue(capability, value));
+}
+
+/**
+ * The encoded wire value that toggles a boolean capability from its resolved
+ * value (design.md D1, D4). The wall tile's whole-card actuation composes its
+ * command through this, so it reuses the same on/off encoding rule as the
+ * embedded control rather than reimplementing it.
+ */
+export function deviceTileToggledValue(
+  capability: Pick<Capability, "valueOn" | "valueOff">,
+  resolvedValue: unknown,
+): string | number | boolean {
+  return composeBooleanCapabilityValue(
+    capability,
+    !readBooleanCapabilityValue(capability, resolvedValue),
+  );
 }
 
 /** Encodes a device's primary boolean on/off state, when it declares one. */

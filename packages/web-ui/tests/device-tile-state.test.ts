@@ -5,6 +5,7 @@ import {
   deviceTileOnOffFromCapabilityValue,
   deviceTileOnOffState,
   deviceTileState,
+  deviceTileToggledValue,
 } from "../src/app/lib/device-tile-state.js";
 import type { DeviceDescriptor } from "../src/app/types.js";
 
@@ -125,6 +126,27 @@ describe("deviceTileOnOffFromCapabilityValue", () => {
     const capability = booleanCapability("on");
     // Confirmed state says off, but a pending optimistic command says on.
     expect(deviceTileOnOffFromCapabilityValue(capability, true).label).toBe("on");
+  });
+});
+
+describe("deviceTileToggledValue", () => {
+  it("toggles through the capability's declared on/off encoding", () => {
+    const capability = booleanCapability("state", { valueOn: "ON", valueOff: "OFF" });
+    expect(deviceTileToggledValue(capability, "ON")).toBe("OFF");
+    expect(deviceTileToggledValue(capability, "OFF")).toBe("ON");
+  });
+
+  it("toggles a real boolean when the capability declares no encoding", () => {
+    const capability = booleanCapability("on");
+    expect(deviceTileToggledValue(capability, true)).toBe(false);
+    expect(deviceTileToggledValue(capability, false)).toBe(true);
+  });
+
+  it("toggles from the resolved (possibly optimistic) value the tile renders", () => {
+    const capability = booleanCapability("on");
+    // The embedded control resolved an optimistic true; the whole-card tap must
+    // command off, not re-command on from the stale confirmed state.
+    expect(deviceTileToggledValue(capability, true)).toBe(false);
   });
 });
 

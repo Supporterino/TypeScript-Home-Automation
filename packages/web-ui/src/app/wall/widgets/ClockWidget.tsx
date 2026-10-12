@@ -6,6 +6,7 @@
  */
 import { Stack, Text } from "@mantine/core";
 import { useNow } from "../../lib/use-now.js";
+import { WALL_HERO_FONT_SIZE, WALL_LABEL_FONT_SIZE } from "../type-ramp.js";
 import { formatClock } from "./clock.js";
 
 export function ClockWidget() {
@@ -18,13 +19,13 @@ export function ClockWidget() {
         fw={700}
         style={{
           fontFamily: "var(--font-display)",
-          fontSize: "clamp(2rem, 6vw, 4.5rem)",
+          fontSize: WALL_HERO_FONT_SIZE,
           lineHeight: 1.05,
         }}
       >
         {time}
       </Text>
-      <Text size="md" c="dimmed" ta="center">
+      <Text fz={WALL_LABEL_FONT_SIZE} c="dimmed" ta="center">
         {date}
       </Text>
     </Stack>

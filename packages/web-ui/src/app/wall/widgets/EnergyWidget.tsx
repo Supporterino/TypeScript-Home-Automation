@@ -4,13 +4,14 @@
  * device event that can change the aggregated totals, so the totals update
  * live without a manual refresh.
  */
-import { Group, Loader, Paper, Stack, Text } from "@mantine/core";
+import { Group, Loader, Stack, Text } from "@mantine/core";
 import { IconBolt, IconDatabase } from "@tabler/icons-react";
 import type { EnergyData } from "@ts-ha/shared";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { fetchEnergy } from "../../api.js";
 import { useDataStore } from "../../lib/data-store.js";
 import { isEnergyRelevantEvent } from "../../lib/energy.js";
+import { WALL_BODY_FONT_SIZE, WALL_LABEL_FONT_SIZE, WALL_METRIC_FONT_SIZE } from "../type-ramp.js";
 import { energyDisplay } from "./energy-model.js";
 
 /** Coalesces a burst of device events into one endpoint refetch. */
@@ -28,17 +29,17 @@ function Metric({
   colorVar: string;
 }) {
   return (
-    <Paper withBorder p="xs">
+    <div>
       <Group gap={6} wrap="nowrap">
         <span style={{ color: `var(${colorVar})`, display: "flex" }}>{icon}</span>
-        <Text size="xs" fw={600} tt="uppercase" c="dimmed">
+        <Text fz={WALL_LABEL_FONT_SIZE} fw={600} tt="uppercase" c="dimmed">
           {label}
         </Text>
       </Group>
-      <Text fw={700} style={{ fontFamily: "var(--font-display)", fontSize: 24 }}>
+      <Text fw={700} style={{ fontFamily: "var(--font-display)", fontSize: WALL_METRIC_FONT_SIZE }}>
         {value}
       </Text>
-    </Paper>
+    </div>
   );
 }
 
@@ -87,7 +88,7 @@ export function EnergyWidget() {
 
   if (error !== null) {
     return (
-      <Text size="sm" c="red">
+      <Text fz={WALL_BODY_FONT_SIZE} c="red">
         Energy data unavailable: {error}
       </Text>
     );
@@ -113,7 +114,7 @@ export function EnergyWidget() {
         colorVar="--on"
       />
       {display.meteringCount === 0 && (
-        <Text size="xs" c="dimmed">
+        <Text fz={WALL_BODY_FONT_SIZE} c="dimmed">
           No metering devices report yet.
         </Text>
       )}

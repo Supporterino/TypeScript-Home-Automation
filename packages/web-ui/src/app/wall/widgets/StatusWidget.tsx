@@ -10,6 +10,7 @@ import { type ReactNode, useMemo } from "react";
 import { useDataStore } from "../../lib/data-store.js";
 import { summarizeDevices } from "../../lib/overview.js";
 import { useNow } from "../../lib/use-now.js";
+import { WALL_LABEL_FONT_SIZE, WALL_METRIC_FONT_SIZE } from "../type-ramp.js";
 
 function Metric({
   icon,
@@ -26,11 +27,11 @@ function Metric({
     <div>
       <Group gap={6} wrap="nowrap">
         <span style={{ color: `var(${colorVar})`, display: "flex" }}>{icon}</span>
-        <Text size="xs" fw={600} tt="uppercase" c="dimmed">
+        <Text fz={WALL_LABEL_FONT_SIZE} fw={600} tt="uppercase" c="dimmed">
           {label}
         </Text>
       </Group>
-      <Text fw={700} style={{ fontFamily: "var(--font-display)", fontSize: 24 }}>
+      <Text fw={700} style={{ fontFamily: "var(--font-display)", fontSize: WALL_METRIC_FONT_SIZE }}>
         {value}
       </Text>
     </div>
