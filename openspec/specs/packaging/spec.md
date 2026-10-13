@@ -19,7 +19,7 @@ The repository MUST be a Bun workspace containing four packages under
 |---------|----------------|
 | `@ts-ha/shared` | The domain and wire contracts, contract constants, and pure helpers |
 | `@ts-ha/core` | The engine, services, device sources, HTTP server, MQTT, state, scheduling |
-| `@ts-ha/web-ui` | Web UI route registration, React/Mantine application, compiled assets |
+| `@ts-ha/web-ui` | Web UI route registration, React/Tailwind application, compiled assets |
 | `@ts-ha/cli` | `DebugClient`, terminal dashboard, target config, and the `run` command |
 
 Each package MUST own its own `package.json`, `tsconfig.json`, and test scope.
