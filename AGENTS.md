@@ -1,11 +1,17 @@
-# AGENTS.md
+# AGENTS.md — TypeScript Home Automation
 
-Coding conventions and instructions for AI agents working in this repository.
+A lightweight, fully typed home automation framework built on MQTT and Bun. This
+repository is a Bun workspace of four independently published packages under
+`packages/`; it ships as npm packages (`@ts-ha/core`, `@ts-ha/cli`, …) and runs
+from source with `ts-ha run`.
 
-## Workspace Layout
+This file is the authoritative reference for cross-package boundaries, coding
+conventions, and agent decision-making. Read it first, then the package or
+document it points to.
 
-This repository is a Bun workspace of four independently published packages under
-`packages/`:
+---
+
+## Packages
 
 | Package | Responsibility |
 |---|---|
@@ -24,6 +30,83 @@ test scope. Its `exports` map carries a `development` condition resolving to
 condition is selected only when passed explicitly — `bun --conditions=development`
 and `bun test --conditions=development` — and `tsc` selects it via
 `customConditions: ["development"]` (there is no `tsc --conditions` flag).
+
+---
+
+## Docs Index
+
+Read the referenced document before touching the relevant surface. Reference
+material lives in `docs/` and `openspec/specs/`, not inline here.
+
+| Fact / surface | Canonical source |
+|----------------|------------------|
+| Architecture map, data flow, package boundaries | `docs/architecture.md` |
+| Configuration and the full env schema | `docs/configuration.md`, `packages/core/src/config.ts` |
+| HTTP API reference (routes, SSE events, auth) | `docs/api-reference.md` |
+| Writing automations | `docs/writing-automations.md` |
+| Device base classes, device types, device registry | `docs/device-classes.md`, `docs/device-types.md`, `docs/device-registry.md` |
+| Services and custom service plugins | `docs/services/`, `docs/service-plugins.md` |
+| State management and the reserved namespace | `docs/state.md` |
+| CLI reference | `docs/cli.md` |
+| Deployment and operations | `docs/deployment.md` |
+| Capability inventory (which specs exist) | `openspec/specs/` — enumerate via `openspec list` |
+| TypeScript bar | `.opencode/bars/typescript.md` |
+| Security bar | `.opencode/bars/security.md` |
+| Dependency direction and shared contracts | `scripts/guard-deps.ts`, `scripts/guard-contracts.ts`, `scripts/contract-inventory.json` |
+| Human overview, quickstart, install | `README.md` |
+
+**Single source of truth per fact:** the architecture is `docs/architecture.md`,
+the capability inventory is `openspec/specs/`, and the tech stack is the root
+`README.md`. All other documents link to these rather than restating them; when
+two documents disagree, the canonical source named above is authoritative.
+
+---
+
+## Agent Responsibilities & Boundaries
+
+### When to Modify Which Package
+
+| Trigger | Package(s) | Action |
+|---------|------------|--------|
+| New or changed cross-package contract (type, constant, validation schema) | `shared` | Declare it once under `packages/shared/src`; update `scripts/contract-inventory.json` if it is a tracked contract |
+| Engine behaviour, service, device source, HTTP route, MQTT, state, scheduling | `core` | Modify the owning subfolder; keep it free of any `web-ui` reference |
+| Dashboard route, React/Mantine view, asset manifest | `web-ui` | Modify `src/` (server) or `src/app/` (frontend); never import `@ts-ha/core` |
+| CLI command, `DebugClient`, dashboard, target config | `cli` | Add a command under `src/commands/`; reuse `DebugClient` and the shared schemas |
+| Guard scripts, dev script, contract inventory | `scripts/` | Update and re-run `bun run check` |
+| Example automations | `docs/examples/` | Add/modify a type-checked example (compiled against core source) |
+| User-facing documentation | `docs/` | Edit the relevant page and keep the `docs/zensical.toml` nav in sync |
+| Design-system page | `design-system/` | Edit the relevant page under `design-system/ts-ha/` |
+
+### Core Rules
+
+1. **Do not invent architecture.** Infer and align with existing patterns in each package.
+2. **Respect the dependency direction.** `shared` ← `core`, `shared` ← `web-ui`, `cli` → {`core`, `shared`}. Never add a `core` ↔ `web-ui` edge.
+3. **Keep shared contracts single-source.** A contract declared in `@ts-ha/shared` is never re-declared in a consumer; a re-export shim is fine.
+4. **Prefer modifying existing modules** over creating new ones. Only create a new module for a genuinely new domain concept.
+5. **Keep changes minimal, composable, and testable.** Avoid sweeping refactors when a targeted fix suffices.
+6. **Always use `.js` extensions** in relative imports and the `node:` prefix for Node built-ins.
+7. **Ensure backward compatibility** unless the task explicitly requests a breaking change. Add fields, deprecate before removing; record published-package changes with a Changeset.
+8. **Never commit secrets or credentials.** `.env` is git-ignored; `.env.example` lists defaults only.
+9. **Stay in OpenCode** for normal work.
+
+### Cross-Package Change Checklist
+
+When implementing a change that spans packages, read `docs/architecture.md` and
+the relevant `openspec/specs/<capability>/spec.md` before starting, then:
+
+- [ ] Shared contract added/changed in `packages/shared/src` (declared exactly once)
+- [ ] `scripts/contract-inventory.json` updated if a tracked contract was added, renamed, or moved
+- [ ] Core updated (owner of engine behaviour)
+- [ ] Web UI server routes / React app updated if the surface changed
+- [ ] CLI command / `DebugClient` / resource mapping updated if it consumes the contract
+- [ ] `docs/` page(s) updated and `docs/zensical.toml` nav synced if user-facing behaviour changed
+- [ ] `bun run typecheck` passes (every package + `docs/examples`)
+- [ ] `bun run check` passes (Biome + `guard-contracts` + `guard-deps`)
+- [ ] `bun run test` passes
+- [ ] `bun run build` passes if the change affects the build
+- [ ] A Changeset is added for a published-package change
+
+---
 
 ## Build / Lint / Test Commands
 
@@ -126,14 +209,18 @@ Full schema in `packages/core/src/config.ts`. `.env.example` lists defaults. Not
 | `SHELLY_POLL_MS` | `10000` | Refresh interval for HTTP-transport Shelly devices in the unified device source layer |
 | `NANOLEAF_POLL_MS` | `10000` | Refresh interval for the Nanoleaf device source |
 
-## Formatting (Biome)
+---
+
+## Cross-Package Coding Conventions
+
+### Formatting (Biome)
 
 - **2 spaces** indent, **100 char** line width, **LF** line endings
 - Biome auto-organizes imports — don't manually reorder
 - `noForEach` is disabled but prefer `for...of` loops in practice
 - Web UI source (`packages/web-ui/src/app/**`) has linting disabled via biome overrides
 
-## Import Conventions
+### Import Conventions
 
 Order (enforced by Biome):
 1. Node built-ins (`node:fs/promises`, `node:path`)
@@ -147,7 +234,7 @@ import type { Config } from "../config.js";
 import { type StateManagerOptions, StateManager } from "./state-manager.js";
 ```
 
-## Naming Conventions
+### Naming Conventions
 
 | Entity | Convention | Example |
 |---|---|---|
@@ -314,3 +401,30 @@ The interactive dashboard (`ts-ha dashboard`) uses `@opentui/core` and `@opentui
 - Grouped by category with section comments
 - `export type { ... }` for type-only exports
 - Alphabetical ordering within each group
+
+---
+
+## Usage Rules for This Agent
+
+1. **Read this file first** when starting work in this workspace.
+2. **Read `.opencode/bars/typescript.md` and `.opencode/bars/security.md`** before changing TypeScript.
+3. **Read the affected package's `README.md` and `package.json`** before modifying it.
+4. **Follow the Cross-Package Change Checklist** for changes that span packages.
+5. **Do not edit `scripts/guard-deps.ts`, `scripts/guard-contracts.ts`, or `scripts/contract-inventory.json` to silence a violation** — fix the cause in the source.
+6. **Preserve the reserved internal state namespace.** `$internal:*` keys are not client-writable and must not appear in the State view.
+7. **Never commit** unless the user explicitly asks.
+8. **When uncertain**, state assumptions explicitly before proceeding.
+
+## graphify
+
+This project ships a graphify OpenCode plugin (`.opencode/plugins/graphify.js`).
+When a knowledge graph exists at `graphify-out/`, use it before grepping raw
+files.
+
+Rules:
+
+- For codebase questions, first run `graphify query "<question>"` when `graphify-out/graph.json` exists. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than `GRAPH_REPORT.md` or raw grep output.
+- If `graphify-out/wiki/index.md` exists, use it for broad navigation instead of raw source browsing.
+- Read `graphify-out/GRAPH_REPORT.md` only for broad architecture review or when query/path/explain do not surface enough context.
+- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
+- When no `graphify-out/` exists, ignore this section and browse the source directly.
