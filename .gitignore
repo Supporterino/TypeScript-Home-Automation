@@ -36,3 +36,5 @@ opencode.json
 Thumbs.db
 
 images
+
+__pycache__
