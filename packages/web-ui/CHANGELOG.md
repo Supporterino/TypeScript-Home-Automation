@@ -1,5 +1,69 @@
 # @ts-ha/web-ui
 
+## 0.6.0
+
+### Minor Changes
+
+- 7c06d1f: Persist last-known device state and send the current device set on every stream
+  connect.
+  
+  - `@ts-ha/core`: a durable device state store holding every device's last-known
+    state and the observation that produced it, keyed by qualified identifier —
+    loaded before any source starts and written behind a debounced flush, so a
+    descriptor reports last-known state from the first read after a restart
+    instead of empty, and a live observation still supersedes it
+  - `@ts-ha/core`: every device source records its observations into the store; a
+    source that does not persist its own state (Shelly, Nanoleaf) seeds a
+    descriptor's state from it when it has no fresher observation of its own,
+    while a self-persisting source (Zigbee, state toggles) records for
+    durability/pruning only — in both cases a descriptor reports last-known state
+    from the first read after a restart, keeping enumeration, retrieval by
+    identifier, and subscription delivery consistent; a restored record keeps its
+    original observation time so a stale value reads as last-known rather than
+    live, and records are pruned when a device drops out of enumeration but
+    retained while its owning source is unavailable
+  - `@ts-ha/core`: `GET /api/events` sends a per-connection initial device
+    snapshot on connect — one `device_appeared` event per device carrying its full
+    descriptor, from the total enumeration including hidden devices and matching
+    `GET /api/device-catalog` — before any later device event, which stays an
+    incremental delta
+  - `@ts-ha/core`: the new `DeviceStateStore` / `DeviceStateStoreOptions` /
+    `DeviceStateRecord` exports, `DEVICE_STATE_PERSIST` / `DEVICE_STATE_FILE` /
+    `DEVICE_STATE_FLUSH_MS` config, and the `deviceState` engine option, with
+    persistence enabled by default alongside the existing persistence defaults
+  - `@ts-ha/web-ui`: the dashboard reconciles the stream's device snapshot into
+    its device map by qualified identifier rather than replacing the map, so state
+    from the read endpoints or an event is not lost, and refetches a device on a
+    delta for an identifier it does not hold instead of dropping the event
+- 5371c54: Redesign the dashboard on the Lumen design system and migrate the frontend off
+  Mantine.
+  
+  - `@ts-ha/web-ui`: replace Mantine v9 and `@tabler/icons-react` with Tailwind
+    CSS v4 (via `bun-plugin-tailwind`, no PostCSS pipeline), Radix UI headless
+    primitives, and `lucide-react`, keeping React 19, `Bun.build`, the
+    content-hashed/split/pre-compressed asset pipeline, and the ≤250 KB gzip
+    first-paint budget
+  - `@ts-ha/web-ui`: replace the "Ambient Glass" system with **Lumen** — the
+    semantic tokens (colour, typography, spacing, radius, elevation, motion) are
+    declared once in the Tailwind entry stylesheet (`src/app/styles/app.css`) and
+    consumed only through utilities/tokens, so no view carries a literal hex; dark
+    is authoritative and the light scheme is designed in its own right, not
+    inverted
+  - `@ts-ha/web-ui`: an explicit light / dark / **system** theme selection is
+    persisted and applied to `data-theme` before first paint by an inline shell
+    bootstrap, replacing Mantine's colour-scheme manager and removing any flash of
+    the wrong scheme
+  - `@ts-ha/web-ui`: the application shell becomes mobile-first — a persistent
+    collapsible nav rail on wide viewports, and a safe-area-aware app bar plus a
+    control-first bottom bar with an overflow affordance on narrow viewports,
+    with operator views reachable by URL
+  - `@ts-ha/web-ui`: every view and shared component (device tile, capability
+    controls, cover transport, source viewer, error boundary, navigation) is
+    rebuilt on a token-driven `ui/*` primitive layer; the data layer
+    (snapshot-then-stream reconciliation, optimistic actuation, per-property
+    coalescing, revert deadlines) and the full-bleed wall's grammar are unchanged
+    in behaviour
+
 ## 0.5.0
 
 ### Minor Changes
