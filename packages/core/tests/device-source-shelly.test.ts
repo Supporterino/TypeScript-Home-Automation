@@ -90,7 +90,14 @@ function createRoutedHttpMock(options: RoutedHttpMockOptions = {}) {
   };
 }
 
-function createMockMqtt(initialComponents?: unknown[]) {
+function createMockMqtt(
+  initialComponents?: unknown[],
+  status: {
+    switch?: (channel: number) => unknown;
+    cover?: (channel: number) => unknown;
+    error?: (method: string) => { code: number; message: string } | undefined;
+  } = {},
+) {
   const handlersByTopic = new Map<string, MqttMessageHandler>();
   let components: unknown[] | undefined = initialComponents;
   const mqtt = {
@@ -99,15 +106,30 @@ function createMockMqtt(initialComponents?: unknown[]) {
     }),
     unsubscribe: mock((topic: string) => handlersByTopic.delete(topic)),
     publish: mock((_topic: string, payload: unknown) => {
-      const frame = payload as { id?: unknown; src?: unknown; method?: unknown };
+      const frame = payload as {
+        id?: unknown;
+        src?: unknown;
+        method?: unknown;
+        params?: { id?: unknown };
+      };
       if (typeof frame?.id !== "number" || typeof frame?.method !== "string") return;
       const responseTopic = `${String(frame.src)}/rpc`;
       const handler = handlersByTopic.get(responseTopic);
       if (!handler) return;
-      const result =
-        frame.method === "Shelly.GetComponents"
-          ? { components: components ?? [], total: (components ?? []).length }
-          : {};
+      const channel = typeof frame.params?.id === "number" ? frame.params.id : 0;
+      const error = status.error?.(frame.method);
+      if (error) {
+        handler(responseTopic, { id: frame.id, error } as unknown as Record<string, unknown>);
+        return;
+      }
+      let result: unknown = {};
+      if (frame.method === "Shelly.GetComponents") {
+        result = { components: components ?? [], total: (components ?? []).length };
+      } else if (frame.method === "Switch.GetStatus") {
+        result = status.switch?.(channel) ?? {};
+      } else if (frame.method === "Cover.GetStatus") {
+        result = status.cover?.(channel) ?? {};
+      }
       handler(responseTopic, { id: frame.id, result } as unknown as Record<string, unknown>);
     }),
   } as unknown as MqttService;
@@ -121,6 +143,81 @@ function createMockMqtt(initialComponents?: unknown[]) {
     setComponents(next: unknown[]): void {
       components = next;
     },
+  };
+}
+
+/**
+ * A controllable MQTT mock for the concurrent-seed race. `Shelly.GetComponents`
+ * on one topic prefix and `Switch.GetStatus` for one channel of another prefix
+ * are withheld until the test releases them, so a seed can be held in flight
+ * while a second device's discovery completes and rebuilds the entry set.
+ */
+function createGatedMqtt(options: {
+  components: unknown[];
+  gateDiscoveryPrefix: string;
+  gateStatusPrefix: string;
+  gateStatusChannel: number;
+}) {
+  const handlersByTopic = new Map<string, MqttMessageHandler>();
+  let releaseDiscovery!: () => void;
+  const discoveryGate = new Promise<void>((resolve) => {
+    releaseDiscovery = resolve;
+  });
+  const pendingStatus: Array<(result: unknown) => void> = [];
+
+  const mqtt = {
+    subscribe: mock((topic: string, handler: MqttMessageHandler) => {
+      handlersByTopic.set(topic, handler);
+    }),
+    unsubscribe: mock((topic: string) => handlersByTopic.delete(topic)),
+    publish: mock((topic: string, payload: unknown) => {
+      const frame = payload as {
+        id?: unknown;
+        src?: unknown;
+        method?: unknown;
+        params?: { id?: unknown };
+      };
+      if (typeof frame?.id !== "number" || typeof frame?.method !== "string") return;
+      const responseTopic = `${String(frame.src)}/rpc`;
+      const respond = (result: unknown): void => {
+        handlersByTopic.get(responseTopic)?.(responseTopic, {
+          id: frame.id,
+          result,
+        } as unknown as Record<string, unknown>);
+      };
+      const prefix = topic.replace(/\/rpc$/, "");
+      if (frame.method === "Shelly.GetComponents") {
+        const total = options.components.length;
+        if (prefix === options.gateDiscoveryPrefix) {
+          void discoveryGate.then(() => respond({ components: options.components, total }));
+          return;
+        }
+        respond({ components: options.components, total });
+        return;
+      }
+      if (frame.method === "Switch.GetStatus") {
+        const channel = typeof frame.params?.id === "number" ? frame.params.id : 0;
+        if (prefix === options.gateStatusPrefix && channel === options.gateStatusChannel) {
+          pendingStatus.push((result) => respond(result));
+          return;
+        }
+        respond({ output: false });
+        return;
+      }
+      respond({});
+    }),
+  } as unknown as MqttService;
+
+  function emit(topic: string, payload: unknown): void {
+    handlersByTopic.get(topic)?.(topic, payload as Record<string, unknown>);
+  }
+
+  return {
+    mqtt,
+    emit,
+    pendingStatusCount: () => pendingStatus.length,
+    releaseDiscovery: () => releaseDiscovery(),
+    releaseStatus: (result: unknown) => pendingStatus.shift()?.(result),
   };
 }
 
@@ -246,6 +343,323 @@ describe("ShellyDeviceSource", () => {
     source.stop();
   });
 
+  it("seeds a switch's on from a NotifyFullStatus with no prior NotifyStatus", async () => {
+    const http = createMockHttp({});
+    const shelly = new ShellyService(http, mqttMock.mqtt, logger);
+    shelly.register("mqtt_plug", { transport: "mqtt", topicPrefix: "shellyplus1-abc" });
+    const source = new ShellyDeviceSource(shelly, mqttMock.mqtt, logger, 1_000_000);
+    await source.start();
+
+    mqttMock.emit("shellyplus1-abc/events/rpc", {
+      method: "NotifyFullStatus",
+      params: { "switch:0": { output: true, apower: 4, voltage: 230, current: 0.02 } },
+    });
+
+    const device = source.get("mqtt_plug");
+    expect(device?.state.on).toBe(true);
+    expect(device?.state.power).toBe(4);
+    expect(device?.observation.mode).toBe("push");
+
+    source.stop();
+  });
+
+  it("seeds a cover's position and state from a NotifyFullStatus naming cover:0", async () => {
+    mqttMock.setComponents([makeComponent("cover:0")]);
+    const http = createMockHttp({});
+    const shelly = new ShellyService(http, mqttMock.mqtt, logger);
+    shelly.register("mqtt_blinds", {
+      transport: "mqtt",
+      topicPrefix: "shellyplus2pm-abc",
+      type: "cover",
+    });
+    const source = new ShellyDeviceSource(shelly, mqttMock.mqtt, logger, 1_000_000);
+    await source.start();
+
+    mqttMock.emit("shellyplus2pm-abc/events/rpc", {
+      method: "NotifyFullStatus",
+      params: { "cover:0": { current_pos: 37, state: "opening" } },
+    });
+
+    const device = source.get("mqtt_blinds");
+    expect(device?.state.position).toBe(37);
+    expect(device?.state.state).toBe("opening");
+    expect(device?.observation.mode).toBe("push");
+
+    source.stop();
+  });
+
+  it("applies a multi-component NotifyFullStatus to every channel and notifies each", async () => {
+    mqttMock.setComponents([makeComponent("switch:0"), makeComponent("switch:1")]);
+    const http = createMockHttp({});
+    const shelly = new ShellyService(http, mqttMock.mqtt, logger);
+    shelly.register("pro", { transport: "mqtt", topicPrefix: "shellypro-abc" });
+    const source = new ShellyDeviceSource(shelly, mqttMock.mqtt, logger, 1_000_000);
+    await source.start();
+
+    expect(sortedIds(source)).toEqual(["pro_0", "pro_1"]);
+
+    const notified: string[] = [];
+    source.subscribe((descriptor) => notified.push(descriptor.id));
+
+    mqttMock.emit("shellypro-abc/events/rpc", {
+      method: "NotifyFullStatus",
+      params: {
+        "switch:0": { output: true, apower: 5, voltage: 230, current: 0.02 },
+        "switch:1": { output: false, apower: 0, voltage: 230, current: 0 },
+      },
+    });
+
+    expect(source.get("pro_0")?.state.on).toBe(true);
+    expect(source.get("pro_1")?.state.on).toBe(false);
+    expect([...notified].sort()).toEqual(["pro_0", "pro_1"]);
+
+    source.stop();
+  });
+
+  // -------------------------------------------------------------------------
+  // Status seeding at subscription (tasks 2.1–2.3)
+  // -------------------------------------------------------------------------
+
+  it("seeds an MQTT switch's on from its status query before any notification", async () => {
+    mqttMock = createMockMqtt(undefined, {
+      switch: () => ({ output: true, apower: 3, voltage: 230, current: 0.02 }),
+    });
+    const http = createMockHttp({});
+    const shelly = new ShellyService(http, mqttMock.mqtt, logger);
+    shelly.register("mqtt_plug", { transport: "mqtt", topicPrefix: "shellyplus1-abc" });
+    const source = new ShellyDeviceSource(shelly, mqttMock.mqtt, logger, 1_000_000);
+
+    await source.start();
+
+    // No MQTT notification has been emitted — the descriptor is complete from
+    // the RPC status query alone.
+    const device = source.get("mqtt_plug");
+    expect(device?.state.on).toBe(true);
+    expect(device?.state.power).toBe(3);
+
+    source.stop();
+  });
+
+  it("preserves a seeded channel's values when a later NotifyStatus names a different component", async () => {
+    mqttMock = createMockMqtt([makeComponent("switch:0"), makeComponent("switch:1")], {
+      switch: (channel) =>
+        channel === 0
+          ? { output: true, apower: 3, voltage: 230, current: 0.02 }
+          : { output: false, apower: 0, voltage: 230, current: 0 },
+    });
+    const http = createMockHttp({});
+    const shelly = new ShellyService(http, mqttMock.mqtt, logger);
+    shelly.register("pro", { transport: "mqtt", topicPrefix: "shellypro-abc" });
+    const source = new ShellyDeviceSource(shelly, mqttMock.mqtt, logger, 1_000_000);
+
+    await source.start();
+
+    // The RPC status query seeded every channel before any notification.
+    expect(source.get("pro_0")?.state.on).toBe(true);
+    expect(source.get("pro_0")?.state.power).toBe(3);
+    expect(source.get("pro_1")?.state.on).toBe(false);
+
+    mqttMock.emit("shellypro-abc/events/rpc", {
+      method: "NotifyStatus",
+      params: { "switch:1": { output: true, apower: 9, voltage: 230, current: 0.04 } },
+    });
+
+    // The partial notification applies to switch:1 only; switch:0's seeded
+    // values are preserved (spec: "Incremental notifications still apply").
+    expect(source.get("pro_0")?.state.on).toBe(true);
+    expect(source.get("pro_0")?.state.power).toBe(3);
+    expect(source.get("pro_1")?.state.on).toBe(true);
+    expect(source.get("pro_1")?.state.power).toBe(9);
+
+    source.stop();
+  });
+
+  it("merges a partial NotifyStatus naming the seeded channel onto its last-known state", async () => {
+    mqttMock = createMockMqtt(undefined, {
+      switch: () => ({ output: true, apower: 3, voltage: 230, current: 0.02 }),
+    });
+    const http = createMockHttp({});
+    const shelly = new ShellyService(http, mqttMock.mqtt, logger);
+    shelly.register("mqtt_plug", { transport: "mqtt", topicPrefix: "shellyplus1-abc" });
+    const source = new ShellyDeviceSource(shelly, mqttMock.mqtt, logger, 1_000_000);
+
+    await source.start();
+
+    // The RPC status query seeded the channel before any notification.
+    expect(source.get("mqtt_plug")?.state.on).toBe(true);
+    expect(source.get("mqtt_plug")?.state.power).toBe(3);
+
+    // A routine partial frame names the *same* component but carries only the
+    // cumulative energy — every other key normalizes to `undefined` and must
+    // not clobber the seeded state.
+    mqttMock.emit("shellyplus1-abc/events/rpc", {
+      method: "NotifyStatus",
+      params: { "switch:0": { aenergy: { total: 55, by_minute: [], minute_ts: 1_700_000_000 } } },
+    });
+
+    // The changed attribute is applied and the seeded values are preserved
+    // (spec: "Incremental notifications still apply").
+    const device = source.get("mqtt_plug");
+    expect(device?.state.energy).toBe(55);
+    expect(device?.state.on).toBe(true);
+    expect(device?.state.power).toBe(3);
+    expect(device?.state.voltage).toBe(230);
+    expect(device?.state.current).toBe(0.02);
+
+    source.stop();
+  });
+
+  it("seeds an MQTT cover's position and state from its status query before any notification", async () => {
+    mqttMock = createMockMqtt(undefined, {
+      cover: () => ({ current_pos: 42, state: "stopped", apower: 0, voltage: 230, current: 0 }),
+    });
+    const http = createMockHttp({});
+    const shelly = new ShellyService(http, mqttMock.mqtt, logger);
+    shelly.register("mqtt_blinds", {
+      transport: "mqtt",
+      topicPrefix: "shellyplus2pm-abc",
+      type: "cover",
+    });
+    const source = new ShellyDeviceSource(shelly, mqttMock.mqtt, logger, 1_000_000);
+
+    await source.start();
+
+    const device = source.get("mqtt_blinds");
+    expect(device?.state.position).toBe(42);
+    expect(device?.state.state).toBe("stopped");
+
+    source.stop();
+  });
+
+  it("logs a failed seed and still enumerates the device", async () => {
+    mqttMock = createMockMqtt(undefined, {
+      error: (method) =>
+        method === "Switch.GetStatus" ? { code: -1, message: "unavailable" } : undefined,
+    });
+    const http = createMockHttp({});
+    const shelly = new ShellyService(http, mqttMock.mqtt, logger);
+    shelly.register("mqtt_plug", { transport: "mqtt", topicPrefix: "shellyplus1-abc" });
+    const source = new ShellyDeviceSource(shelly, mqttMock.mqtt, logger, 1_000_000);
+
+    const errorSpy = spyOn(logger, "error");
+
+    // A rejecting status query must not reject the source or drop the device.
+    await expect(source.start()).resolves.toBeUndefined();
+    expect(source.list()).toHaveLength(1);
+    expect(source.get("mqtt_plug")).toBeDefined();
+    expect(source.get("mqtt_plug")?.state.on).toBeUndefined();
+
+    // The failure is logged (spec: "the failure is logged, the device remains
+    // enumerable"), with the seed's own message and device context.
+    expect(
+      errorSpy.mock.calls.some((call) => call[1] === "Shelly status seed failed — continuing"),
+    ).toBe(true);
+
+    errorSpy.mockRestore();
+
+    source.stop();
+  });
+
+  it("applies an in-flight seed to a re-resolved id when a concurrent discovery duplicates a configured name", async () => {
+    // Both devices configure a component name "Kitchen", so while only "a" is
+    // discovered its channel id is "Kitchen"; once "b" is discovered the name is
+    // no longer unique and "a" re-resolves to "a_0" mid-seed.
+    const gated = createGatedMqtt({
+      components: [makeComponent("switch:0", "Kitchen"), makeComponent("switch:1")],
+      gateDiscoveryPrefix: "shelly-b",
+      gateStatusPrefix: "shelly-a",
+      gateStatusChannel: 0,
+    });
+    const http = createMockHttp({});
+    const shelly = new ShellyService(http, gated.mqtt, logger);
+    shelly.register("a", { transport: "mqtt", topicPrefix: "shelly-a" });
+    shelly.register("b", { transport: "mqtt", topicPrefix: "shelly-b" });
+    const source = new ShellyDeviceSource(shelly, gated.mqtt, logger, 1_000_000);
+
+    const started = source.start();
+
+    // "a" discovers first and its switch:0 status RPC is now in flight (gated);
+    // "b"'s discovery is still gated, so "a" holds the "Kitchen" identity.
+    while (gated.pendingStatusCount() === 0) await new Promise((r) => setTimeout(r, 1));
+    expect(source.get("Kitchen")?.id).toBe("Kitchen");
+
+    // "b"'s discovery completes, making "Kitchen" non-unique and re-resolving
+    // "a" to "a_0" while its status RPC is still in flight.
+    gated.releaseDiscovery();
+    while (source.get("a_0") === undefined) await new Promise((r) => setTimeout(r, 1));
+    expect(source.get("Kitchen")).toBeUndefined();
+
+    // The in-flight seed resolves; it must land on "a"'s current id, not be
+    // discarded against the stale snapshot id.
+    gated.releaseStatus({ output: true, apower: 7, voltage: 230, current: 0.03 });
+    await started;
+
+    expect(source.get("a_0")?.state.on).toBe(true);
+    expect(source.get("a_0")?.state.power).toBe(7);
+    expect(source.get("b_0")?.state.on).toBe(false);
+
+    source.stop();
+  });
+
+  it("keeps a push applied during the seed in flight instead of overwriting it with the stale snapshot", async () => {
+    const gated = createGatedMqtt({
+      components: [makeComponent("switch:0")],
+      gateDiscoveryPrefix: "unused-prefix",
+      gateStatusPrefix: "shelly-a",
+      gateStatusChannel: 0,
+    });
+    const http = createMockHttp({});
+    const shelly = new ShellyService(http, gated.mqtt, logger);
+    shelly.register("a", { transport: "mqtt", topicPrefix: "shelly-a" });
+    const source = new ShellyDeviceSource(shelly, gated.mqtt, logger, 1_000_000);
+
+    const started = source.start();
+
+    // The seed's switch:0 status RPC is now in flight (gated) while the events
+    // subscription is already live.
+    while (gated.pendingStatusCount() === 0) await new Promise((r) => setTimeout(r, 1));
+
+    // The device toggles on and pushes the change while the seed is still
+    // pending; the seed's response is a snapshot the device took before it.
+    gated.emit("shelly-a/events/rpc", {
+      method: "NotifyStatus",
+      params: { "switch:0": { output: true, apower: 9, voltage: 230, current: 0.04 } },
+    });
+    expect(source.get("a")?.state.on).toBe(true);
+
+    // The older snapshot lands after the push and must not overwrite it.
+    gated.releaseStatus({ output: false, apower: 0, voltage: 230, current: 0 });
+    await started;
+
+    const device = source.get("a");
+    expect(device?.state.on).toBe(true);
+    expect(device?.state.power).toBe(9);
+
+    source.stop();
+  });
+
+  it("omits an unreported readable property instead of synthesizing a zero", async () => {
+    mqttMock = createMockMqtt(undefined, {
+      // The status omits `apower`, so the transport has not reported `power`.
+      switch: () => ({ output: true, voltage: 230, current: 0 }),
+    });
+    const http = createMockHttp({});
+    const shelly = new ShellyService(http, mqttMock.mqtt, logger);
+    shelly.register("mqtt_plug", { transport: "mqtt", topicPrefix: "shellyplus1-abc" });
+    const source = new ShellyDeviceSource(shelly, mqttMock.mqtt, logger, 1_000_000);
+
+    await source.start();
+
+    const device = source.get("mqtt_plug");
+    expect(device?.state.on).toBe(true);
+    expect(device?.state.power).toBeUndefined();
+    // Present-but-undefined is dropped on the wire, never rendered as zero.
+    const serialized = JSON.parse(JSON.stringify(device?.state)) as Record<string, unknown>;
+    expect("power" in serialized).toBe(false);
+
+    source.stop();
+  });
+
   it("maps cumulative active energy into state and declares the Wh capability for a metering device", async () => {
     const http = createMockHttp({});
     const shelly = new ShellyService(http, mqttMock.mqtt, logger);
@@ -333,6 +747,35 @@ describe("ShellyDeviceSource", () => {
     shelly.register("late_plug", "192.168.1.70", "switch");
     await new Promise((r) => setTimeout(r, 10));
     expect(source.list()).toHaveLength(1);
+
+    source.stop();
+  });
+
+  it("seeds an MQTT device registered after the source has started from its status query", async () => {
+    mqttMock = createMockMqtt(undefined, {
+      switch: () => ({ output: true, apower: 3, voltage: 230, current: 0.02 }),
+    });
+    const http = createMockHttp({});
+    const shelly = new ShellyService(http, mqttMock.mqtt, logger);
+    const source = new ShellyDeviceSource(shelly, mqttMock.mqtt, logger, 1_000_000);
+    await source.start();
+
+    expect(source.list()).toHaveLength(0);
+
+    // Register after start(): the late-registration hook must run the same
+    // discovery + RPC seed path as a start-time registration (spec: "or that
+    // device is registered after the source has started").
+    shelly.register("late_mqtt", { transport: "mqtt", topicPrefix: "shellyplus1-late" });
+    while (source.get("late_mqtt")?.state.on === undefined) {
+      await new Promise((r) => setTimeout(r, 1));
+    }
+
+    // The descriptor is complete from the RPC status query alone — no
+    // NotifyStatus/NotifyFullStatus was ever emitted.
+    const device = source.get("late_mqtt");
+    expect(device?.state.on).toBe(true);
+    expect(device?.state.power).toBe(3);
+    expect(device?.observation.mode).toBe("push");
 
     source.stop();
   });

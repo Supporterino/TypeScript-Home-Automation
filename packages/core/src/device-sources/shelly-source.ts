@@ -119,12 +119,37 @@ function pickUniqueId(candidates: string[], used: ReadonlySet<string>): string {
   return candidate;
 }
 
+/**
+ * Keep only the keys a normalized state patch actually defines. `normalize()`
+ * always emits the readable keys it knows about — with `undefined` for a field
+ * the frame did not carry — so spreading the raw patch would overwrite a
+ * seeded value with `undefined`. Filtering here lets `updateTracked` merge a
+ * partial frame onto the last-known state without resurrecting an attribute the
+ * transport has not reported (spec: "Incremental notifications still apply",
+ * "A never-reported attribute is absent, not synthesized").
+ */
+function definedState(state: Record<string, unknown>): Record<string, unknown> {
+  const defined: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(state)) {
+    if (value !== undefined) defined[key] = value;
+  }
+  return defined;
+}
+
 export class ShellyDeviceSource implements DeviceSource {
   readonly id = SHELLY_SOURCE_ID;
 
   private readonly listeners: Set<DeviceChangeListener> = new Set();
   /** Per-channel-entry state, keyed by logical device id. */
   private readonly tracked: Map<string, TrackedShellyState> = new Map();
+  /**
+   * Time each logical channel last received a push notification, keyed by the
+   * logical `entryKey` (base name + kind + channel) so it survives an id
+   * re-resolution. A seed whose request was issued before this time is stale
+   * and is dropped (design.md: "A stale seeded value could be shown as
+   * current").
+   */
+  private readonly lastPushAt: Map<string, number> = new Map();
   /** One subscription per physical device, keyed by its registration name. */
   private readonly mqttSubscriptions: Map<string, MqttSubscriptionHandles> = new Map();
   /** Materialized logical entries, keyed by logical device id. */
@@ -210,6 +235,7 @@ export class ShellyDeviceSource implements DeviceSource {
       this.removeMqttSubscriptions(name);
     }
     this.tracked.clear();
+    this.lastPushAt.clear();
     this.entries.clear();
     this.entryKeys.clear();
     this.registrations.clear();
@@ -314,6 +340,12 @@ export class ShellyDeviceSource implements DeviceSource {
 
     this.discoveredComponents.set(device.name, components);
     this.rebuildEntries();
+
+    // Seed every MQTT-transport entry's current status before discovery
+    // settles, so `start()` and late registration both enumerate complete
+    // descriptors (design.md D2, D3). HTTP-transport entries are already
+    // refreshed by `poll()`.
+    await this.seedMqttEntries(device.name, generation);
   }
 
   /**
@@ -736,16 +768,18 @@ export class ShellyDeviceSource implements DeviceSource {
 
   /**
    * Apply every recognized `switch:N`/`cover:N` key present in a notification
-   * to its matching channel entry (design.md D3, task 3.6). Unknown keys are
-   * ignored.
+   * to its matching channel entry (design.md D1, D3; task 3.6). Both the full
+   * (`NotifyFullStatus`) and incremental (`NotifyStatus`) methods carry the same
+   * component keys, so each is dispatched through the identical per-component
+   * path. Unknown keys are ignored.
    */
   private handleNotifyStatus(baseName: string, payload: Record<string, unknown>): void {
-    if (payload?.method !== "NotifyStatus") return;
+    if (payload?.method !== "NotifyStatus" && payload?.method !== "NotifyFullStatus") return;
     const params = payload.params;
     if (params === null || typeof params !== "object") {
       this.logger.warn(
-        { device: baseName, payload },
-        "Received malformed Shelly NotifyStatus (missing params) — skipping",
+        { device: baseName, method: payload.method, payload },
+        "Received malformed Shelly notification (missing params) — skipping",
       );
       return;
     }
@@ -766,10 +800,12 @@ export class ShellyDeviceSource implements DeviceSource {
       // (design.md D4, task 3.9).
       if (entry.retained) continue;
 
+      const observedAt = Date.now();
+      this.lastPushAt.set(this.entryKey(baseName, componentKind, channel), observedAt);
       const state = this.normalize(entry.type, value as Record<string, unknown>);
       this.updateTracked(id, {
         state,
-        observation: { mode: "push", observedAt: Date.now() },
+        observation: { mode: "push", observedAt },
       });
     }
   }
@@ -788,6 +824,85 @@ export class ShellyDeviceSource implements DeviceSource {
         this.updateTracked(entry.id, { reachable: payload });
       }
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Status seeding at subscription
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Request and apply the current component status for every MQTT-transport
+   * entry of a device through the same RPC status query `poll()` uses, so a
+   * push-backed descriptor carries its readable properties from first
+   * enumeration (design.md D2, D3). `events/rpc` is not retained, so a
+   * connect-time full status may have been published before the source
+   * subscribed; the query closes that gap.
+   *
+   * Only MQTT-transport entries are seeded — HTTP-transport entries are
+   * refreshed by `poll()` and must not be double-seeded. Isolation is per
+   * entry: a failed or timed-out seed is logged and leaves the entry with the
+   * state it has, without rejecting the source or blocking the device's other
+   * channels.
+   */
+  private async seedMqttEntries(baseName: string, generation: number): Promise<void> {
+    const shelly = this.shelly;
+    if (!shelly) return;
+    // Mirror `addMqttSubscriptions`: only a device that actually subscribed —
+    // MQTT transport *and* a topic prefix — has a channel to query. A
+    // prefix-less MQTT registration would otherwise issue `Switch.GetStatus`
+    // over `"undefined/rpc"` and stall `start()` on the 5 s RPC timeout.
+    const registration = this.registrations.get(baseName);
+    if (registration?.transport !== "mqtt" || !registration.topicPrefix) return;
+
+    const entries = Array.from(this.entries.values()).filter(
+      (entry) => entry.baseName === baseName && !entry.retained,
+    );
+    await Promise.all(
+      entries.map(async (entry) => {
+        const requestedAt = Date.now();
+        let patch: Partial<TrackedShellyState> | null = null;
+        try {
+          const raw =
+            entry.type === "cover"
+              ? await shelly.getCoverStatus(entry.id)
+              : await shelly.getStatus(entry.id);
+          const state = this.normalize(entry.type, raw as unknown as Record<string, unknown>);
+          patch = { state, observation: { mode: "push", observedAt: Date.now() } };
+        } catch (err) {
+          // A failed or timed-out seed is non-fatal: log and leave the entry
+          // with the state it already has (design.md D3).
+          this.logger.error({ err, device: entry.id }, "Shelly status seed failed — continuing");
+        }
+
+        // Never resume a lifecycle that ended while the request was in flight,
+        // and never apply a seed that failed.
+        if (!patch || generation !== this.generation) return;
+
+        // Re-resolve the entry by its logical key after the await: a
+        // concurrent discovery may have re-resolved this channel's id (a
+        // configured-name candidate is dropped once a duplicate name appears
+        // anywhere), and a re-registration may have retained this channel. The
+        // key encodes baseName/kind/channel, so resolving through it preserves
+        // the "never write onto a retained or unrelated entry" guarantee
+        // without losing the seed on an id re-resolution (design.md D3, D4).
+        const key = this.entryKey(entry.baseName, entry.kind, entry.channel);
+        const currentId = this.entryKeys.get(key);
+        if (!currentId) return;
+        const current = this.entries.get(currentId);
+        if (!current || current.retained) return;
+
+        // A push notification applied after this seed's request was issued
+        // describes a state newer than the snapshot the device took before the
+        // change; drop the stale seed rather than overwrite the pushed value
+        // with it. Keyed by the logical channel so it survives an id
+        // re-resolution. `rebuildEntries()` stamps the entry's initial
+        // observation before this runs, so a silent device is never suppressed.
+        const lastPushAt = this.lastPushAt.get(key);
+        if (lastPushAt !== undefined && lastPushAt > requestedAt) return;
+
+        this.updateTracked(currentId, patch);
+      }),
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -889,7 +1004,13 @@ export class ShellyDeviceSource implements DeviceSource {
       observation: this.initialObservation(entry.baseName),
     };
     const updated: TrackedShellyState = {
-      state: patch.state ?? existing.state,
+      // Merge the patch's defined keys onto the last-known state so a partial
+      // `NotifyStatus` preserves the seeded attributes it does not carry and
+      // never resurrects an attribute the transport has not reported (spec:
+      // "Incremental notifications still apply"). A full frame — HTTP poll,
+      // `NotifyFullStatus`, or RPC seed — defines every key it reports, so the
+      // merge is equivalent to a replace for those keys.
+      state: patch.state ? { ...existing.state, ...definedState(patch.state) } : existing.state,
       reachable: patch.reachable ?? existing.reachable,
       metered: patch.metered ?? existing.metered,
       observation: patch.observation ?? existing.observation,

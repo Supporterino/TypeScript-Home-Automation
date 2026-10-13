@@ -376,15 +376,23 @@ export interface ShellyMqttRpcResponse {
 
 /**
  * A push notification frame received on `<topicPrefix>/events/rpc`
- * (e.g. `NotifyStatus`, `NotifyEvent`).
+ * (e.g. `NotifyStatus`, `NotifyFullStatus`, `NotifyEvent`).
+ *
+ * `NotifyFullStatus` carries the full component status a Shelly publishes when
+ * its MQTT connection is established; `NotifyStatus` carries subsequent
+ * incremental changes. Both name their components the same way (e.g.
+ * `"switch:0"`, `"cover:0"`).
  */
 export interface ShellyMqttNotification {
   /** The publishing device's identifier. */
   src?: string;
   dst?: string;
-  /** Notification method (e.g. "NotifyStatus", "NotifyEvent"). */
+  /** Notification method (e.g. "NotifyStatus", "NotifyFullStatus", "NotifyEvent"). */
   method: string;
-  /** Notification payload — for `NotifyStatus`, keyed by component (e.g. "switch:0"). */
+  /**
+   * Notification payload — keyed by component (e.g. "switch:0") for
+   * `NotifyStatus` and `NotifyFullStatus`.
+   */
   params?: Record<string, unknown>;
 }
 
