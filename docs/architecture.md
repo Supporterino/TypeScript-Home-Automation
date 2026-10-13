@@ -54,6 +54,7 @@ into subfolders by responsibility:
 | `packages/core/src/logging/` | `log-buffer.ts` |
 | `packages/core/src/services/` | `shelly-service.ts`, `nanoleaf-service.ts`, `ntfy-notification-service.ts`, `open-meteo-service.ts`, `openweathermap-service.ts`, `homekit-service.ts`, `homekit-accessory-factory.ts`, `service-plugin.ts`, `service-registry.ts` |
 | `packages/core/src/devices/` | `aqara-h1-automation.ts`, `ikea-styrbar-automation.ts`, `ikea-rodret-automation.ts` |
+| `packages/core/src/device-sources/` | `device-source.ts`, the per-source implementations (Zigbee, Shelly, Nanoleaf, state toggles), and `device-state-store.ts` — the unified device layer and its durable last-known state |
 | `packages/core/src/zigbee/` | `device-registry.ts` — Zigbee2MQTT device discovery and state tracking |
 | `packages/shared/src/` | `@ts-ha/shared` contracts, constants, and pure helpers |
 | `packages/web-ui/src/` | `@ts-ha/web-ui` Hono routes, `WebUiService` plugin, React + Mantine frontend, compiled asset constants |
@@ -110,6 +111,13 @@ A `Bun.serve()`-based HTTP server handling:
 - `/api/*` — automations, state, logs, device catalog, rooms, and the realtime event stream — authenticated when `HTTP_TOKEN` is set (see [API Reference](api-reference.md#httpserver) for the full route table)
 - `{WEB_UI_PATH}/*` (default: `/status/*`) — routes registered by the `@ts-ha/web-ui` package's `WebUiService` (`ServicePlugin`) when the web UI is enabled: the HTML shell, compiled assets, and login/logout. The `/api/*` routes above are **not** nested under this path — see [Web UI](http/web-ui.md#data-api)
 
+On every connection to `GET /api/events`, the server first sends a
+per-connection initial device snapshot — one `device_appeared` event per device,
+each carrying its full descriptor, from the aggregate's total enumeration
+(including hidden devices, matching the `GET /api/device-catalog` snapshot) —
+before any later device event. Subsequent device events remain incremental
+deltas (design.md D6).
+
 ### `ShellyService`
 
 Maintains a `Map<string, ShellyDevice>` of device name → registration (transport, host/topicPrefix, type). Each method routes to `httpRpc()` (HTTP GET against the device's `/rpc/<Method>` endpoint via the shared `HttpClient`) or `mqttRpc()` (JSON-RPC published to `<topicPrefix>/rpc`, correlated by request id on a single shared `<src>/rpc` subscription) based on the target device's fixed-at-registration `transport` field — no fallback between transports. Typed response interfaces are provided for switch and cover status.
@@ -121,6 +129,20 @@ Maintains a `Map<string, NanoleafDevice>` of registered panels. Makes HTTP reque
 ### `DeviceRegistry`
 
 Subscribes to `{prefix}/bridge/devices` (a retained Zigbee2MQTT topic) to build a device list, and to `{prefix}/bridge/event` to react to joins and departures in real time. Maintains a per-device MQTT subscription for each tracked device to track live state — incoming payloads are **merged** on top of the last-known state. Exposes device metadata, merged state snapshots, human-readable nice names, and change/join/leave listeners to automations. Enabled via `DEVICE_REGISTRY_ENABLED=true`; exposed as `engine.deviceRegistry` (`null` when disabled).
+
+### `DeviceStateStore`
+
+A durable, unified store of every device's last-known state and the observation
+that produced it, keyed by qualified id
+(`packages/core/src/device-sources/device-state-store.ts`, design.md D1). It is
+loaded before any device source starts and persisted write-behind with a
+debounced flush, mirroring `StateManager`, so enumeration reports last-known
+state from the first read after a restart instead of empty. It is a **seed,
+never an authority** — a reported observation always wins over the persisted
+value, and a restored record keeps its original observation time so a stale
+value still reads as last-known rather than live (design.md D4). Records are
+pruned when a device drops out of enumeration (design.md D5). Configured via
+`DEVICE_STATE_*`; see [Configuration](configuration.md#device-state-store).
 
 ### `HttpClient`
 

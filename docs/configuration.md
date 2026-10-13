@@ -8,14 +8,19 @@ An annotated `.env.example` is included in the repository.
 
 ## Breaking changes for upgrading operators
 
-> **`STATE_PERSIST` and `DEVICE_REGISTRY_PERSIST` now default to `true`.**
-> Previously both defaulted to `false`. The state store now holds room
-> definitions and automation enabled flags, which must survive a restart, so
-> persistence is on by default rather than opt-in (design.md D6, R14). The
-> direction of the surprise is benign — an upgraded instance now keeps data it
-> previously lost — but it does mean a default deployment writes `state.json`
-> and `device-registry.json` to disk where it previously did not.
-> **Migration:** set `STATE_PERSIST=false` and/or `DEVICE_REGISTRY_PERSIST=false`
+> **`STATE_PERSIST`, `DEVICE_REGISTRY_PERSIST`, and `DEVICE_STATE_PERSIST`
+> now default to `true`.** `STATE_PERSIST` and `DEVICE_REGISTRY_PERSIST`
+> previously defaulted to `false`; `DEVICE_STATE_PERSIST` is new and defaults
+> on. The state store holds room definitions and automation enabled flags,
+> which must survive a restart (design.md D6, R14), and the device state store
+> holds every device's last-known state so enumeration reports it from the
+> first read after a restart
+> (design.md D3). Persistence is on by default rather than opt-in. The direction
+> of the surprise is benign — an upgraded instance now keeps data it previously
+> lost — but it does mean a default deployment writes `state.json`,
+> `device-registry.json`, and `device-state.json` to disk where it previously
+> did not. **Migration:** set `STATE_PERSIST=false`,
+> `DEVICE_REGISTRY_PERSIST=false`, and/or `DEVICE_STATE_PERSIST=false`
 > explicitly if you rely on the old ephemeral-by-default behaviour.
 
 > **`GET /api/devices` and `GET /api/devices/:name` are removed**, not
@@ -200,6 +205,37 @@ own `refreshIntervalMs`, it does not hardcode either constant.
 
 ---
 
+## Device state store
+
+The unified device layer's last-known state is held in a durable device state
+store (`packages/core/src/device-sources/device-state-store.ts`, design.md D1).
+Every source records each observation into it, and a descriptor's state is
+seeded from it when the source has no fresher in-memory observation, so a
+device's last-known state is available from the first read after a restart
+instead of empty (design.md D2, D4). The store is a **seed, never an
+authority** — a reported observation always wins over the persisted value, and
+a restored record keeps its original observation time, so a stale value still
+reads as last-known rather than live. Records are pruned when a device drops
+out of enumeration (design.md D5), but a record is retained while its owning
+source is unavailable so a source outage does not discard that device's
+last-known state.
+
+Persistence mirrors [state persistence](#state-persistence): a debounced,
+coalesced write-behind JSON file.
+
+| Variable | Default | Description |
+|---|---|---|
+| `DEVICE_STATE_PERSIST` | `true` | Persist last-known device state (write-behind) and restore it before any source starts. Defaults on, alongside `STATE_PERSIST` and `DEVICE_REGISTRY_PERSIST`, so enumeration reports last-known state immediately after a restart. Set to a false value to write no device-state file and start the store empty. |
+| `DEVICE_STATE_FILE` | `./device-state.json` | Path to the device state persistence JSON file |
+| `DEVICE_STATE_FLUSH_MS` | `1000` | Milliseconds between coalesced saves. `0` saves on every write instead of scheduling. A non-numeric value fails startup validation. |
+
+The engine also exposes the store's settings programmatically via
+`createEngine({ deviceState: { persist, filePath, flushIntervalMs } })`,
+mirroring the `state` and `deviceRegistry` options — see
+[API Reference](api-reference.md#engineoptions).
+
+---
+
 ## Energy monitoring
 
 The engine samples the aggregate device source on a fixed interval and keeps a
@@ -256,6 +292,10 @@ WEB_UI_PATH=/status
 DEVICE_REGISTRY_ENABLED=true
 DEVICE_REGISTRY_PERSIST=true
 DEVICE_REGISTRY_FILE_PATH=./data/device-registry.json
+
+DEVICE_STATE_PERSIST=true
+DEVICE_STATE_FILE=./data/device-state.json
+DEVICE_STATE_FLUSH_MS=1000
 
 SHELLY_POLL_MS=10000
 NANOLEAF_POLL_MS=10000

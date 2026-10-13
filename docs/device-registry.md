@@ -49,6 +49,16 @@ This is useful when:
 
 Live MQTT data **always wins** — persisted values are a cold-start seed, not a source of truth. Incoming `bridge/devices` overwrites device metadata, and incoming state payloads are merged on top of restored state.
 
+> **Zigbee state is also persisted by the unified device-state store.** In
+> addition to this registry-level persistence, every device source — Zigbee
+> included — records its observations into the engine-level device state store
+> (`DEVICE_STATE_PERSIST`, default on), which seeds each descriptor's state
+> after a restart so enumeration reports last-known state from the first read.
+> See [Configuration → Device state store](configuration.md#device-state-store).
+> Both paths write the same last-known value, so a divergence between them is
+> not observable; the registry's own persistence remains an independent
+> cold-start seed and may be retired in a follow-up (design.md, Risks).
+
 ### Configuring
 
 ```bash

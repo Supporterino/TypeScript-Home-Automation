@@ -28,6 +28,7 @@ function createEngine(options: EngineOptions): Engine
 | `logger` | `Logger` | _(auto)_ | Provide a custom pino logger |
 | `state` | `StateManagerOptions` | _(from env)_ | State persistence options |
 | `deviceRegistry` | `object` | _(from env)_ | Device registry options (see below) |
+| `deviceState` | `DeviceStateStoreOptions` | _(from env)_ | Durable last-known device state store options (see below) |
 | `stateToggles` | `StateToggleConfig[]` | `[]` | Boolean `StateManager` keys presented as devices through the unified device layer (Zigbee/Shelly/Nanoleaf/state toggles) — controllable from the web UI and HomeKit alike |
 | `services` | `object` | `{}` | Optional service instances or factories |
 
@@ -38,6 +39,14 @@ function createEngine(options: EngineOptions): Engine
 | `names` | `DeviceNiceNames` | Nice-name mapping (see [Device Registry](device-registry.md)) |
 | `persist` | `boolean` | Persist device list and state to disk |
 | `filePath` | `string` | Path for the persistence file |
+
+`deviceState` sub-options (`DeviceStateStoreOptions`, mirroring `StateManagerOptions`):
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `persist` | `boolean` | `true` | Persist last-known device state (debounced write-behind) and restore it before any source starts (from `DEVICE_STATE_PERSIST`) |
+| `filePath` | `string` | `"./device-state.json"` | Path to the persistence file |
+| `flushIntervalMs` | `number` | `1000` | Milliseconds between coalesced saves; `0` saves on every write |
 
 `services` sub-options:
 
@@ -426,6 +435,8 @@ type WebhookHandler = (context: {
 | `GET` | `/api/events` | Yes | Realtime server-sent event stream |
 
 `GET /api/devices` and `GET /api/devices/:friendlyName` (Zigbee-only) are removed — they return `410`. Use `/api/device-catalog`, which spans every device source (Zigbee, Shelly, Nanoleaf, and state toggles), addressed by [qualified identifier](#qualified-device-identifier) (design.md R13).
+
+`GET /api/events` is delta-only after connect, with one exception: when a client opens the stream the server first sends a per-connection initial device snapshot — one `device_appeared` event per device, each carrying its full descriptor, from the total device enumeration including hidden devices and matching the `GET /api/device-catalog` snapshot — before any subsequent device event. Later device events remain incremental deltas (design.md D6). The dashboard reconciles this snapshot into its device map by qualified identifier rather than replacing the map, and refetches a device on a delta for an identifier it does not hold (design.md D7).
 
 `PUT /api/state/:key` and `DELETE /api/state/:key` return `400` when `key` falls inside the reserved internal namespace (the `$internal:` prefix — rooms, automation enabled flags). `GET /api/state` never lists a reserved key, in either the returned map or its `count`. See [State Management](state.md#reserved-internal-namespace) (design.md D20).
 
