@@ -55,7 +55,9 @@ await engine.start();
 
 ### MQTT transport
 
-Shelly Gen2 devices also expose a native JSON-RPC channel over MQTT: commands are published to `<topicPrefix>/rpc`, responses come back on a single shared response topic, status changes push instantly via `NotifyStatus` (instead of being polled), and presence is tracked via an `online` LWT topic. This is useful when devices aren't reliably reachable by IP, or when you want instant (rather than polled) status updates in HomeKit.
+Shelly Gen2 devices also expose a native JSON-RPC channel over MQTT: commands are published to `<topicPrefix>/rpc`, responses come back on a single shared response topic, status changes push instantly over the device's events topic (instead of being polled), and presence is tracked via an `online` LWT topic. The events topic carries both notification methods — `NotifyFullStatus` (the full component status a device publishes when its MQTT connection is established) and `NotifyStatus` (subsequent incremental changes) — and the source ingests both. This is useful when devices aren't reliably reachable by IP, or when you want instant (rather than polled) status updates in HomeKit.
+
+Because the events topic is not retained, a connect-time `NotifyFullStatus` published before the engine subscribed would never arrive. At source start — and whenever an MQTT-transport device is registered after start — the device source therefore seeds each logical entry's current status through the same RPC status query (`Switch.GetStatus` / `Cover.GetStatus`) used to poll HTTP devices, so a switch's `on` (and a cover's `position`/`state`) is present from first enumeration rather than only after a physical change. A seed failure or timeout is logged and non-fatal — the device stays enumerable and the source otherwise starts normally. HTTP-transport devices remain poll-backed and are not seeded.
 
 Register an MQTT-transport device with the object-form overload, using the device's MQTT topic prefix (e.g. `"shellyplus1-a8032abe54dc"`) instead of a host:
 
@@ -154,10 +156,13 @@ appears as four switches; a device that exposes only `switch:0` is unchanged.
   already-registered device before returning, so enumeration is complete once the
   engine is up. A device does not appear until its discovery resolves. Devices
   registered after startup are discovered asynchronously and appear when resolved.
-- **MQTT transport:** one subscription per physical device, but each
-  `NotifyStatus` is dispatched by its actual component key — a `switch:2`
-  notification updates only channel 2.
-- **HTTP transport:** every component channel is polled independently.
+- **MQTT transport:** one subscription per physical device; both
+  `NotifyFullStatus` and `NotifyStatus` frames are dispatched by their actual
+  component key — a `switch:2` notification updates only channel 2. Each
+  logical entry is seeded with its current status at subscription (see
+  [MQTT transport](#mqtt-transport)).
+- **HTTP transport:** every component channel is polled independently; HTTP
+  devices are not seeded.
 - **Commands** are addressed to a logical channel via that channel's identity
   (see below); the RPC carries the channel as its component `id`.
 - **Device-level queries** (`getDeviceInfo`, `getSysStatus`, `reboot`) remain
