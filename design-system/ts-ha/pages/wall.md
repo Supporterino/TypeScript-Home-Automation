@@ -29,7 +29,7 @@ scales the wall up and splits its cards into two grammars.
   scroll (`overflow-y: auto`) is enabled only as a last resort for a profile
   taller than the panel.
 
-## Type ramp (overrides MASTER's `12/14/16/20/24` body scale)
+## Type ramp (overrides MASTER's `12.5/14/16/18/22/28/34` type scale)
 
 Distance-readable, using MASTER's fonts and theme-aware text tokens
 (`--text`, `--text-muted`, `--font-display`) — no new families.
@@ -41,7 +41,7 @@ Distance-readable, using MASTER's fonts and theme-aware text tokens
 | Label | 20 px | metric labels, descriptions, forecast captions |
 | Body (minimum) | 16 px | any remaining wall text |
 
-No wall **body/`Text` content** may render below **16 px**. Readouts stay within
+No wall **body content** may render below **16 px**. Readouts stay within
 **32–64 px**. (Compact status chips — e.g. the `Hidden`, `Unavailable`, and room
 "skipped" badges — are a deliberate compact exception and are not held to the
 16 px body floor.)
@@ -52,12 +52,12 @@ Every widget type carries a fixed grammar; a frame draws chrome accordingly
 (ambient vs control is not owner-selectable).
 
 - **Ambient** — `clock`, `weather`, `energy`, `status`. Rendered **chrome-less**:
-  no `Paper`, no border, no background; the large type sits directly on `--bg`.
+  no surface, no border, no background; the large type sits directly on `--bg`.
   They are read, not touched. State still uses a non-color channel (icon shape +
   label), per MASTER's State Encoding Rule.
 - **Control** — `room`, `favorites`, `device`, `scene`. Rendered as a MASTER
-  content tile: opaque `--surface`, `--hairline` border, 14 px radius; the whole
-  card is the touch target.
+  content tile: opaque `--surface`, `--hairline` border, the 16 px tile radius
+  (`--radius-tile`); the whole card is the touch target.
 - **Titles are opt-in** — a widget header is drawn **only** when the profile sets
   a title; otherwise the widget's own content labels it. The type label is never
   a fallback header.
@@ -81,7 +81,7 @@ refined further from the device's ranked capabilities — its *archetype*:
 
 Surface choice therefore follows the archetype, not solely the `ambient` /
 `control` grammar. The grammar still governs the *widget* default, while a
-**readout device card draws no card surface of its own** — no `Paper`, no
+**readout device card draws no card surface of its own** — no surface, no
 border, no background. A single-device (`device`) widget has a chrome-less
 frame, so a readout there sits its value and label directly on `--bg` like the
 clock and weather. A readout tile nested in a `room` or `favorites` card draws
@@ -125,4 +125,6 @@ referenced here, not changed.
 
 ## Room accents
 
-Per MASTER: room accents appear on the room header only — never on device tiles.
+Lumen assigns no per-room hue: a room header and its members use the shared
+`--surface` / `--hairline` / `--text` tokens like every other tile, so no room
+colour is applied to a device tile (or to the wall).

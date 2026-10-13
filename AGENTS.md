@@ -17,7 +17,7 @@ document it points to.
 |---|---|
 | `@ts-ha/shared` | Domain/wire contracts, contract constants, pure helpers, and pure browser-safe validation schemas (no runtime deps beyond a pure validator) |
 | `@ts-ha/core` | Engine, services, device sources, HTTP server, MQTT, state, scheduling |
-| `@ts-ha/web-ui` | Hono routes + React/Mantine app + compiled asset manifest |
+| `@ts-ha/web-ui` | Hono routes + React/Tailwind app + compiled asset manifest |
 | `@ts-ha/cli` | `DebugClient`, OpenTUI dashboard, target config, and `ts-ha run` |
 
 Dependency direction is one-way: `shared` ← `core`, `shared` ← `web-ui`,
@@ -70,7 +70,7 @@ two documents disagree, the canonical source named above is authoritative.
 |---------|------------|--------|
 | New or changed cross-package contract (type, constant, validation schema) | `shared` | Declare it once under `packages/shared/src`; update `scripts/contract-inventory.json` if it is a tracked contract |
 | Engine behaviour, service, device source, HTTP route, MQTT, state, scheduling | `core` | Modify the owning subfolder; keep it free of any `web-ui` reference |
-| Dashboard route, React/Mantine view, asset manifest | `web-ui` | Modify `src/` (server) or `src/app/` (frontend); never import `@ts-ha/core` |
+| Dashboard route, React/Tailwind view, asset manifest | `web-ui` | Modify `src/` (server) or `src/app/` (frontend); never import `@ts-ha/core` |
 | CLI command, `DebugClient`, dashboard, target config | `cli` | Add a command under `src/commands/`; reuse `DebugClient` and the shared schemas |
 | Guard scripts, dev script, contract inventory | `scripts/` | Update and re-run `bun run check` |
 | Example automations | `docs/examples/` | Add/modify a type-checked example (compiled against core source) |
@@ -142,7 +142,7 @@ Other scripts: `format:check`, `lint:fix`, `docker:build/up/down`, `version`,
   and then `tsc`, so its server modules compile against the generated manifest.
   Each package emits `dist/` with declarations and source maps.
 - **`build:web-ui`**: lives in `@ts-ha/web-ui` and compiles `packages/web-ui/src/app/`
-  (React + Mantine) via `Bun.build` into generated string constants under
+  (React + Tailwind CSS v4) via `Bun.build` into generated string constants under
   `packages/web-ui/src/assets/` (git-ignored). It passes `conditions: ["development"]`
   to `Bun.build` so the bundle resolves `@ts-ha/shared` to source with no prior build.
 - **Test runner**: `bun test` (uses `bun:test`), not Jest/Vitest. Tests live in each
@@ -180,7 +180,7 @@ Other scripts: `format:check`, `lint:fix`, `docker:build/up/down`, `version`,
   - `web-ui-service.ts` — the `WebUiService` plugin (structural; imports nothing from core)
   - `web-ui-routes.ts`, `asset-routes.ts`, `components/html-shell.ts` — Hono routes
   - `options.ts` — `WEB_UI_ENABLED` / `WEB_UI_PATH` parsing
-  - `app/` — React + Mantine frontend (compiled by `Bun.build`, **not** `tsc`)
+  - `app/` — React + Tailwind CSS frontend (compiled by `Bun.build`, **not** `tsc`)
   - `app/wall/` — the lazy, full-bleed wall surface (own chunk; must stay out of first paint). A bounded row unit (`clamp(72px, (panelHeight − chrome) / occupiedRows, 112px)`, reserving padding + inter-row gutters) sizes cards to their span and centers a short composition (top-aligns + scrolls a taller one); a single `clamp(16px, 2vmin, 24px)` gutter; a larger type ramp (`wall/type-ramp.ts`, no wall body text below 16px); and an `ambient` (clock/weather/energy/status, chrome-less) vs `control` (room/favorites/device/scene, surface tile) grammar fixed per widget type in `wall/registry.ts`. Device tiles run the shared `components/DeviceTile.tsx` in a wall kiosk mode (`size="wall"`, `wall/scale.ts`) that suppresses favorite/hide-unhide/open-detail and makes the whole card actuate a toggle — a wall-only revisit of `add-wall-display` design D7; ranking, optimistic override, and state encoding stay single-source.
   - `assets/` — Generated JS/CSS string constants (git-ignored, rebuilt by `build:web-ui`)
 - `packages/cli/src/` — `@ts-ha/cli`:

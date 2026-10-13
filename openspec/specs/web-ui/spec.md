@@ -2,7 +2,7 @@
 
 ## Purpose
 
-A React + Mantine web dashboard served by the engine's HTTP server. Provides a browser-based UI for monitoring automations, devices, state, logs, and HomeKit status. Compiles to static JS/CSS strings embedded in the package.
+A React + Tailwind CSS web dashboard served by the engine's HTTP server. Provides a browser-based UI for monitoring automations, devices, state, logs, and HomeKit status. Compiles to static JS/CSS strings embedded in the package.
 
 ## Requirements
 

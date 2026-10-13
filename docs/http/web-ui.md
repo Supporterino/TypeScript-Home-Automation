@@ -1,8 +1,12 @@
 # Web UI
 
-The `@ts-ha/web-ui` package provides an optional browser-based dashboard served on the same port as the HTTP server. It registers itself with the engine as a `ServicePlugin` — the core engine contains no web-UI-specific code. It is a control-first interface: the landing view is an **Overview** control surface that summarizes the home (live device metrics, favorites, and room zones) before listing it, with engine internals (automations, state, logs, HomeKit, energy, weather) demoted to a distinct operator section.
+The `@ts-ha/web-ui` package provides an optional browser-based dashboard served on the same port as the HTTP server. It registers itself with the engine as a `ServicePlugin` — the core engine contains no web-UI-specific code. It is a control-first interface: the landing view is an **Overview** control surface that summarizes the home (live device metrics, favorites, and room zones) before listing it, with engine internals (automations, state, logs, HomeKit, energy, weather, walls editor) demoted to a distinct operator section.
 
-The interface is built on a single designed visual system — **Ambient Glass**, a dark-first Mantine theme plus a CSS token layer (palette, typography, spacing, elevation, radii, motion), with a self-hosted display typeface. It is not component-library defaults.
+The interface is built on a single designed visual system — **Lumen**, a
+dark-first, light-designed semantic token layer declared once in the Tailwind CSS
+entry stylesheet (palette, typography, spacing, elevation, radii, motion), where
+the same token block is also the utility source. It is not component-library
+defaults, and it ships with a self-hosted display typeface.
 
 ---
 
@@ -69,14 +73,14 @@ before `onStart` are safe.
 The interface is split by audience, not by feature area (design.md D13):
 
 - **HOME** — a control surface. Overview (landing view), a favorites group (shown when any device is favorited), each user-defined room, an Unassigned-devices bucket, and an all-devices list.
-- **ENGINE** — an operator surface. Automations, State, Logs, HomeKit, Energy, Weather.
+- **ENGINE** — an operator surface. Automations, State, Logs, HomeKit, Energy, Weather, Walls.
 
 This one IA is rendered by two navigation components depending on viewport:
 
-| | Desktop (`sm` and up) | Mobile |
+| | Desktop (`md` and up) | Mobile |
 |---|---|---|
-| Layout | Sidebar, collapsible HOME/ENGINE groups | Fixed 3-slot bottom bar |
-| Content | Both groups, favorites and rooms listed dynamically under HOME | Home / Rooms / Devices only |
+| Layout | Sidebar, collapsible HOME/ENGINE groups | Safe-area app bar plus a control-first bottom bar with an overflow affordance |
+| Content | Both groups, favorites and rooms listed dynamically under HOME | Home / Rooms / Devices, plus the remaining control entries in the overflow menu |
 | ENGINE reachable? | Yes, in the sidebar | Yes, by direct URL — deliberately not promoted |
 
 The mobile bar's omission of ENGINE is a deliberate statement that a phone is
@@ -400,7 +404,12 @@ session exists.
 
 ## Color scheme
 
-The dashboard follows the browser/OS light or dark mode preference automatically via `prefers-color-scheme`. A toggle button in the header switches between light and dark manually; the choice is persisted in `localStorage`.
+The dashboard offers an explicit **light / dark / system** selection in the app
+bar. The choice is persisted in `localStorage` and applied to the document's
+`data-theme` attribute before the first paint, so a reload never flashes a scheme
+other than the one selected; **system** follows `prefers-color-scheme` and reacts
+to an OS change while it is selected. Dark is the authoritative scheme, and the
+light scheme is designed in its own right rather than derived by inverting dark.
 
 ---
 
@@ -427,7 +436,7 @@ only when opened, off first paint. See
 
 ## Asset delivery
 
-The entire frontend (React + Mantine) is compiled by `Bun.build` at build
+The entire frontend (React + Tailwind CSS) is compiled by `Bun.build` at build
 time into content-hashed, pre-compressed (gzip) asset entries embedded in
 the package as generated module constants — there is no external static
 file directory, so the package still ships as a single importable module

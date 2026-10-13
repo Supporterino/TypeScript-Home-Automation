@@ -57,7 +57,7 @@ into subfolders by responsibility:
 | `packages/core/src/device-sources/` | `device-source.ts`, the per-source implementations (Zigbee, Shelly, Nanoleaf, state toggles), and `device-state-store.ts` — the unified device layer and its durable last-known state |
 | `packages/core/src/zigbee/` | `device-registry.ts` — Zigbee2MQTT device discovery and state tracking |
 | `packages/shared/src/` | `@ts-ha/shared` contracts, constants, and pure helpers |
-| `packages/web-ui/src/` | `@ts-ha/web-ui` Hono routes, `WebUiService` plugin, React + Mantine frontend, compiled asset constants |
+| `packages/web-ui/src/` | `@ts-ha/web-ui` Hono routes, `WebUiService` plugin, React + Tailwind frontend, compiled asset constants |
 
 ---
 
