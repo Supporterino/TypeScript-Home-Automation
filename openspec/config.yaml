@@ -1,20 +1,46 @@
 schema: spec-driven
 
-# Project context (optional)
-# This is shown to AI when creating artifacts.
-# Add your tech stack, conventions, style guides, domain knowledge, etc.
-# Example:
-#   context: |
-#     Tech stack: TypeScript, React, Node.js
-#     We use conventional commits
-#     Domain: e-commerce platform
+# Project context
+# This is shown to AI when creating OpenSpec artifacts (proposals, specs, designs, tasks).
+# Keep it lean — facts live in the root README.md, AGENTS.md, and docs/. Only summarize here.
+context: |
+  **TypeScript Home Automation** — a lightweight, fully typed home automation
+  framework built on MQTT and Bun, published as a workspace of four packages:
+  `@ts-ha/shared`, `@ts-ha/core`, `@ts-ha/web-ui`, and `@ts-ha/cli`. See the root
+  `README.md` for the tech stack.
 
-# Per-artifact rules (optional)
-# Add custom rules for specific artifacts.
-# Example:
-#   rules:
-#     proposal:
-#       - Keep proposals under 500 words
-#       - Always include a "Non-goals" section
-#     tasks:
-#       - Break tasks into chunks of max 2 hours
+  ## Working with specs
+  - **Specs are the source of truth.** Read the relevant
+    `openspec/specs/<capability>/spec.md` before proposing changes. Enumerate
+    capabilities via `openspec list`.
+  - **Dependency direction is fixed.** `shared` ← `core`, `shared` ← `web-ui`,
+    `cli` → {`core`, `shared`}. `core` never references `web-ui`; `web-ui` never
+    references `core` (not even `import type`). `scripts/guard-deps.ts` enforces it.
+  - **Shared contracts have a single declaration site.** A contract declared in
+    `@ts-ha/shared` must not be re-declared in a consumer; tracked contracts are
+    pinned in `scripts/contract-inventory.json` and verified by
+    `scripts/guard-contracts.ts`.
+  - The workspace gate is `bun run typecheck && bun run check && bun run test`
+    (`check` is Biome + both guards). See the root `AGENTS.md` for the
+    Cross-Package Change Checklist, conventions, and the Docs Index
+    (`docs/architecture.md`, `docs/configuration.md`, `docs/api-reference.md`).
+
+# Per-artifact rules
+rules:
+  proposal:
+    - Reference which specs will be modified (ADDED/MODIFIED/REMOVED requirements)
+    - List which packages (`shared`, `core`, `web-ui`, `cli`) and docs are impacted
+    - Include a "Non-Goals" section for scope clarity
+  design:
+    - Ground decisions in existing code patterns (cite concrete file paths)
+    - Document trade-offs when multiple approaches exist
+    - Note any dependency-direction or shared-contract impact
+  specs:
+    - Use SHALL/MUST for normative requirements, avoid should/may
+    - Every requirement MUST have at least one scenario
+    - Scenarios use `- **WHEN** ...` / `- **THEN** ...` format
+    - Group related requirements under logical requirement names
+  tasks:
+    - Break tasks into chunks of max 2 hours
+    - Order tasks by dependency (shared contract first, then core / web-ui, then cli)
+    - Include verification steps (typecheck, check, test; manual test where no automated gate exists)
