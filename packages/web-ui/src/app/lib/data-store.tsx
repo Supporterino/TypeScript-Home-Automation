@@ -37,6 +37,7 @@ import {
 } from "react";
 import {
   fetchAutomations,
+  fetchDevice,
   fetchDeviceCatalog,
   fetchHomekitStatus,
   fetchLogs,
@@ -64,7 +65,7 @@ import type {
 } from "../types.js";
 import { normalizeStreamEvent } from "../utils/normalize.js";
 import { CommandCoalescer, coalescingKey } from "./command-coalescing.js";
-import { reduceDeviceEvent } from "./device-reduction.js";
+import { reduceDeviceEvent, unknownDeviceDeltaId } from "./device-reduction.js";
 import {
   FAVORITES_STATE_KEY,
   favoritesFromState,
@@ -187,6 +188,13 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
   const [devicesByQualifiedId, setDevicesByQualifiedId] = useState<Map<string, DeviceDescriptor>>(
     () => new Map(),
   );
+  // A live mirror of the device map for the stream handler: the handler is
+  // created once and cannot read the state variable directly without closing
+  // over a stale map (design.md D7). Synced on every commit below.
+  const devicesByIdRef = useRef<Map<string, DeviceDescriptor>>(devicesByQualifiedId);
+  // Ids with an in-flight recovery fetch, so a burst of deltas for one unknown
+  // device fires a single refetch rather than one per event (design.md D7).
+  const recoveringDeviceIdsRef = useRef<Set<string>>(new Set());
   const [roomDefs, setRoomDefs] = useState<Map<string, Room>>(() => new Map());
   const [roomAssignments, setRoomAssignments] = useState<Map<string, string>>(() => new Map());
   const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -301,6 +309,12 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  // Keep the handler's map mirror in step with committed state, so a delta for
+  // a device already in the map is recognised as known (design.md D7).
+  useEffect(() => {
+    devicesByIdRef.current = devicesByQualifiedId;
+  }, [devicesByQualifiedId]);
+
   const listenersRef = useRef<Set<(event: NormalizedStreamEvent) => void>>(new Set());
   const subscribe = useCallback((listener: (event: NormalizedStreamEvent) => void) => {
     listenersRef.current.add(listener);
@@ -335,6 +349,30 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
     });
     setLogs(logsRes);
     setHomekit(homekitRes);
+  }, []);
+
+  // A delta for a device the client does not hold carries no full descriptor,
+  // so it is refetched by id and merged rather than dropped (design.md D7;
+  // specs/web-ui "A delta for an unknown device recovers it"). The fetch is a
+  // side effect and never runs inside a state updater; a failure is ignored,
+  // matching refresh()'s per-endpoint tolerance — the next event for the id
+  // retries. Concurrent deltas for one id share a single fetch.
+  const recoverDevice = useCallback((qualifiedId: string) => {
+    if (recoveringDeviceIdsRef.current.has(qualifiedId)) return;
+    recoveringDeviceIdsRef.current.add(qualifiedId);
+    void fetchDevice(qualifiedId)
+      .then((device) => {
+        setDevicesByQualifiedId((prev) =>
+          reduceDeviceEvent(prev, { category: "device_appeared", device }),
+        );
+      })
+      .catch(() => {
+        // Best-effort recovery: the event is dropped and retried on the next
+        // delta for this id, exactly as refresh() swallows a failed endpoint.
+      })
+      .finally(() => {
+        recoveringDeviceIdsRef.current.delete(qualifiedId);
+      });
   }, []);
 
   const setDeviceHidden = useCallback((qualifiedId: string, hidden: boolean) => {
@@ -459,6 +497,8 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
         case "device_appeared":
         case "device_disappeared":
         case "device_visibility": {
+          const unknownId = unknownDeviceDeltaId(devicesByIdRef.current, event);
+          if (unknownId !== null) recoverDevice(unknownId);
           setDevicesByQualifiedId((prev) => reduceDeviceEvent(prev, event));
           if (event.category === "device_state") {
             clearConfirmedOverrides(event.qualifiedId, event.properties);
