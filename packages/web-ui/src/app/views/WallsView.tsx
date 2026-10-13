@@ -1,42 +1,44 @@
 /**
- * Wall-profile editor entry point (task 6.1; specs/web-ui "Wall Editor
+ * Wall-profile editor entry point (design.md D12; specs/web-ui "Wall Editor
  * Admission In Admin Navigation"; specs/wall-display "Wall Configuration
- * Editor"). Rendered inside `AppShell` via `RouteOutlet`, so it is reachable
- * through admin navigation at its own reloadable URL. It lists profiles and
- * admits creating, renaming, deleting, and configuring them; the profile
- * editor itself opens as a full-screen modal ({@link WallEditor}) — the wall is
- * not a route the editor lives under.
+ * Editor"; task 6.4). Rendered inside the shell via `RouteOutlet`, so it is
+ * reachable through admin navigation at its own reloadable URL. It lists
+ * profiles and admits creating, renaming, deleting, and configuring them; the
+ * profile editor itself opens as a full-screen overlay ({@link WallEditor}) —
+ * the wall is not a route the editor lives under.
  *
  * Mutations surface the server's inline error (a 409 conflict or 400 invalid)
  * and reload the list on success, mirroring `RoomsView`'s pattern.
+ *
+ * Rebuilt on the Lumen primitive layer (`ui/*`) and `lucide-react`.
  */
-import {
-  ActionIcon,
-  Alert,
-  Button,
-  Group,
-  Loader,
-  Modal,
-  Paper,
-  Stack,
-  Text,
-  TextInput,
-  Title,
-} from "@mantine/core";
-import {
-  IconDeviceScreen,
-  IconPencil,
-  IconPlus,
-  IconSettings,
-  IconTrash,
-} from "@tabler/icons-react";
+import { Monitor, Pencil, Plus, Settings, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { createWall, deleteWall, fetchWalls, updateWall } from "../api.js";
 import { wallPath } from "../lib/router.js";
 import { useRouter } from "../lib/router-context.js";
 import type { WallProfile } from "../types.js";
+import {
+  Button,
+  Card,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  EmptyState,
+  IconButton,
+  Row,
+  Spinner,
+  Stack,
+} from "../ui/index.js";
 import { emptyWallConfig } from "../wall/editor/model.js";
 import { WallEditor } from "../wall/editor/WallEditor.js";
+
+/** The shared text-input treatment (the `ui/` layer carries no input primitive). */
+const INPUT_CLASSES =
+  "touch-target h-10 w-full rounded-input border border-hairline bg-surface px-3 text-sm text-ink motion-toggle focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus";
 
 export function WallsView() {
   const { basePath } = useRouter();
@@ -117,161 +119,201 @@ export function WallsView() {
   }
 
   return (
-    <Stack gap="md">
-      <Group justify="space-between">
-        <Title order={2}>Walls</Title>
+    <Stack gap={4}>
+      <Row justify="between" align="center" gap={3} wrap>
+        <h2 className="font-display text-2xl font-bold text-ink">Walls</h2>
         <Button
-          size="xs"
-          leftSection={<IconPlus size={14} />}
+          size="sm"
           onClick={() => {
             setCreateError(null);
             setCreating(true);
           }}
         >
+          <Plus size={14} aria-hidden />
           New wall
         </Button>
-      </Group>
+      </Row>
 
-      <Text size="sm" c="dimmed">
+      <p className="text-sm text-muted">
         Wall profiles are consumed read-only at their own address; the panel itself has no editing
         controls.
-      </Text>
+      </p>
 
       {loadError && (
-        <Alert color="red" title="Could not load wall profiles">
-          {loadError}
-        </Alert>
+        <Stack gap={1} className="rounded-tile border border-danger/40 bg-danger/10 p-3">
+          <span className="font-semibold text-ink">Could not load wall profiles</span>
+          <p role="alert" className="text-sm text-muted">
+            {loadError}
+          </p>
+        </Stack>
       )}
 
-      {walls === null && !loadError && <Loader size="sm" />}
+      {walls === null && !loadError && <Spinner className="mt-2" />}
 
-      <Stack gap="xs">
-        {walls?.length === 0 && (
-          <Text c="dimmed" size="sm">
-            No wall profiles yet — create one to start composing a panel.
-          </Text>
-        )}
+      {walls?.length === 0 && (
+        <EmptyState
+          icon={<Monitor size={28} />}
+          title="No wall profiles yet"
+          description="Create one to start composing a panel for a wall-mounted display."
+        />
+      )}
+
+      <Stack gap={2}>
         {walls?.map((profile) => (
-          <Paper key={profile.name} withBorder p="sm" radius="md">
-            <Group justify="space-between">
-              <Group gap="xs">
-                <IconDeviceScreen size={16} />
-                <Stack gap={0}>
-                  <Text fw={600}>{profile.name}</Text>
-                  <Text size="xs" c="dimmed" ff="monospace">
+          <Card key={profile.name} padding={false}>
+            <Row justify="between" align="center" gap={2} wrap>
+              <Row gap={2} align="center" className="min-w-0 flex-1 px-4 py-3" wrap={false}>
+                <Monitor size={16} aria-hidden className="shrink-0 text-muted" />
+                <Stack gap={0} className="min-w-0">
+                  <span className="truncate font-semibold text-ink">{profile.name}</span>
+                  <span className="truncate font-mono text-xs text-muted">
                     {wallPath(basePath, profile.name)} · {profile.config.widgets.length} widget
                     {profile.config.widgets.length === 1 ? "" : "s"}
-                  </Text>
+                  </span>
                 </Stack>
-              </Group>
-              <Group gap={4}>
-                <Button
-                  size="xs"
-                  variant="light"
-                  leftSection={<IconSettings size={14} />}
-                  onClick={() => setEditing(profile)}
-                >
+              </Row>
+              <Row gap={1} align="center" className="shrink-0 py-2 pr-3">
+                <Button size="sm" variant="soft" onClick={() => setEditing(profile)}>
+                  <Settings size={14} aria-hidden />
                   Configure
                 </Button>
-                <ActionIcon
-                  variant="subtle"
-                  aria-label={`Rename ${profile.name}`}
+                <IconButton
+                  label={`Rename ${profile.name}`}
+                  size="sm"
                   onClick={() => {
                     setRenameName(profile.name);
                     setRenameError(null);
                     setRenaming(profile);
                   }}
                 >
-                  <IconPencil size={16} />
-                </ActionIcon>
-                <ActionIcon
-                  color="red"
-                  variant="subtle"
-                  aria-label={`Delete ${profile.name}`}
+                  <Pencil size={16} />
+                </IconButton>
+                <IconButton
+                  label={`Delete ${profile.name}`}
+                  size="sm"
+                  className="text-danger"
                   onClick={() => {
                     setDeleteError(null);
                     setDeleting(profile);
                   }}
                 >
-                  <IconTrash size={16} />
-                </ActionIcon>
-              </Group>
-            </Group>
-          </Paper>
+                  <Trash2 size={16} />
+                </IconButton>
+              </Row>
+            </Row>
+          </Card>
         ))}
       </Stack>
 
-      <Modal opened={creating} onClose={() => setCreating(false)} title="New wall profile">
-        <Stack>
-          <TextInput
-            label="Profile name"
-            description="Used as the wall's address; must be unique."
-            value={newName}
-            onChange={(e) => setNewName(e.currentTarget.value)}
-            data-autofocus
-          />
-          {createError && (
-            <Text c="red" size="sm">
-              {createError}
-            </Text>
-          )}
-          <Button
-            onClick={handleCreate}
-            loading={submitting}
-            disabled={newName.trim().length === 0}
+      <Dialog open={creating} onOpenChange={setCreating}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="text-lg font-semibold text-ink">New wall profile</DialogTitle>
+            <DialogDescription className="text-sm text-muted">
+              The profile name is used as the wall's address; it must be unique.
+            </DialogDescription>
+          </DialogHeader>
+          <form
+            className="flex flex-col gap-3"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void handleCreate();
+            }}
           >
-            Create
-          </Button>
-        </Stack>
-      </Modal>
+            <label htmlFor="new-wall-name" className="text-sm font-medium text-ink">
+              Profile name
+            </label>
+            <input
+              id="new-wall-name"
+              className={INPUT_CLASSES}
+              value={newName}
+              autoFocus
+              onChange={(event) => setNewName(event.currentTarget.value)}
+            />
+            {createError && (
+              <p role="alert" className="text-sm text-danger">
+                {createError}
+              </p>
+            )}
+            <DialogFooter>
+              <Button variant="ghost" onClick={() => setCreating(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={submitting || newName.trim().length === 0}>
+                Create
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
-      <Modal
-        opened={renaming !== null}
-        onClose={() => setRenaming(null)}
-        title="Rename wall profile"
-      >
-        <Stack>
-          <TextInput
-            label="Profile name"
-            value={renameName}
-            onChange={(e) => setRenameName(e.currentTarget.value)}
-            data-autofocus
-          />
-          {renameError && (
-            <Text c="red" size="sm">
-              {renameError}
-            </Text>
-          )}
-          <Button
-            onClick={handleRename}
-            loading={submitting}
-            disabled={renameName.trim().length === 0}
+      <Dialog open={renaming !== null} onOpenChange={(open) => !open && setRenaming(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="text-lg font-semibold text-ink">
+              Rename wall profile
+            </DialogTitle>
+          </DialogHeader>
+          <form
+            className="flex flex-col gap-3"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void handleRename();
+            }}
           >
-            Rename
-          </Button>
-        </Stack>
-      </Modal>
+            <label htmlFor="rename-wall-name" className="text-sm font-medium text-ink">
+              Profile name
+            </label>
+            <input
+              id="rename-wall-name"
+              className={INPUT_CLASSES}
+              value={renameName}
+              autoFocus
+              onChange={(event) => setRenameName(event.currentTarget.value)}
+            />
+            {renameError && (
+              <p role="alert" className="text-sm text-danger">
+                {renameError}
+              </p>
+            )}
+            <DialogFooter>
+              <Button variant="ghost" onClick={() => setRenaming(null)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={submitting || renameName.trim().length === 0}>
+                Rename
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
-      <Modal
-        opened={deleting !== null}
-        onClose={() => setDeleting(null)}
-        title="Delete wall profile"
-      >
-        <Stack>
-          <Text size="sm">
-            Delete <strong>{deleting?.name}</strong>? Any panel displaying it will explain that it
-            no longer exists.
-          </Text>
+      <Dialog open={deleting !== null} onOpenChange={(open) => !open && setDeleting(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="text-lg font-semibold text-ink">
+              Delete wall profile
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted">
+            Delete <strong className="text-ink">{deleting?.name}</strong>? Any panel displaying it
+            will explain that it no longer exists.
+          </p>
           {deleteError && (
-            <Text c="red" size="sm">
+            <p role="alert" className="text-sm text-danger">
               {deleteError}
-            </Text>
+            </p>
           )}
-          <Button color="red" onClick={handleDelete} loading={submitting}>
-            Delete
-          </Button>
-        </Stack>
-      </Modal>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setDeleting(null)}>
+              Cancel
+            </Button>
+            <Button variant="danger" onClick={() => void handleDelete()} disabled={submitting}>
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {editing && (
         <WallEditor

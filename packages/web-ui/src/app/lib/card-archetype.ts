@@ -64,7 +64,7 @@ export function archetypeWholeCardActuation(archetype: CardArchetype): boolean {
 }
 
 /**
- * Whether a device tile draws no `Paper` of its own. A `contained` tile
+ * Whether a device tile draws no surface of its own. A `contained` tile
  * inherits the surrounding frame's surface (design.md D2), and a wall readout
  * card is deliberately chrome-less (design.md D4) — both so a card is a single
  * surface. The dashboard (`wall === false`) never takes the readout branch, so

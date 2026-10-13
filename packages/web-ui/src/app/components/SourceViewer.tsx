@@ -1,16 +1,21 @@
 /**
- * Renders an automation's source with syntax highlighting (design.md D15;
- * specs/web-ui "Automation Management Interface"; task 10.18).
+ * Renders an automation's source with syntax highlighting (specs/web-ui
+ * "Automation Management Interface").
  *
  * Prism (TypeScript + JavaScript grammars only) is loaded via a dynamic
- * `import()` the first time this component renders — never at first paint
- * — which is also what keeps it out of the first-paint budget (design.md
- * D24; `tests/web-ui-assets.test.ts`). No other grammar is imported: an
- * automation's source is TypeScript in development and compiled JavaScript
- * in a built package, and no other language can appear.
+ * `import()` the first time this component renders — never at first paint —
+ * which is also what keeps it, and this module's syntax theme, out of the
+ * first-paint budget (`tests/web-ui-assets.test.ts`). No other grammar is
+ * imported: an automation's source is TypeScript in development and compiled
+ * JavaScript in a built package, and no other language can appear.
+ *
+ * Rebuilt on the Lumen tokens (task 4.3): the frame follows the design system,
+ * while the highlight palette is the syntax theme's own.
  */
 import { useEffect, useState } from "react";
 
+// A code-highlight palette (not design-system colour) with a light default and
+// a dark override keyed on the Lumen `data-theme` attribute.
 const PRISM_THEME_CSS = `
 .ts-ha-source .token.comment,.ts-ha-source .token.prolog,.ts-ha-source .token.doctype,.ts-ha-source .token.cdata{color:#6a737d}
 .ts-ha-source .token.keyword{color:#d73a49}
@@ -20,15 +25,18 @@ const PRISM_THEME_CSS = `
 .ts-ha-source .token.number,.ts-ha-source .token.boolean{color:#005cc5}
 .ts-ha-source .token.operator,.ts-ha-source .token.punctuation{color:#24292e}
 .ts-ha-source .token.builtin{color:#e36209}
-[data-mantine-color-scheme="dark"] .ts-ha-source .token.comment{color:#8b949e}
-[data-mantine-color-scheme="dark"] .ts-ha-source .token.keyword{color:#ff7b72}
-[data-mantine-color-scheme="dark"] .ts-ha-source .token.string{color:#a5d6ff}
-[data-mantine-color-scheme="dark"] .ts-ha-source .token.function{color:#d2a8ff}
-[data-mantine-color-scheme="dark"] .ts-ha-source .token.class-name{color:#7ee787}
-[data-mantine-color-scheme="dark"] .ts-ha-source .token.number{color:#79c0ff}
-[data-mantine-color-scheme="dark"] .ts-ha-source .token.punctuation{color:#c9d1d9}
-[data-mantine-color-scheme="dark"] .ts-ha-source .token.builtin{color:#ffa657}
+[data-theme="dark"] .ts-ha-source .token.comment{color:#8b949e}
+[data-theme="dark"] .ts-ha-source .token.keyword{color:#ff7b72}
+[data-theme="dark"] .ts-ha-source .token.string{color:#a5d6ff}
+[data-theme="dark"] .ts-ha-source .token.function{color:#d2a8ff}
+[data-theme="dark"] .ts-ha-source .token.class-name{color:#7ee787}
+[data-theme="dark"] .ts-ha-source .token.number{color:#79c0ff}
+[data-theme="dark"] .ts-ha-source .token.punctuation{color:#c9d1d9}
+[data-theme="dark"] .ts-ha-source .token.builtin{color:#ffa657}
 `;
+
+const SOURCE_CLASSES =
+  "ts-ha-source m-0 overflow-auto rounded-input border border-hairline bg-surface-2 p-3 font-mono text-xs leading-relaxed text-ink";
 
 interface PrismLike {
   languages: Record<string, unknown>;
@@ -66,19 +74,9 @@ export function SourceViewer({ source }: { source: string }) {
     };
   }, [source]);
 
-  const preStyle: React.CSSProperties = {
-    margin: 0,
-    padding: 12,
-    overflow: "auto",
-    fontSize: 12,
-    lineHeight: 1.5,
-    fontFamily:
-      "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace",
-  };
-
   if (html === null) {
     return (
-      <pre className="ts-ha-source" style={preStyle}>
+      <pre className={SOURCE_CLASSES}>
         <code>{source}</code>
       </pre>
     );
@@ -88,7 +86,7 @@ export function SourceViewer({ source }: { source: string }) {
     <>
       <style>{PRISM_THEME_CSS}</style>
       {/* Prism's own tokenised output, not user input. */}
-      <pre className="ts-ha-source" style={preStyle}>
+      <pre className={SOURCE_CLASSES}>
         <code dangerouslySetInnerHTML={{ __html: html }} />
       </pre>
     </>

@@ -1,25 +1,27 @@
 /**
  * The wall weather widget (specs/wall-display "Widget Catalog", "An
- * unconfigured widget is contained"). Reads `GET /api/weather`; when the
- * service is unconfigured it reports that inside its own area and never throws,
- * so the rest of the profile keeps rendering.
+ * unconfigured widget is contained"; design.md D13). Reads `GET /api/weather`;
+ * when the service is unconfigured it reports that inside its own area and
+ * never throws, so the rest of the profile keeps rendering. An ambient readout:
+ * chrome-less, condition conveyed by icon shape plus description text — never
+ * colour alone.
  */
-import { Alert, Group, Loader, Stack, Text } from "@mantine/core";
-import {
-  IconCloud,
-  IconCloudRain,
-  IconCloudStorm,
-  IconDroplet,
-  IconMist,
-  IconSnowflake,
-  IconSun,
-  IconWind,
-} from "@tabler/icons-react";
 import type { WeatherData, WeatherUnavailable } from "@ts-ha/shared";
+import {
+  Cloud,
+  CloudFog,
+  CloudLightning,
+  CloudRain,
+  Droplet,
+  Snowflake,
+  Sun,
+  Wind,
+} from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { fetchWeather } from "../../api.js";
 import { useDataStore } from "../../lib/data-store.js";
 import { unavailableMessage, windDirectionLabel } from "../../lib/weather.js";
+import { Spinner } from "../../ui/index.js";
 import { WALL_BODY_FONT_SIZE, WALL_LABEL_FONT_SIZE, WALL_METRIC_FONT_SIZE } from "../type-ramp.js";
 import { weatherForecastDays, weatherWidgetState } from "./weather-model.js";
 
@@ -29,22 +31,22 @@ type WeatherCondition = WeatherData["current"]["condition"];
 function conditionIcon(condition: WeatherCondition, size = 40): ReactNode {
   switch (condition) {
     case "clear":
-      return <IconSun size={size} />;
+      return <Sun size={size} />;
     case "rain":
     case "drizzle":
-      return <IconCloudRain size={size} />;
+      return <CloudRain size={size} />;
     case "thunderstorm":
-      return <IconCloudStorm size={size} />;
+      return <CloudLightning size={size} />;
     case "snow":
-      return <IconSnowflake size={size} />;
+      return <Snowflake size={size} />;
     case "mist":
     case "fog":
     case "haze":
     case "dust":
     case "smoke":
-      return <IconMist size={size} />;
+      return <CloudFog size={size} />;
     default:
-      return <IconCloud size={size} />;
+      return <Cloud size={size} />;
   }
 }
 
@@ -79,31 +81,35 @@ export function WeatherWidget() {
 
   if (state.status === "loading") {
     return (
-      <Stack h="100%" justify="center" align="center">
-        <Loader size="sm" />
-      </Stack>
+      <div className="flex h-full items-center justify-center">
+        <Spinner />
+      </div>
     );
   }
 
   if (state.status === "error") {
     return (
-      <Alert color="red" p="xs">
-        <Text fz={WALL_LABEL_FONT_SIZE} fw={600}>
+      <div role="alert">
+        <p className="font-semibold text-danger" style={{ fontSize: WALL_LABEL_FONT_SIZE }}>
           Weather unavailable
-        </Text>
-        <Text fz={WALL_BODY_FONT_SIZE}>{state.message}</Text>
-      </Alert>
+        </p>
+        <p className="text-muted" style={{ fontSize: WALL_BODY_FONT_SIZE }}>
+          {state.message}
+        </p>
+      </div>
     );
   }
 
   if (state.status === "unavailable") {
     return (
-      <Alert color="ambient" p="xs" data-testid="wall-weather-unconfigured">
-        <Text fz={WALL_LABEL_FONT_SIZE} fw={600}>
+      <div data-testid="wall-weather-unconfigured">
+        <p className="font-semibold text-muted" style={{ fontSize: WALL_LABEL_FONT_SIZE }}>
           Weather is not configured
-        </Text>
-        <Text fz={WALL_BODY_FONT_SIZE}>{unavailableMessage(state.reason)}</Text>
-      </Alert>
+        </p>
+        <p className="text-muted" style={{ fontSize: WALL_BODY_FONT_SIZE }}>
+          {unavailableMessage(state.reason)}
+        </p>
+      </div>
     );
   }
 
@@ -111,60 +117,59 @@ export function WeatherWidget() {
   const forecast = weatherForecastDays(state.data);
 
   return (
-    <Stack gap="xs" h="100%" justify="center">
-      <Group gap="sm" wrap="nowrap" align="center">
-        <span style={{ color: "var(--info)", display: "flex" }} aria-hidden>
+    <div className="flex h-full flex-col justify-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="flex text-info" aria-hidden>
           {conditionIcon(current.condition)}
         </span>
-        <Stack gap={0}>
-          <Text
-            fw={700}
-            style={{
-              fontFamily: "var(--font-display)",
-              fontSize: WALL_METRIC_FONT_SIZE,
-              lineHeight: 1.1,
-            }}
+        <div className="flex flex-col">
+          <p
+            className="font-display font-bold"
+            style={{ fontSize: WALL_METRIC_FONT_SIZE, lineHeight: 1.1 }}
           >
             {Math.round(current.temperature)}°C
-          </Text>
-          <Text fz={WALL_LABEL_FONT_SIZE} c="dimmed" tt="capitalize">
+          </p>
+          <p className="capitalize text-muted" style={{ fontSize: WALL_LABEL_FONT_SIZE }}>
             {current.description}
-          </Text>
-        </Stack>
-      </Group>
+          </p>
+        </div>
+      </div>
 
-      <Group gap="lg" wrap="nowrap">
-        <Group gap={4} wrap="nowrap">
-          <IconDroplet size={18} aria-hidden />
-          <Text fz={WALL_BODY_FONT_SIZE} ff="monospace">
+      <div className="flex flex-wrap items-center gap-4">
+        <div className="flex items-center gap-1">
+          <Droplet size={18} aria-hidden />
+          <p className="font-mono" style={{ fontSize: WALL_BODY_FONT_SIZE }}>
             {Math.round(current.humidity)}%
-          </Text>
-        </Group>
-        <Group gap={4} wrap="nowrap">
-          <IconWind size={18} aria-hidden />
-          <Text fz={WALL_BODY_FONT_SIZE} ff="monospace">
+          </p>
+        </div>
+        <div className="flex items-center gap-1">
+          <Wind size={18} aria-hidden />
+          <p className="font-mono" style={{ fontSize: WALL_BODY_FONT_SIZE }}>
             {current.wind.speed.toFixed(1)} m/s {windDirectionLabel(current.wind.direction)}
-          </Text>
-        </Group>
-      </Group>
+          </p>
+        </div>
+      </div>
 
       {forecast.length > 0 && (
-        <Group gap="md" wrap="nowrap" justify="space-between" data-testid="wall-weather-forecast">
+        <div
+          className="flex flex-wrap items-start justify-between gap-3"
+          data-testid="wall-weather-forecast"
+        >
           {forecast.map((day) => (
-            <Stack key={day.date} gap={2} align="center">
-              <Text fz={WALL_BODY_FONT_SIZE} c="dimmed" ff="monospace">
+            <div key={day.date} className="flex flex-col items-center gap-0.5">
+              <p className="font-mono text-muted" style={{ fontSize: WALL_BODY_FONT_SIZE }}>
                 {day.label}
-              </Text>
-              <span style={{ color: "var(--info)", display: "flex" }} aria-hidden>
+              </p>
+              <span className="flex text-info" aria-hidden>
                 {conditionIcon(day.condition, 26)}
               </span>
-              <Text fz={WALL_BODY_FONT_SIZE} ff="monospace">
+              <p className="font-mono" style={{ fontSize: WALL_BODY_FONT_SIZE }}>
                 {day.high}°/{day.low}°
-              </Text>
-            </Stack>
+              </p>
+            </div>
           ))}
-        </Group>
+        </div>
       )}
-    </Stack>
+    </div>
   );
 }

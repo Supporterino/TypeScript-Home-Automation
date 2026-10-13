@@ -161,7 +161,7 @@ export function isOverviewView(pathname: string, basePath: string): boolean {
 /**
  * Whether `view` renders full-bleed, without the application chrome (design.md
  * D3; specs/web-ui "Full-Bleed Wall Rendering"). The wall is the only view that
- * does so — every other view keeps the `AppShell` header, navigation, and
+ * does so — every other view keeps the app shell's header, navigation, and
  * footer. Pure and dependency-free so `App.tsx`'s render branch is a single
  * inspectable decision and the test can assert it directly.
  */

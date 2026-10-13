@@ -1,5 +1,5 @@
 /**
- * The wall favorites widget (design.md D7; specs/wall-display "Widget
+ * The wall favorites widget (design.md D13; specs/wall-display "Widget
  * Catalog"). Renders the user's favorited devices as the same touch-sized
  * device tiles used everywhere else — favorites logic and the tile
  * presentation are reused, never reimplemented.
@@ -8,9 +8,12 @@
  * device map on every render, so a favorite change streamed from another
  * client reconciles through the existing `state` handling with no local
  * action; the tile's own favorite toggle writes through the store too.
+ *
+ * A control widget: the frame draws the surface, so each contained tile draws
+ * none of its own (specs/wall-display "A card is a single surface").
  */
-import { ScrollArea, SimpleGrid, Stack, Text } from "@mantine/core";
 import { useDataStore } from "../../lib/data-store.js";
+import { Grid, ScrollArea, Stack } from "../../ui/index.js";
 import type { WallWidgetProps } from "../registry.js";
 import { WALL_BODY_FONT_SIZE } from "../type-ramp.js";
 import { favoriteDevices } from "./favorites-model.js";
@@ -22,20 +25,20 @@ export function FavoritesWidget({ contained }: WallWidgetProps) {
 
   if (devices.length === 0) {
     return (
-      <Text fz={WALL_BODY_FONT_SIZE} c="dimmed">
+      <p className="text-muted" style={{ fontSize: WALL_BODY_FONT_SIZE }}>
         No favorite devices. Star a device to show it here.
-      </Text>
+      </p>
     );
   }
 
   return (
-    <Stack h="100%" gap="xs" style={{ minHeight: 0 }}>
-      <ScrollArea style={{ flex: 1, minHeight: 0 }}>
-        <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs" pr="xs">
+    <Stack gap={2} className="h-full min-h-0">
+      <ScrollArea className="min-h-0 flex-1">
+        <Grid columns={1} md={2} gap={2} className="pr-2">
           {devices.map((device) => (
             <WallDeviceTile key={device.qualifiedId} device={device} contained={contained} />
           ))}
-        </SimpleGrid>
+        </Grid>
       </ScrollArea>
     </Stack>
   );

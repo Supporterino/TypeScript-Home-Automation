@@ -18,7 +18,6 @@ describe("wallFrameChrome", () => {
     expect(chrome.background).toBeNull();
     expect(chrome.borderColor).toBeNull();
     expect(chrome.radius).toBeNull();
-    expect(chrome.padding).toBeNull();
   });
 
   it("renders a control widget as a bordered surface tile", () => {
@@ -27,7 +26,6 @@ describe("wallFrameChrome", () => {
     expect(chrome.background).toBe("var(--surface)");
     expect(chrome.borderColor).toBe("var(--hairline)");
     expect(chrome.radius).toBe("var(--radius-tile)");
-    expect(chrome.padding).not.toBeNull();
   });
 
   it("derives the surface from each type's descriptor grammar", () => {

@@ -1,45 +1,36 @@
 /**
  * A device tile: one dominant primary action or readout, selected by the
- * curated capability ranking (design.md D12, D16; task 10.6), plus an
- * explicit affordance that opens the device's detail view. Degrades to a
- * read-only tile — fully activatable as a whole — when nothing ranks
- * (design.md "An unrankable device degrades gracefully").
+ * curated capability ranking (design.md D5, D12; specs/web-ui "Device Tile
+ * Presentation"), plus an explicit affordance that opens the device's detail
+ * view. Degrades to a read-only tile — fully activatable as a whole — when
+ * nothing ranks.
  *
- * State is never color-only (MASTER "State Encoding Rule"; task 9.2): every
- * on/off and reachability condition carries a distinct icon shape and label
- * alongside its token, produced by the pure {@link deviceTileState} helper.
+ * State is never colour-only (design.md D9): every on/off and reachability
+ * condition carries a distinct icon shape and label alongside its token,
+ * produced by the pure {@link deviceTileState} helper.
  *
- * Also takes an optional action slot and an optional unavailable mode
- * (design.md D6) — a room places its unassign control in the slot, and
- * renders an unavailable member through the unavailable variant, so every
- * device collection shares one tile shape rather than a room inventing a
- * second one.
+ * Also takes an optional action slot and an optional unavailable mode — a room
+ * places its unassign control in the slot, and renders an unavailable member
+ * through the unavailable variant, so every device collection shares one tile
+ * shape rather than a room inventing a second one.
+ *
+ * Rebuilt on the Lumen primitive layer (`ui/*`) and `lucide-react` (task 4.1);
+ * the pure helpers it consumes (`card-archetype`, `device-tile-state`,
+ * `capability-ranking`, `humanize-name`, `wall/scale`) are unchanged, and its
+ * props and behaviour contracts are preserved.
  */
 import {
-  ActionIcon,
-  Badge,
-  Box,
-  Button,
-  Group,
-  Paper,
-  Slider,
-  Stack,
-  Text,
-  Tooltip,
-} from "@mantine/core";
-import {
-  IconChevronRight,
-  IconClock,
-  IconEye,
-  IconEyeOff,
-  IconPlugOff,
-  IconPower,
-  IconStar,
-  IconStarFilled,
-  IconUsersGroup,
-  IconWifi,
-  IconWifiOff,
-} from "@tabler/icons-react";
+  ChevronRight,
+  Clock,
+  Eye,
+  EyeOff,
+  Power,
+  Star,
+  Unplug,
+  UsersRound,
+  Wifi,
+  WifiOff,
+} from "lucide-react";
 import { type ReactNode, useState } from "react";
 import {
   coverStopCommand,
@@ -70,6 +61,7 @@ import { useRouter } from "../lib/router-context.js";
 import { useNow } from "../lib/use-now.js";
 import { useOptimisticDeviceProperty } from "../lib/use-optimistic-property.js";
 import type { DeviceDescriptor } from "../types.js";
+import { Badge, Button, Card, cn, IconButton, Row, Slider, Stack, Tooltip } from "../ui/index.js";
 import {
   deviceTileObservationText,
   deviceTilePresentation,
@@ -82,10 +74,30 @@ import { CapabilityControl, formatReadoutValue } from "./CapabilityControl.js";
 import { CoverTransport } from "./CoverTransport.js";
 
 /**
+ * Maps a pure size token to a CSS font size against the Lumen type scale
+ * (design.md D3). The wall's token is already a `clamp(...)` expression and is
+ * passed through unchanged.
+ */
+function tileFontSize(token: string): string {
+  switch (token) {
+    case "xs":
+      return "var(--text-xs)";
+    case "sm":
+      return "var(--text-sm)";
+    case "md":
+      return "var(--text-base)";
+    case "lg":
+      return "var(--text-lg)";
+    default:
+      return token;
+  }
+}
+
+/**
  * Renders a state glyph from the symbolic icon name the pure state helper
- * produces, colored by a design token rather than a literal hex (task 9.2).
- * The on/off pair differs in fill as well as color, so it is distinguishable
- * with color removed.
+ * produces, coloured by a design token rather than a literal hex (design.md
+ * D9). The on/off pair differs in fill as well as colour, so it is
+ * distinguishable with colour removed.
  */
 function StateGlyph({
   icon,
@@ -96,57 +108,57 @@ function StateGlyph({
   size: number;
   token: string;
 }) {
-  const color = `var(${token})`;
+  const style = { color: `var(${token})` };
   switch (icon) {
     case "power-filled":
-      return <IconPower size={size} color={color} fill={color} aria-hidden />;
+      return <Power size={size} fill="currentColor" style={style} aria-hidden />;
     case "power-outline":
-      return <IconPower size={size} color={color} aria-hidden />;
+      return <Power size={size} style={style} aria-hidden />;
     case "plug-off":
-      return <IconPlugOff size={size} color={color} aria-hidden />;
+      return <Unplug size={size} style={style} aria-hidden />;
     case "wifi":
-      return <IconWifi size={size} color={color} aria-hidden />;
+      return <Wifi size={size} style={style} aria-hidden />;
     case "wifi-off":
-      return <IconWifiOff size={size} color={color} aria-hidden />;
+      return <WifiOff size={size} style={style} aria-hidden />;
     case "clock":
-      return <IconClock size={size} color={color} aria-hidden />;
+      return <Clock size={size} style={style} aria-hidden />;
   }
 }
 
-/** The on/off label + filled/outline power glyph — the non-color on/off channel (task 9.2). */
-function OnOffChip({ state, textSize }: { state: DeviceTileOnOffState; textSize: string }) {
+/** The on/off label + filled/outline power glyph — the non-colour on/off channel (design.md D9). */
+function OnOffChip({ state, fontSize }: { state: DeviceTileOnOffState; fontSize: string }) {
   return (
-    <Group gap={4} wrap="nowrap" align="center">
+    <Row gap={1} align="center" wrap={false}>
       <StateGlyph icon={state.icon} size={15} token={state.token} />
-      <Text size={textSize} fw={600} style={{ color: `var(${state.token})` }}>
+      <span className="font-semibold" style={{ fontSize, color: `var(${state.token})` }}>
         {state.label}
-      </Text>
-    </Group>
+      </span>
+    </Row>
   );
 }
 
 /**
- * The observation state (design.md D5; specs/wall-display "Observation is a
+ * The observation state (design.md D5, D9; specs/wall-display "Observation is a
  * quiet indicator"). The wall renders it as a non-textual indicator — glyph
  * shape + token still distinguish push, polled/stale, and unreachable without
- * color, and the state label is retained as the accessible name and tooltip
+ * colour, and the state label is retained as the accessible name and tooltip
  * rather than text competing with the card's control. The dashboard keeps the
  * visible label (with the polled age) the unmodified web-ui capability requires.
  */
 function ObservationIndicator({
   observation,
   size,
-  textSize,
+  fontSize,
   showLabel,
 }: {
   observation: DeviceTileObservationState;
   size: number;
-  textSize: string;
+  fontSize: string;
   showLabel: boolean;
 }) {
   const glyph = <StateGlyph icon={observation.icon} size={size} token={observation.token} />;
   return (
-    <Group gap={3} wrap="nowrap">
+    <Row gap={1} align="center" wrap={false}>
       {showLabel ? (
         glyph
       ) : (
@@ -154,39 +166,35 @@ function ObservationIndicator({
           role="img"
           aria-label={observation.label}
           title={observation.label}
-          style={{ display: "flex", color: `var(${observation.token})` }}
+          className="flex"
+          style={{ color: `var(${observation.token})` }}
         >
           {glyph}
         </span>
       )}
       {showLabel && (
-        <Text
-          size={textSize}
-          style={{ color: `var(${observation.token})` }}
-          truncate
+        <span
+          className="truncate"
+          style={{ fontSize, color: `var(${observation.token})` }}
           title={observation.label}
         >
           {observation.label}
-        </Text>
+        </span>
       )}
-    </Group>
+    </Row>
   );
 }
 
 /**
- * The group-of-devices marker: a non-color users-group glyph with an
+ * The group-of-devices marker: a non-colour users-group glyph with an
  * accessible name, shown on any card whose device is a Zigbee group. Extracted
  * so the header and the chrome-less wall readout carry the identical marker.
  */
 function GroupMarker({ wall }: { wall: boolean }) {
   return (
     <Tooltip label="Group of devices">
-      <span
-        role="img"
-        aria-label="Group of devices"
-        style={{ display: "flex", color: "var(--text-muted)" }}
-      >
-        <IconUsersGroup size={wall ? 18 : 14} aria-hidden />
+      <span role="img" aria-label="Group of devices" className="flex text-muted">
+        <UsersRound size={wall ? 18 : 14} aria-hidden />
       </span>
     </Tooltip>
   );
@@ -196,26 +204,25 @@ function GroupMarker({ wall }: { wall: boolean }) {
  * The tile's corner action slot: favorite, visibility, and any caller-supplied
  * action. In normal flow at the end of the header row rather than absolutely
  * positioned, so it never overlays the name and a long name truncates before
- * reaching it (MASTER "never over the name"; task 9.4).
+ * reaching it.
  */
 function ActionSlot({ action }: { action: ReactNode }) {
   return (
-    <Group
-      gap={2}
-      wrap="nowrap"
-      onClick={(e) => e.stopPropagation()}
-      onKeyDown={(e) => e.stopPropagation()}
+    <Row
+      gap={1}
+      wrap={false}
+      onClick={(event) => event.stopPropagation()}
+      onKeyDown={(event) => event.stopPropagation()}
     >
       {action}
-    </Group>
+    </Row>
   );
 }
 
 /**
  * A favorite star toggle, never requiring the caller to know a device's
- * qualified identifier (specs/web-ui "Favorites"; task 9.4). Uses the store's
- * optimistic write and stream reconciliation, so a change is reflected across
- * clients.
+ * qualified identifier (specs/web-ui "Favorites"). Uses the store's optimistic
+ * write and stream reconciliation, so a change is reflected across clients.
  */
 function FavoriteToggle({ device, wall }: { device: DeviceDescriptor; wall?: boolean }) {
   const { isFavorite, toggleFavorite } = useDataStore();
@@ -224,12 +231,11 @@ function FavoriteToggle({ device, wall }: { device: DeviceDescriptor; wall?: boo
   const iconSize = wall ? 20 : 14;
 
   const button = (
-    <ActionIcon
-      variant="subtle"
-      color={error ? "red" : favorite ? "yellow" : "gray"}
-      size={wall ? 48 : "sm"}
-      aria-label={favorite ? "Remove from favorites" : "Add to favorites"}
+    <IconButton
+      size={wall ? "lg" : "sm"}
+      label={favorite ? "Remove from favorites" : "Add to favorites"}
       aria-pressed={favorite}
+      className={cn(error ? "text-danger" : favorite ? "text-stale" : "text-muted")}
       onClick={async () => {
         setError(null);
         try {
@@ -239,59 +245,52 @@ function FavoriteToggle({ device, wall }: { device: DeviceDescriptor; wall?: boo
         }
       }}
     >
-      {favorite ? <IconStarFilled size={iconSize} /> : <IconStar size={iconSize} />}
-    </ActionIcon>
+      {favorite ? <Star size={iconSize} fill="currentColor" /> : <Star size={iconSize} />}
+    </IconButton>
   );
 
-  return error ? (
-    <Tooltip label={error} color="red" withArrow>
-      {button}
-    </Tooltip>
-  ) : (
-    button
-  );
+  return error ? <Tooltip label={error}>{button}</Tooltip> : button;
 }
 
 /**
  * A hide/unhide toggle, never requiring the caller to know a device's
  * qualified identifier — it reads it off the descriptor itself (specs/web-ui
  * "Hiding And Unhiding From The Interface"). Composed alongside any
- * caller-supplied `action` in the tile's corner slot, so a room's own
- * unassign control and this toggle can coexist.
+ * caller-supplied `action` in the tile's corner slot, so a room's own unassign
+ * control and this toggle can coexist.
  */
 function VisibilityToggle({ device, wall }: { device: DeviceDescriptor; wall?: boolean }) {
   const { hideDevice, unhideDevice } = useDataStore();
   const iconSize = wall ? 20 : 14;
   return (
-    <ActionIcon
-      variant="subtle"
-      color="gray"
-      size={wall ? 48 : "sm"}
-      aria-label={device.hidden ? "Unhide device" : "Hide device"}
+    <IconButton
+      size={wall ? "lg" : "sm"}
+      label={device.hidden ? "Unhide device" : "Hide device"}
+      className="text-muted"
       onClick={() => {
         void (device.hidden ? unhideDevice(device.qualifiedId) : hideDevice(device.qualifiedId));
       }}
     >
-      {device.hidden ? <IconEye size={iconSize} /> : <IconEyeOff size={iconSize} />}
-    </ActionIcon>
+      {device.hidden ? <Eye size={iconSize} /> : <EyeOff size={iconSize} />}
+    </IconButton>
   );
 }
 
 interface AvailableProps {
   device: DeviceDescriptor;
-  /** Rendered in the tile's corner slot, e.g. a room's unassign control in edit mode (design.md D6, D7). */
+  /** Rendered in the tile's corner slot, e.g. a room's unassign control in edit mode. */
   action?: ReactNode;
   /**
    * Size token. `"wall"` enlarges padding and interactive controls to the
-   * wall's minimum touch target while preserving the default rendering
-   * exactly (design.md D7; specs/wall-display "Touch Operation").
+   * wall's minimum touch target while preserving the default rendering exactly
+   * (design.md D13; specs/wall-display "Touch Operation").
    */
   size?: WallTileSize;
   /**
-   * When set, the tile draws no `Paper` of its own and inherits the
-   * surrounding frame's surface, so a card is a single surface rather than a
-   * tile nested inside one (design.md D2; specs/wall-display "A card is a
-   * single surface"). Unset reproduces the tile's ordinary paper rendering.
+   * When set, the tile draws no surface of its own and inherits the surrounding
+   * frame's, so a card is a single surface rather than a tile nested inside one
+   * (specs/wall-display "A card is a single surface"). Unset reproduces the
+   * tile's ordinary surface rendering.
    */
   contained?: boolean;
 }
@@ -312,55 +311,38 @@ type Props = AvailableProps | UnavailableProps;
 /**
  * The unavailable variant: qualified identifier and an unavailable marker,
  * with no control, no state readout, and no detail affordance — no live
- * descriptor exists to open, and its stale state is never presented as
- * current (design.md D6; specs/web-ui "Unavailable member is visible but
- * distinct"; task 9.3).
+ * descriptor exists to open, and its stale state is never presented as current
+ * (specs/web-ui "Unavailable member is visible but distinct").
  */
 function UnavailableTile({ qualifiedId, action, size, contained }: UnavailableProps) {
   const wall = size === "wall";
-  const metrics = wall ? wallTileMetrics("wall") : null;
+  const padClass = wall ? "p-4" : "p-3";
   const inner = (
     <>
-      <Group justify="space-between" wrap="nowrap" gap="xs" align="flex-start">
-        <Text
-          size={wall ? "md" : "sm"}
-          c="dimmed"
-          ff="monospace"
-          truncate
-          style={{ flex: 1, minWidth: 0 }}
+      <Row justify="between" align="start" gap={2} wrap={false}>
+        <span
+          className="truncate font-mono text-muted"
+          style={{ flex: 1, minWidth: 0, fontSize: wall ? WALL_BODY_FONT_SIZE : "var(--text-sm)" }}
         >
           {qualifiedId}
-        </Text>
+        </span>
         {action && <ActionSlot action={action} />}
-      </Group>
-      <Group gap={4} wrap="nowrap" mt={6}>
-        <IconPlugOff size={wall ? 16 : 13} color="var(--danger)" aria-hidden />
-        <Badge color="gray" variant="light" size="sm">
-          Unavailable
-        </Badge>
-      </Group>
+      </Row>
+      <Row gap={1} align="center" wrap={false} className="mt-1.5">
+        <Unplug size={wall ? 16 : 13} className="text-danger" aria-hidden />
+        <Badge tone="neutral">Unavailable</Badge>
+      </Row>
     </>
   );
 
   if (contained) {
-    return (
-      <Box p={metrics?.padding ?? "sm"} opacity={0.6}>
-        {inner}
-      </Box>
-    );
+    return <div className={cn("opacity-60", padClass)}>{inner}</div>;
   }
 
   return (
-    <Paper
-      className="ambient-e1"
-      withBorder
-      p={metrics?.padding ?? "sm"}
-      radius="lg"
-      opacity={0.6}
-      style={{ borderStyle: "dashed" }}
-    >
+    <Card padding={false} elevation="flat" className={cn(padClass, "border-dashed opacity-60")}>
       {inner}
-    </Paper>
+    </Card>
   );
 }
 
@@ -382,7 +364,7 @@ function AvailableTile({ device, action, size, contained }: AvailableProps) {
   const showObservationLabel = deviceTileObservationText(size);
   const isGroup = device.source === "zigbee-group";
   // Presentation only: the humanised label is shown, while `device.qualifiedId`
-  // remains the value that addresses and commands the device (design.md D8).
+  // remains the value that addresses and commands the device.
   const deviceLabel = humanizeDeviceName(device.displayName);
   const ranking = rankDeviceTile(device.capabilities);
   const flat = flattenCapabilities(device.capabilities);
@@ -394,23 +376,22 @@ function AvailableTile({ device, action, size, contained }: AvailableProps) {
     ? flat.find((c) => c.property === ranking.readout?.capability.property)
     : undefined;
 
-  // The card archetype is a wall presentation (design.md D1 Non-Goals: the
-  // dashboard keeps the shared single template), so the dashboard stays
-  // `default` and its rendering is unchanged.
+  // The card archetype is a wall presentation (the dashboard keeps the shared
+  // single template), so the dashboard stays `default` and its rendering is
+  // unchanged.
   const archetype: CardArchetype = wall ? cardArchetype(ranking, device.capabilities) : "default";
   const brightnessCapability =
     archetype === "light" ? writableBrightnessCapability(device.capabilities) : undefined;
-  // The stop command is progressive (design.md D6): a cover card shows Stop only
-  // when the pure detector finds a writable transport property that can express
-  // it. Computed only for the cover archetype, so no other card pays for it.
+  // The stop command is progressive: a cover card shows Stop only when the pure
+  // detector finds a writable transport property that can express it. Computed
+  // only for the cover archetype, so no other card pays for it.
   const stopCommand = archetype === "cover" ? coverStopCommand(device.capabilities) : null;
 
   // A tile with no ranked action is read-only. On the dashboard the whole tile
   // then activates the detail view (specs/web-ui "A read-only tile still opens
-  // detail"). On the wall a read-only device is a readout with no navigation
-  // (specs/wall-display "A sensor is read-only"). A tile with a control opens
-  // detail only through its explicit affordance, so the embedded control is
-  // never mistaken for it (task 9.1).
+  // detail"). On the wall a read-only device is a readout with no navigation.
+  // A tile with a control opens detail only through its explicit affordance, so
+  // the embedded control is never mistaken for it.
   const readOnly = !actionCapability;
   const wholeCardToggle =
     presentation.wholeCardActuation &&
@@ -420,11 +401,11 @@ function AvailableTile({ device, action, size, contained }: AvailableProps) {
   const state = deviceTileState(device, now);
 
   // One optimistic resolution for the tile's primary action, shared by the
-  // embedded control and the on/off chip. The chip and control must agree
-  // while a command is in flight; deriving the chip from confirmed state alone
-  // would let them contradict until the round trip (design.md D12; specs/web-ui
-  // "Device Tile Presentation"). The hook resolves a store-level override
-  // (room command) ahead of this component's local override, so the tile still
+  // embedded control and the on/off chip. The chip and control must agree while
+  // a command is in flight; deriving the chip from confirmed state alone would
+  // let them contradict until the round trip (design.md D12; specs/web-ui
+  // "Device Tile Presentation"). The hook resolves a store-level override (room
+  // command) ahead of this component's local override, so the tile still
   // reflects room-wide commands.
   const actionControl = useOptimisticDeviceProperty(
     device.qualifiedId,
@@ -432,9 +413,9 @@ function AvailableTile({ device, action, size, contained }: AvailableProps) {
     actionCapability ? device.state[actionCapability.property] : undefined,
     device.observation,
   );
-  // The light card's brightness is a second, independent optimistic channel
-  // (design.md D3). The hook is called unconditionally — with no property when
-  // the device is not a light — so hook order is stable across renders.
+  // The light card's brightness is a second, independent optimistic channel.
+  // The hook is called unconditionally — with no property when the device is
+  // not a light — so hook order is stable across renders.
   const brightnessControl = useOptimisticDeviceProperty(
     device.qualifiedId,
     brightnessCapability?.property ?? "",
@@ -442,9 +423,9 @@ function AvailableTile({ device, action, size, contained }: AvailableProps) {
     device.observation,
   );
   // The cover's Stop is a third independent optimistic channel, on its detected
-  // transport property (design.md D6). Called unconditionally with an absent
-  // property when the device is not a stop-capable cover, so hook order is
-  // stable across renders; Open/Close reuse the primary `actionControl` above.
+  // transport property. Called unconditionally with an absent property when the
+  // device is not a stop-capable cover, so hook order is stable across renders;
+  // Open/Close reuse the primary `actionControl` above.
   const stopControl = useOptimisticDeviceProperty(
     device.qualifiedId,
     stopCommand?.property ?? "",
@@ -457,10 +438,14 @@ function AvailableTile({ device, action, size, contained }: AvailableProps) {
       : state.onOff;
 
   const lightCard = archetype === "light" && brightnessCapability !== undefined;
-  // A readout card is deliberately chrome-less on the wall (design.md D4); a
-  // contained tile inherits the surrounding frame's surface (design.md D2).
-  // Either way the tile draws no `Paper` of its own, so a card is one surface.
+  // A readout card is deliberately chrome-less on the wall; a contained tile
+  // inherits the surrounding frame's surface. Either way the tile draws no
+  // surface of its own, so a card is one surface.
   const surfaceLess = cardDrawsNoSurface(archetype, wall, contained === true);
+
+  const chipFontSize = tileFontSize(tileText.chip);
+  const bodyFontSize = tileFontSize(tileText.body);
+  const padClass = metrics?.padding === "md" ? "p-4" : "p-3";
 
   function openDetail() {
     navigate(deviceDetailPath(basePath, device.qualifiedId));
@@ -483,30 +468,34 @@ function AvailableTile({ device, action, size, contained }: AvailableProps) {
       : null;
 
   // Accessibility: the wall whole-card toggle is a pointer-only redundant
-  // affordance. Its embedded control is a focusable Mantine Switch carrying the
-  // correct role and state, so it is the single accessible activation — the
-  // card must not also take role="button"/a tab stop, which ARIA forbids around
-  // an interactive descendant. The dashboard read-only card keeps its
-  // role="button" because it contains no interactive descendant.
+  // affordance. Its embedded control carries the correct role and state, so it
+  // is the single accessible activation — the card must not also take
+  // role="button"/a tab stop, which ARIA forbids around an interactive
+  // descendant. The dashboard read-only card keeps its role="button" because it
+  // contains no embedded control.
   const cardKeyboardAction = wholeCardToggle ? null : cardAction;
 
   const observation = (
     <ObservationIndicator
       observation={state.observation}
       size={wall ? 16 : 11}
-      textSize={tileText.chip}
+      fontSize={chipFontSize}
       showLabel={showObservationLabel}
     />
   );
 
   const header = (
-    <Group justify="space-between" wrap="nowrap" gap="xs" align="flex-start">
-      <Group gap={4} wrap="nowrap" style={{ minWidth: 0, flex: 1 }}>
+    <Row justify="between" align="start" gap={2} wrap={false}>
+      <Row gap={1} align="center" wrap={false} className="min-w-0 flex-1">
         {isGroup && <GroupMarker wall={wall} />}
-        <Text size={wall ? "md" : "sm"} fw={600} truncate title={deviceLabel}>
+        <span
+          className="truncate font-semibold"
+          title={deviceLabel}
+          style={{ fontSize: wall ? WALL_BODY_FONT_SIZE : "var(--text-sm)" }}
+        >
           {deviceLabel}
-        </Text>
-      </Group>
+        </span>
+      </Row>
       {(action != null || presentation.favorite || presentation.visibility) && (
         <ActionSlot
           action={
@@ -518,21 +507,30 @@ function AvailableTile({ device, action, size, contained }: AvailableProps) {
           }
         />
       )}
-    </Group>
+    </Row>
   );
 
   const controlWrapperStyle = { flex: 1, minWidth: 0, minHeight: metrics?.control };
-  const stop = (e: { stopPropagation: () => void }) => e.stopPropagation();
+  const stop = (event: { stopPropagation: () => void }) => event.stopPropagation();
 
   // The light archetype renders two independent controls — an on/off toggle and
-  // a brightness slider with a persistent `%` readout (design.md D3; specs/wall-
-  // display "A light card presents both a toggle and a value control").
+  // a brightness slider with a persistent `%` readout (specs/wall-display "A
+  // light card presents both a toggle and a value control").
   let controls: ReactNode;
   if (lightCard && actionCapability && brightnessCapability) {
+    const brightnessMin = brightnessCapability.range?.min ?? 0;
+    // The light's brightness as a percentage of its declared range (design.md D3).
+    const brightnessPercent = (value: unknown): string =>
+      formatBrightnessPercent(value, brightnessCapability.range);
     controls = (
       <>
-        <Group gap="xs" wrap="nowrap" align="center">
-          <div style={controlWrapperStyle} onClick={stop} onKeyDown={stop}>
+        <Row gap={2} align="center" wrap={false}>
+          <div
+            className="flex items-center"
+            style={controlWrapperStyle}
+            onClick={stop}
+            onKeyDown={stop}
+          >
             <CapabilityControl
               device={device}
               capability={actionCapability}
@@ -543,38 +541,45 @@ function AvailableTile({ device, action, size, contained }: AvailableProps) {
               error={actionControl.error}
             />
           </div>
-          {onOff && <OnOffChip state={onOff} textSize={tileText.chip} />}
-        </Group>
-        <Group gap="xs" wrap="nowrap" align="center">
-          <div style={controlWrapperStyle} onClick={stop} onKeyDown={stop}>
+          {onOff && <OnOffChip state={onOff} fontSize={chipFontSize} />}
+        </Row>
+        <Row gap={2} align="center" wrap={false}>
+          <div
+            className="flex items-center"
+            style={controlWrapperStyle}
+            onClick={stop}
+            onKeyDown={stop}
+            title={brightnessPercent(brightnessControl.value)}
+          >
             <Slider
-              size={metrics?.controlSize}
-              min={brightnessCapability.range?.min ?? 0}
+              min={brightnessMin}
               max={brightnessCapability.range?.max ?? 100}
               step={brightnessCapability.step ?? 1}
-              value={
+              value={[
                 typeof brightnessControl.value === "number"
                   ? brightnessControl.value
-                  : (brightnessCapability.range?.min ?? 0)
-              }
+                  : brightnessMin,
+              ]}
               disabled={!device.reachable}
-              label={(value) => formatBrightnessPercent(value, brightnessCapability.range)}
-              onChange={(value) => brightnessControl.setValue(value)}
+              onValueChange={([value]) => brightnessControl.setValue(value)}
               aria-label={brightnessCapability.property}
             />
           </div>
-          <Text size={tileText.body} fw={600} style={{ minWidth: 44, textAlign: "right" }}>
+          <span
+            className="font-semibold"
+            style={{ minWidth: 44, textAlign: "right", fontSize: bodyFontSize }}
+          >
             {formatBrightnessPercent(brightnessControl.value, brightnessCapability.range)}
-          </Text>
-        </Group>
+          </span>
+        </Row>
       </>
     );
   } else if (archetype === "cover" && actionCapability) {
     // A cover's primary action is a position, but the wall presents discrete,
-    // touch-sized transport instead of the generic slider (design.md D6;
-    // specs/wall-display "Cover Transport Controls"). Open/Close reuse the
-    // primary `actionControl` hook above, so reflection/reconciliation/revert is
-    // identical to the generic path; Stop is a separate optimistic channel.
+    // touch-sized transport instead of the generic slider (specs/wall-display
+    // "Cover Transport Controls"). Open/Close reuse the primary `actionControl`
+    // hook above, so reflection/reconciliation/revert is identical to the
+    // generic path; Stop is a separate optimistic channel.
     controls = (
       <CoverTransport
         device={device}
@@ -586,13 +591,18 @@ function AvailableTile({ device, action, size, contained }: AvailableProps) {
         onStop={stopControl.setValue}
         stopError={stopControl.error}
         control={metrics?.control ?? 32}
-        readoutSize={tileText.body}
+        readoutSize={bodyFontSize}
       />
     );
   } else if (actionCapability) {
     controls = (
-      <Group gap="xs" wrap="nowrap" align="center">
-        <div style={controlWrapperStyle} onClick={stop} onKeyDown={stop}>
+      <Row gap={2} align="center" wrap={false}>
+        <div
+          className="flex items-center"
+          style={controlWrapperStyle}
+          onClick={stop}
+          onKeyDown={stop}
+        >
           <CapabilityControl
             device={device}
             capability={actionCapability}
@@ -603,106 +613,97 @@ function AvailableTile({ device, action, size, contained }: AvailableProps) {
             error={actionControl.error}
           />
         </div>
-        {onOff && <OnOffChip state={onOff} textSize={tileText.chip} />}
-      </Group>
+        {onOff && <OnOffChip state={onOff} fontSize={chipFontSize} />}
+      </Row>
     );
   } else if (readoutCapability) {
     controls = (
-      <Text size="xl" fw={700} style={{ fontFamily: "var(--font-display)" }}>
+      <span
+        className="font-bold"
+        style={{ fontFamily: "var(--font-display)", fontSize: "var(--text-xl)" }}
+      >
         {formatReadoutValue(device.state[readoutCapability.property], readoutCapability.unit)}
-      </Text>
+      </span>
     );
   } else {
     controls = (
-      <Text size={tileText.body} c="dimmed">
+      <span className="text-muted" style={{ fontSize: bodyFontSize }}>
         No controls
-      </Text>
+      </span>
     );
   }
 
   const readoutLine =
     actionCapability && readoutCapability && !lightCard && archetype !== "cover" ? (
-      <Text size={tileText.body} c="dimmed">
+      <span className="text-muted" style={{ fontSize: bodyFontSize }}>
         {formatReadoutValue(device.state[readoutCapability.property], readoutCapability.unit)}
-      </Text>
+      </span>
     ) : null;
 
   const footer = (
-    <Group justify="space-between" wrap="nowrap" gap="xs">
-      <Group gap={4} wrap="nowrap" style={{ minWidth: 0 }}>
-        {device.hidden && (
-          <Badge size="xs" color="gray" variant="outline">
-            Hidden
-          </Badge>
-        )}
+    <Row justify="between" align="center" gap={2} wrap={false}>
+      <Row gap={1} align="center" wrap={false} className="min-w-0">
+        {device.hidden && <Badge tone="neutral">Hidden</Badge>}
         {observation}
-      </Group>
+      </Row>
 
       {presentation.detail && (
         <Button
-          variant="subtle"
-          size={wall ? "md" : "compact-xs"}
-          rightSection={<IconChevronRight size={wall ? 18 : 12} />}
+          variant="soft"
+          size={wall ? "md" : "sm"}
           aria-label={`Open ${deviceLabel} details`}
-          onClick={(e) => {
-            e.stopPropagation();
+          onClick={(event) => {
+            event.stopPropagation();
             openDetail();
           }}
         >
           Details
+          <ChevronRight size={wall ? 18 : 12} aria-hidden />
         </Button>
       )}
-    </Group>
+    </Row>
   );
 
   // A wall readout card is a chrome-less dominant value with a quiet label
-  // (design.md D4; specs/wall-display "A readout card MUST present its value as
-  // the card's dominant content without a control surface"). It carries the
-  // group marker and the Hidden badge for parity with the other archetypes, and
-  // keeps only the non-textual observation indicator — never a control or
-  // navigation affordance.
+  // (specs/wall-display "A readout card MUST present its value as the card's
+  // dominant content without a control surface"). It carries the group marker
+  // and the Hidden badge for parity with the other archetypes, and keeps only
+  // the non-textual observation indicator — never a control or navigation
+  // affordance.
   const inner =
     wall && archetype === "readout" ? (
-      <Stack gap={wall ? "sm" : 6}>
+      <Stack gap={3}>
         {readoutCapability ? (
-          <Text
-            fz={WALL_METRIC_FONT_SIZE}
-            fw={700}
-            style={{ fontFamily: "var(--font-display)" }}
-            c={device.reachable ? undefined : "dimmed"}
+          <span
+            className={device.reachable ? "font-bold" : "font-bold text-muted"}
+            style={{ fontFamily: "var(--font-display)", fontSize: WALL_METRIC_FONT_SIZE }}
           >
             {formatReadoutValue(device.state[readoutCapability.property], readoutCapability.unit)}
-          </Text>
+          </span>
         ) : (
-          <Text fz={WALL_BODY_FONT_SIZE} c="dimmed">
+          <span className="text-muted" style={{ fontSize: WALL_BODY_FONT_SIZE }}>
             No reading
-          </Text>
+          </span>
         )}
-        <Group justify="space-between" wrap="nowrap" gap="xs" align="center">
-          <Group gap={4} wrap="nowrap" style={{ minWidth: 0, flex: 1 }}>
+        <Row justify="between" align="center" gap={2} wrap={false}>
+          <Row gap={1} align="center" wrap={false} className="min-w-0 flex-1">
             {isGroup && <GroupMarker wall={wall} />}
-            <Text
-              fz={WALL_BODY_FONT_SIZE}
-              c="dimmed"
-              truncate
+            <span
+              className="truncate text-muted"
               title={deviceLabel}
-              style={{ minWidth: 0 }}
+              style={{ minWidth: 0, fontSize: WALL_BODY_FONT_SIZE }}
             >
               {deviceLabel}
-            </Text>
-          </Group>
-          <Group gap={4} wrap="nowrap" align="center">
-            {device.hidden && (
-              <Badge size="xs" color="gray" variant="outline">
-                Hidden
-              </Badge>
-            )}
+            </span>
+          </Row>
+          <Row gap={1} align="center" wrap={false}>
+            {device.hidden && <Badge tone="neutral">Hidden</Badge>}
             {observation}
-          </Group>
-        </Group>
+          </Row>
+        </Row>
       </Stack>
     ) : (
-      <Stack gap={wall ? "sm" : 6}>
+      <Stack gap={wall ? 3 : 2}>
         {header}
         {controls}
         {readoutLine}
@@ -712,50 +713,53 @@ function AvailableTile({ device, action, size, contained }: AvailableProps) {
 
   if (surfaceLess) {
     return (
-      <Box
-        p={metrics?.padding ?? "sm"}
-        opacity={device.hidden ? 0.7 : 1}
-        style={{ cursor: cardAction ? "pointer" : "default", position: "relative" }}
+      <div
+        className={cn(
+          "relative",
+          padClass,
+          device.hidden && "opacity-70",
+          cardAction && "cursor-pointer",
+        )}
         onClick={cardAction ?? undefined}
         role={cardKeyboardAction ? "button" : undefined}
         tabIndex={cardKeyboardAction ? 0 : undefined}
         onKeyDown={
           cardKeyboardAction
-            ? (e) => {
-                if (e.key === "Enter" || e.key === " ") cardKeyboardAction();
+            ? (event) => {
+                if (event.key === " ") event.preventDefault();
+                if (event.key === "Enter" || event.key === " ") cardKeyboardAction();
               }
             : undefined
         }
       >
         {inner}
-      </Box>
+      </div>
     );
   }
 
   return (
-    <Paper
-      className="ambient-e1"
-      withBorder
-      p={metrics?.padding ?? "sm"}
-      radius="lg"
-      opacity={device.hidden ? 0.7 : 1}
-      style={{
-        cursor: cardAction ? "pointer" : "default",
-        position: "relative",
-        borderStyle: device.hidden ? "dashed" : undefined,
-      }}
+    <Card
+      padding={false}
+      elevation="raised"
+      className={cn(
+        padClass,
+        "relative",
+        device.hidden && "border-dashed opacity-70",
+        cardAction && "cursor-pointer",
+      )}
       onClick={cardAction ?? undefined}
       role={cardKeyboardAction ? "button" : undefined}
       tabIndex={cardKeyboardAction ? 0 : undefined}
       onKeyDown={
         cardKeyboardAction
-          ? (e) => {
-              if (e.key === "Enter" || e.key === " ") cardKeyboardAction();
+          ? (event) => {
+              if (event.key === " ") event.preventDefault();
+              if (event.key === "Enter" || event.key === " ") cardKeyboardAction();
             }
           : undefined
       }
     >
       {inner}
-    </Paper>
+    </Card>
   );
 }

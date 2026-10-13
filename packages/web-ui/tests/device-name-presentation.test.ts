@@ -77,13 +77,13 @@ describe("the raw identifier still addresses the device", () => {
     expect(await source(TILE)).toContain("deviceDetailPath(basePath, device.qualifiedId)");
     expect(await source(NAV)).toContain("deviceDetailPath(basePath, device.qualifiedId)");
     expect(await source(DETAIL)).toContain("deviceDetailPath(basePath, memberId)");
-    expect(await source(ROOM)).toContain("value: d.qualifiedId");
+    expect(await source(ROOM)).toContain("value={d.qualifiedId}");
     expect(await source(CONFIG)).toContain("value: device.qualifiedId");
   });
 
   it("keeps the raw qualifiedId visible in the device detail view", async () => {
     const detail = await source(DETAIL);
-    expect(detail).toContain('ff="monospace"');
+    expect(detail).toContain("font-mono");
     expect(detail).toContain("{qualifiedId}");
   });
 });

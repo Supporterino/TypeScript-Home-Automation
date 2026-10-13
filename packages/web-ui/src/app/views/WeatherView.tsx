@@ -1,26 +1,30 @@
 /**
- * The lazy Weather view (design.md D8, D12; specs/weather-services;
- * specs/web-ui "Weather View"; task 11.3).
+ * The lazy Weather view (design.md D11, D12; specs/weather-services; specs/web-ui
+ * "Weather View"; task 6.3).
  *
- * Reads `GET /api/weather`: current conditions and, when the registered
- * service provides one, a daily forecast. No service (or no resolvable
- * location) is a supported state, not an error — the endpoint's 404/400 map
- * to an explicit "not configured" message. Weather changes slowly, so the
- * view refetches on mount and on a stream reconnect only.
+ * Reads `GET /api/weather`: current conditions and, when the registered service
+ * provides one, a daily forecast. No service (or no resolvable location) is a
+ * supported state, not an error — the endpoint's 404/400 map to an explicit
+ * "not configured" message. Weather changes slowly, so the view refetches on
+ * mount and on a stream reconnect only.
+ *
+ * Condition is conveyed by icon + description text, never colour alone.
+ *
+ * Rebuilt on the Lumen primitive layer (`ui/*`) and `lucide-react`.
  */
-import { Alert, Group, Loader, Paper, SimpleGrid, Stack, Text, Title } from "@mantine/core";
-import {
-  IconCloud,
-  IconCloudRain,
-  IconCloudStorm,
-  IconDroplet,
-  IconMist,
-  IconSnowflake,
-  IconSun,
-  IconTemperature,
-  IconWind,
-} from "@tabler/icons-react";
+
 import type { WeatherData, WeatherUnavailable } from "@ts-ha/shared";
+import {
+  Cloud,
+  CloudFog,
+  CloudLightning,
+  CloudRain,
+  Droplet,
+  Snowflake,
+  Sun,
+  Thermometer,
+  Wind,
+} from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { fetchWeather } from "../api.js";
 import { useDataStore } from "../lib/data-store.js";
@@ -30,43 +34,31 @@ import {
   unavailableMessage,
   windDirectionLabel,
 } from "../lib/weather.js";
+import { Card, Grid, Row, Spinner, Stack, Stat } from "../ui/index.js";
 
 type WeatherCondition = WeatherData["current"]["condition"];
 
-/** Condition is conveyed by icon + description text, never color alone (MASTER "State Encoding Rule"). */
+/** Condition is conveyed by icon + description text, never colour alone. */
 function conditionIcon(condition: WeatherCondition): ReactNode {
   switch (condition) {
     case "clear":
-      return <IconSun size={44} />;
+      return <Sun size={44} />;
     case "rain":
     case "drizzle":
-      return <IconCloudRain size={44} />;
+      return <CloudRain size={44} />;
     case "thunderstorm":
-      return <IconCloudStorm size={44} />;
+      return <CloudLightning size={44} />;
     case "snow":
-      return <IconSnowflake size={44} />;
+      return <Snowflake size={44} />;
     case "mist":
     case "fog":
     case "haze":
     case "dust":
     case "smoke":
-      return <IconMist size={44} />;
+      return <CloudFog size={44} />;
     default:
-      return <IconCloud size={44} />;
+      return <Cloud size={44} />;
   }
-}
-
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <Paper withBorder p="sm">
-      <Text size="xs" fw={600} tt="uppercase" c="dimmed">
-        {label}
-      </Text>
-      <Text size="sm" fw={500}>
-        {value}
-      </Text>
-    </Paper>
-  );
 }
 
 export function WeatherView() {
@@ -99,115 +91,127 @@ export function WeatherView() {
 
   if (data && isWeatherUnavailable(data)) {
     return (
-      <Stack gap="md">
-        <Title order={2}>Weather</Title>
-        <Alert
-          color="ambient"
-          title="Weather is not configured"
-          icon={<IconCloud size={16} />}
-          data-testid="weather-unconfigured"
-        >
-          {unavailableMessage(data.reason)}
-        </Alert>
+      <Stack gap={4}>
+        <h2 className="font-display text-2xl font-bold text-ink">Weather</h2>
+        <Card data-testid="weather-unconfigured">
+          <Stack gap={2}>
+            <Row gap={2} align="center">
+              <Cloud size={18} aria-hidden className="text-accent" />
+              <span className="font-semibold text-ink">Weather is not configured</span>
+            </Row>
+            <p className="max-w-prose text-sm text-muted">{unavailableMessage(data.reason)}</p>
+          </Stack>
+        </Card>
       </Stack>
     );
   }
 
   return (
-    <Stack gap="lg">
-      <Title order={2}>Weather</Title>
+    <Stack gap={4}>
+      <h2 className="font-display text-2xl font-bold text-ink">Weather</h2>
 
       {error && (
-        <Alert color="red" title="Weather data unavailable">
-          {error}
-        </Alert>
+        <Stack gap={1} className="rounded-tile border border-danger/40 bg-danger/10 p-3">
+          <span className="font-semibold text-ink">Weather data unavailable</span>
+          <p role="alert" className="text-sm text-muted">
+            {error}
+          </p>
+        </Stack>
       )}
 
       {!data && !error ? (
-        <Loader size="sm" mt="md" />
+        <Spinner className="mt-2" />
       ) : data ? (
         <>
-          <Paper withBorder p="md">
-            <Group justify="space-between" wrap="nowrap" gap="md">
-              <Group gap="md" wrap="nowrap" style={{ minWidth: 0 }}>
-                <span style={{ color: "var(--info)", display: "flex" }} aria-hidden>
+          <Card>
+            <Row justify="between" align="center" gap={3} wrap>
+              <Row gap={3} align="center" className="min-w-0" wrap={false}>
+                <span aria-hidden className="flex text-info">
                   {conditionIcon(data.current.condition)}
                 </span>
                 <Stack gap={0}>
-                  <Text
-                    fw={700}
-                    style={{
-                      fontFamily: "var(--font-display)",
-                      fontSize: 32,
-                      lineHeight: 1.1,
-                    }}
-                  >
+                  <span className="font-display text-3xl font-bold leading-none text-ink">
                     {Math.round(data.current.temperature)}°C
-                  </Text>
-                  <Text size="sm" c="dimmed" tt="capitalize">
-                    {data.current.description}
-                  </Text>
+                  </span>
+                  <span className="text-sm capitalize text-muted">{data.current.description}</span>
                 </Stack>
-              </Group>
-              <Text size="xs" c="dimmed" ff="monospace" ta="right">
+              </Row>
+              <span className="text-right font-mono text-xs text-muted">
                 {data.location.latitude.toFixed(2)}, {data.location.longitude.toFixed(2)}
-              </Text>
-            </Group>
-          </Paper>
+              </span>
+            </Row>
+          </Card>
 
-          <SimpleGrid cols={{ base: 2, sm: 4 }} spacing="sm">
-            <Stat label="Feels like" value={`${Math.round(data.current.feelsLike)}°C`} />
-            <Stat label="Humidity" value={`${Math.round(data.current.humidity)}%`} />
-            <Stat
-              label="Wind"
-              value={`${data.current.wind.speed.toFixed(1)} m/s ${windDirectionLabel(
-                data.current.wind.direction,
-              )}`}
-            />
-            <Stat label="Cloud cover" value={`${Math.round(data.current.cloudCover)}%`} />
-          </SimpleGrid>
+          <Grid columns={2} md={4} gap={3}>
+            <Card>
+              <Stat
+                icon={<Thermometer size={14} />}
+                label="Feels like"
+                value={`${Math.round(data.current.feelsLike)}°C`}
+              />
+            </Card>
+            <Card>
+              <Stat
+                icon={<Droplet size={14} />}
+                label="Humidity"
+                value={`${Math.round(data.current.humidity)}%`}
+              />
+            </Card>
+            <Card>
+              <Stat
+                icon={<Wind size={14} />}
+                label="Wind"
+                value={`${data.current.wind.speed.toFixed(1)} m/s ${windDirectionLabel(
+                  data.current.wind.direction,
+                )}`}
+              />
+            </Card>
+            <Card>
+              <Stat label="Cloud cover" value={`${Math.round(data.current.cloudCover)}%`} />
+            </Card>
+          </Grid>
 
           {data.forecast.length > 0 && (
-            <Stack gap="xs">
-              <Group gap={6}>
-                <IconTemperature size={14} />
-                <Text size="xs" fw={600} tt="uppercase" c="dimmed">
+            <Stack gap={2}>
+              <Row gap={1} align="center">
+                <Thermometer size={14} aria-hidden className="text-muted" />
+                <span className="text-xs font-bold uppercase tracking-wide text-muted">
                   Forecast
-                </Text>
-              </Group>
+                </span>
+              </Row>
               {data.forecast.map((day) => (
-                <Paper key={day.date} withBorder p="sm">
-                  <Group justify="space-between" wrap="nowrap" gap="sm">
-                    <Text size="sm" fw={500} w={140}>
+                <Card key={day.date}>
+                  <Row justify="between" align="center" gap={2} wrap>
+                    <span className="w-36 shrink-0 text-sm font-medium text-ink">
                       {formatForecastDate(day.date)}
-                    </Text>
-                    <Group gap={6} wrap="nowrap" style={{ minWidth: 0 }}>
-                      <span style={{ color: "var(--info)", display: "flex" }} aria-hidden>
+                    </span>
+                    <Row gap={2} align="center" className="min-w-0" wrap={false}>
+                      <span aria-hidden className="flex shrink-0 text-info">
                         {conditionIcon(day.condition)}
                       </span>
-                      <Text size="sm" c="dimmed" truncate tt="capitalize">
+                      <span className="truncate text-sm capitalize text-muted">
                         {day.description}
-                      </Text>
-                    </Group>
-                    <Group gap="lg" wrap="nowrap">
-                      <Group gap={4} wrap="nowrap">
-                        <IconDroplet size={12} />
-                        <Text size="sm" ff="monospace">
+                      </span>
+                    </Row>
+                    <Row gap={3} align="center" wrap={false}>
+                      <Row gap={1} align="center" wrap={false}>
+                        <Droplet size={12} aria-hidden className="text-muted" />
+                        <span className="font-mono text-sm text-ink">
                           {Math.round(day.precipitationChance * 100)}%
-                        </Text>
-                      </Group>
-                      <Group gap={4} wrap="nowrap">
-                        <IconWind size={12} />
-                        <Text size="sm" ff="monospace">
+                        </span>
+                      </Row>
+                      <Row gap={1} align="center" wrap={false}>
+                        <Wind size={12} aria-hidden className="text-muted" />
+                        <span className="font-mono text-sm text-ink">
                           {day.wind.speed.toFixed(1)}
-                        </Text>
-                      </Group>
-                      <Text size="sm" ff="monospace">
+                        </span>
+                      </Row>
+                      <span className="font-mono text-sm text-ink">
                         {Math.round(day.tempHigh)}° / {Math.round(day.tempLow)}°
-                      </Text>
-                    </Group>
-                  </Group>
-                </Paper>
+                      </span>
+                    </Row>
+                  </Row>
+                </Card>
               ))}
             </Stack>
           )}

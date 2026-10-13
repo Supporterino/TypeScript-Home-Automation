@@ -1,8 +1,8 @@
 /**
- * Full-bleed wall surface (design.md D3, D9, D11; specs/web-ui "Full-Bleed
- * Wall Rendering"; specs/wall-display "Named Wall Profiles", "Profile Changes
- * Reach Open Walls", "Always-On Operation"). `App.tsx` renders this outside
- * `AppShell`, so it owns the whole viewport — no header, navigation, or footer.
+ * Full-bleed wall surface (design.md D13; specs/web-ui "Full-Bleed Wall
+ * Rendering"; specs/wall-display "Named Wall Profiles", "Profile Changes
+ * Reach Open Walls", "Always-On Operation"). `App.tsx` renders this outside the
+ * app shell, so it owns the whole viewport — no header, navigation, or footer.
  *
  * Fetches the profile by name, then rides the shared data-layer stream: this
  * component opens no `EventSource` of its own (the pure decision helpers live
@@ -20,14 +20,17 @@
  * editor, never a blank panel. A failed refetch of an already-loaded profile
  * likewise never blanks the wall: the last-good composition keeps rendering
  * and the error is shown as a dismissible banner over it.
+ *
+ * Rebuilt on the Lumen primitive layer (`ui/*`) and `lucide-react`.
  */
-import { Alert, Box, Button, Loader, Paper, Stack, Text, Title } from "@mantine/core";
+import { X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchWallOrNull } from "../api.js";
 import { useDataStore } from "../lib/data-store.js";
 import { wallsPath } from "../lib/router.js";
 import { Link, useRouter } from "../lib/router-context.js";
 import type { WallProfile } from "../types.js";
+import { Button, Card, IconButton, Spinner, Stack } from "../ui/index.js";
 import { wallErrorIsFatal, wallEventKindForProfile, wallViewState } from "../wall/live.js";
 import { WallGrid } from "../wall/WallGrid.js";
 
@@ -89,11 +92,12 @@ export function WallView({ name }: { name: string }) {
 
   if (error !== null && wallErrorIsFatal(profile)) {
     return (
-      <Box h="100dvh" w="100vw" p="md">
-        <Alert color="red" title="Wall unavailable">
-          {error}
-        </Alert>
-      </Box>
+      <div className="h-dvh w-screen p-4">
+        <div role="alert" className="rounded-tile border border-danger/40 bg-danger/10 p-4">
+          <p className="font-semibold text-ink">Wall unavailable</p>
+          <p className="text-sm text-muted">{error}</p>
+        </div>
+      </div>
     );
   }
 
@@ -104,48 +108,51 @@ export function WallView({ name }: { name: string }) {
     // last-good composition (the clock needs no connection) and surface the
     // error over it, dismissibly (specs/wall-display "Always-On Operation").
     return (
-      <Box h="100dvh" w="100vw" style={{ position: "relative" }}>
+      <div className="relative h-dvh w-screen">
         {error !== null && (
-          <Alert
-            color="yellow"
-            title="Could not refresh this wall"
-            withCloseButton
-            onClose={() => setError(null)}
-            style={{ position: "absolute", top: 12, left: 12, right: 12, zIndex: 10 }}
+          <div
+            role="alert"
+            className="absolute inset-x-3 top-3 z-10 flex items-start justify-between gap-3 rounded-tile border border-stale/40 bg-stale/10 p-3"
           >
-            {error}
-          </Alert>
+            <div>
+              <p className="font-semibold text-ink">Could not refresh this wall</p>
+              <p className="text-sm text-muted">{error}</p>
+            </div>
+            <IconButton label="Dismiss" size="sm" onClick={() => setError(null)}>
+              <X size={16} />
+            </IconButton>
+          </div>
         )}
         <WallGrid config={profile.config} />
-      </Box>
+      </div>
     );
   }
 
   if (state === "unknown" || state === "deleted") {
     return (
-      <Box h="100dvh" w="100vw" p="md" style={{ display: "grid", placeItems: "center" }}>
-        <Paper withBorder p="xl" radius="md" maw={460}>
-          <Stack gap="sm">
-            <Title order={3}>{state === "deleted" ? "Wall deleted" : "Wall not found"}</Title>
-            <Text c="dimmed" size="sm">
+      <div className="grid h-dvh w-screen place-items-center p-4">
+        <Card className="max-w-[460px] p-6">
+          <Stack gap={2}>
+            <h2 className="font-display text-xl font-bold text-ink">
+              {state === "deleted" ? "Wall deleted" : "Wall not found"}
+            </h2>
+            <p className="text-sm text-muted">
               {state === "deleted"
                 ? `The "${name}" wall profile was deleted while this panel was open. Create a profile with this name to bring it back.`
                 : `No wall profile named "${name}" exists. Create it in the wall editor, then open it at this address.`}
-            </Text>
-            <Link to={wallsPath(basePath)} style={{ textDecoration: "none" }}>
-              <Button variant="light" size="sm">
-                Open the wall editor
-              </Button>
-            </Link>
+            </p>
+            <Button asChild variant="soft" size="sm">
+              <Link to={wallsPath(basePath)}>Open the wall editor</Link>
+            </Button>
           </Stack>
-        </Paper>
-      </Box>
+        </Card>
+      </div>
     );
   }
 
   return (
-    <Box h="100dvh" w="100vw" style={{ display: "grid", placeItems: "center" }}>
-      <Loader size="sm" />
-    </Box>
+    <div className="grid h-dvh w-screen place-items-center">
+      <Spinner />
+    </div>
   );
 }

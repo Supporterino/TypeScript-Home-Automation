@@ -1,6 +1,6 @@
 # Display typeface — Plus Jakarta Sans (subset)
 
-Self-hosted display face for the Ambient Glass design system. Body/UI text uses
+Self-hosted display face for the Lumen design system. Body/UI text uses
 the system stack; only headings and numeric readouts use this font.
 
 - **File:** `plus-jakarta-sans-latin.woff2`
@@ -13,7 +13,7 @@ the system stack; only headings and numeric readouts use this font.
 The file is a subset build of the upstream variable font; it is committed so
 the build needs no network and no font dependency is added to `package.json`.
 `build:web-ui` emits it as a content-hashed `.woff2` referenced from
-`../styles/tokens.css`.
+`../styles/app.css`.
 
 ## Reproduction
 

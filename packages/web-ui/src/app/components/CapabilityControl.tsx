@@ -1,21 +1,34 @@
 /**
  * Renders a control appropriate to one flattened capability's declared type
- * and constraints (design.md D12; task 10.11, 10.12). Shared by the device
- * tile's primary control and the device detail view's full control list —
- * detail views stay fully generic, tiles apply a curated ranking on top,
- * never a different rendering path underneath.
+ * and constraints (design.md D5, D12; specs/web-ui "Device Control
+ * Interface"). Shared by the device tile's primary control and the device
+ * detail view's full control list — detail views stay fully generic, tiles
+ * apply a curated ranking on top, never a different rendering path underneath.
  *
- * A read-only capability renders a plain readout. A writable one renders
- * the widget matching its `valueType`, constrained to its declared range or
- * permitted values so an out-of-range command cannot be composed — and
- * wired through {@link useOptimisticDeviceProperty} for immediate
- * reflection, reconciliation, and revert.
+ * A read-only capability renders a plain readout. A writable one renders the
+ * widget matching its `valueType`, constrained to its declared range or
+ * permitted values so an out-of-range command cannot be composed — and wired
+ * through {@link useOptimisticDeviceProperty} for immediate reflection,
+ * reconciliation, and revert. A rejected command surfaces its message inline
+ * rather than being swallowed.
+ *
+ * Rebuilt on the Lumen primitive layer (`ui/*`); its props and behaviour
+ * contracts are preserved (task 4.2).
  */
-import { Select, Slider, Switch, Text, TextInput, Tooltip } from "@mantine/core";
 import { composeBooleanCapabilityValue, readBooleanCapabilityValue } from "@ts-ha/shared";
 import type { FlatCapability } from "../lib/capability-ranking.js";
 import { useOptimisticDeviceProperty } from "../lib/use-optimistic-property.js";
 import type { DeviceDescriptor } from "../types.js";
+import {
+  cn,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  Slider,
+  Switch,
+} from "../ui/index.js";
 
 interface Props {
   device: DeviceDescriptor;
@@ -23,9 +36,8 @@ interface Props {
   /** Renders at a smaller scale for a tile's primary control. */
   compact?: boolean;
   /**
-   * Explicit Mantine size for the rendered control, overriding the
-   * `compact` scale. Used by the wall tile's size token to enlarge controls
-   * to the wall's minimum touch target (design.md D7).
+   * Explicit scale for the rendered control, overriding the `compact` scale.
+   * Used by the wall tile's size token to keep its controls at the wall scale.
    */
   size?: "sm" | "md" | "lg";
   /**
@@ -39,6 +51,18 @@ interface Props {
   onChange?: (next: unknown) => void;
   /** Error from the caller's optimistic hook, surfaced when controlled. */
   error?: string | null;
+}
+
+/** Maps a scale token to a Lumen type size (design.md D3). */
+function controlFontSize(size: "sm" | "md" | "lg"): string {
+  switch (size) {
+    case "sm":
+      return "var(--text-sm)";
+    case "lg":
+      return "var(--text-lg)";
+    default:
+      return "var(--text-base)";
+  }
 }
 
 /** Formats a readout value for display, applying the capability's unit when numeric. */
@@ -59,6 +83,7 @@ export function CapabilityControl({
   error: controlledError,
 }: Props) {
   const controlSize = size ?? (compact ? "sm" : "md");
+  const fontSize = controlFontSize(controlSize);
   const confirmedValue = device.state[capability.property];
   const optimistic = useOptimisticDeviceProperty(
     device.qualifiedId,
@@ -77,81 +102,89 @@ export function CapabilityControl({
   const control = (() => {
     if (!capability.access.writable) {
       return (
-        <Text size={controlSize} fw={600}>
+        <span className="font-semibold" style={{ fontSize }}>
           {formatReadoutValue(value, capability.unit)}
-        </Text>
+        </span>
       );
     }
 
     switch (capability.valueType) {
       case "boolean":
         // Reads and writes through the capability's declared on/off encoding
-        // rather than general-purpose truthiness or a raw JSON boolean —
-        // some sources (Zigbee2MQTT) report and accept a string encoding,
-        // and both assumptions silently misread/mis-command those devices
-        // (design.md D1, D2; specs/web-ui "Device Control Interface").
+        // rather than general-purpose truthiness or a raw JSON boolean — some
+        // sources (Zigbee2MQTT) report and accept a string encoding, and both
+        // assumptions silently misread/mis-command those devices.
         return (
           <Switch
-            size={controlSize}
             checked={readBooleanCapabilityValue(capability, value)}
             disabled={disabled}
-            onChange={(e) =>
-              setValue(composeBooleanCapabilityValue(capability, e.currentTarget.checked))
+            onCheckedChange={(checked) =>
+              setValue(composeBooleanCapabilityValue(capability, checked))
             }
             aria-label={capability.property}
           />
         );
 
       case "numeric": {
+        // The slider is fixed to the capability's declared range and step, so
+        // an out-of-range command cannot be composed (task 4.2).
         const min = capability.range?.min ?? 0;
         const max = capability.range?.max ?? 100;
         const numericValue = typeof value === "number" ? value : min;
         return (
           <Slider
-            size={controlSize}
             min={min}
             max={max}
             step={capability.step ?? 1}
-            value={numericValue}
+            value={[numericValue]}
             disabled={disabled}
-            label={(v) => (capability.unit ? `${v} ${capability.unit}` : String(v))}
-            onChange={(v) => setValue(v)}
+            onValueChange={([next]) => setValue(next)}
+            aria-label={capability.property}
           />
         );
       }
 
       case "enum": {
-        const options = (capability.permittedValues ?? []).map((v) => String(v));
+        const options = (capability.permittedValues ?? []).map((option) => String(option));
+        const current = typeof value === "string" || typeof value === "number" ? String(value) : "";
         return (
-          <Select
-            size={controlSize}
-            data={options}
-            value={typeof value === "string" || typeof value === "number" ? String(value) : null}
-            disabled={disabled}
-            onChange={(v) => {
-              if (v !== null) setValue(v);
-            }}
-            aria-label={capability.property}
-          />
+          <Select value={current} onValueChange={(next) => setValue(next)} disabled={disabled}>
+            <SelectTrigger aria-label={capability.property}>
+              <SelectValue placeholder="—" />
+            </SelectTrigger>
+            <SelectContent>
+              {options.map((option) => (
+                <SelectItem key={option} value={option}>
+                  {option}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         );
       }
 
       case "text":
         return (
-          <TextInput
-            size={controlSize}
+          <input
+            type="text"
             defaultValue={typeof value === "string" ? value : ""}
             disabled={disabled}
-            onBlur={(e) => setValue(e.currentTarget.value)}
+            onBlur={(event) => setValue(event.currentTarget.value)}
             aria-label={capability.property}
+            className={cn(
+              "touch-target h-10 w-full rounded-input border border-hairline bg-surface px-3 text-ink motion-toggle",
+              "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus",
+              "disabled:cursor-not-allowed disabled:opacity-50",
+            )}
+            style={{ fontSize }}
           />
         );
 
       default:
         return (
-          <Text size={controlSize} c="dimmed">
+          <span className="text-muted" style={{ fontSize }}>
             {formatReadoutValue(value, capability.unit)}
-          </Text>
+          </span>
         );
     }
   })();
@@ -159,8 +192,11 @@ export function CapabilityControl({
   if (!error) return control;
 
   return (
-    <Tooltip label={error} color="red" withArrow>
+    <div className="flex flex-col gap-1">
       {control}
-    </Tooltip>
+      <p role="alert" className="text-xs font-medium text-danger">
+        {error}
+      </p>
+    </div>
   );
 }

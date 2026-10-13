@@ -5,7 +5,7 @@
  * generated manifest).
  *
  * The icon is a 512×512 SVG:
- *   - Ambient Glass accent (#38BDF8) rounded square background (iOS icon radius)
+ *   - ts-ha accent (#5EA8FF) rounded square background (iOS icon radius)
  *   - White "ts-ha" wordmark in bold monospace, vertically centred
  *
  * Run automatically as the first step of build:web-ui.
@@ -17,7 +17,7 @@ const ROOT = join(import.meta.dirname, "..");
 const OUT = join(ROOT, "src/assets/icon-svg.ts");
 
 const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
-  <rect width="512" height="512" rx="115" ry="115" fill="#38BDF8"/>
+  <rect width="512" height="512" rx="115" ry="115" fill="#5EA8FF"/>
   <text
     x="256"
     y="318"

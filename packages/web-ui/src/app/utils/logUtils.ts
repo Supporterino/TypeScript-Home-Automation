@@ -37,21 +37,6 @@ export const LEVEL_OPTIONS = [
 
 // ── Helper functions ───────────────────────────────────────────────────────
 
-export function levelColor(level: number): string {
-  if (level <= 20) return "cyan";
-  if (level === 30) return "green";
-  if (level === 40) return "yellow";
-  return "red";
-}
-
-/** Raw CSS color for use in non-Mantine style props (e.g. border-left). */
-export function levelCssColor(level: number): string {
-  if (level <= 20) return "var(--mantine-color-cyan-5)";
-  if (level === 30) return "var(--mantine-color-green-5)";
-  if (level === 40) return "var(--mantine-color-yellow-5)";
-  return "var(--mantine-color-red-5)";
-}
-
 /** Abbreviated time string shown in the log row. */
 export function formatTime(ts: number): string {
   return new Date(ts).toLocaleTimeString();

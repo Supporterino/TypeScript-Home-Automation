@@ -1,14 +1,23 @@
 /**
- * Automation list — shows each automation's enabled state and allows it to
- * be toggled, reverting and surfacing the error on failure (design.md D4,
- * D27; specs/web-ui "Automation Management Interface"; task 10.13).
+ * Automation list — shows each automation's enabled state and allows it to be
+ * toggled, reverting and surfacing the reported error on failure (design.md
+ * D12; specs/web-ui "Automation Management Interface"; task 6.1).
+ *
+ * The switch is controlled by the store's `automation.enabled`, never by local
+ * optimistic state: a failed toggle therefore leaves the displayed state at its
+ * previous value, which is the "failure reverts" behaviour the spec requires.
+ * The error is surfaced both for assistive technology (`role="alert"`) and
+ * visually, never by colour alone.
+ *
+ * Rebuilt on the Lumen primitive layer (`ui/*`) and `lucide-react`.
  */
-import { Group, Paper, Stack, Switch, Text, Title, Tooltip } from "@mantine/core";
+import { Workflow } from "lucide-react";
 import { useState } from "react";
 import { setAutomationEnabled } from "../api.js";
 import { useDataStore } from "../lib/data-store.js";
 import { automationDetailPath } from "../lib/router.js";
 import { Link, useRouter } from "../lib/router-context.js";
+import { Card, EmptyState, Row, Stack, Switch } from "../ui/index.js";
 
 export function AutomationsView() {
   const { automations, refresh } = useDataStore();
@@ -40,50 +49,52 @@ export function AutomationsView() {
   }
 
   return (
-    <Stack gap="md">
-      <Title order={2}>Automations</Title>
+    <Stack gap={4}>
+      <h2 className="font-display text-2xl font-bold text-ink">Automations</h2>
 
       {automations.length === 0 ? (
-        <Text c="dimmed" size="sm">
-          No automations discovered.
-        </Text>
+        <EmptyState
+          icon={<Workflow size={28} />}
+          title="No automations discovered"
+          description="Automations appear here once the engine has scanned its automations directory."
+        />
       ) : (
-        <Stack gap="xs">
+        <Stack gap={2}>
           {automations.map((automation) => {
             const error = errors.get(automation.name);
-            const control = (
-              <Switch
-                checked={automation.enabled}
-                disabled={pending.has(automation.name)}
-                onChange={(e) => handleToggle(automation.name, e.currentTarget.checked)}
-                onClick={(e) => e.stopPropagation()}
-                aria-label={`Enable ${automation.name}`}
-              />
-            );
             return (
-              <Paper key={automation.name} withBorder p="sm" radius="md">
-                <Group justify="space-between">
+              <Card key={automation.name} padding={false}>
+                <Row justify="between" align="center" gap={2} wrap>
                   <Link
                     to={automationDetailPath(basePath, automation.name)}
-                    style={{ textDecoration: "none", color: "inherit" }}
+                    className="flex min-w-0 flex-1 items-center rounded-tile px-4 py-3 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
                   >
-                    <Stack gap={2}>
-                      <Text fw={600}>{automation.name}</Text>
-                      <Text size="xs" c="dimmed">
+                    <Stack gap={0} className="min-w-0">
+                      <span className="truncate font-semibold text-ink">{automation.name}</span>
+                      <span className="text-xs text-muted">
                         {automation.triggers.length} trigger
                         {automation.triggers.length === 1 ? "" : "s"}
-                      </Text>
+                      </span>
                     </Stack>
                   </Link>
-                  {error ? (
-                    <Tooltip label={error} color="red">
-                      {control}
-                    </Tooltip>
-                  ) : (
-                    control
-                  )}
-                </Group>
-              </Paper>
+                  <Stack gap={1} align="end" className="shrink-0 py-2 pr-4">
+                    <label className="flex items-center gap-2 text-sm text-muted">
+                      <Switch
+                        checked={automation.enabled}
+                        disabled={pending.has(automation.name)}
+                        aria-label={`Enable ${automation.name}`}
+                        onCheckedChange={(next) => void handleToggle(automation.name, next)}
+                      />
+                      <span>{automation.enabled ? "Enabled" : "Disabled"}</span>
+                    </label>
+                    {error && (
+                      <p role="alert" className="max-w-[16rem] text-xs text-danger">
+                        {error}
+                      </p>
+                    )}
+                  </Stack>
+                </Row>
+              </Card>
             );
           })}
         </Stack>

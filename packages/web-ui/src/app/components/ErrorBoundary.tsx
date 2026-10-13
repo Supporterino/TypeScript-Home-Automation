@@ -1,6 +1,6 @@
-import { Button, Stack, Text, Title } from "@mantine/core";
-import { IconAlertTriangle } from "@tabler/icons-react";
+import { TriangleAlert } from "lucide-react";
 import { Component, type ErrorInfo, type ReactNode } from "react";
+import { Button, Stack } from "../ui/index.js";
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -13,14 +13,17 @@ interface ErrorBoundaryState {
 /**
  * Contains a render failure so it does not take down the whole dashboard.
  *
- * Placed structurally at the single point where view content is swapped —
- * today the tab content area in `App.tsx`, to be relocated to the route
- * outlet once 10.1 introduces the router — never per view, so there is one
- * place for it to be wrong (design.md R16).
+ * Placed structurally at the single point where view content is swapped — the
+ * route outlet in `App.tsx` — never per view, so there is one place for it to
+ * be wrong.
  *
  * Recovery on navigating away and back is achieved by the caller remounting
- * this component (e.g. keying it by the active view) rather than by any
- * internal retry logic here — a fresh mount clears `state.error` for free.
+ * this component (keying it by the active view) rather than by any internal
+ * retry logic here — a fresh mount clears `state.error` for free. The Retry
+ * button re-renders the same children without a navigation.
+ *
+ * Rebuilt on the Lumen primitive layer (`ui/*`); its view-failure isolation and
+ * recovery-on-navigation contract are preserved (task 4.3).
  */
 export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   override state: ErrorBoundaryState = { error: null };
@@ -41,16 +44,21 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   override render(): ReactNode {
     if (this.state.error) {
       return (
-        <Stack align="center" justify="center" gap="sm" p="xl" mih={200}>
-          <IconAlertTriangle size={32} color="var(--mantine-color-red-6)" />
-          <Title order={4}>Something went wrong rendering this view</Title>
-          <Text size="sm" c="dimmed" ta="center" maw={480}>
+        <Stack
+          align="center"
+          gap={3}
+          className="justify-center px-6 py-10 text-center"
+          style={{ minHeight: 200 }}
+        >
+          <TriangleAlert size={32} className="text-danger" aria-hidden />
+          <p className="text-lg font-semibold text-ink">Something went wrong rendering this view</p>
+          <p className="max-w-prose text-sm text-muted">
             {this.state.error.message || "An unexpected error occurred."}
-          </Text>
-          <Text size="xs" c="dimmed" ta="center">
+          </p>
+          <p className="text-xs text-muted">
             The rest of the dashboard is unaffected. Navigate to another view and back to retry.
-          </Text>
-          <Button size="xs" variant="light" onClick={this.reset}>
+          </p>
+          <Button size="sm" variant="soft" onClick={this.reset}>
             Retry
           </Button>
         </Stack>

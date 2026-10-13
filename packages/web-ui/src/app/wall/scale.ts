@@ -19,9 +19,9 @@ export type WallTileSize = "default" | "wall";
 export interface WallTileMetrics {
   /** Minimum interactive-control side, in CSS pixels. */
   control: number;
-  /** Mantine size token for the tile's embedded form controls. */
+  /** Size token for the tile's embedded form controls. */
   controlSize: "sm" | "md" | "lg";
-  /** Mantine padding token for the tile's paper. */
+  /** Padding token for the tile's surface. */
   padding: "sm" | "md";
 }
 
@@ -98,7 +98,7 @@ export interface DeviceTileText {
 
 /**
  * Resolves the tile's text sizes. The dashboard token returns the existing
- * Mantine sizes unchanged (`xs` chip, `sm` body); the wall token returns the
+ * sizes unchanged (`xs` chip, `sm` body); the wall token returns the
  * ramp's 16px body floor, so no wall tile text falls below it.
  */
 export function deviceTileText(size: WallTileSize = "default"): DeviceTileText {

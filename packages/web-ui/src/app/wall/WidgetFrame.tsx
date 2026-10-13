@@ -1,12 +1,18 @@
 /**
- * The framed container each grid widget renders inside (design.md D2, D3, D4,
- * D6). The frame owns the widget's grammar-driven surface and its opt-in title,
- * while the per-widget render boundary is applied by {@link WallGrid}. The
- * ambient-vs-control decision and the title rule are the pure
- * {@link wallFrameChrome}/{@link widgetTitle} helpers, so this component stays
- * a thin wrapper that dispatches to the registry's renderer.
+ * The framed container each grid widget renders inside (design.md D13; specs/
+ * wall-display "Wall Glanceability"). The frame owns the widget's
+ * grammar-driven surface and its opt-in title, while the per-widget render
+ * boundary is applied by {@link WallGrid}. The ambient-vs-control decision and
+ * the title rule are the pure {@link wallFrameChrome}/{@link widgetTitle}
+ * helpers, so this component stays a thin wrapper that dispatches to the
+ * registry's renderer.
+ *
+ * Rebuilt on the Lumen layers (design.md D13): an ambient readout draws no
+ * surface and sits its large type directly on the panel background, while a
+ * control widget draws a `--surface` tile with a hairline border and the shared
+ * tile radius. The surface tokens come from {@link wallFrameChrome} — never a
+ * literal in the view.
  */
-import { Box, Paper, Text } from "@mantine/core";
 import type { WallWidget } from "@ts-ha/shared";
 import { wallFrameChrome, wallFrameDrawsSurface, widgetTitle } from "./frame.js";
 import { getWidgetDescriptor } from "./registry.js";
@@ -22,44 +28,38 @@ export function WidgetFrame({ widget }: { widget: WallWidget }) {
   const content = (
     <>
       {title !== null && (
-        <Text fz={WALL_LABEL_FONT_SIZE} fw={600} tt="uppercase" c="dimmed" mb={6} truncate>
+        <p
+          className="truncate font-semibold uppercase text-muted"
+          style={{ fontSize: WALL_LABEL_FONT_SIZE, marginBottom: 6 }}
+        >
           {title}
-        </Text>
+        </p>
       )}
-      <Box style={{ flex: 1, minHeight: 0 }}>
+      <div style={{ flex: 1, minHeight: 0 }}>
         <Renderer widget={widget} contained={drawsSurface} />
-      </Box>
+      </div>
     </>
   );
 
   if (!drawsSurface) {
     return (
-      <Box
-        h="100%"
-        style={{ display: "flex", flexDirection: "column", overflow: "hidden", minHeight: 0 }}
-      >
+      <div className="flex h-full flex-col overflow-hidden" style={{ minHeight: 0 }}>
         {content}
-      </Box>
+      </div>
     );
   }
 
   return (
-    <Paper
-      withBorder
-      radius="lg"
-      h="100%"
+    <div
+      className="flex h-full flex-col overflow-hidden border p-4"
       style={{
-        display: "flex",
-        flexDirection: "column",
-        overflow: "hidden",
         minHeight: 0,
-        padding: chrome.padding ?? undefined,
         background: chrome.background ?? undefined,
         borderColor: chrome.borderColor ?? undefined,
         borderRadius: chrome.radius ?? undefined,
       }}
     >
       {content}
-    </Paper>
+    </div>
   );
 }

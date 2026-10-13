@@ -118,10 +118,10 @@ describe("cover transport optimistic wiring (task 4.2)", () => {
     expect(tile).toContain("stopError={stopControl.error}");
   });
 
-  it("surfaces a failed transport command with the red tooltip used elsewhere", async () => {
+  it("surfaces a failed transport command with a danger treatment", async () => {
     const src = await source(COVER_TRANSPORT);
     expect(src).toContain("<Tooltip");
-    expect(src).toContain('color="red"');
+    expect(src).toContain("text-danger");
     expect(src).toContain("error={stopError}");
   });
 });
@@ -131,7 +131,7 @@ describe("cover transport touch target and no-hover operation (task 4.3)", () =>
     const tile = await source(TILE);
     expect(tile).toContain("control={metrics?.control ?? 32}");
     const src = await source(COVER_TRANSPORT);
-    expect(src).toContain("size={control}");
+    expect(src).toContain("width: control");
   });
 
   it("sets the wall metric to at least the 48px minimum touch target", () => {

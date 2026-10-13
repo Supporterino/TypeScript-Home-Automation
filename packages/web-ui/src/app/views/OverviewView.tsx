@@ -1,24 +1,27 @@
 /**
- * The Overview landing view (design.md D4; specs/web-ui "Overview Landing";
- * task 8.4). A control surface that summarizes the home before listing it:
- * live summary metrics, the user's favorites, and each room as a navigable
- * zone. Every value is derived from the store, so a streamed device event
- * updates the surface without a manual refresh.
+ * The Overview landing view (design.md D4; specs/web-ui "Overview Landing").
+ * A control surface that summarizes the home before listing it: live summary
+ * metrics, the user's favorites, and each room as a navigable zone. Every value
+ * is derived from the store, so a streamed device event updates the surface
+ * without a manual refresh.
  *
  * Hidden devices are shown per the existing default (filtered out) but the
  * overview deliberately offers no filter controls — those belong to the
  * device/room listings, not the consumer surface (MASTER anti-pattern).
+ *
+ * Rebuilt on the Lumen primitive layer (`ui/*`) and `lucide-react` (task 5.1);
+ * the derivation (`lib/overview.ts`) and the store it reads are unchanged.
  */
-import { Badge, Group, Paper, SimpleGrid, Stack, Text, Title } from "@mantine/core";
 import {
-  IconActivity,
-  IconAlertTriangle,
-  IconClock,
-  IconDoorEnter,
-  IconPlugOff,
-  IconPower,
-  IconStar,
-} from "@tabler/icons-react";
+  Activity,
+  Clock,
+  DoorOpen,
+  PlugZap,
+  Power,
+  Star,
+  TriangleAlert,
+  Unplug,
+} from "lucide-react";
 import type { ReactNode } from "react";
 import { useMemo } from "react";
 import { DeviceTile } from "../components/DeviceTile.js";
@@ -28,31 +31,31 @@ import { roomPath } from "../lib/router.js";
 import { Link, useRouter } from "../lib/router-context.js";
 import { useNow } from "../lib/use-now.js";
 import type { DeviceDescriptor } from "../types.js";
+import { Badge, Card, EmptyState, Grid, Row, Stack, Stat } from "../ui/index.js";
 
-/** One at-a-glance metric: color is never the only channel — icon and label carry it too. */
-function MetricCard({
-  icon,
-  label,
-  value,
-  colorVar,
-}: {
-  icon: ReactNode;
-  label: string;
-  value: number;
-  colorVar: string;
-}) {
+/**
+ * A quiet uppercase section label, optionally a link into the section. The
+ * icon is decorative; the label carries the meaning (design.md D9).
+ */
+function SectionHeading({ icon, label, to }: { icon: ReactNode; label: ReactNode; to?: string }) {
+  const heading = (
+    <Row gap={1} align="center" wrap={false} className="text-muted">
+      <span aria-hidden className="flex">
+        {icon}
+      </span>
+      <span className="text-xs font-bold uppercase tracking-wide">{label}</span>
+    </Row>
+  );
+
+  if (to === undefined) return heading;
+
   return (
-    <Paper withBorder p="sm">
-      <Group gap={6} wrap="nowrap">
-        <span style={{ color: `var(${colorVar})`, display: "flex" }}>{icon}</span>
-        <Text size="xs" fw={600} tt="uppercase" c="dimmed">
-          {label}
-        </Text>
-      </Group>
-      <Text size="xl" fw={700} style={{ fontFamily: "var(--font-display)" }}>
-        {value}
-      </Text>
-    </Paper>
+    <Link
+      to={to}
+      className="inline-flex rounded-input focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+    >
+      {heading}
+    </Link>
   );
 }
 
@@ -94,90 +97,77 @@ export function OverviewView() {
   const emptyHome = devices.length === 0;
 
   return (
-    <Stack gap="lg">
-      <Group justify="space-between" wrap="wrap">
-        <Title order={2}>Overview</Title>
-        <Badge
-          color={ready ? "green" : "red"}
-          variant="light"
-          size="sm"
-          leftSection={ready ? <IconPower size={12} /> : <IconAlertTriangle size={12} />}
-        >
+    <Stack gap={6}>
+      <Row justify="between" align="center" gap={3} wrap>
+        <h2 className="font-display text-2xl font-bold text-ink">Overview</h2>
+        <Badge tone={ready ? "on" : "danger"}>
+          {ready ? <Power size={12} aria-hidden /> : <TriangleAlert size={12} aria-hidden />}
           {ready ? "Engine ready" : "Engine not ready"}
         </Badge>
-      </Group>
+      </Row>
 
       {emptyHome ? (
-        <Text c="dimmed" size="sm">
-          No devices yet. Devices appear here once a source (Zigbee, Shelly, Nanoleaf, or a state
-          toggle) reports them.
-        </Text>
+        <EmptyState
+          icon={<PlugZap size={28} />}
+          title="No devices yet"
+          description="Devices appear here once a source (Zigbee, Shelly, Nanoleaf, or a state toggle) reports them."
+        />
       ) : (
         <>
-          <SimpleGrid cols={{ base: 2, sm: 4 }} spacing="sm">
-            <MetricCard
-              icon={<IconPower size={16} />}
-              label="On"
-              value={summary.on}
-              colorVar="--on"
-            />
-            <MetricCard
-              icon={<IconPlugOff size={16} />}
-              label="Unreachable"
-              value={summary.unreachable}
-              colorVar="--danger"
-            />
-            <MetricCard
-              icon={<IconClock size={16} />}
-              label="Stale"
-              value={summary.stale}
-              colorVar="--stale"
-            />
-            <MetricCard
-              icon={<IconActivity size={16} />}
-              label="Motion"
-              value={summary.motion}
-              colorVar="--info"
-            />
-          </SimpleGrid>
+          <Grid columns={2} md={4} gap={3}>
+            <Card>
+              <Stat icon={<Power size={14} />} label="On" value={summary.on} tone="on" />
+            </Card>
+            <Card>
+              <Stat
+                icon={<Unplug size={14} />}
+                label="Unreachable"
+                value={summary.unreachable}
+                tone="danger"
+              />
+            </Card>
+            <Card>
+              <Stat icon={<Clock size={14} />} label="Stale" value={summary.stale} tone="stale" />
+            </Card>
+            <Card>
+              <Stat
+                icon={<Activity size={14} />}
+                label="Motion"
+                value={summary.motion}
+                tone="info"
+              />
+            </Card>
+          </Grid>
 
           {favoriteDevices.length > 0 && (
-            <Stack gap="xs">
-              <Group gap={6}>
-                <IconStar size={14} />
-                <Text size="sm" fw={600} c="dimmed" tt="uppercase">
-                  Favorites
-                </Text>
-              </Group>
-              <SimpleGrid cols={{ base: 2, sm: 3, md: 4, lg: 5 }} spacing="sm">
+            <Stack gap={3}>
+              <SectionHeading icon={<Star size={14} className="text-stale" />} label="Favorites" />
+              <Grid columns={2} md={3} lg={5} gap={3}>
                 {favoriteDevices.map((device) => (
                   <DeviceTile key={device.qualifiedId} device={device} />
                 ))}
-              </SimpleGrid>
+              </Grid>
             </Stack>
           )}
 
           {roomZones.map(({ room, devices: zoneDevices }) => (
-            <Stack key={room.id} gap="xs">
-              <Link
+            <Stack key={room.id} gap={3}>
+              <SectionHeading
+                icon={<DoorOpen size={14} />}
+                label={room.name}
                 to={roomPath(basePath, room.id)}
-                style={{ textDecoration: "none", color: "inherit" }}
-              >
-                <Group gap={6}>
-                  <IconDoorEnter size={14} />
-                  <Text size="sm" fw={600} c="dimmed" tt="uppercase">
-                    {room.name}
-                  </Text>
-                </Group>
-              </Link>
-              <SimpleGrid cols={{ base: 2, sm: 3, md: 4, lg: 5 }} spacing="sm">
+              />
+              <Grid columns={2} md={3} lg={5} gap={3}>
                 {zoneDevices.slice(0, OVERVIEW_ZONE_LIMIT).map((device) => (
                   <DeviceTile key={device.qualifiedId} device={device} />
                 ))}
-              </SimpleGrid>
+              </Grid>
               {zoneDevices.length > OVERVIEW_ZONE_LIMIT && (
-                <Link to={roomPath(basePath, room.id)}>
-                  <Text size="xs">View all {zoneDevices.length} devices</Text>
+                <Link
+                  to={roomPath(basePath, room.id)}
+                  className="inline-flex w-fit rounded-input text-sm font-medium text-accent hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+                >
+                  View all {zoneDevices.length} devices
                 </Link>
               )}
             </Stack>

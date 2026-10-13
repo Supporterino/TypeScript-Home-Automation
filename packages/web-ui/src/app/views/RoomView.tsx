@@ -1,49 +1,22 @@
 /**
- * A single room's detail and management view — rename, delete, assign,
- * unassign (design.md D14, D6, D7; specs/web-ui "Room Management
- * Interface"; task 10.8, 10.9).
+ * A single room's detail and control view — assign, unassign, filters, and the
+ * room-level command (design.md D14, D6, D7; specs/web-ui "Room Management
+ * Interface", "Room-Level Command"; task 5.2).
  *
- * Members are presented in the same grid every other device collection
- * uses, through the same {@link DeviceTile} component — an unavailable
- * member renders through its unavailable variant rather than a parallel
- * layout, and never shows its stale state as current. Removing a member
- * is not always-present chrome: it lives behind a room-level edit mode,
- * reachable by tap so it works on the PWA's primary input.
+ * Members are presented in the same grid every other device collection uses,
+ * through the same {@link DeviceTile} component — an unavailable member renders
+ * through its unavailable variant rather than a parallel layout, and never
+ * shows its stale state as current. Removing a member is not always-present
+ * chrome: it lives behind a room-level manage mode, reachable by keyboard or
+ * tap so it works on the PWA's primary input.
+ *
+ * Room creation/rename/delete live on the rooms index; this view owns
+ * membership and the batch command. Rebuilt on the Lumen primitive layer
+ * (`ui/*`) and `lucide-react` (task 5.2).
  */
-import {
-  ActionIcon,
-  Alert,
-  Badge,
-  Button,
-  Group,
-  Modal,
-  Select,
-  SimpleGrid,
-  Stack,
-  Switch,
-  Text,
-  TextInput,
-  Title,
-} from "@mantine/core";
-import {
-  IconAlertTriangle,
-  IconCheck,
-  IconInfoCircle,
-  IconListCheck,
-  IconPencil,
-  IconPlus,
-  IconPower,
-  IconTrash,
-  IconX,
-} from "@tabler/icons-react";
+import { Check, CircleHelp, ListChecks, Plus, Power, TriangleAlert, X } from "lucide-react";
 import { useState } from "react";
-import {
-  assignDeviceRoom,
-  deleteRoom,
-  renameRoom,
-  sendRoomCommand,
-  unassignDeviceRoom,
-} from "../api.js";
+import { assignDeviceRoom, sendRoomCommand, unassignDeviceRoom } from "../api.js";
 import { DeviceTile } from "../components/DeviceTile.js";
 import { isOperableDevice } from "../lib/capability-ranking.js";
 import { useDataStore } from "../lib/data-store.js";
@@ -55,17 +28,30 @@ import {
   supportsOnOffCommand,
 } from "../lib/room-command.js";
 import { roomsPath } from "../lib/router.js";
-import { useRouter } from "../lib/router-context.js";
+import { Link, useRouter } from "../lib/router-context.js";
+import {
+  Badge,
+  Button,
+  EmptyState,
+  Grid,
+  IconButton,
+  Row,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  Spinner,
+  Stack,
+  Switch,
+} from "../ui/index.js";
 
 export function RoomView({ roomId }: { roomId: string }) {
   const { rooms, unassignedDevices, refresh, applyOptimisticOverride, revertOptimisticOverride } =
     useDataStore();
-  const { navigate, basePath } = useRouter();
+  const { basePath } = useRouter();
   const room = rooms.find((r) => r.id === roomId);
 
-  const [renaming, setRenaming] = useState(false);
-  const [name, setName] = useState(room?.name ?? "");
-  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [assignTarget, setAssignTarget] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -85,44 +71,29 @@ export function RoomView({ roomId }: { roomId: string }) {
 
   if (!room) {
     return (
-      <Alert color="yellow" icon={<IconAlertTriangle size={16} />} title="Room not found">
-        This room no longer exists. It may have just been deleted.
-      </Alert>
+      <EmptyState
+        icon={<TriangleAlert size={28} />}
+        title="Room not found"
+        description="This room no longer exists. It may have just been deleted."
+        action={
+          <Button variant="soft" size="sm" asChild>
+            <Link to={roomsPath(basePath)}>Back to rooms</Link>
+          </Button>
+        }
+      />
     );
-  }
-
-  async function handleRename() {
-    setBusy(true);
-    setError(null);
-    try {
-      await renameRoom(room!.id, name.trim());
-      setRenaming(false);
-      await refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to rename room");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleDelete() {
-    setBusy(true);
-    try {
-      await deleteRoom(room!.id);
-      setDeleteConfirmOpen(false);
-      navigate(roomsPath(basePath));
-    } finally {
-      setBusy(false);
-    }
   }
 
   async function handleAssign() {
     if (!assignTarget) return;
     setBusy(true);
+    setError(null);
     try {
       await assignDeviceRoom(assignTarget, room!.id);
       setAssignTarget(null);
       await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to assign device");
     } finally {
       setBusy(false);
     }
@@ -130,9 +101,12 @@ export function RoomView({ roomId }: { roomId: string }) {
 
   async function handleUnassign(qualifiedId: string) {
     setBusy(true);
+    setError(null);
     try {
       await unassignDeviceRoom(qualifiedId);
       await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to remove device from room");
     } finally {
       setBusy(false);
     }
@@ -239,135 +213,124 @@ export function RoomView({ roomId }: { roomId: string }) {
     filteredEmpty && !showHidden && allAvailableMembers.length > 0 && shownMembers.length === 0;
 
   return (
-    <Stack gap="md">
-      <Group justify="space-between">
-        <Title order={2}>{room.name}</Title>
-        <Group gap="xs">
-          <ActionIcon variant="light" onClick={() => setRenaming(true)} aria-label="Rename room">
-            <IconPencil size={16} />
-          </ActionIcon>
-          <ActionIcon
-            variant="light"
-            color="red"
-            onClick={() => setDeleteConfirmOpen(true)}
-            aria-label="Delete room"
-          >
-            <IconTrash size={16} />
-          </ActionIcon>
-          <ActionIcon
-            variant={editMode ? "filled" : "light"}
-            onClick={() => setEditMode((v) => !v)}
-            aria-label={editMode ? "Done managing members" : "Manage members"}
-          >
-            {editMode ? <IconCheck size={16} /> : <IconListCheck size={16} />}
-          </ActionIcon>
-        </Group>
-      </Group>
-
-      <Group gap="xs" align="flex-end">
-        <Select
-          label="Assign a device to this room"
-          placeholder="Choose a device"
-          data={unassignedDevices.map((d) => ({
-            value: d.qualifiedId,
-            label: humanizeDeviceName(d.displayName),
-          }))}
-          value={assignTarget}
-          onChange={setAssignTarget}
-          searchable
-          style={{ minWidth: 240 }}
-        />
-        <Button
-          leftSection={<IconPlus size={14} />}
-          onClick={handleAssign}
-          disabled={!assignTarget}
-          loading={busy}
+    <Stack gap={4}>
+      <Row justify="between" align="center" gap={3} wrap>
+        <h2 className="font-display text-2xl font-bold text-ink">{room.name}</h2>
+        <IconButton
+          label={editMode ? "Done managing members" : "Manage members"}
+          variant={editMode ? "solid" : "ghost"}
+          aria-pressed={editMode}
+          onClick={() => setEditMode((value) => !value)}
         >
+          {editMode ? <Check size={16} /> : <ListChecks size={16} />}
+        </IconButton>
+      </Row>
+
+      <Row gap={2} align="end" wrap>
+        <Stack gap={1} className="min-w-[240px] flex-1">
+          <span className="text-xs font-medium text-muted">Assign a device to this room</span>
+          <Select
+            value={assignTarget ?? ""}
+            onValueChange={(value) => setAssignTarget(value)}
+            disabled={unassignedDevices.length === 0}
+          >
+            <SelectTrigger aria-label="Assign a device to this room">
+              <SelectValue placeholder="Choose a device" />
+            </SelectTrigger>
+            <SelectContent>
+              {unassignedDevices.map((d) => (
+                <SelectItem key={d.qualifiedId} value={d.qualifiedId}>
+                  {humanizeDeviceName(d.displayName)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Stack>
+        <Button onClick={() => void handleAssign()} disabled={!assignTarget || busy}>
+          {busy ? <Spinner size={14} label="" /> : <Plus size={14} aria-hidden />}
           Add
         </Button>
-      </Group>
+      </Row>
+
+      {error && (
+        <p role="alert" className="text-sm text-danger">
+          {error}
+        </p>
+      )}
 
       {actuatableMembers.length > 0 && (
-        <Group gap="xs" align="center">
-          <Text size="sm" c="dimmed">
-            Room control
-          </Text>
+        <Row gap={2} align="center" wrap>
+          <span className="text-sm text-muted">Room control</span>
           <Button
-            size="xs"
-            variant="light"
-            leftSection={<IconPower size={14} />}
-            loading={commandBusy}
+            size="sm"
+            variant="soft"
+            disabled={commandBusy}
             onClick={() => void handleRoomCommand(true)}
           >
+            {commandBusy ? <Spinner size={14} label="" /> : <Power size={14} aria-hidden />}
             All on
           </Button>
           <Button
-            size="xs"
-            variant="light"
-            color="gray"
-            leftSection={<IconPower size={14} />}
-            loading={commandBusy}
+            size="sm"
+            variant="soft"
+            disabled={commandBusy}
             onClick={() => void handleRoomCommand(false)}
           >
+            {commandBusy ? <Spinner size={14} label="" /> : <Power size={14} aria-hidden />}
             All off
           </Button>
-        </Group>
+        </Row>
       )}
 
       {commandError && (
-        <Alert color="red" icon={<IconAlertTriangle size={16} />} title="Room command failed">
-          {commandError}
-        </Alert>
+        <div
+          role="alert"
+          className="flex items-start gap-2 rounded-input border border-danger/30 bg-danger/15 px-3 py-2 text-sm text-danger"
+        >
+          <TriangleAlert size={16} aria-hidden className="mt-0.5 shrink-0" />
+          <span>
+            <strong className="font-semibold">Room command failed. </strong>
+            {commandError}
+          </span>
+        </div>
       )}
 
       {skippedCount > 0 && (
-        <Badge
-          color="gray"
-          variant="light"
-          leftSection={<IconInfoCircle size={12} />}
-          style={{ alignSelf: "flex-start" }}
-        >
+        <Badge tone="neutral" className="w-fit">
+          <CircleHelp size={12} aria-hidden />
           {skippedCount} skipped (no control)
         </Badge>
       )}
 
-      {genuinelyEmpty && (
-        <Text c="dimmed" size="sm">
-          No devices in this room yet.
-        </Text>
-      )}
+      {genuinelyEmpty && <p className="text-sm text-muted">No devices in this room yet.</p>}
 
       {!genuinelyEmpty && (
-        <Group justify="flex-end">
-          <Switch
-            label="Show hidden"
-            size="sm"
-            checked={showHidden}
-            onChange={(e) => setShowHidden(e.currentTarget.checked)}
-          />
-          <Switch
-            label="Operable only"
-            size="sm"
-            checked={operableOnly}
-            onChange={(e) => setOperableOnly(e.currentTarget.checked)}
-          />
-        </Group>
+        <Row justify="end" gap={3} wrap>
+          <label className="flex items-center gap-2 text-sm text-muted">
+            <Switch checked={showHidden} onCheckedChange={setShowHidden} />
+            Show hidden
+          </label>
+          <label className="flex items-center gap-2 text-sm text-muted">
+            <Switch checked={operableOnly} onCheckedChange={setOperableOnly} />
+            Operable only
+          </label>
+        </Row>
       )}
 
       {filteredEmpty &&
         (allHiddenOnly ? (
-          <Text c="dimmed" size="sm">
+          <p className="text-sm text-muted">
             This room's devices are hidden, not absent — turn on "Show hidden" to see them.
-          </Text>
+          </p>
         ) : (
-          <Text c="dimmed" size="sm">
+          <p className="text-sm text-muted">
             No operable devices. Every device in this room only reports — turn off "Operable only"
             to see them.
-          </Text>
+          </p>
         ))}
 
       {(availableMembers.length > 0 || unavailableMembers.length > 0) && (
-        <SimpleGrid cols={{ base: 2, sm: 3, md: 4, lg: 5 }} spacing="sm">
+        <Grid columns={2} md={3} lg={5} gap={3}>
           {availableMembers.map((member) => (
             <DeviceTile
               key={member.qualifiedId}
@@ -375,14 +338,13 @@ export function RoomView({ roomId }: { roomId: string }) {
               device={member.device!}
               action={
                 editMode ? (
-                  <ActionIcon
-                    variant="subtle"
-                    color="gray"
-                    onClick={() => handleUnassign(member.qualifiedId)}
-                    aria-label="Remove from room"
+                  <IconButton
+                    label="Remove from room"
+                    size="sm"
+                    onClick={() => void handleUnassign(member.qualifiedId)}
                   >
-                    <IconX size={16} />
-                  </ActionIcon>
+                    <X size={14} />
+                  </IconButton>
                 ) : undefined
               }
             />
@@ -395,55 +357,19 @@ export function RoomView({ roomId }: { roomId: string }) {
               qualifiedId={member.qualifiedId}
               action={
                 editMode ? (
-                  <ActionIcon
-                    variant="subtle"
-                    color="gray"
-                    onClick={() => handleUnassign(member.qualifiedId)}
-                    aria-label="Remove from room"
+                  <IconButton
+                    label="Remove from room"
+                    size="sm"
+                    onClick={() => void handleUnassign(member.qualifiedId)}
                   >
-                    <IconX size={16} />
-                  </ActionIcon>
+                    <X size={14} />
+                  </IconButton>
                 ) : undefined
               }
             />
           ))}
-        </SimpleGrid>
+        </Grid>
       )}
-
-      <Modal opened={renaming} onClose={() => setRenaming(false)} title="Rename room">
-        <Stack>
-          <TextInput value={name} onChange={(e) => setName(e.currentTarget.value)} data-autofocus />
-          {error && (
-            <Text c="red" size="sm">
-              {error}
-            </Text>
-          )}
-          <Button onClick={handleRename} loading={busy} disabled={name.trim().length === 0}>
-            Save
-          </Button>
-        </Stack>
-      </Modal>
-
-      <Modal
-        opened={deleteConfirmOpen}
-        onClose={() => setDeleteConfirmOpen(false)}
-        title="Delete room"
-      >
-        <Stack>
-          <Text size="sm">
-            Delete <strong>{room.name}</strong>? Its devices are not deleted — they become
-            unassigned.
-          </Text>
-          <Group justify="flex-end">
-            <Button variant="default" onClick={() => setDeleteConfirmOpen(false)}>
-              Cancel
-            </Button>
-            <Button color="red" onClick={handleDelete} loading={busy}>
-              Delete room
-            </Button>
-          </Group>
-        </Stack>
-      </Modal>
     </Stack>
   );
 }

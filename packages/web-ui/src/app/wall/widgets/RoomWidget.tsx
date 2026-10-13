@@ -1,5 +1,5 @@
 /**
- * The wall room widget (design.md D7; specs/wall-display "Widget Catalog", "A
+ * The wall room widget (design.md D13; specs/wall-display "Widget Catalog", "A
  * room widget commands the room"). Shows a configured room's devices as
  * touch-sized tiles plus room-wide all-on/all-off controls.
  *
@@ -9,9 +9,11 @@
  * the per-member responses are merged and classified — applied is left to the
  * stream or the deadline, failed reverts and is surfaced, skipped is reported
  * separately. Report-only members are never commanded.
+ *
+ * A control widget: the frame draws the surface, so each contained tile draws
+ * none of its own (specs/wall-display "A card is a single surface").
  */
-import { Badge, Button, Group, ScrollArea, SimpleGrid, Stack, Text } from "@mantine/core";
-import { IconInfoCircle, IconPower } from "@tabler/icons-react";
+import { Info, Power } from "lucide-react";
 import { useState } from "react";
 import { sendRoomCommand } from "../../api.js";
 import { useDataStore } from "../../lib/data-store.js";
@@ -21,6 +23,7 @@ import {
   mergeRoomCommandResults,
 } from "../../lib/room-command.js";
 import type { DeviceDescriptor } from "../../types.js";
+import { Badge, Button, Grid, ScrollArea, Spinner, Stack } from "../../ui/index.js";
 import type { WallWidgetProps } from "../registry.js";
 import { WALL_BODY_FONT_SIZE } from "../type-ramp.js";
 import { actuatableRoomMembers } from "./room-model.js";
@@ -37,9 +40,9 @@ export function RoomWidget({ widget, contained }: WallWidgetProps) {
 
   if (!room) {
     return (
-      <Text fz={WALL_BODY_FONT_SIZE} c="dimmed">
+      <p className="text-muted" style={{ fontSize: WALL_BODY_FONT_SIZE }}>
         {roomId ? `Room "${roomId}" is not configured.` : "No room configured."}
-      </Text>
+      </p>
     );
   }
 
@@ -111,50 +114,50 @@ export function RoomWidget({ widget, contained }: WallWidgetProps) {
   }
 
   return (
-    <Stack h="100%" gap="xs" style={{ minHeight: 0 }}>
+    <Stack gap={2} className="h-full min-h-0">
       {hasActuatable && (
-        <Group gap="xs" wrap="nowrap">
+        <div className="flex flex-wrap items-center gap-2">
           <Button
             size="lg"
-            variant="light"
-            leftSection={<IconPower size={18} />}
-            loading={commandBusy}
+            variant="soft"
+            disabled={commandBusy}
             onClick={() => void handleRoomCommand(true)}
           >
+            {commandBusy ? <Spinner size={18} label="" /> : <Power size={18} aria-hidden />}
             All on
           </Button>
           <Button
             size="lg"
-            variant="light"
-            color="gray"
-            leftSection={<IconPower size={18} />}
-            loading={commandBusy}
+            variant="soft"
+            disabled={commandBusy}
             onClick={() => void handleRoomCommand(false)}
           >
+            {commandBusy ? <Spinner size={18} label="" /> : <Power size={18} aria-hidden />}
             All off
           </Button>
-        </Group>
+        </div>
       )}
 
       {commandError && (
-        <Text fz={WALL_BODY_FONT_SIZE} c="red">
+        <p role="alert" className="text-danger" style={{ fontSize: WALL_BODY_FONT_SIZE }}>
           {commandError}
-        </Text>
+        </p>
       )}
 
       {skippedCount > 0 && (
-        <Badge color="gray" variant="light" leftSection={<IconInfoCircle size={12} />}>
+        <Badge tone="neutral">
+          <Info size={12} aria-hidden />
           {skippedCount} skipped (no control)
         </Badge>
       )}
 
       {availableMembers.length === 0 && unavailableMembers.length === 0 ? (
-        <Text fz={WALL_BODY_FONT_SIZE} c="dimmed">
+        <p className="text-muted" style={{ fontSize: WALL_BODY_FONT_SIZE }}>
           No devices in this room yet.
-        </Text>
+        </p>
       ) : (
-        <ScrollArea style={{ flex: 1, minHeight: 0 }}>
-          <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs" pr="xs">
+        <ScrollArea className="min-h-0 flex-1">
+          <Grid columns={1} md={2} gap={2} className="pr-2">
             {availableMembers.map((member) =>
               member.device ? (
                 <WallDeviceTile
@@ -172,7 +175,7 @@ export function RoomWidget({ widget, contained }: WallWidgetProps) {
                 contained={contained}
               />
             ))}
-          </SimpleGrid>
+          </Grid>
         </ScrollArea>
       )}
     </Stack>

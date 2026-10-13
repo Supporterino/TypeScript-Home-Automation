@@ -2,7 +2,7 @@
 /**
  * Build script for the web UI frontend.
  *
- * Uses Bun.build to compile the React + Mantine app into content-hashed,
+ * Uses Bun.build to compile the React + Tailwind CSS app into content-hashed,
  * code-split, pre-compressed JS and CSS assets, then writes them as a
  * generated asset manifest module that the server serves from
  * content-addressed routes (see `packages/web-ui/src/asset-routes.ts`).
@@ -15,6 +15,7 @@
 
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+import tailwind from "bun-plugin-tailwind";
 import type { BuiltAsset } from "../src/assets/asset-types.js";
 
 const PACKAGE_ROOT = join(import.meta.dirname, "..");
@@ -22,11 +23,11 @@ const ENTRY = join(PACKAGE_ROOT, "src/app/index.tsx");
 const APP_DIR = join(PACKAGE_ROOT, "src/app");
 const OUT_MANIFEST = join(PACKAGE_ROOT, "src/assets/manifest.ts");
 
-// The display face is referenced from `styles/tokens.css` by this relative
+// The display face is referenced from `styles/app.css` by this relative
 // path. Bun's CSS bundler inlines `url()` assets as base64 data URLs
 // (oven-sh/bun#24599), so the reference is marked external, the file is
 // emitted as its own content-hashed asset below, and the CSS url is rewritten
-// to point at it (design.md D3).
+// to point at it (design.md D3, D10).
 const FONT_SOURCE = join(APP_DIR, "fonts/plus-jakarta-sans-latin.woff2");
 const FONT_CSS_REF = "../fonts/plus-jakarta-sans-latin.woff2";
 
@@ -73,6 +74,11 @@ async function buildOnce(): Promise<boolean> {
 
   const result = await Bun.build({
     entrypoints: [ENTRY],
+    // Compile the Tailwind v4 stylesheet as part of this same bundle step
+    // (design.md D2). `app.css` is the CSS entry, reached through the entry
+    // module's import; no PostCSS pipeline is introduced.
+    // `bun-plugin-tailwind` default-exports the plugin instance, not a factory.
+    plugins: [tailwind],
     target: "browser",
     format: "esm",
     minify: true,
@@ -177,7 +183,7 @@ async function main() {
     return;
   }
 
-  console.log("[build-web-ui] Building React + Mantine frontend…");
+  console.log("[build-web-ui] Building React frontend (Tailwind CSS)…");
   const ok = await buildOnce();
   if (!ok && !WATCH) process.exit(1);
 

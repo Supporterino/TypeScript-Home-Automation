@@ -113,11 +113,12 @@ export function registerWebUiRoutes(
       display: "standalone",
       start_url: path,
       scope: path,
-      // Ambient Glass retint (design.md D13). Keep in sync with the dark-scheme
-      // `--bg` and the interactive accent in `src/app/tokens.ts`; the brand
-      // name itself is unchanged.
-      background_color: "#0B1120",
-      theme_color: "#38BDF8",
+      // Lumen (design.md D3). The manifest and the document `theme-color` use
+      // the dark scheme's background so the installed app's chrome matches the
+      // authoritative scheme. Keep in sync with `--bg` in
+      // `src/app/styles/app.css`; the brand name itself is unchanged.
+      background_color: "#0B0F17",
+      theme_color: "#0B0F17",
       icons: [{ src: iconPath, sizes: "512x512", type: "image/svg+xml", purpose: "any maskable" }],
     });
     return c.body(manifest, 200, { "Content-Type": "application/manifest+json" });

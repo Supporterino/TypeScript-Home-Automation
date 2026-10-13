@@ -9,12 +9,12 @@ import type { WallWidgetGrammar } from "./registry.js";
 
 /**
  * The surface a frame draws for a widget's grammar. `ambient` readouts are
- * chrome-less — no `Paper`, no border, no background — so large type sits
+ * chrome-less — no surface, no border, no background — so large type sits
  * directly on the panel; `control` widgets draw a `--surface` tile with a
  * hairline border and the shared tile radius (design.md D2).
  */
 export interface WallFrameChrome {
-  /** Whether the frame renders a `Paper` control surface. */
+  /** Whether the frame renders a control surface. */
   surface: boolean;
   /** The control surface background token, or `null` for a chrome-less readout. */
   background: string | null;
@@ -22,21 +22,18 @@ export interface WallFrameChrome {
   borderColor: string | null;
   /** The control surface corner radius token, or `null` for a chrome-less readout. */
   radius: string | null;
-  /** The control surface padding token, or `null` for a chrome-less readout. */
-  padding: string | null;
 }
 
 /** Maps a widget's grammar to the frame surface it draws (design.md D2). */
 export function wallFrameChrome(grammar: WallWidgetGrammar): WallFrameChrome {
   if (grammar === "ambient") {
-    return { surface: false, background: null, borderColor: null, radius: null, padding: null };
+    return { surface: false, background: null, borderColor: null, radius: null };
   }
   return {
     surface: true,
     background: "var(--surface)",
     borderColor: "var(--hairline)",
     radius: "var(--radius-tile)",
-    padding: "var(--space-4)",
   };
 }
 

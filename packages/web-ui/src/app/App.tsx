@@ -1,22 +1,15 @@
-import {
-  ActionIcon,
-  AppShell,
-  Group,
-  Loader,
-  Text,
-  Tooltip,
-  useComputedColorScheme,
-  useMantineColorScheme,
-} from "@mantine/core";
-import {
-  IconBolt,
-  IconMoon,
-  IconRefresh,
-  IconSun,
-  IconWifi,
-  IconWifiOff,
-} from "@tabler/icons-react";
-import { lazy, Suspense, useEffect } from "react";
+/**
+ * The application shell (design.md D4, D6; specs/web-ui "Responsive
+ * Navigation", "Navigation and Information Architecture", "Theme Selection").
+ *
+ * Mobile-first: a sticky, safe-area-aware app bar carries the title, the
+ * transport indicator, and the theme control; a control-first bottom tab bar
+ * serves the narrow viewport while a persistent grouped rail serves the wide
+ * one. The full-bleed wall renders with no chrome at all (specs/web-ui
+ * "Full-Bleed Wall Rendering").
+ */
+import { LoaderCircle, Monitor, Moon, RefreshCw, Sun, Wifi, WifiOff, Zap } from "lucide-react";
+import { lazy, type ReactNode, Suspense, useEffect } from "react";
 import { initApi } from "./api.js";
 import { ErrorBoundary } from "./components/ErrorBoundary.js";
 import { DesktopSidebar, MobileBottomBar } from "./components/Nav.js";
@@ -24,6 +17,20 @@ import { useAuth } from "./hooks/useAuth.js";
 import { DataStoreProvider, useDataStore } from "./lib/data-store.js";
 import { isFullBleedView } from "./lib/router.js";
 import { RouterProvider, useRouter } from "./lib/router-context.js";
+import { type ThemePreference, useTheme } from "./lib/theme.js";
+import type { TransportState } from "./types.js";
+import {
+  cn,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+  IconButton,
+  Row,
+  Spinner,
+  TooltipProvider,
+} from "./ui/index.js";
 import { NotFoundView } from "./views/NotFoundView.js";
 import { OverviewView } from "./views/OverviewView.js";
 
@@ -70,48 +77,94 @@ const basePath =
   (document.documentElement as HTMLElement & { dataset: DOMStringMap }).dataset.basePath ??
   "/status";
 
-const HEADER_HEIGHT = 52;
-const FOOTER_HEIGHT = 56;
-
-function ColorSchemeToggle() {
-  const { setColorScheme } = useMantineColorScheme();
-  const computed = useComputedColorScheme("light", { getInitialValueInEffect: true });
-  return (
-    <Tooltip label={computed === "dark" ? "Switch to light mode" : "Switch to dark mode"}>
-      <ActionIcon
-        variant="default"
-        size="sm"
-        onClick={() => setColorScheme(computed === "dark" ? "light" : "dark")}
-        aria-label="Toggle color scheme"
-      >
-        {computed === "dark" ? <IconSun size={14} /> : <IconMoon size={14} />}
-      </ActionIcon>
-    </Tooltip>
-  );
+/**
+ * The header copy for a transport state (design.md D6; specs/web-ui "Data
+ * Sources" — degraded transport is visible). The distinct label per state is
+ * the non-colour channel alongside the icon and its token.
+ */
+function transportPresentation(transport: TransportState): {
+  label: string;
+  detail: string;
+  icon: ReactNode;
+  className: string;
+} {
+  switch (transport) {
+    case "live":
+      return {
+        label: "Live",
+        detail: "Realtime updates are streaming",
+        icon: <Wifi size={14} aria-hidden />,
+        className: "text-on",
+      };
+    case "connecting":
+      return {
+        label: "Connecting…",
+        detail: "Opening the event stream",
+        icon: <LoaderCircle size={14} aria-hidden />,
+        className: "text-stale",
+      };
+    case "degraded":
+      return {
+        label: "Polled",
+        detail: "Event stream unavailable — polling for updates",
+        icon: <WifiOff size={14} aria-hidden />,
+        className: "text-danger",
+      };
+  }
 }
 
 function TransportIndicator() {
   const { transport, refresh } = useDataStore();
-  const live = transport === "live";
-  const label = transport === "connecting" ? "Connecting…" : live ? "Live" : "Degraded — polling";
-  const color = transport === "connecting" ? "yellow" : live ? "green" : "red";
+  const presentation = transportPresentation(transport);
 
   return (
-    <Group gap={4} wrap="nowrap">
-      {live ? (
-        <IconWifi size={13} color={`var(--mantine-color-${color}-5)`} />
-      ) : (
-        <IconWifiOff size={13} color={`var(--mantine-color-${color}-5)`} />
-      )}
-      <Text size="xs" c={color} visibleFrom="xs">
-        {label}
-      </Text>
-      <Tooltip label="Refresh now">
-        <ActionIcon variant="default" size="sm" onClick={() => void refresh()} aria-label="Refresh">
-          <IconRefresh size={13} />
-        </ActionIcon>
-      </Tooltip>
-    </Group>
+    <Row gap={1} align="center" wrap={false}>
+      <span
+        role="status"
+        aria-live="polite"
+        title={presentation.detail}
+        className={cn("flex items-center gap-1 text-xs font-medium", presentation.className)}
+      >
+        {presentation.icon}
+        <span>{presentation.label}</span>
+      </span>
+      <IconButton label="Refresh now" size="sm" onClick={() => void refresh()}>
+        <RefreshCw size={14} />
+      </IconButton>
+    </Row>
+  );
+}
+
+/** Whether a string from Radix's radio group is one of the theme preferences. */
+function isThemePreference(value: string): value is ThemePreference {
+  return value === "light" || value === "dark" || value === "system";
+}
+
+/** The light/dark/system theme control (design.md D4; specs/web-ui "Theme Selection"). */
+function ThemeControl() {
+  const { preference, resolvedTheme, setTheme } = useTheme();
+  const Icon = preference === "system" ? Monitor : resolvedTheme === "dark" ? Moon : Sun;
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <IconButton label={`Color theme: ${preference}`} size="sm">
+          <Icon size={14} aria-hidden />
+        </IconButton>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuRadioGroup
+          value={preference}
+          onValueChange={(next) => {
+            if (isThemePreference(next)) setTheme(next);
+          }}
+        >
+          <DropdownMenuRadioItem value="light">Light</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="dark">Dark</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="system">System</DropdownMenuRadioItem>
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -152,19 +205,45 @@ function RouteOutlet() {
   }
 }
 
+/** The sticky app bar: title, transport indicator, and theme control. */
+function AppBar() {
+  return (
+    <header className="sticky top-0 z-30 border-b border-hairline bg-surface pt-[env(safe-area-inset-top)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
+      <Row className="h-14 gap-2 px-3 md:px-4" justify="between" align="center" wrap={false}>
+        <Row gap={1} align="center" wrap={false}>
+          <span aria-hidden className="text-accent">
+            <Zap size={18} />
+          </span>
+          <span className="font-display text-base font-bold text-ink">ts-ha</span>
+        </Row>
+        <Row gap={1} align="center" wrap={false}>
+          <TransportIndicator />
+          <ThemeControl />
+        </Row>
+      </Row>
+    </header>
+  );
+}
+
 function Shell() {
   const { pathname, route } = useRouter();
 
-  // The wall is the one full-bleed view (design.md D3; specs/web-ui
-  // "Full-Bleed Wall Rendering"): it renders directly, with no `AppShell`
-  // header/navbar/footer, so its widgets use the whole panel. Every other view
-  // takes the shell path below unchanged. The store provider above still wraps
-  // it — the wall needs the data layer — and the boundary/suspense wrap matches
-  // the shell path's, so a chunk load or render failure behaves identically.
+  // The wall is the one full-bleed view (specs/web-ui "Full-Bleed Wall
+  // Rendering"): it renders directly, with no app bar, rail, or tab bar, so its
+  // widgets use the whole panel. Every other view takes the shell path below
+  // unchanged. The store provider above still wraps it — the wall needs the data
+  // layer — and the boundary/suspense wrap matches the shell path's, so a chunk
+  // load or render failure behaves identically.
   if (isFullBleedView(route.view)) {
     return (
       <ErrorBoundary key={pathname}>
-        <Suspense fallback={<Loader size="sm" mt="xl" />}>
+        <Suspense
+          fallback={
+            <div className="grid min-h-dvh place-items-center">
+              <Spinner />
+            </div>
+          }
+        >
           <WallViewLazy name={route.params.name ?? ""} />
         </Suspense>
       </ErrorBoundary>
@@ -172,54 +251,35 @@ function Shell() {
   }
 
   return (
-    <AppShell
-      header={{ height: HEADER_HEIGHT }}
-      navbar={{ width: 220, breakpoint: "sm" }}
-      footer={{ height: FOOTER_HEIGHT }}
-      padding="md"
-    >
-      <AppShell.Header className="ambient-glass">
-        <Group h="100%" px="md" justify="space-between" wrap="nowrap">
-          <Group gap={6} wrap="nowrap">
-            <IconBolt size={18} />
-            <Text fw={700} size="sm">
-              ts-ha
-            </Text>
-          </Group>
-          <Group gap="xs" wrap="nowrap">
-            <TransportIndicator />
-            <ColorSchemeToggle />
-          </Group>
-        </Group>
-      </AppShell.Header>
+    <div className="min-h-dvh bg-canvas text-ink">
+      <AppBar />
 
-      <AppShell.Navbar className="ambient-glass" visibleFrom="sm">
+      <div className="flex">
         <DesktopSidebar />
-      </AppShell.Navbar>
+        <div className="min-w-0 flex-1 pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
+          {/*
+            Keyed by pathname: navigating to another view and back remounts the
+            boundary, which is how a caught render failure recovers. The single
+            structural point where routed view content is swapped. The
+            `motion-enter` wrapper replays the non-essential enter transition on
+            each navigation; it is transform/opacity only, so it never shifts
+            layout, and the token stylesheet suppresses it under
+            prefers-reduced-motion.
+          */}
+          <main className="px-3 pb-[calc(5.5rem+env(safe-area-inset-bottom))] pt-4 md:px-6 md:pb-8">
+            <ErrorBoundary key={pathname}>
+              <div className="motion-enter">
+                <Suspense fallback={<Spinner className="mt-6" />}>
+                  <RouteOutlet />
+                </Suspense>
+              </div>
+            </ErrorBoundary>
+          </main>
+        </div>
+      </div>
 
-      <AppShell.Footer className="ambient-glass" hiddenFrom="sm">
-        <MobileBottomBar />
-      </AppShell.Footer>
-
-      <AppShell.Main>
-        {/*
-          Keyed by pathname: navigating to another view and back remounts
-          the boundary, which is how a caught render failure recovers
-          (design.md R16). The single structural point where routed view
-          content is swapped. The `ambient-enter` wrapper replays the
-          non-essential enter transition on each navigation; it is
-          transform/opacity only, so it never shifts layout, and the token
-          stylesheet suppresses it under prefers-reduced-motion.
-        */}
-        <ErrorBoundary key={pathname}>
-          <div className="ambient-enter">
-            <Suspense fallback={<Loader size="sm" mt="xl" />}>
-              <RouteOutlet />
-            </Suspense>
-          </div>
-        </ErrorBoundary>
-      </AppShell.Main>
-    </AppShell>
+      <MobileBottomBar />
+    </div>
   );
 }
 
@@ -232,9 +292,13 @@ export function App() {
 
   return (
     <RouterProvider basePath={basePath}>
-      <DataStoreProvider>
-        <Shell />
-      </DataStoreProvider>
+      {/* Radix tooltips need one provider above every trigger; the app root is
+          the single place that guarantees it (design.md D5). */}
+      <TooltipProvider>
+        <DataStoreProvider>
+          <Shell />
+        </DataStoreProvider>
+      </TooltipProvider>
     </RouterProvider>
   );
 }

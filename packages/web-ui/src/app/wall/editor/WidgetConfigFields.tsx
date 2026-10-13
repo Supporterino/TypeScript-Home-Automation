@@ -1,20 +1,94 @@
 /**
- * The per-type config form a wall widget exposes in the editor (task 6.2;
+ * The per-type config form a wall widget exposes in the editor (design.md D13;
  * specs/wall-display "Wall Configuration Editor"). Driven by the widget type:
  * a room widget picks a room, a device widget picks a device, a scene widget
  * picks an automation and a label, and the rest take an optional title. The
  * values written here are validated by the type's descriptor schema in
  * `model.ts` before a save, so a blank required field surfaces inline rather
  * than reaching the server.
+ *
+ * Rebuilt on the Lumen primitive layer (`ui/*`); the `ui/` layer carries no
+ * input primitive, so the text fields use the shared input treatment.
  */
-import { Select, Stack, Text, TextInput } from "@mantine/core";
 import type { WallWidget } from "@ts-ha/shared";
 import { useDataStore } from "../../lib/data-store.js";
 import { humanizeDeviceName } from "../../lib/humanize-name.js";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  Stack,
+} from "../../ui/index.js";
 
 export interface WidgetConfigFieldsProps {
   widget: WallWidget;
   onChange: (patch: Record<string, unknown>) => void;
+}
+
+/** The shared text-input treatment (the `ui/` layer carries no input primitive). */
+const INPUT_CLASSES =
+  "touch-target h-10 w-full rounded-input border border-hairline bg-surface px-3 text-sm text-ink motion-toggle focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus";
+
+interface SelectOption {
+  value: string;
+  label: string;
+}
+
+/** A labelled single-choice field; the trigger carries the accessible name. */
+function SelectField({
+  label,
+  placeholder,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  placeholder: string;
+  value: string;
+  options: SelectOption[];
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="text-xs font-medium text-muted">{label}</span>
+      <Select value={value} onValueChange={onChange}>
+        <SelectTrigger aria-label={label}>
+          <SelectValue placeholder={placeholder} />
+        </SelectTrigger>
+        <SelectContent>
+          {options.map((option) => (
+            <SelectItem key={option.value} value={option.value}>
+              {option.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
+/** A labelled free-text field, used for the opt-in widget title and scene label. */
+function TextField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="flex flex-col gap-1">
+      <span className="text-xs font-medium text-muted">{label}</span>
+      <input
+        className={INPUT_CLASSES}
+        value={value}
+        onChange={(event) => onChange(event.currentTarget.value)}
+      />
+    </label>
+  );
 }
 
 export function WidgetConfigFields({ widget, onChange }: WidgetConfigFieldsProps) {
@@ -25,18 +99,18 @@ export function WidgetConfigFields({ widget, onChange }: WidgetConfigFieldsProps
   switch (widget.type) {
     case "room":
       return (
-        <Stack gap="xs">
-          <Select
+        <Stack gap={2}>
+          <SelectField
             label="Room"
             placeholder="Choose a room"
-            value={text("roomId") || null}
-            onChange={(value) => onChange({ roomId: value ?? "" })}
-            data={rooms.map((room) => ({ value: room.id, label: room.name }))}
+            value={text("roomId")}
+            options={rooms.map((room) => ({ value: room.id, label: room.name }))}
+            onChange={(value) => onChange({ roomId: value })}
           />
-          <TextInput
+          <TextField
             label="Title"
             value={text("title")}
-            onChange={(e) => onChange({ title: e.currentTarget.value })}
+            onChange={(value) => onChange({ title: value })}
           />
         </Stack>
       );
@@ -46,21 +120,21 @@ export function WidgetConfigFields({ widget, onChange }: WidgetConfigFieldsProps
         humanizeDeviceName(a.displayName).localeCompare(humanizeDeviceName(b.displayName)),
       );
       return (
-        <Stack gap="xs">
-          <Select
+        <Stack gap={2}>
+          <SelectField
             label="Device"
             placeholder="Choose a device"
-            value={text("qualifiedId") || null}
-            onChange={(value) => onChange({ qualifiedId: value ?? "" })}
-            data={devices.map((device) => ({
+            value={text("qualifiedId")}
+            options={devices.map((device) => ({
               value: device.qualifiedId,
               label: humanizeDeviceName(device.displayName),
             }))}
+            onChange={(value) => onChange({ qualifiedId: value })}
           />
-          <TextInput
+          <TextField
             label="Title"
             value={text("title")}
-            onChange={(e) => onChange({ title: e.currentTarget.value })}
+            onChange={(value) => onChange({ title: value })}
           />
         </Stack>
       );
@@ -68,21 +142,21 @@ export function WidgetConfigFields({ widget, onChange }: WidgetConfigFieldsProps
 
     case "scene":
       return (
-        <Stack gap="xs">
-          <Select
+        <Stack gap={2}>
+          <SelectField
             label="Automation"
             placeholder="Choose an automation"
-            value={text("automation") || null}
-            onChange={(value) => onChange({ automation: value ?? "" })}
-            data={automations.map((automation) => ({
+            value={text("automation")}
+            options={automations.map((automation) => ({
               value: automation.name,
               label: automation.name,
             }))}
+            onChange={(value) => onChange({ automation: value })}
           />
-          <TextInput
+          <TextField
             label="Button label"
             value={text("label")}
-            onChange={(e) => onChange({ label: e.currentTarget.value })}
+            onChange={(value) => onChange({ label: value })}
           />
         </Stack>
       );
@@ -92,18 +166,14 @@ export function WidgetConfigFields({ widget, onChange }: WidgetConfigFieldsProps
     case "energy":
     case "status":
       return (
-        <TextInput
+        <TextField
           label="Title"
           value={text("title")}
-          onChange={(e) => onChange({ title: e.currentTarget.value })}
+          onChange={(value) => onChange({ title: value })}
         />
       );
 
     case "favorites":
-      return (
-        <Text size="sm" c="dimmed">
-          No options.
-        </Text>
-      );
+      return <p className="text-sm text-muted">No options.</p>;
   }
 }

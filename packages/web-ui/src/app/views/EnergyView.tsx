@@ -1,28 +1,23 @@
 /**
- * The lazy Energy view (design.md D6, D7, D12; specs/energy-monitoring;
- * specs/web-ui "Energy View"; tasks 11.1–11.2).
+ * The lazy Energy view (design.md D11, D12; specs/energy-monitoring; specs/web-ui
+ * "Energy View"; task 6.3).
  *
  * Reads `GET /api/energy` — the aggregated instantaneous power, cumulative
- * consumption, per-device breakdown, and bounded history. The endpoint is
- * not part of the store's snapshot (it is not needed for first paint), so the
- * view fetches it itself and re-fetches on the relevant device events and on
- * a stream reconnect, debounced. It stays useful with no metering devices and
+ * consumption, per-device breakdown, and bounded history. The endpoint is not
+ * part of the store's snapshot (it is not needed for first paint), so the view
+ * fetches it itself and re-fetches on the relevant device events and on a
+ * stream reconnect, debounced. It stays useful with no metering devices and
  * with history disabled: both render explanatory states, never an error.
  *
- * The trend is a hand-rendered inline SVG polyline (design.md D12); no chart
- * library is added to first paint or to this chunk.
+ * The trend is a hand-rendered inline SVG polyline — no chart library is added
+ * to first paint or to this chunk.
+ *
+ * Rebuilt on the Lumen primitive layer (`ui/*`) and `lucide-react`.
  */
-import { Alert, Badge, Group, Loader, Paper, SimpleGrid, Stack, Text, Title } from "@mantine/core";
-import {
-  IconAlertTriangle,
-  IconBolt,
-  IconChartLine,
-  IconDatabase,
-  IconPlugOff,
-  IconPower,
-} from "@tabler/icons-react";
+
 import type { EnergyData } from "@ts-ha/shared";
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChartLine, Database, Gauge, PlugZap, TriangleAlert, Unplug, Zap } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fetchEnergy } from "../api.js";
 import { useDataStore } from "../lib/data-store.js";
 import {
@@ -35,35 +30,10 @@ import {
   sparklinePoints,
 } from "../lib/energy.js";
 import { humanizeDeviceName } from "../lib/humanize-name.js";
+import { Badge, Card, EmptyState, Grid, Row, Spinner, Stack, Stat } from "../ui/index.js";
 
 /** Coalesces a burst of device events into one endpoint refetch. */
 const REFETCH_DEBOUNCE_MS = 750;
-
-function MetricCard({
-  icon,
-  label,
-  value,
-  colorVar,
-}: {
-  icon: ReactNode;
-  label: string;
-  value: string;
-  colorVar: string;
-}) {
-  return (
-    <Paper withBorder p="sm">
-      <Group gap={6} wrap="nowrap">
-        <span style={{ color: `var(${colorVar})`, display: "flex" }}>{icon}</span>
-        <Text size="xs" fw={600} tt="uppercase" c="dimmed">
-          {label}
-        </Text>
-      </Group>
-      <Text size="xl" fw={700} style={{ fontFamily: "var(--font-display)" }}>
-        {value}
-      </Text>
-    </Paper>
-  );
-}
 
 function Sparkline({ data }: { data: EnergyData }) {
   const points = useMemo(() => sparklinePoints(data.history), [data.history]);
@@ -71,32 +41,35 @@ function Sparkline({ data }: { data: EnergyData }) {
   if (points === "") return null;
 
   return (
-    <Paper withBorder p="sm">
-      <Group gap={6} mb={6}>
-        <IconChartLine size={14} />
-        <Text size="xs" fw={600} tt="uppercase" c="dimmed">
-          Recent power trend
-        </Text>
-      </Group>
-      <svg
-        viewBox={`0 0 ${SPARKLINE_WIDTH} ${SPARKLINE_HEIGHT}`}
-        width="100%"
-        height={64}
-        preserveAspectRatio="none"
-        role="img"
-        aria-label={label}
-      >
-        <polyline
-          points={points}
-          fill="none"
-          stroke="var(--info)"
-          strokeWidth={2}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          vectorEffect="non-scaling-stroke"
-        />
-      </svg>
-    </Paper>
+    <Card>
+      <Stack gap={2}>
+        <Row gap={1} align="center">
+          <ChartLine size={14} aria-hidden className="text-muted" />
+          <span className="text-xs font-bold uppercase tracking-wide text-muted">
+            Recent power trend
+          </span>
+        </Row>
+        <svg
+          viewBox={`0 0 ${SPARKLINE_WIDTH} ${SPARKLINE_HEIGHT}`}
+          width="100%"
+          height={64}
+          preserveAspectRatio="none"
+          role="img"
+          aria-label={label}
+          className="text-info"
+        >
+          <polyline
+            points={points}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            vectorEffect="non-scaling-stroke"
+          />
+        </svg>
+      </Stack>
+    </Card>
   );
 }
 
@@ -115,8 +88,8 @@ export function EnergyView() {
     }
   }, []);
 
-  // Mount fetch. The view only mounts when its route matches, and the route
-  // is a lazy chunk, so `/api/energy` is never requested for first paint.
+  // Mount fetch. The view only mounts when its route matches, and the route is
+  // a lazy chunk, so `/api/energy` is never requested for first paint.
   useEffect(() => {
     void load();
   }, [load]);
@@ -153,92 +126,107 @@ export function EnergyView() {
   const noMetering = data !== null && data.breakdown.length === 0;
 
   return (
-    <Stack gap="lg">
-      <Group justify="space-between" wrap="wrap">
-        <Title order={2}>Energy</Title>
+    <Stack gap={4}>
+      <Row justify="between" align="center" gap={3} wrap>
+        <h2 className="font-display text-2xl font-bold text-ink">Energy</h2>
         {data && !noMetering && (
-          <Text size="xs" c="dimmed">
+          <span className="text-xs text-muted">
             {data.breakdown.length} metering device{data.breakdown.length === 1 ? "" : "s"}
-          </Text>
+          </span>
         )}
-      </Group>
+      </Row>
 
       {error && (
-        <Alert color="red" icon={<IconAlertTriangle size={16} />} title="Energy data unavailable">
-          {error}
-        </Alert>
+        <Stack gap={1} className="rounded-tile border border-danger/40 bg-danger/10 p-3">
+          <Row gap={2} align="center">
+            <TriangleAlert size={16} aria-hidden className="text-danger" />
+            <span className="font-semibold text-ink">Energy data unavailable</span>
+          </Row>
+          <p role="alert" className="text-sm text-muted">
+            {error}
+          </p>
+        </Stack>
       )}
 
       {!data && !error ? (
-        <Loader size="sm" mt="md" />
+        <Spinner className="mt-2" />
       ) : data ? (
         <>
-          <SimpleGrid cols={{ base: 2, sm: 3 }} spacing="sm">
-            <MetricCard
-              icon={<IconPower size={16} />}
-              label="Current power"
-              value={formatWatts(data.powerWatts)}
-              colorVar="--info"
-            />
-            <MetricCard
-              icon={<IconDatabase size={16} />}
-              label="Cumulative"
-              value={formatKwh(data.energyWh)}
-              colorVar="--on"
-            />
-            <MetricCard
-              icon={<IconBolt size={16} />}
-              label="Metering devices"
-              value={String(data.breakdown.length)}
-              colorVar="--stale"
-            />
-          </SimpleGrid>
+          <Grid columns={2} md={3} gap={3}>
+            <Card>
+              <Stat
+                icon={<Zap size={14} />}
+                label="Current power"
+                value={formatWatts(data.powerWatts)}
+                tone="info"
+              />
+            </Card>
+            <Card>
+              <Stat
+                icon={<Database size={14} />}
+                label="Cumulative"
+                value={formatKwh(data.energyWh)}
+                tone="on"
+              />
+            </Card>
+            <Card>
+              <Stat
+                icon={<Gauge size={14} />}
+                label="Metering devices"
+                value={data.breakdown.length}
+                tone="stale"
+              />
+            </Card>
+          </Grid>
 
           <Sparkline data={data} />
 
+          {data.history.length === 0 && !noMetering && (
+            <p className="text-xs text-muted">
+              No history samples are available — history may be disabled on this deployment.
+            </p>
+          )}
+
           {noMetering ? (
-            <Text c="dimmed" size="sm">
-              No devices report energy metering yet. Instantaneous power and cumulative consumption
-              appear here once a metering device (for example a Shelly switch) is reporting.
-            </Text>
+            <EmptyState
+              icon={<PlugZap size={28} />}
+              title="No devices report energy metering yet"
+              description="Instantaneous power and cumulative consumption appear here once a metering device (for example a Shelly switch) is reporting."
+            />
           ) : (
-            <Stack gap="xs">
-              <Text size="xs" fw={600} tt="uppercase" c="dimmed">
+            <Stack gap={2}>
+              <span className="text-xs font-bold uppercase tracking-wide text-muted">
                 Per-device breakdown
-              </Text>
+              </span>
               {data.breakdown.map((device) => (
-                <Paper key={device.qualifiedId} withBorder p="sm">
-                  <Group justify="space-between" wrap="nowrap" gap="sm">
-                    <Group gap={6} wrap="nowrap" style={{ minWidth: 0 }}>
-                      <Text size="sm" fw={500} truncate>
+                <Card key={device.qualifiedId}>
+                  <Row justify="between" align="center" gap={2} wrap>
+                    <Row gap={2} align="center" className="min-w-0" wrap={false}>
+                      <span className="truncate text-sm font-medium text-ink">
                         {humanizeDeviceName(device.displayName)}
-                      </Text>
+                      </span>
                       {!device.available && (
-                        <Badge
-                          color="red"
-                          variant="light"
-                          size="xs"
-                          leftSection={<IconPlugOff size={10} />}
-                        >
+                        <Badge tone="danger">
+                          <Unplug size={12} aria-hidden />
                           unavailable
                         </Badge>
                       )}
-                    </Group>
-                    <Group gap="lg" wrap="nowrap">
-                      <Text size="sm" ff="monospace">
+                    </Row>
+                    <Row gap={3} align="center" wrap={false}>
+                      <span className="font-mono text-sm text-ink">
                         {device.powerWatts === undefined ? "—" : formatWatts(device.powerWatts)}
-                      </Text>
-                      <Text size="sm" ff="monospace">
+                      </span>
+                      <span className="font-mono text-sm text-ink">
                         {device.energyWh === undefined ? "—" : formatKwh(device.energyWh)}
-                      </Text>
-                    </Group>
-                  </Group>
-                </Paper>
+                      </span>
+                    </Row>
+                  </Row>
+                </Card>
               ))}
-              <Text size="xs" c="dimmed">
+              <p className="text-xs text-muted">
                 A dash means the device reports no such reading — it is not counted as zero.
                 Unavailable devices are excluded from the totals above.
-              </Text>
+              </p>
             </Stack>
           )}
         </>

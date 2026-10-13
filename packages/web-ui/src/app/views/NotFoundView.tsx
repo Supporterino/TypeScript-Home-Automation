@@ -1,16 +1,26 @@
-import { Stack, Text, Title } from "@mantine/core";
+/**
+ * The not-found view — an unmatched path resolves here rather than guessing at
+ * a route (design.md D12; specs/web-ui "Navigation and Information
+ * Architecture"; task 6.4). Rebuilt on the Lumen primitive layer (`ui/*`) and
+ * `lucide-react`.
+ */
+import { Compass } from "lucide-react";
 import { overviewPath } from "../lib/router.js";
 import { Link, useRouter } from "../lib/router-context.js";
+import { Button, EmptyState } from "../ui/index.js";
 
 export function NotFoundView() {
   const { basePath } = useRouter();
   return (
-    <Stack align="center" justify="center" mih={300} gap="xs">
-      <Title order={3}>Not found</Title>
-      <Text c="dimmed" size="sm">
-        Nothing is registered at this path.
-      </Text>
-      <Link to={overviewPath(basePath)}>Back to overview</Link>
-    </Stack>
+    <EmptyState
+      icon={<Compass size={28} />}
+      title="Not found"
+      description="Nothing is registered at this path."
+      action={
+        <Button asChild>
+          <Link to={overviewPath(basePath)}>Back to overview</Link>
+        </Button>
+      }
+    />
   );
 }

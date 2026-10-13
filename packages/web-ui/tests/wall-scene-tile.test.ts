@@ -4,13 +4,16 @@ import { join } from "node:path";
 import { wallTileMetrics } from "../src/app/wall/scale.js";
 
 /**
- * Structural assertions for the wall scene button (task 5.1; design.md D7;
+ * Structural assertions for the wall scene button (task 5.1; design.md D13;
  * specs/wall-display "Scene Buttons Trigger Automations"). There is no DOM
  * harness here, so the render decisions — the full-bleed surface, the icon +
  * label anatomy, the explicit pressed/busy states, and the unchanged trigger
  * and error-surfacing path — are asserted against the widget's source, the same
  * style as `wall-card-archetypes.test.ts` / `cover-transport.test.ts`. The pure
  * trigger-request decision stays covered by `wall-scene.test.ts`.
+ *
+ * Re-pointed at the Lumen primitive layer (`ui/*`) and `lucide-react` (task
+ * 7.1); each assertion's intent is unchanged.
  */
 const APP_DIR = join(import.meta.dir, "..", "src/app");
 const SCENE = join(APP_DIR, "wall/widgets/SceneWidget.tsx");
@@ -27,15 +30,15 @@ async function sceneSource(): Promise<string> {
 describe("scene button is a full-bleed pressable tile", () => {
   it("fills its widget area with a pressable element", async () => {
     const source = await sceneSource();
-    expect(source).toContain("<UnstyledButton");
-    expect(source).toContain('width: "100%"');
-    expect(source).toContain('height: "100%"');
+    expect(source).toContain("<button");
+    expect(source).toContain("h-full w-full");
     expect(source).toContain("onClick={() => void handleTrigger()}");
   });
 
   it("presents a large icon above the label", async () => {
     const source = await sceneSource();
-    expect(source).toContain("IconPlayerPlay");
+    expect(source).toContain('from "lucide-react"');
+    expect(source).toContain("<Play size={SCENE_ICON_SIZE}");
     expect(source).toContain("{label}");
   });
 
@@ -64,13 +67,13 @@ describe("scene button state presentation", () => {
     const source = await sceneSource();
     expect(source).toContain("data-busy");
     expect(source).toContain("aria-busy={busy}");
-    expect(source).toContain("<Loader");
+    expect(source).toContain("<Spinner");
   });
 
   it("reserves the geometry so states change paint, not layout", async () => {
     const source = await sceneSource();
     // The busy indicator overlays the icon rather than displacing it.
-    expect(source).toContain('position: "absolute"');
+    expect(source).toContain('className="absolute"');
     // States toggle opacity/background/shadow only — never width or height.
     expect(source).toContain("opacity: busy ? 0 : 1");
     expect(source).toContain('background: pressed ? "var(--surface-2)" : "transparent"');
@@ -91,7 +94,7 @@ describe("scene button keeps its trigger and error path", () => {
 
   it("surfaces a failure on the widget", async () => {
     const source = await sceneSource();
-    expect(source).toContain('c="red"');
+    expect(source).toContain("text-danger");
     expect(source).toContain('"Could not trigger this automation"');
   });
 });

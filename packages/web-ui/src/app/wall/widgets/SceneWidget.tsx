@@ -1,5 +1,5 @@
 /**
- * The wall scene-button widget (design.md D7; specs/wall-display "Scene
+ * The wall scene-button widget (design.md D13; specs/wall-display "Scene
  * Buttons Trigger Automations"). A configurable label triggers an existing
  * automation through the same manual-trigger path the admin interface uses —
  * no scene subsystem.
@@ -11,11 +11,11 @@
  * shift while it is operated. A trigger failure is caught and surfaced on the
  * tile itself, so a broken or deleted automation never takes down the profile.
  */
-import { Box, Loader, Text, UnstyledButton } from "@mantine/core";
-import { IconPlayerPlay } from "@tabler/icons-react";
+import { Play } from "lucide-react";
 import { useState } from "react";
 import { manualTriggerContext, triggerAutomation } from "../../api.js";
 import { useDataStore } from "../../lib/data-store.js";
+import { Spinner } from "../../ui/index.js";
 import type { WallWidgetProps } from "../registry.js";
 import { wallTileMetrics } from "../scale.js";
 import { WALL_BODY_FONT_SIZE } from "../type-ramp.js";
@@ -52,16 +52,16 @@ export function SceneWidget({ widget }: WallWidgetProps) {
 
   if (!automationName) {
     return (
-      <Text fz={WALL_BODY_FONT_SIZE} c="dimmed">
+      <p className="text-muted" style={{ fontSize: WALL_BODY_FONT_SIZE }}>
         No automation configured.
-      </Text>
+      </p>
     );
   }
 
   return (
-    <Box h="100%" w="100%" style={{ position: "relative", display: "flex" }}>
-      <UnstyledButton
-        className="ambient-toggle"
+    <div className="relative flex h-full w-full">
+      <button
+        type="button"
         data-pressed={pressed ? "" : undefined}
         data-busy={busy ? "" : undefined}
         aria-label={label}
@@ -76,49 +76,36 @@ export function SceneWidget({ widget }: WallWidgetProps) {
           if (event.key === "Enter" || event.key === " ") setPressed(true);
         }}
         onKeyUp={() => setPressed(false)}
+        className="flex h-full w-full cursor-pointer flex-col items-center justify-center gap-3 rounded-tile p-3 text-ink motion-toggle disabled:cursor-progress"
         style={{
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: "var(--space-3)",
-          width: "100%",
-          height: "100%",
           minHeight: minTouchTarget,
-          padding: "var(--space-3)",
-          borderRadius: "var(--radius-tile)",
           background: pressed ? "var(--surface-2)" : "transparent",
           boxShadow: pressed ? "var(--e2)" : "var(--e1)",
-          color: "var(--text)",
-          cursor: busy ? "progress" : "pointer",
         }}
       >
-        <Box
-          style={{
-            position: "relative",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            width: minTouchTarget,
-            height: minTouchTarget,
-          }}
+        <span
+          className="relative flex items-center justify-center"
+          style={{ width: minTouchTarget, height: minTouchTarget }}
         >
-          <IconPlayerPlay size={SCENE_ICON_SIZE} aria-hidden style={{ opacity: busy ? 0 : 1 }} />
-          {busy && <Loader size={SCENE_ICON_SIZE} style={{ position: "absolute" }} aria-hidden />}
-        </Box>
-        <Text fz={WALL_BODY_FONT_SIZE} fw={600} style={{ opacity: busy ? 0.6 : 1 }}>
+          <Play size={SCENE_ICON_SIZE} aria-hidden style={{ opacity: busy ? 0 : 1 }} />
+          {busy && <Spinner size={SCENE_ICON_SIZE} label="" className="absolute" />}
+        </span>
+        <span
+          className="font-semibold"
+          style={{ fontSize: WALL_BODY_FONT_SIZE, opacity: busy ? 0.6 : 1 }}
+        >
           {label}
-        </Text>
-      </UnstyledButton>
+        </span>
+      </button>
       {error && (
-        <Text
-          fz={WALL_BODY_FONT_SIZE}
-          c="red"
-          style={{ position: "absolute", insetInline: 0, bottom: 0, textAlign: "center" }}
+        <p
+          role="alert"
+          className="absolute inset-x-0 bottom-0 text-center text-danger"
+          style={{ fontSize: WALL_BODY_FONT_SIZE }}
         >
           {error}
-        </Text>
+        </p>
       )}
-    </Box>
+    </div>
   );
 }

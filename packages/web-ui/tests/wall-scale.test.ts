@@ -53,7 +53,7 @@ describe("deviceTileText", () => {
     expect(px(wall.body)).toBeGreaterThanOrEqual(16);
   });
 
-  it("reproduces the dashboard tile's existing Mantine sizes exactly", () => {
+  it("reproduces the dashboard tile's existing sizes exactly", () => {
     const dashboard = deviceTileText("default");
     expect(dashboard.chip).toBe("xs");
     expect(dashboard.body).toBe("sm");

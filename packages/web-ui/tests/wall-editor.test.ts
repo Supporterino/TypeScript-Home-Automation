@@ -274,16 +274,16 @@ describe("widget list layout (task 7.1)", () => {
     const source = await editorSource();
     // A profile with many widgets is laid out two-up on a wide viewport; the
     // same grid collapses to a single column below the `md` breakpoint.
-    expect(source).toContain("<SimpleGrid");
-    expect(source).toContain("cols={{ base: 1, md: 2 }}");
+    expect(source).toContain("<Grid");
+    expect(source).toContain("columns={1} md={2}");
     expect(source).toContain("config.widgets.map((widget) =>");
   });
 
   it("keeps each widget a self-contained card with its own surface", async () => {
     const source = await editorSource();
-    // Every mapped widget renders through WidgetRow, which draws its own Paper.
+    // Every mapped widget renders through WidgetRow, which draws its own Card.
     expect(source).toContain("<WidgetRow");
-    expect(source).toContain("<Paper withBorder");
+    expect(source).toContain("<Card>");
   });
 
   it("does not introduce horizontal scrolling on a narrow viewport", async () => {

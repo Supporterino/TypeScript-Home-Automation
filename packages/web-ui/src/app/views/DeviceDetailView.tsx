@@ -1,10 +1,19 @@
 /**
  * Device detail — controls derived generically from the device's declared
  * capabilities, not a fixed per-model list (design.md D12; specs/web-ui
- * "Device Control Interface"; task 10.11).
+ * "Device Control Interface", "Zigbee Groups Are Presented As Devices With
+ * Their Membership", "Device Name Presentation"; task 5.3).
+ *
+ * The human-readable label is presented while the raw qualified identifier
+ * stays visible, so an operator can still see the value that addresses, routes
+ * to, and commands the device. A group links to each member's own detail view,
+ * including hidden members, since membership is read-only here.
+ *
+ * Rebuilt on the Lumen primitive layer (`ui/*`) and `lucide-react` (task 5.3);
+ * the capability-driven control path (`CapabilityControl`) is unchanged.
  */
-import { Alert, Badge, Button, Group, Paper, Select, Stack, Text, Title } from "@mantine/core";
-import { IconAlertTriangle, IconEye, IconEyeOff, IconUsersGroup } from "@tabler/icons-react";
+import { Clock, Eye, EyeOff, TriangleAlert, Unplug, UsersRound, Wifi } from "lucide-react";
+import { useState } from "react";
 import { assignDeviceRoom, unassignDeviceRoom } from "../api.js";
 import { CapabilityControl } from "../components/CapabilityControl.js";
 import { flattenCapabilities } from "../lib/capability-ranking.js";
@@ -12,8 +21,24 @@ import { useDataStore } from "../lib/data-store.js";
 import { formatAge, isObservationStale } from "../lib/format.js";
 import { humanizeDeviceName } from "../lib/humanize-name.js";
 import { deviceDetailPath } from "../lib/router.js";
-import { useRouter } from "../lib/router-context.js";
+import { Link, useRouter } from "../lib/router-context.js";
 import { useNow } from "../lib/use-now.js";
+import {
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  Row,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  Stack,
+} from "../ui/index.js";
+
+/** The select value that unassigns the device from every room. */
+const UNASSIGNED_VALUE = "__unassigned__";
 
 /** "current_heating_setpoint" → "Current heating setpoint". */
 function prettifyPropertyName(property: string): string {
@@ -23,15 +48,18 @@ function prettifyPropertyName(property: string): string {
 
 export function DeviceDetailView({ qualifiedId }: { qualifiedId: string }) {
   const { devicesByQualifiedId, rooms, refresh, hideDevice, unhideDevice } = useDataStore();
-  const { navigate, basePath } = useRouter();
+  const { basePath } = useRouter();
   const now = useNow();
+  const [roomError, setRoomError] = useState<string | null>(null);
   const device = devicesByQualifiedId.get(qualifiedId);
 
   if (!device) {
     return (
-      <Alert color="yellow" icon={<IconAlertTriangle size={16} />} title="Device not found">
-        This device is not currently known to any source.
-      </Alert>
+      <EmptyState
+        icon={<TriangleAlert size={28} />}
+        title="Device not found"
+        description="This device is not currently known to any source."
+      />
     );
   }
 
@@ -44,117 +72,134 @@ export function DeviceDetailView({ qualifiedId }: { qualifiedId: string }) {
   );
   const isGroup = device.source === "zigbee-group";
 
-  async function handleRoomChange(roomId: string | null) {
-    if (roomId) await assignDeviceRoom(qualifiedId, roomId);
-    else await unassignDeviceRoom(qualifiedId);
-    await refresh();
+  async function handleRoomChange(value: string) {
+    setRoomError(null);
+    try {
+      if (value === UNASSIGNED_VALUE) await unassignDeviceRoom(qualifiedId);
+      else await assignDeviceRoom(qualifiedId, value);
+      await refresh();
+    } catch (err) {
+      setRoomError(err instanceof Error ? err.message : "Failed to change the device's room");
+    }
   }
 
   return (
-    <Stack gap="md">
-      <Group justify="space-between" wrap="wrap">
-        <Group gap="xs" wrap="nowrap">
-          {isGroup && <IconUsersGroup size={20} color="var(--mantine-color-dimmed)" />}
-          <Stack gap={0}>
-            <Title order={2}>{humanizeDeviceName(device.displayName)}</Title>
+    <Stack gap={4}>
+      <Row justify="between" align="start" gap={3} wrap>
+        <Row gap={2} align="center" wrap={false} className="min-w-0">
+          {isGroup && <UsersRound size={20} aria-hidden className="shrink-0 text-muted" />}
+          <Stack gap={0} className="min-w-0">
+            <h2 className="truncate font-display text-2xl font-bold text-ink">
+              {humanizeDeviceName(device.displayName)}
+            </h2>
             {/* The raw identifier stays visible so an operator can still see
                 the value that addresses, routes to, and commands the device
                 (design.md D8; specs/web-ui "Device Name Presentation"). */}
-            <Text size="xs" c="dimmed" ff="monospace">
-              {qualifiedId}
-            </Text>
+            <code className="font-mono text-xs text-muted">{qualifiedId}</code>
           </Stack>
-        </Group>
-        <Group gap="xs">
-          <Badge variant="light">{isGroup ? "group" : device.source}</Badge>
+        </Row>
+
+        <Row gap={2} align="center" wrap>
+          <Badge tone="neutral">{isGroup ? "group" : device.source}</Badge>
           {device.hidden && (
-            <Badge color="gray" variant="outline">
+            <Badge tone="neutral">
+              <EyeOff size={12} aria-hidden />
               Hidden
             </Badge>
           )}
           {!device.reachable && (
-            <Badge color="red" variant="light">
+            <Badge tone="danger">
+              <Unplug size={12} aria-hidden />
               Unreachable
             </Badge>
           )}
           {device.observation.mode === "polled" && (
-            <Badge color={stale ? "yellow" : "gray"} variant="light">
+            <Badge tone={stale ? "stale" : "neutral"}>
+              <Clock size={12} aria-hidden />
               polled · {formatAge(now - device.observation.observedAt)} ago
             </Badge>
           )}
           {device.observation.mode === "push" && (
-            <Badge color="green" variant="light">
+            <Badge tone="on">
+              <Wifi size={12} aria-hidden />
               live
             </Badge>
           )}
           <Button
-            size="xs"
-            variant="default"
-            leftSection={device.hidden ? <IconEye size={14} /> : <IconEyeOff size={14} />}
+            size="sm"
+            variant="soft"
             onClick={() =>
               void (device.hidden ? unhideDevice(qualifiedId) : hideDevice(qualifiedId))
             }
           >
+            {device.hidden ? <Eye size={14} aria-hidden /> : <EyeOff size={14} aria-hidden />}
             {device.hidden ? "Unhide" : "Hide"}
           </Button>
-        </Group>
-      </Group>
+        </Row>
+      </Row>
 
-      <Select
-        label="Room"
-        placeholder="Unassigned"
-        clearable
-        data={rooms.map((r) => ({ value: r.id, label: r.name }))}
-        value={currentRoom?.id ?? null}
-        onChange={handleRoomChange}
-        style={{ maxWidth: 320 }}
-      />
+      <Stack gap={1} className="max-w-xs">
+        <span className="text-xs font-medium text-muted">Room</span>
+        <Select
+          value={currentRoom?.id ?? ""}
+          onValueChange={(value) => void handleRoomChange(value)}
+        >
+          <SelectTrigger aria-label="Room">
+            <SelectValue placeholder="Unassigned" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={UNASSIGNED_VALUE}>Unassigned</SelectItem>
+            {rooms.map((room) => (
+              <SelectItem key={room.id} value={room.id}>
+                {room.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {roomError && (
+          <p role="alert" className="text-sm text-danger">
+            {roomError}
+          </p>
+        )}
+      </Stack>
 
       {isGroup && device.memberQualifiedIds && device.memberQualifiedIds.length > 0 && (
-        <Stack gap="xs">
-          <Text fw={600} size="sm" c="dimmed" tt="uppercase">
-            Members
-          </Text>
-          <Text c="dimmed" size="xs">
+        <Stack gap={2}>
+          <span className="text-xs font-bold uppercase tracking-wide text-muted">Members</span>
+          <p className="text-xs text-muted">
             Membership is managed in Zigbee2MQTT and read-only here.
-          </Text>
-          <Group gap="xs">
+          </p>
+          <Row gap={2} wrap>
             {device.memberQualifiedIds.map((memberId) => {
               const member = devicesByQualifiedId.get(memberId);
               return (
-                <Button
-                  key={memberId}
-                  size="xs"
-                  variant="light"
-                  color={member?.hidden ? "gray" : "ambient"}
-                  onClick={() => navigate(deviceDetailPath(basePath, memberId))}
-                >
-                  {member ? humanizeDeviceName(member.displayName) : memberId}
-                  {member?.hidden ? " (hidden)" : ""}
+                <Button key={memberId} size="sm" variant="soft" asChild>
+                  <Link to={deviceDetailPath(basePath, memberId)}>
+                    {member ? humanizeDeviceName(member.displayName) : memberId}
+                    {member?.hidden ? " (hidden)" : ""}
+                  </Link>
                 </Button>
               );
             })}
-          </Group>
+          </Row>
         </Stack>
       )}
 
-      <Stack gap="sm">
+      <Stack gap={2}>
         {flat.length === 0 && (
-          <Text c="dimmed" size="sm">
-            This device declares no capabilities.
-          </Text>
+          <p className="text-sm text-muted">This device declares no capabilities.</p>
         )}
         {flat.map((capability) => (
-          <Paper key={capability.property} withBorder p="sm" radius="md">
-            <Group justify="space-between" wrap="nowrap" align="center">
-              <Text size="sm" fw={500}>
+          <Card key={capability.property}>
+            <Row justify="between" align="center" gap={3} wrap={false}>
+              <span className="text-sm font-medium text-ink">
                 {prettifyPropertyName(capability.property)}
-              </Text>
-              <div style={{ minWidth: 160 }}>
+              </span>
+              <div className="min-w-[160px]">
                 <CapabilityControl device={device} capability={capability} />
               </div>
-            </Group>
-          </Paper>
+            </Row>
+          </Card>
         ))}
       </Stack>
     </Stack>

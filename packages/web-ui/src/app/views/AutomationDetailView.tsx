@@ -1,33 +1,39 @@
 /**
  * Automation detail — triggers, enabled state, manual trigger, source,
- * execution history, and relationships (design.md D4, D11, D27; specs/web-ui
- * "Automation Management Interface"; tasks 10.14–10.17).
+ * execution history, and relationships (design.md D11, D12; specs/web-ui
+ * "Automation Management Interface"; task 6.1).
  *
- * The manual trigger control is unavailable while the automation is
- * disabled, so the server's 409 (design.md D27) is a guard this view
- * prevents from being reached in the ordinary case, not an expected
- * response the user sees.
+ * The manual trigger control is unavailable while the automation is disabled,
+ * so the server's 409 is a guard this view prevents from being reached in the
+ * ordinary case, not an expected response the user sees.
+ *
+ * Declared relationships (required services, related devices, watched state
+ * keys — complete without ever having run) are presented distinctly from
+ * observed relationships (state keys written since startup, growing with use),
+ * so a never-run automation is not misread as one that writes nothing.
+ *
+ * The source highlighter is rendered only once the source section is opened and
+ * its contents fetched, so Prism stays out of first paint.
+ *
+ * Rebuilt on the Lumen primitive layer (`ui/*`) and `lucide-react`.
  */
 import {
-  Accordion,
-  Alert,
-  Badge,
-  Button,
-  Code,
-  Group,
-  Paper,
-  Stack,
-  Switch,
-  Text,
-  Title,
-  Tooltip,
-} from "@mantine/core";
-import { IconAlertTriangle } from "@tabler/icons-react";
-import { useEffect, useState } from "react";
+  CircleCheck,
+  CircleX,
+  Clock,
+  Cpu,
+  FileCode,
+  KeyRound,
+  Play,
+  ScrollText,
+  TriangleAlert,
+} from "lucide-react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import {
   fetchAutomationHistory,
   fetchAutomationRelationships,
   fetchAutomationSource,
+  manualTriggerContext,
   setAutomationEnabled,
   triggerAutomation,
 } from "../api.js";
@@ -35,20 +41,59 @@ import { SourceViewer } from "../components/SourceViewer.js";
 import { useDataStore } from "../lib/data-store.js";
 import { deviceDetailPath } from "../lib/router.js";
 import { Link, useRouter } from "../lib/router-context.js";
-import type { AutomationRelationships, ExecutionRecord } from "../types.js";
+import type { AutomationRelationships, ExecutionRecord, TriggerContext } from "../types.js";
+import {
+  Badge,
+  Button,
+  Card,
+  Chip,
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+  EmptyState,
+  Row,
+  Stack,
+  Switch,
+} from "../ui/index.js";
+import { entryKey, formatDateTime, formatTime, LEVEL_NAMES } from "../utils/logUtils.js";
 
-function outcomeColor(outcome: "success" | "failure"): string {
-  return outcome === "success" ? "green" : "red";
+/** How many of an automation's most recent log entries the detail view lists. */
+const LOG_LIMIT = 50;
+
+/** A quiet uppercase section label. */
+function SectionLabel({ children }: { children: ReactNode }) {
+  return <span className="text-xs font-bold uppercase tracking-wide text-muted">{children}</span>;
 }
 
+/** A short, human description of what fired a run. */
+function describeTrigger(trigger: TriggerContext): string {
+  switch (trigger.type) {
+    case "mqtt":
+      return trigger.topic;
+    case "cron":
+      return trigger.expression;
+    case "state":
+      return trigger.key;
+    case "webhook":
+      return `${trigger.method} ${trigger.path}`;
+    default:
+      return trigger.type;
+  }
+}
+
+/** The mono treatment for a raw state key. */
+const CODE_CLASSES =
+  "inline-flex items-center rounded-input border border-hairline bg-surface-2 px-2 py-0.5 font-mono text-xs text-ink";
+
 export function AutomationDetailView({ name }: { name: string }) {
-  const { automations, devices, subscribe, refresh } = useDataStore();
+  const { automations, devices, logs, subscribe, refresh } = useDataStore();
   const { basePath } = useRouter();
   const automation = automations.find((a) => a.name === name);
 
   const [history, setHistory] = useState<ExecutionRecord[] | null>(null);
   const [relationships, setRelationships] = useState<AutomationRelationships | null>(null);
   const [source, setSource] = useState<string | null>(null);
+  const [sourceOpen, setSourceOpen] = useState(false);
   const [toggleError, setToggleError] = useState<string | null>(null);
   const [toggling, setToggling] = useState(false);
   const [triggerError, setTriggerError] = useState<string | null>(null);
@@ -67,13 +112,14 @@ export function AutomationDetailView({ name }: { name: string }) {
     setHistory(null);
     setRelationships(null);
     setSource(null);
+    setSourceOpen(false);
     void loadDetails();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [name]);
 
-  // New executions appear without a manual refresh (task 10.17): a
-  // completion event for this automation triggers a lightweight history
-  // re-fetch rather than trying to reconstruct the record client-side.
+  // New executions appear without a manual refresh: a completion event for this
+  // automation triggers a lightweight history re-fetch rather than trying to
+  // reconstruct the record client-side.
   useEffect(() => {
     return subscribe((event) => {
       if (event.category === "automation_execution" && event.automation === name) {
@@ -83,11 +129,23 @@ export function AutomationDetailView({ name }: { name: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [subscribe, name]);
 
+  // The store's log buffer updates from the stream, so this list appends live.
+  const automationLogs = useMemo(
+    () =>
+      logs
+        .filter((entry) => entry.automation === name)
+        .slice(-LOG_LIMIT)
+        .reverse(),
+    [logs, name],
+  );
+
   if (!automation) {
     return (
-      <Alert color="yellow" icon={<IconAlertTriangle size={16} />} title="Automation not found">
-        No automation named "{name}" is currently registered.
-      </Alert>
+      <EmptyState
+        icon={<TriangleAlert size={28} />}
+        title="Automation not found"
+        description={`No automation named "${name}" is currently registered.`}
+      />
     );
   }
 
@@ -108,8 +166,8 @@ export function AutomationDetailView({ name }: { name: string }) {
     setTriggering(true);
     setTriggerError(null);
     try {
-      const trigger = automation!.triggers[0];
-      await triggerAutomation(name, { type: trigger?.type ?? "cron" });
+      const trigger = automation?.triggers[0];
+      await triggerAutomation(name, manualTriggerContext(trigger?.type ?? "cron"));
     } catch (err) {
       setTriggerError(err instanceof Error ? err.message : "Trigger failed");
     } finally {
@@ -132,208 +190,283 @@ export function AutomationDetailView({ name }: { name: string }) {
   }
 
   return (
-    <Stack gap="md">
-      <Group justify="space-between">
-        <Title order={2}>{name}</Title>
-        <Tooltip label={toggleError ?? ""} color="red" disabled={!toggleError}>
-          <Switch
-            checked={automation.enabled}
-            disabled={toggling}
-            onChange={(e) => handleToggle(e.currentTarget.checked)}
-            label={automation.enabled ? "Enabled" : "Disabled"}
-          />
-        </Tooltip>
-      </Group>
-
-      <Paper withBorder p="sm" radius="md">
-        <Text size="xs" tt="uppercase" c="dimmed" fw={600} mb={6}>
-          Triggers
-        </Text>
-        <Stack gap={4}>
-          {automation.triggers.map((trigger, i) => (
-            <Code key={i} block>
-              {JSON.stringify(trigger)}
-            </Code>
-          ))}
-          {automation.triggers.length === 0 && (
-            <Text size="sm" c="dimmed">
-              No declared triggers.
-            </Text>
+    <Stack gap={4}>
+      <Row justify="between" align="start" gap={3} wrap>
+        <h2 className="min-w-0 truncate font-display text-2xl font-bold text-ink">{name}</h2>
+        <Stack gap={1} align="end" className="shrink-0">
+          <label className="flex items-center gap-2 text-sm text-muted">
+            <Switch
+              checked={automation.enabled}
+              disabled={toggling}
+              aria-label={`Enable ${name}`}
+              onCheckedChange={(next) => void handleToggle(next)}
+            />
+            <span>{automation.enabled ? "Enabled" : "Disabled"}</span>
+          </label>
+          {toggleError && (
+            <p role="alert" className="max-w-[16rem] text-xs text-danger">
+              {toggleError}
+            </p>
           )}
         </Stack>
-      </Paper>
+      </Row>
 
-      <Group>
-        <Tooltip
-          label="Disabled automations cannot be manually triggered"
-          disabled={automation.enabled}
+      <Card>
+        <Stack gap={2}>
+          <SectionLabel>Triggers</SectionLabel>
+          {automation.triggers.length === 0 ? (
+            <p className="text-sm text-muted">No declared triggers.</p>
+          ) : (
+            <Stack gap={1}>
+              {automation.triggers.map((trigger, i) => (
+                <code
+                  key={i}
+                  className="block overflow-auto rounded-input border border-hairline bg-surface-2 p-2 font-mono text-xs text-ink"
+                >
+                  {JSON.stringify(trigger)}
+                </code>
+              ))}
+            </Stack>
+          )}
+        </Stack>
+      </Card>
+
+      <Row gap={2} align="center" wrap>
+        <Button
+          size="sm"
+          disabled={triggering || !automation.enabled}
+          onClick={() => void handleTrigger()}
         >
-          <Button onClick={handleTrigger} loading={triggering} disabled={!automation.enabled}>
-            Trigger now
-          </Button>
-        </Tooltip>
+          <Play size={14} aria-hidden />
+          Trigger now
+        </Button>
         {triggerError && (
-          <Text c="red" size="sm">
+          <p role="alert" className="text-sm text-danger">
             {triggerError}
-          </Text>
+          </p>
         )}
-      </Group>
+        {!automation.enabled && (
+          <span className="text-xs text-muted">
+            Disabled automations cannot be manually triggered.
+          </span>
+        )}
+      </Row>
 
-      <Accordion multiple defaultValue={["history"]}>
-        <Accordion.Item value="history">
-          <Accordion.Control>Recent executions</Accordion.Control>
-          <Accordion.Panel>
-            {history === null ? (
-              <Text size="sm" c="dimmed">
-                Loading…
-              </Text>
-            ) : history.length === 0 ? (
-              <Text size="sm" c="dimmed">
-                No executions since startup.
-              </Text>
-            ) : (
-              <Stack gap={4}>
-                {history.map((record, i) => (
-                  <Group key={i} justify="space-between" wrap="nowrap">
-                    <Text size="sm">{new Date(record.startedAt).toLocaleString()}</Text>
-                    <Text size="xs" c="dimmed">
-                      {record.durationMs}ms
-                    </Text>
-                    <Badge size="sm" color={outcomeColor(record.outcome)} variant="light">
+      <Card>
+        <Stack gap={2}>
+          <Row gap={1} align="center">
+            <Clock size={14} aria-hidden className="text-muted" />
+            <SectionLabel>Recent executions</SectionLabel>
+          </Row>
+          {history === null ? (
+            <p className="text-sm text-muted">Loading…</p>
+          ) : history.length === 0 ? (
+            <p className="text-sm text-muted">No executions since startup.</p>
+          ) : (
+            <Stack gap={1}>
+              {history.map((record, i) => (
+                <Row
+                  key={i}
+                  justify="between"
+                  align="center"
+                  gap={2}
+                  wrap
+                  className="border-b border-hairline py-1 last:border-b-0"
+                >
+                  <span className="text-sm text-ink">
+                    {new Date(record.startedAt).toLocaleString()}
+                  </span>
+                  <Row gap={2} align="center" wrap>
+                    <Badge tone="neutral">{record.trigger.type}</Badge>
+                    <span
+                      className="max-w-[12rem] truncate font-mono text-xs text-muted"
+                      title={describeTrigger(record.trigger)}
+                    >
+                      {describeTrigger(record.trigger)}
+                    </span>
+                    <span className="font-mono text-xs text-muted">{record.durationMs}ms</span>
+                    <Badge tone={record.outcome === "success" ? "on" : "danger"}>
                       {record.outcome}
                     </Badge>
-                    {record.error && (
-                      <Text size="xs" c="red" truncate style={{ flex: 1 }}>
-                        {record.error}
-                      </Text>
-                    )}
-                  </Group>
-                ))}
-              </Stack>
-            )}
-          </Accordion.Panel>
-        </Accordion.Item>
+                  </Row>
+                  {record.error && (
+                    <p className="w-full text-xs text-danger" title={record.error}>
+                      {record.error}
+                    </p>
+                  )}
+                </Row>
+              ))}
+            </Stack>
+          )}
+        </Stack>
+      </Card>
 
-        <Accordion.Item value="relationships">
-          <Accordion.Control>Relationships</Accordion.Control>
-          <Accordion.Panel>
+      <Card>
+        <Stack gap={3}>
+          <SectionLabel>Declared — complete without running</SectionLabel>
+
+          <Stack gap={1}>
+            <span className="text-sm font-medium text-ink">Required services</span>
             {relationships === null ? (
-              <Text size="sm" c="dimmed">
-                Loading…
-              </Text>
+              <p className="text-sm text-muted">Loading…</p>
+            ) : relationships.declared.requiredServices.length === 0 ? (
+              <p className="text-sm text-muted">None declared.</p>
             ) : (
-              <Stack gap="sm">
-                <div>
-                  <Text size="xs" tt="uppercase" c="dimmed" fw={600} mb={4}>
-                    Required services
-                  </Text>
-                  {relationships.declared.requiredServices.length === 0 ? (
-                    <Text size="sm" c="dimmed">
-                      None declared.
-                    </Text>
-                  ) : (
-                    <Group gap="xs">
-                      {relationships.declared.requiredServices.map((svc) => (
-                        <Badge
-                          key={svc.name}
-                          color={svc.registered ? "green" : "red"}
-                          variant="light"
-                        >
-                          {svc.name} {svc.registered ? "" : "· unavailable"}
-                        </Badge>
-                      ))}
-                    </Group>
-                  )}
-                </div>
-
-                <div>
-                  <Text size="xs" tt="uppercase" c="dimmed" fw={600} mb={4}>
-                    Related devices
-                  </Text>
-                  {relationships.declared.relatedDevices.length === 0 ? (
-                    <Text size="sm" c="dimmed">
-                      None declared.
-                    </Text>
-                  ) : (
-                    <Group gap="xs">
-                      {relationships.declared.relatedDevices.map((deviceName) => {
-                        const device = findDevice(deviceName);
-                        return device ? (
-                          <Link
-                            key={deviceName}
-                            to={deviceDetailPath(basePath, device.qualifiedId)}
-                          >
-                            <Badge variant="light" style={{ cursor: "pointer" }}>
-                              {deviceName}
-                            </Badge>
-                          </Link>
-                        ) : (
-                          <Badge key={deviceName} variant="light" color="gray">
-                            {deviceName}
-                          </Badge>
-                        );
-                      })}
-                    </Group>
-                  )}
-                </div>
-
-                <div>
-                  <Text size="xs" tt="uppercase" c="dimmed" fw={600} mb={4}>
-                    Watched state keys (declared)
-                  </Text>
-                  {relationships.declared.watchedStateKeys.length === 0 ? (
-                    <Text size="sm" c="dimmed">
-                      None declared.
-                    </Text>
-                  ) : (
-                    <Group gap="xs">
-                      {relationships.declared.watchedStateKeys.map((key) => (
-                        <Code key={key}>{key}</Code>
-                      ))}
-                    </Group>
-                  )}
-                </div>
-
-                <div>
-                  <Text size="xs" tt="uppercase" c="dimmed" fw={600} mb={4}>
-                    Observed written state keys (since startup)
-                    {relationships.observed.truncated && (
-                      <Badge ml={6} size="xs" color="yellow" variant="light">
-                        truncated
-                      </Badge>
+              <Row gap={1} wrap>
+                {relationships.declared.requiredServices.map((svc) => (
+                  <Badge key={svc.name} tone={svc.registered ? "on" : "danger"}>
+                    {svc.registered ? (
+                      <CircleCheck size={12} aria-hidden />
+                    ) : (
+                      <CircleX size={12} aria-hidden />
                     )}
-                  </Text>
-                  {relationships.observed.writtenStateKeys.length === 0 ? (
-                    <Text size="sm" c="dimmed">
-                      None observed yet — this does not mean the automation writes nothing, only
-                      that no write has been observed since startup.
-                    </Text>
-                  ) : (
-                    <Group gap="xs">
-                      {relationships.observed.writtenStateKeys.map((key) => (
-                        <Code key={key}>{key}</Code>
-                      ))}
-                    </Group>
-                  )}
-                </div>
-              </Stack>
+                    {svc.name}
+                    {svc.registered ? "" : " · unavailable"}
+                  </Badge>
+                ))}
+              </Row>
             )}
-          </Accordion.Panel>
-        </Accordion.Item>
+          </Stack>
 
-        <Accordion.Item value="source">
-          <Accordion.Control onClick={handleOpenSource}>Source</Accordion.Control>
-          <Accordion.Panel>
-            {source === null ? (
-              <Text size="sm" c="dimmed">
-                Opening this section loads the source.
-              </Text>
+          <Stack gap={1}>
+            <Row gap={1} align="center">
+              <Cpu size={13} aria-hidden className="text-muted" />
+              <span className="text-sm font-medium text-ink">Related devices</span>
+            </Row>
+            {relationships === null ? (
+              <p className="text-sm text-muted">Loading…</p>
+            ) : relationships.declared.relatedDevices.length === 0 ? (
+              <p className="text-sm text-muted">None declared.</p>
             ) : (
-              <SourceViewer source={source} />
+              <Row gap={1} wrap>
+                {relationships.declared.relatedDevices.map((deviceName) => {
+                  const device = findDevice(deviceName);
+                  return device ? (
+                    <Link
+                      key={deviceName}
+                      to={deviceDetailPath(basePath, device.qualifiedId)}
+                      className="inline-flex items-center rounded-pill border border-hairline bg-surface px-2.5 py-1 text-xs font-medium text-accent hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+                    >
+                      {deviceName}
+                    </Link>
+                  ) : (
+                    <Chip key={deviceName}>{deviceName}</Chip>
+                  );
+                })}
+              </Row>
             )}
-          </Accordion.Panel>
-        </Accordion.Item>
-      </Accordion>
+          </Stack>
+
+          <Stack gap={1}>
+            <Row gap={1} align="center">
+              <KeyRound size={13} aria-hidden className="text-muted" />
+              <span className="text-sm font-medium text-ink">Watched state keys</span>
+            </Row>
+            {relationships === null ? (
+              <p className="text-sm text-muted">Loading…</p>
+            ) : relationships.declared.watchedStateKeys.length === 0 ? (
+              <p className="text-sm text-muted">None declared.</p>
+            ) : (
+              <Row gap={1} wrap>
+                {relationships.declared.watchedStateKeys.map((key) => (
+                  <code key={key} className={CODE_CLASSES}>
+                    {key}
+                  </code>
+                ))}
+              </Row>
+            )}
+          </Stack>
+        </Stack>
+      </Card>
+
+      <Card>
+        <Stack gap={2}>
+          <Row gap={2} align="center" wrap>
+            <SectionLabel>Observed — since startup</SectionLabel>
+            {relationships?.observed.truncated && <Badge tone="stale">truncated</Badge>}
+          </Row>
+          <Row gap={1} align="center">
+            <KeyRound size={13} aria-hidden className="text-muted" />
+            <span className="text-sm font-medium text-ink">Written state keys</span>
+          </Row>
+          {relationships === null ? (
+            <p className="text-sm text-muted">Loading…</p>
+          ) : relationships.observed.writtenStateKeys.length === 0 ? (
+            <p className="text-sm text-muted">
+              None observed yet — this does not mean the automation writes nothing, only that no
+              write has been observed since startup.
+            </p>
+          ) : (
+            <Row gap={1} wrap>
+              {relationships.observed.writtenStateKeys.map((key) => (
+                <code key={key} className={CODE_CLASSES}>
+                  {key}
+                </code>
+              ))}
+            </Row>
+          )}
+        </Stack>
+      </Card>
+
+      <Card>
+        <Stack gap={2}>
+          <Row gap={1} align="center">
+            <ScrollText size={14} aria-hidden className="text-muted" />
+            <SectionLabel>Log entries</SectionLabel>
+          </Row>
+          {automationLogs.length === 0 ? (
+            <p className="text-sm text-muted">No log entries for this automation.</p>
+          ) : (
+            <Stack gap={1}>
+              {automationLogs.map((entry) => (
+                <Row key={entryKey(entry)} gap={2} align="baseline" wrap={false}>
+                  <span
+                    className="shrink-0 font-mono text-xs text-muted"
+                    title={formatDateTime(entry.time)}
+                  >
+                    {formatTime(entry.time)}
+                  </span>
+                  <Badge tone="neutral">{LEVEL_NAMES[entry.level] ?? entry.level}</Badge>
+                  <span className="min-w-0 flex-1 truncate text-sm text-ink" title={entry.msg}>
+                    {entry.msg}
+                  </span>
+                </Row>
+              ))}
+            </Stack>
+          )}
+        </Stack>
+      </Card>
+
+      <Collapsible
+        open={sourceOpen}
+        onOpenChange={(open) => {
+          setSourceOpen(open);
+          if (open) void handleOpenSource();
+        }}
+      >
+        <Card>
+          <Stack gap={3}>
+            <Row gap={2} align="center" wrap>
+              <CollapsibleTrigger asChild>
+                <Button size="sm" variant="soft">
+                  <FileCode size={14} aria-hidden />
+                  {sourceOpen ? "Hide source" : "Show source"}
+                </Button>
+              </CollapsibleTrigger>
+              <span className="text-xs text-muted">
+                Opening this section loads the syntax highlighter.
+              </span>
+            </Row>
+            <CollapsibleContent>
+              {source === null ? (
+                <p className="text-sm text-muted">Loading source…</p>
+              ) : (
+                <SourceViewer source={source} />
+              )}
+            </CollapsibleContent>
+          </Stack>
+        </Card>
+      </Collapsible>
     </Stack>
   );
 }

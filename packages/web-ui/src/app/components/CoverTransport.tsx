@@ -1,26 +1,26 @@
 /**
- * Cover transport controls for a wall cover card (design.md D6; specs/wall-display
- * "Cover Transport Controls").
+ * Cover transport controls for a cover card (specs/wall-display "Cover
+ * Transport Controls").
  *
  * A cover's primary action is a position, but a wall presents it as discrete,
  * touch-friendly transport rather than a bare slider: Open and Close command the
  * cover to its extremes, and Stop is offered only when a pure helper finds a
  * writable transport property that can express it — so an inert control is never
- * rendered, and a Shelly-like cover keeps Open and Close alone (design.md D6).
+ * rendered, and a Shelly-like cover keeps Open and Close alone.
  *
  * Every control is a plain pressable button with no hover dependency, sized to
- * the wall's minimum touch target through the size token's `control` metric, and
- * the current position is shown as a persistent readout so an optimistic command
- * is reflected immediately.
+ * the tile's `control` metric, and the current position is shown as a persistent
+ * readout so an optimistic command is reflected immediately. A rejected command
+ * is surfaced on its own control with the danger token.
  *
- * First-paint-safe: this module imports only pure helpers, Mantine, and icons —
- * never the lazy wall chunk (`wall/registry.ts`).
+ * Rebuilt on the Lumen primitive layer (`ui/*`) and `lucide-react`; its props
+ * and behaviour contracts are preserved (task 4.2).
  */
-import { ActionIcon, Group, Stack, Text, Tooltip } from "@mantine/core";
-import { IconChevronDown, IconChevronUp, IconPlayerStop } from "@tabler/icons-react";
+import { ChevronDown, ChevronUp, Square } from "lucide-react";
 import type { ReactNode } from "react";
 import type { CoverStopCommand, FlatCapability } from "../lib/capability-ranking.js";
 import type { DeviceDescriptor } from "../types.js";
+import { Button, cn, Row, Stack, Tooltip } from "../ui/index.js";
 import { formatReadoutValue } from "./CapabilityControl.js";
 
 interface Props {
@@ -45,7 +45,7 @@ interface Props {
   readoutSize: string;
 }
 
-/** One pressable transport control, surfaced with a red tooltip when its command fails. */
+/** One pressable transport control, surfaced with an error tooltip when its command fails. */
 function TransportButton({
   label,
   icon,
@@ -62,26 +62,22 @@ function TransportButton({
   onClick: () => void;
 }) {
   const button = (
-    <ActionIcon
-      variant="light"
-      color={error ? "red" : undefined}
-      size={control}
-      disabled={disabled}
+    <Button
+      variant="soft"
       aria-label={label}
       title={label}
+      disabled={disabled}
+      className={cn("p-0", error ? "text-danger" : undefined)}
+      style={{ width: control, height: control }}
       onClick={onClick}
     >
-      {icon}
-    </ActionIcon>
+      <span aria-hidden className="inline-flex items-center justify-center">
+        {icon}
+      </span>
+    </Button>
   );
 
-  return error ? (
-    <Tooltip label={error} color="red" withArrow>
-      {button}
-    </Tooltip>
-  ) : (
-    button
-  );
+  return error ? <Tooltip label={error}>{button}</Tooltip> : button;
 }
 
 export function CoverTransport({
@@ -102,11 +98,11 @@ export function CoverTransport({
   const iconSize = control >= 48 ? 18 : 14;
 
   return (
-    <Stack gap={4}>
-      <Group gap="xs" wrap="nowrap" align="center">
+    <Stack gap={1}>
+      <Row gap={2} align="center" wrap={false}>
         <TransportButton
           label="Open cover"
-          icon={<IconChevronUp size={iconSize} aria-hidden />}
+          icon={<ChevronUp size={iconSize} aria-hidden />}
           control={control}
           disabled={disabled}
           error={error}
@@ -114,7 +110,7 @@ export function CoverTransport({
         />
         <TransportButton
           label="Close cover"
-          icon={<IconChevronDown size={iconSize} aria-hidden />}
+          icon={<ChevronDown size={iconSize} aria-hidden />}
           control={control}
           disabled={disabled}
           error={error}
@@ -123,17 +119,17 @@ export function CoverTransport({
         {stop && (
           <TransportButton
             label="Stop cover"
-            icon={<IconPlayerStop size={iconSize} aria-hidden />}
+            icon={<Square size={iconSize} aria-hidden />}
             control={control}
             disabled={disabled}
             error={stopError}
             onClick={() => onStop(stop.value)}
           />
         )}
-      </Group>
-      <Text size={readoutSize} c="dimmed" fw={600}>
+      </Row>
+      <span className="font-semibold text-muted" style={{ fontSize: readoutSize }}>
         {formatReadoutValue(value, position.unit)}
-      </Text>
+      </span>
     </Stack>
   );
 }

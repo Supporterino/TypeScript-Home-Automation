@@ -1,4 +1,5 @@
 import { firstPaintAssetUrls } from "../asset-routes.js";
+import { themeBootstrapScript } from "./theme-bootstrap.js";
 
 export interface HtmlShellOptions {
   /** URL path prefix where the web UI is mounted, e.g. "/status". */
@@ -14,7 +15,7 @@ export interface HtmlShellOptions {
  * Returns the full HTML document for the web UI dashboard.
  *
  * The page is a minimal shell — a single <div id="app"> mount point for the
- * React + Mantine frontend. The compiled JS and CSS bundles are referenced by
+ * React frontend. The compiled JS and CSS bundles are referenced by
  * their content-addressed asset URLs rather than inlined, so they are
  * cacheable across requests and across views (design.md D8). The shell's size
  * is therefore independent of the compiled application's size.
@@ -23,10 +24,10 @@ export interface HtmlShellOptions {
  * calls with the correct path (e.g. /status/api/status).
  */
 export function htmlShell({ basePath, hasAuth: _hasAuth }: HtmlShellOptions): string {
-  // Inline equivalent of Mantine's <ColorSchemeScript defaultColorScheme="auto" />.
-  // Sets data-mantine-color-scheme on <html> before the React bundle loads,
-  // preventing a flash of the wrong color scheme on first paint.
-  const colorSchemeScript = `(function(){try{var s=localStorage.getItem("mantine-color-scheme");if(s==="light"||s==="dark"){document.documentElement.setAttribute("data-mantine-color-scheme",s);}else{var m=window.matchMedia("(prefers-color-scheme: dark)").matches;document.documentElement.setAttribute("data-mantine-color-scheme",m?"dark":"light");}}catch(e){}})();`;
+  // The no-flash theme bootstrap (design.md D4): sets data-theme on <html>
+  // before the React bundle loads, from the persisted preference or the system
+  // preference, so no reload flashes the wrong scheme.
+  const themeBootstrap = themeBootstrapScript();
 
   const iconPath = basePath === "/" ? "/icon.svg" : `${basePath}/icon.svg`;
   const manifestPath = basePath === "/" ? "/manifest.json" : `${basePath}/manifest.json`;
@@ -47,11 +48,11 @@ export function htmlShell({ basePath, hasAuth: _hasAuth }: HtmlShellOptions): st
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="ts-ha" />
-  <meta name="theme-color" content="#38BDF8" />
+  <meta name="theme-color" content="#0B0F17" />
   <link rel="manifest" href="${esc(manifestPath)}" />
   <link rel="apple-touch-icon" href="${esc(iconPath)}" />
   <link rel="icon" type="image/svg+xml" href="${esc(iconPath)}" />
-  <script>${colorSchemeScript}</script>
+  <script>${themeBootstrap}</script>
 ${cssLinks}
 </head>
 <body>
@@ -79,7 +80,7 @@ function esc(str: string): string {
  */
 export function loginShell({ basePath, error }: { basePath: string; error?: string }): string {
   const errorHtml = error
-    ? `<div style="color:#fa5252;background:rgba(250,82,82,.1);border:1px solid rgba(250,82,82,.4);border-radius:4px;padding:8px 12px;font-size:13px">${esc(error)}</div>`
+    ? `<div style="color:light-dark(#DC2626,#F87171);background:light-dark(rgba(220,38,38,.1),rgba(248,113,113,.1));border:1px solid light-dark(rgba(220,38,38,.4),rgba(248,113,113,.4));border-radius:4px;padding:8px 12px;font-size:13px">${esc(error)}</div>`
     : "";
 
   return `<!DOCTYPE html>
@@ -93,8 +94,8 @@ export function loginShell({ basePath, error }: { basePath: string; error?: stri
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       font-size: 14px;
-      background: light-dark(#F1F5F9, #0B1120);
-      color: light-dark(#0F172A, #F8FAFC);
+      background: light-dark(#F6F8FC, #0B0F17);
+      color: light-dark(#0D1526, #F3F6FC);
       min-height: 100vh;
       display: flex;
       align-items: center;
@@ -103,8 +104,8 @@ export function loginShell({ basePath, error }: { basePath: string; error?: stri
       color-scheme: light dark;
     }
     .card {
-      background: light-dark(#FFFFFF, #151E2E);
-      border: 1px solid light-dark(#E2E8F0, rgba(255,255,255,.08));
+      background: light-dark(#FFFFFF, #121826);
+      border: 1px solid light-dark(#DCE3EF, rgba(255,255,255,.08));
       border-radius: 14px;
       padding: 32px;
       width: 100%;
@@ -114,27 +115,27 @@ export function loginShell({ basePath, error }: { basePath: string; error?: stri
       gap: 20px;
       box-shadow: 0 8px 24px rgba(0,0,0,.32);
     }
-    h1 { font-size: 20px; font-weight: 700; color: #38BDF8; text-align: center; }
-    p { font-size: 12px; color: light-dark(#64748B, #94A3B8); text-align: center; margin-top: -12px; }
+    h1 { font-size: 20px; font-weight: 700; color: light-dark(#2563EB, #5EA8FF); text-align: center; }
+    p { font-size: 12px; color: light-dark(#5B6B85, #9AA6BC); text-align: center; margin-top: -12px; }
     label { font-size: 12px; font-weight: 600; display: block; margin-bottom: 5px; }
     input[type=password] {
       width: 100%; padding: 8px 12px;
-      border: 1px solid light-dark(#E2E8F0, rgba(255,255,255,.08));
+      border: 1px solid light-dark(#DCE3EF, rgba(255,255,255,.08));
       border-radius: 10px;
-      background: light-dark(#FFFFFF, #1E2940);
+      background: light-dark(#EEF2F9, #1A2334);
       color: inherit;
       font-size: 14px;
       outline: none;
     }
-    input[type=password]:focus { border-color: #38BDF8; }
+    input[type=password]:focus { border-color: light-dark(#2563EB, #5EA8FF); }
     button {
       width: 100%; padding: 10px;
-      background: #0284C7; color: #fff;
+      background: light-dark(#2563EB, #5EA8FF); color: light-dark(#FFFFFF, #0B0F17);
       border: none; border-radius: 10px;
       font-size: 14px; font-weight: 600;
       cursor: pointer;
     }
-    button:hover { background: #0369A1; }
+    button:hover { background: light-dark(#1D4ED8, #7CB8FF); }
   </style>
 </head>
 <body>

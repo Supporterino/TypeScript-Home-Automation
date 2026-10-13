@@ -4,8 +4,8 @@
  *
  * Every state the tile can present is described by a label and an icon
  * *shape* in addition to a color token, so color is never the only channel.
- * Icons are named symbolically here and mapped to Tabler components by the
- * renderer — this module stays DOM-free so the encoding itself is unit
+ * Icons are named symbolically here and mapped to `lucide-react` components by
+ * the renderer — this module stays DOM-free so the encoding itself is unit
  * testable (design.md D23).
  */
 

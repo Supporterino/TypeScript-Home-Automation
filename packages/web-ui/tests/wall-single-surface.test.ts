@@ -90,7 +90,7 @@ describe("contained wiring", () => {
     expect(wallTile).toContain("contained={props.contained}");
   });
 
-  it("DeviceTile skips its Paper via the pure surface decision", async () => {
+  it("DeviceTile skips its surface via the pure surface decision", async () => {
     const tile = await source("components/DeviceTile.tsx");
     expect(tile).toContain("cardDrawsNoSurface(archetype, wall, contained === true)");
     expect(tile).toContain("if (surfaceLess)");
