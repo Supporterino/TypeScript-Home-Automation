@@ -44,6 +44,9 @@ describe("loadConfig", () => {
     delete process.env.DEVICE_REGISTRY_FILE_PATH;
     delete process.env.SHELLY_POLL_MS;
     delete process.env.NANOLEAF_POLL_MS;
+    delete process.env.DEVICE_STATE_PERSIST;
+    delete process.env.DEVICE_STATE_FILE;
+    delete process.env.DEVICE_STATE_FLUSH_MS;
     delete process.env.ENERGY_SAMPLE_MS;
     delete process.env.ENERGY_HISTORY_MINUTES;
     delete process.env.WEATHER_LATITUDE;
@@ -76,6 +79,12 @@ describe("loadConfig", () => {
       expect(config.automations.recursive).toBe(false);
       expect(config.httpServer.port).toBe(8080);
       expect(config.deviceRegistry.persist).toBe(true);
+      // Device state persistence defaults on, matching the state store and
+      // device registry defaults (specs/configuration "Device State
+      // Persistence").
+      expect(config.deviceState.persist).toBe(true);
+      expect(config.deviceState.filePath).toBe("./device-state.json");
+      expect(config.deviceState.flushIntervalMs).toBe(1000);
       expect(config.services).toEqual({});
       // Energy history defaults on: sample every minute over a one-day window.
       expect(config.energy.sampleIntervalMs).toBe(60000);
@@ -235,6 +244,57 @@ describe("loadConfig", () => {
         process.exit = originalExit;
         console.error = originalError;
       }
+    });
+  });
+
+  describe("device state config", () => {
+    it("resolves unset DEVICE_STATE_PERSIST to true", () => {
+      const config = loadConfig();
+      expect(config.deviceState.persist).toBe(true);
+    });
+
+    it("DEVICE_STATE_PERSIST='false' resolves to false", () => {
+      process.env.DEVICE_STATE_PERSIST = "false";
+      const config = loadConfig();
+      expect(config.deviceState.persist).toBe(false);
+    });
+
+    it("defaults DEVICE_STATE_FILE to ./device-state.json", () => {
+      const config = loadConfig();
+      expect(config.deviceState.filePath).toBe("./device-state.json");
+    });
+
+    it("reads DEVICE_STATE_FILE from env", () => {
+      process.env.DEVICE_STATE_FILE = "/data/device-state.json";
+      const config = loadConfig();
+      expect(config.deviceState.filePath).toBe("/data/device-state.json");
+    });
+
+    it("defaults DEVICE_STATE_FLUSH_MS to 1000", () => {
+      const config = loadConfig();
+      expect(config.deviceState.flushIntervalMs).toBe(1000);
+    });
+
+    it("reads an explicit DEVICE_STATE_FLUSH_MS from env", () => {
+      process.env.DEVICE_STATE_FLUSH_MS = "5000";
+      const config = loadConfig();
+      expect(config.deviceState.flushIntervalMs).toBe(5000);
+    });
+
+    it("accepts DEVICE_STATE_FLUSH_MS=0", () => {
+      process.env.DEVICE_STATE_FLUSH_MS = "0";
+      const config = loadConfig();
+      expect(config.deviceState.flushIntervalMs).toBe(0);
+    });
+
+    it("rejects a non-numeric DEVICE_STATE_FLUSH_MS", () => {
+      process.env.DEVICE_STATE_FLUSH_MS = "soon";
+      expect(captureExit(() => loadConfig()).exitCode).toBe(1);
+    });
+
+    it("rejects a negative DEVICE_STATE_FLUSH_MS", () => {
+      process.env.DEVICE_STATE_FLUSH_MS = "-5";
+      expect(captureExit(() => loadConfig()).exitCode).toBe(1);
     });
   });
 

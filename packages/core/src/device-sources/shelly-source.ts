@@ -37,6 +37,7 @@ import type {
   DeviceSource,
 } from "./device-source.js";
 import { qualifyDeviceId } from "./device-source.js";
+import type { DeviceStateStore } from "./device-state-store.js";
 import { shellyCapabilitiesFor } from "./shelly-capabilities.js";
 
 export const SHELLY_SOURCE_ID = "shelly";
@@ -176,6 +177,7 @@ export class ShellyDeviceSource implements DeviceSource {
     private readonly mqtt: MqttService,
     private readonly logger: Logger,
     private readonly pollIntervalMs: number = DEFAULT_SHELLY_SOURCE_POLL_MS,
+    private readonly deviceStateStore?: DeviceStateStore,
   ) {}
 
   get available(): boolean {
@@ -600,13 +602,11 @@ export class ShellyDeviceSource implements DeviceSource {
       if (!existing) {
         // Seed metering from discovery so a metered channel's descriptor
         // declares energy from first enumeration, before any poll or
-        // notification (design.md D7).
-        this.tracked.set(entry.id, {
-          state: {},
-          reachable: true,
-          metered,
-          observation: this.initialObservation(entry.baseName),
-        });
+        // notification (design.md D7), and seed state/observation from the
+        // durable store so a restart's first enumeration reports the
+        // device's last-known value before a new observation arrives
+        // (design.md D2, D4).
+        this.tracked.set(entry.id, this.trackedFor(entry));
       } else if (metered) {
         existing.metered = true;
       }
@@ -997,12 +997,7 @@ export class ShellyDeviceSource implements DeviceSource {
     const entry = this.entries.get(id);
     if (!entry) return;
 
-    const existing = this.tracked.get(id) ?? {
-      state: {},
-      reachable: true,
-      metered: this.componentMetered(entry),
-      observation: this.initialObservation(entry.baseName),
-    };
+    const existing = this.trackedFor(entry);
     const updated: TrackedShellyState = {
       // Merge the patch's defined keys onto the last-known state so a partial
       // `NotifyStatus` preserves the seeded attributes it does not carry and
@@ -1016,7 +1011,41 @@ export class ShellyDeviceSource implements DeviceSource {
       observation: patch.observation ?? existing.observation,
     };
     this.tracked.set(id, updated);
+    // Record the observation where it is made and delivered — a poll, a push
+    // notification, or an RPC seed — never on a read (`list()`/`get()`/
+    // `toDescriptor()`), which would churn observedAt and the write-behind
+    // file (design.md D2). A reachability-only patch carries no observation
+    // and records nothing.
+    if (patch.observation) {
+      this.deviceStateStore?.record(
+        qualifyDeviceId(this.id, id),
+        updated.state,
+        updated.observation,
+      );
+    }
     this.notify(entry);
+  }
+
+  /**
+   * The tracked state for an entry, falling back to the durable store's
+   * last-known record when the entry has no in-memory observation yet
+   * (design.md D2, D4). A restored record's state and observation are used
+   * verbatim — observedAt stays the time it was recorded, never the read
+   * time, so a restored value reads as last-known rather than live.
+   */
+  private trackedFor(entry: ShellyLogicalEntry): TrackedShellyState {
+    const tracked = this.tracked.get(entry.id);
+    if (tracked) return tracked;
+    const restored = this.deviceStateStore?.get(qualifyDeviceId(this.id, entry.id));
+    return {
+      state: restored?.state ?? {},
+      // Reachability is not persisted — design.md D1 scopes a record to state +
+      // observation — so a restored device seeds as reachable until its next
+      // observation reports otherwise.
+      reachable: true,
+      metered: this.componentMetered(entry),
+      observation: restored?.observation ?? this.initialObservation(entry.baseName),
+    };
   }
 
   private notify(entry: ShellyLogicalEntry): void {
@@ -1031,12 +1060,7 @@ export class ShellyDeviceSource implements DeviceSource {
   }
 
   private toDescriptor(entry: ShellyLogicalEntry): DeviceDescriptor {
-    const tracked = this.tracked.get(entry.id) ?? {
-      state: {},
-      reachable: true,
-      metered: this.componentMetered(entry),
-      observation: this.initialObservation(entry.baseName),
-    };
+    const tracked = this.trackedFor(entry);
     // Shelly has no metering flag, so a channel is "metered" once discovery
     // reports it or it has actually reported a cumulative reading (design.md
     // D7). Until then — and for channels that never report one — the energy

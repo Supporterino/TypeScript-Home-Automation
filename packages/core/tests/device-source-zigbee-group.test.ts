@@ -3,6 +3,7 @@ import type { Capability } from "@ts-ha/shared";
 import type { ZigbeeDevice, ZigbeeGroup } from "@ts-ha/shared/types";
 import pino from "pino";
 import type { Config } from "../src/config.js";
+import { DeviceStateStore } from "../src/device-sources/device-state-store.js";
 import { formatQualifiedId } from "../src/device-sources/qualified-id.js";
 import {
   deriveGroupState,
@@ -437,5 +438,27 @@ describe("ZigbeeGroupDeviceSource", () => {
     mqttMock.emit("zigbee2mqtt/bulb1", { state: "ON" });
 
     expect(seen).toHaveLength(0);
+  });
+
+  // -------------------------------------------------------------------------
+  // Durable device state store (design.md D2; task 2.1)
+  // -------------------------------------------------------------------------
+
+  it("records a derived group observation into the durable store (task 2.1)", () => {
+    const store = new DeviceStateStore(logger, { persist: false });
+    const withStore = new ZigbeeGroupDeviceSource(registry, mqttMock.mqtt, logger, store);
+    withStore.start();
+
+    seedMembers();
+    seedGroup();
+
+    mqttMock.emit("zigbee2mqtt/bulb1", { state: "ON", brightness: 100 });
+
+    const record = store.get(formatQualifiedId("zigbee-group", "5"));
+    expect(record?.state).toEqual({ state: "ON", brightness: 100 });
+    expect(record?.observation.mode).toBe("push");
+    expect(withStore.get("5")?.state).toEqual(record?.state);
+
+    withStore.stop();
   });
 });

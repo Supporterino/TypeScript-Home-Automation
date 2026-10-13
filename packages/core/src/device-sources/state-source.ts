@@ -22,6 +22,7 @@ import type {
   DeviceSource,
 } from "./device-source.js";
 import { qualifyDeviceId } from "./device-source.js";
+import type { DeviceStateStore } from "./device-state-store.js";
 
 export const STATE_SOURCE_ID = "state";
 
@@ -55,6 +56,7 @@ export class StateDeviceSource implements DeviceSource {
     private readonly state: StateManager,
     private readonly toggles: StateToggleConfig[],
     private readonly logger: Logger,
+    private readonly deviceStateStore?: DeviceStateStore,
   ) {}
 
   /** Always available: the backing store is in-process and never absent. */
@@ -122,6 +124,12 @@ export class StateDeviceSource implements DeviceSource {
 
   private notify(stateKey: string): void {
     const descriptor = this.toDescriptor(stateKey);
+    // A state toggle changed — a real observation of the device's state,
+    // recorded at the point it is delivered, never on a read (design.md D2).
+    // Recorded for durability/pruning only: `toDescriptor` reads the backing
+    // `StateManager`, which persists independently, so the store's seed path
+    // is intentionally never consulted here (design.md D2, Risks).
+    this.deviceStateStore?.record(descriptor.qualifiedId, descriptor.state, descriptor.observation);
     for (const listener of this.listeners) {
       try {
         listener(descriptor);

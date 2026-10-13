@@ -23,6 +23,7 @@ import type {
   DeviceSource,
 } from "./device-source.js";
 import { qualifyDeviceId } from "./device-source.js";
+import type { DeviceStateStore } from "./device-state-store.js";
 
 export const NANOLEAF_SOURCE_ID = "nanoleaf";
 
@@ -88,6 +89,7 @@ export class NanoleafDeviceSource implements DeviceSource {
     private readonly nanoleaf: NanoleafService | null,
     private readonly logger: Logger,
     private readonly pollIntervalMs: number = DEFAULT_NANOLEAF_SOURCE_POLL_MS,
+    private readonly deviceStateStore?: DeviceStateStore,
   ) {}
 
   get available(): boolean {
@@ -187,29 +189,33 @@ export class NanoleafDeviceSource implements DeviceSource {
           effect: currentEffect,
         };
 
+        const observation: DeviceObservation = {
+          mode: "polled",
+          observedAt: Date.now(),
+          refreshIntervalMs: this.pollIntervalMs,
+        };
         this.tracked.set(name, {
           state,
           effects,
           reachable: true,
-          observation: {
-            mode: "polled",
-            observedAt: Date.now(),
-            refreshIntervalMs: this.pollIntervalMs,
-          },
+          observation,
         });
+        // Record the poll's observation at the point it is made, never on a
+        // read (design.md D2).
+        this.deviceStateStore?.record(qualifyDeviceId(this.id, name), state, observation);
         this.notify(name);
       } catch (err) {
         this.logger.error({ err, device: name }, "Nanoleaf poll failed for device — skipping");
-        const existing = this.tracked.get(name);
+        // A failed poll makes no observation: keep the last-known state and its
+        // original observation — restored from the store when the device has
+        // none in memory — rather than stamping a new observedAt or wiping the
+        // state (design.md D4).
+        const existing = this.trackedFor(name);
         this.tracked.set(name, {
-          state: existing?.state ?? {},
-          effects: existing?.effects ?? [],
+          state: existing.state,
+          effects: existing.effects,
           reachable: false,
-          observation: existing?.observation ?? {
-            mode: "polled",
-            observedAt: Date.now(),
-            refreshIntervalMs: this.pollIntervalMs,
-          },
+          observation: existing.observation,
         });
         this.notify(name);
       }
@@ -227,17 +233,34 @@ export class NanoleafDeviceSource implements DeviceSource {
     }
   }
 
-  private toDescriptor(name: string): DeviceDescriptor {
-    const tracked = this.tracked.get(name) ?? {
-      state: {},
+  /**
+   * The tracked state for a device, falling back to the durable store's
+   * last-known record when the device has no in-memory observation yet
+   * (design.md D2, D4). A restored record's state and observation are used
+   * verbatim — observedAt stays the time it was recorded, never the read
+   * time, so a restored value reads as last-known rather than live.
+   */
+  private trackedFor(name: string): TrackedNanoleafState {
+    const tracked = this.tracked.get(name);
+    if (tracked) return tracked;
+    const restored = this.deviceStateStore?.get(qualifyDeviceId(this.id, name));
+    return {
+      state: restored?.state ?? {},
       effects: [],
+      // Reachability is not persisted — design.md D1 scopes a record to state +
+      // observation — so a restored device seeds as reachable until its next
+      // observation reports otherwise.
       reachable: true,
-      observation: {
-        mode: "polled" as const,
+      observation: restored?.observation ?? {
+        mode: "polled",
         observedAt: Date.now(),
         refreshIntervalMs: this.pollIntervalMs,
       },
     };
+  }
+
+  private toDescriptor(name: string): DeviceDescriptor {
+    const tracked = this.trackedFor(name);
     return {
       source: this.id,
       id: name,

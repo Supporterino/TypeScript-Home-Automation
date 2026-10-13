@@ -27,6 +27,7 @@ import type {
   DeviceSource,
 } from "./device-source.js";
 import { qualifyDeviceId } from "./device-source.js";
+import type { DeviceStateStore } from "./device-state-store.js";
 
 export const ZIGBEE_SOURCE_ID = "zigbee";
 
@@ -42,6 +43,7 @@ export class ZigbeeDeviceSource implements DeviceSource {
     private readonly registry: DeviceRegistry | null,
     private readonly mqtt: MqttService,
     private readonly logger: Logger,
+    private readonly deviceStateStore?: DeviceStateStore,
   ) {}
 
   get available(): boolean {
@@ -139,6 +141,13 @@ export class ZigbeeDeviceSource implements DeviceSource {
 
   private notify(device: ZigbeeDevice): void {
     const descriptor = this.toDescriptor(device);
+    // The registry reported a device state change (or a device joined) — a
+    // real observation, recorded at the point it is delivered, never on a
+    // read (design.md D2).
+    // Recorded for durability/pruning only: `toDescriptor` seeds from the
+    // registry's independently persisted state, so the store's seed path is
+    // intentionally never consulted here (design.md D2, Risks).
+    this.deviceStateStore?.record(descriptor.qualifiedId, descriptor.state, descriptor.observation);
     for (const listener of this.listeners) {
       try {
         listener(descriptor);

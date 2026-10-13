@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "bun:test";
 import pino from "pino";
+import { DeviceStateStore } from "../src/device-sources/device-state-store.js";
 import { formatQualifiedId } from "../src/device-sources/qualified-id.js";
 import { StateDeviceSource, type StateToggleConfig } from "../src/device-sources/state-source.js";
 import { StateManager } from "../src/state/state-manager.js";
@@ -193,5 +194,56 @@ describe("StateDeviceSource", () => {
 
     state.set("night_mode", true);
     expect(seen).toEqual([]);
+  });
+
+  // -------------------------------------------------------------------------
+  // Durable device state store (design.md D2; task 2.1)
+  // -------------------------------------------------------------------------
+
+  it("records a change observation into the durable store (task 2.1)", () => {
+    const store = new DeviceStateStore(logger, { persist: false });
+    const source = new StateDeviceSource(
+      state,
+      [{ stateKey: "night_mode", name: "Night Mode" }],
+      logger,
+      store,
+    );
+    source.start();
+
+    state.set("night_mode", true);
+
+    const record = store.get("state:night_mode");
+    expect(record?.state).toEqual({ on: true });
+    expect(record?.observation.mode).toBe("push");
+    expect(source.get("night_mode")?.state).toEqual(record?.state);
+
+    source.stop();
+  });
+
+  // -------------------------------------------------------------------------
+  // Subscription delivery matches enumeration (design.md D2; task 2.2)
+  // -------------------------------------------------------------------------
+
+  it("delivers the same state to a subscriber as enumeration returns (task 2.2)", () => {
+    const source = new StateDeviceSource(
+      state,
+      [{ stateKey: "night_mode", name: "Night Mode" }],
+      logger,
+    );
+    source.start();
+
+    const delivered: { qualifiedId: string; state: Record<string, unknown>; reachable: boolean }[] =
+      [];
+    source.subscribe((descriptor) => delivered.push(descriptor));
+
+    state.set("night_mode", true);
+
+    const enumerated = source.get("night_mode");
+    expect(delivered).toHaveLength(1);
+    expect(delivered[0].qualifiedId).toBe(enumerated?.qualifiedId);
+    expect(delivered[0].state).toEqual(enumerated?.state);
+    expect(delivered[0].reachable).toBe(enumerated?.reachable);
+
+    source.stop();
   });
 });

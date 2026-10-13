@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
+import type { DeviceDescriptor } from "@ts-ha/shared";
 import pino from "pino";
 import { EventBus } from "../src/events/event-bus.js";
 import { EventStreamHub } from "../src/http/event-stream.js";
@@ -14,6 +15,26 @@ async function readOne(reader: ReadableStreamDefaultReader<Uint8Array>): Promise
 
 function makeLogger() {
   return pino({ level: "silent" });
+}
+
+/** Minimal full device descriptor for snapshot tests. */
+function makeDevice(id: string, hidden = false): DeviceDescriptor {
+  return {
+    source: "zigbee",
+    id,
+    qualifiedId: `zigbee:${id}`,
+    displayName: id,
+    state: {},
+    capabilities: [],
+    reachable: true,
+    observation: { mode: "push", observedAt: 1_700_000_000_000 },
+    hidden,
+  };
+}
+
+/** Parse one SSE frame's JSON payload. */
+function parseFrame(frame: string): Record<string, unknown> {
+  return JSON.parse(frame.replace(/^data: /, "").trim());
 }
 
 describe("EventStreamHub", () => {
@@ -212,6 +233,106 @@ describe("EventStreamHub", () => {
       expect(chunk).toBe(": keep-alive\n\n");
 
       await reader.cancel();
+    });
+  });
+
+  describe("per-connection device snapshot (design.md D6; tasks 4.1, 4.2)", () => {
+    it("sends one device_appeared per device before any subsequent event (task 4.1)", async () => {
+      const devices = [makeDevice("bulb-1"), makeDevice("bulb-2", true), makeDevice("bulb-3")];
+      const localHub = new EventStreamHub(bus, makeLogger(), makeLogger());
+      localHub.setDeviceSupplier(() => devices);
+
+      const res = localHub.open();
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error("no body");
+
+      // Emitted after the connection opens: the snapshot was buffered before
+      // the connection joined the fan-out set, so this cannot interleave
+      // ahead of it.
+      bus.emit({ category: "readiness", ready: true });
+
+      const frames: Array<Record<string, unknown>> = [];
+      for (let i = 0; i < devices.length + 1; i++) {
+        frames.push(parseFrame(await readOne(reader)));
+      }
+
+      // One device_appeared per device, in enumeration order, each carrying
+      // the full descriptor — including the hidden device (total enumeration).
+      for (let i = 0; i < devices.length; i++) {
+        expect(frames[i].category).toBe("device_appeared");
+        expect(frames[i].device).toEqual(devices[i]);
+      }
+      // Only then does the live event arrive.
+      expect(frames[devices.length].category).toBe("readiness");
+
+      await reader.cancel();
+    });
+
+    it("delivers every snapshot device_appeared when the device count exceeds the buffer limit (design.md D6, D28)", async () => {
+      const capacity = 3;
+      const devices = Array.from({ length: capacity + 5 }, (_, i) => makeDevice(`bulb-${i}`));
+      const localHub = new EventStreamHub(bus, makeLogger(), makeLogger(), capacity);
+      localHub.setDeviceSupplier(() => devices);
+
+      const res = localHub.open();
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error("no body");
+
+      // A live event arrives before the client drains any of the snapshot.
+      // Were the snapshot to share the bounded live buffer, this event would
+      // evict the oldest snapshot frame and raise a spurious fell-behind.
+      bus.emit({ category: "readiness", ready: true });
+
+      const frames: Array<Record<string, unknown>> = [];
+      for (let i = 0; i < devices.length + 1; i++) {
+        frames.push(parseFrame(await readOne(reader)));
+      }
+
+      // Every device_appeared is delivered, in order and none dropped, before
+      // the live event — the snapshot is never subject to bufferCapacity.
+      for (let i = 0; i < devices.length; i++) {
+        expect(frames[i].category).toBe("device_appeared");
+        expect(frames[i].device).toEqual(devices[i]);
+      }
+      expect(frames[devices.length].category).toBe("readiness");
+      expect(frames.some((f) => f.category === "fell_behind")).toBe(false);
+
+      await reader.cancel();
+    });
+
+    it("binds the snapshot to the connecting client and never resends it (task 4.2)", async () => {
+      const devices = [makeDevice("plug-1"), makeDevice("plug-2")];
+      const localHub = new EventStreamHub(bus, makeLogger(), makeLogger());
+      localHub.setDeviceSupplier(() => devices);
+
+      const first = localHub.open();
+      const firstReader = first.body?.getReader();
+      if (!firstReader) throw new Error("no body");
+
+      // Drain the first connection's snapshot.
+      for (let i = 0; i < devices.length; i++) {
+        const frame = parseFrame(await readOne(firstReader));
+        expect(frame.category).toBe("device_appeared");
+        expect((frame.device as DeviceDescriptor).qualifiedId).toBe(devices[i].qualifiedId);
+      }
+
+      // A later live event is delivered as-is — the snapshot is not resent.
+      bus.emit({ category: "readiness", ready: true });
+      expect(parseFrame(await readOne(firstReader)).category).toBe("readiness");
+
+      // A second connection receives its own, independent snapshot.
+      const second = localHub.open();
+      const secondReader = second.body?.getReader();
+      if (!secondReader) throw new Error("no body");
+
+      for (let i = 0; i < devices.length; i++) {
+        const frame = parseFrame(await readOne(secondReader));
+        expect(frame.category).toBe("device_appeared");
+        expect((frame.device as DeviceDescriptor).qualifiedId).toBe(devices[i].qualifiedId);
+      }
+
+      await firstReader.cancel();
+      await secondReader.cancel();
     });
   });
 });

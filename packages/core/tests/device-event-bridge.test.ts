@@ -1,4 +1,5 @@
 import { describe, expect, it, mock } from "bun:test";
+import { unlink } from "node:fs/promises";
 import pino from "pino";
 import { AggregateDeviceSource } from "../src/device-sources/aggregate.js";
 import { wireDeviceEvents } from "../src/device-sources/device-event-bridge.js";
@@ -7,6 +8,7 @@ import type {
   DeviceCommandOutcome,
   DeviceDescriptor,
 } from "../src/device-sources/device-source.js";
+import { DeviceStateStore } from "../src/device-sources/device-state-store.js";
 import { formatQualifiedId } from "../src/device-sources/qualified-id.js";
 import type { DeviceVisibility } from "../src/device-visibility.js";
 import { EventBus, type StreamEvent } from "../src/events/event-bus.js";
@@ -255,4 +257,93 @@ describe("wireDeviceEvents", () => {
 
     expect(events.some((e) => e.category === "device_disappeared")).toBe(false);
   });
+
+  it("prunes a disappeared device's store record so it is not restored on the next start (task 3.3)", async () => {
+    const filePath = "./test-device-event-bridge-prune.json";
+    await removeFiles(filePath);
+
+    const store = new DeviceStateStore(logger, { persist: true, filePath, flushIntervalMs: 0 });
+    const fakeA = makeFakeSource("zigbee", [makeDescriptor("zigbee", "0xaaa")]);
+    const fakeB = makeFakeSource("shelly", [makeDescriptor("shelly", "plug")]);
+    const aggregate = new AggregateDeviceSource([fakeA, fakeB], makeVisibility(), logger);
+    const bus = new EventBus();
+
+    store.record("zigbee:0xaaa", { on: true }, { mode: "push", observedAt: 1 });
+    store.record("shelly:plug", { on: false }, { mode: "push", observedAt: 1 });
+
+    await aggregate.start();
+    wireDeviceEvents(aggregate, bus, store);
+
+    // "0xaaa" disappears from zigbee's enumeration; a change on the still-present
+    // shelly device drives the reconciliation that observes the disappearance.
+    fakeA.setDevices([]);
+    fakeB.emit(makeDescriptor("shelly", "plug", { state: { on: true } }));
+
+    expect(store.get("zigbee:0xaaa")).toBeUndefined();
+    expect(store.get("shelly:plug")).toBeDefined();
+
+    await store.flush();
+    const restored = new DeviceStateStore(logger, { persist: true, filePath });
+    await restored.load();
+    expect(restored.get("zigbee:0xaaa")).toBeUndefined();
+    expect(restored.get("shelly:plug")).toBeDefined();
+
+    await removeFiles(filePath);
+  });
+
+  it("prunes a store record for an available source whose device is absent at wiring (design.md D5)", async () => {
+    const filePath = "./test-device-event-bridge-reconcile.json";
+    await removeFiles(filePath);
+
+    const store = new DeviceStateStore(logger, { persist: true, filePath, flushIntervalMs: 0 });
+    // "0xaaa" is stored but its source no longer enumerates it — it was
+    // removed while the engine was stopped, so it never enters the wiring-time
+    // seed and the per-notification path can never observe its disappearance.
+    store.record("zigbee:0xaaa", { on: true }, { mode: "push", observedAt: 1 });
+
+    const fake = makeFakeSource("zigbee", [makeDescriptor("zigbee", "0xbbb")]);
+    const aggregate = new AggregateDeviceSource([fake], makeVisibility(), logger);
+    const bus = new EventBus();
+
+    await aggregate.start();
+    wireDeviceEvents(aggregate, bus, store);
+
+    expect(store.get("zigbee:0xaaa")).toBeUndefined();
+
+    // The prune is persisted, so it is not restored on the next start.
+    await store.flush();
+    const restored = new DeviceStateStore(logger, { persist: true, filePath });
+    await restored.load();
+    expect(restored.get("zigbee:0xaaa")).toBeUndefined();
+
+    await removeFiles(filePath);
+  });
+
+  it("retains a store record for a currently unavailable source (design.md D5)", async () => {
+    const store = new DeviceStateStore(logger, { persist: false });
+    store.record("shelly:plug", { on: true }, { mode: "polled", observedAt: 1 });
+
+    // The source is down — its device is absent from list() only because the
+    // source is unavailable, not because the device was removed.
+    const fake = makeFakeSource("shelly");
+    fake.available = false;
+    const aggregate = new AggregateDeviceSource([fake], makeVisibility(), logger);
+    const bus = new EventBus();
+
+    await aggregate.start();
+    wireDeviceEvents(aggregate, bus, store);
+
+    expect(store.get("shelly:plug")).toBeDefined();
+  });
 });
+
+/** Remove a persistence file and its siblings, ignoring any that are absent. */
+async function removeFiles(filePath: string): Promise<void> {
+  for (const path of [filePath, `${filePath}.bak`, `${filePath}.tmp`]) {
+    try {
+      await unlink(path);
+    } catch {
+      // ignore a file that does not exist
+    }
+  }
+}

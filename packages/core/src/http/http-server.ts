@@ -227,6 +227,11 @@ export class HttpServer {
       deliveryLogger,
       this.logger.child({ service: "sse" }),
     );
+    // Each connecting client receives the current device set as its initial
+    // snapshot (design.md D6). Read lazily from `this.deviceSources`, so the
+    // supplier stays correct regardless of whether `setDeviceSources` was
+    // called before or after this method.
+    this.eventStreamHub.setDeviceSupplier(() => this.deviceSources?.list() ?? []);
   }
 
   /**

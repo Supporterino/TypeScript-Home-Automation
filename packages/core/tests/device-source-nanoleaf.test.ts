@@ -1,5 +1,6 @@
 import { describe, expect, it, mock } from "bun:test";
 import pino from "pino";
+import { DeviceStateStore } from "../src/device-sources/device-state-store.js";
 import { NanoleafDeviceSource } from "../src/device-sources/nanoleaf-source.js";
 import { formatQualifiedId } from "../src/device-sources/qualified-id.js";
 import type { HttpClient, HttpResponse } from "../src/http/http-client.js";
@@ -152,5 +153,56 @@ describe("NanoleafDeviceSource", () => {
     const callsAtStop = getSpy.mock.calls.length;
     await new Promise((r) => setTimeout(r, 60));
     expect(getSpy.mock.calls.length).toBe(callsAtStop);
+  });
+
+  // -------------------------------------------------------------------------
+  // Durable device state store (design.md D2, D4; task 2.1)
+  // -------------------------------------------------------------------------
+
+  it("seeds enumeration from the durable store's last-known state before any poll (task 2.1)", () => {
+    const store = new DeviceStateStore(logger, { persist: false });
+    const storedObservation = {
+      mode: "polled" as const,
+      observedAt: 1_700_000_000_000,
+      refreshIntervalMs: 1_000_000,
+    };
+    store.record(
+      "nanoleaf:panels",
+      { on: true, brightness: 55, effect: "Nemo" },
+      storedObservation,
+    );
+
+    const nanoleaf = new NanoleafService(createMockHttp(), logger);
+    nanoleaf.register("panels", { host: "192.168.1.60", token: "abc" });
+    // Not started: no poll has observed the device, so enumeration must use the
+    // store's restored value verbatim.
+    const source = new NanoleafDeviceSource(nanoleaf, logger, 1_000_000, store);
+
+    const device = source.get("panels");
+    expect(device?.state).toEqual({ on: true, brightness: 55, effect: "Nemo" });
+    expect(device?.observation).toEqual(storedObservation);
+  });
+
+  it("a fresh poll supersedes the seed and updates the store (task 2.1)", async () => {
+    const store = new DeviceStateStore(logger, { persist: false });
+    store.record(
+      "nanoleaf:panels",
+      { on: false },
+      { mode: "polled" as const, observedAt: 1_700_000_000_000, refreshIntervalMs: 1_000_000 },
+    );
+
+    const nanoleaf = new NanoleafService(createMockHttp(), logger);
+    nanoleaf.register("panels", { host: "192.168.1.60", token: "abc" });
+    const source = new NanoleafDeviceSource(nanoleaf, logger, 20, store);
+    source.start();
+
+    await new Promise((r) => setTimeout(r, 40));
+
+    const device = source.get("panels");
+    expect(device?.state.on).toBe(true);
+    expect(store.get("nanoleaf:panels")?.state).toEqual(device?.state);
+    expect(store.get("nanoleaf:panels")?.observation.observedAt).toBeGreaterThan(1_700_000_000_000);
+
+    source.stop();
   });
 });

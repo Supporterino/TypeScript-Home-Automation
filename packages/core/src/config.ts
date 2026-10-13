@@ -93,6 +93,16 @@ const configSchema = z.object({
     /** Refresh interval, in milliseconds, for the Nanoleaf device source. */
     nanoleafPollMs: z.coerce.number().int().positive().default(10000),
   }),
+  deviceState: z.object({
+    // Defaults to true: last-known state should be readable immediately on
+    // boot, matching the state store and device registry defaults
+    // (design.md D3; specs/configuration "Device State Persistence").
+    persist: booleanEnv(true),
+    /** Path to the device state persistence JSON file. */
+    filePath: z.string().default("./device-state.json"),
+    /** Milliseconds between coalesced device-state saves. `0` saves on every write. */
+    flushIntervalMs: z.coerce.number().int().min(0).default(1000),
+  }),
   energy: z.object({
     /**
      * Milliseconds between rolling power-history samples. `0` would sample
@@ -178,6 +188,11 @@ export function loadConfig(): Config {
     devices: {
       shellyPollMs: process.env.SHELLY_POLL_MS,
       nanoleafPollMs: process.env.NANOLEAF_POLL_MS,
+    },
+    deviceState: {
+      persist: process.env.DEVICE_STATE_PERSIST,
+      filePath: process.env.DEVICE_STATE_FILE,
+      flushIntervalMs: process.env.DEVICE_STATE_FLUSH_MS,
     },
     energy: {
       sampleIntervalMs: process.env.ENERGY_SAMPLE_MS,

@@ -166,6 +166,11 @@ export type {
   DeviceSource,
   ObservationMode,
 } from "./device-sources/device-source.js";
+export {
+  type DeviceStateRecord,
+  DeviceStateStore,
+  type DeviceStateStoreOptions,
+} from "./device-sources/device-state-store.js";
 export { NanoleafDeviceSource } from "./device-sources/nanoleaf-source.js";
 export {
   formatQualifiedId,

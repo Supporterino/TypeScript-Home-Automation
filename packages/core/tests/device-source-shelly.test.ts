@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
 import pino from "pino";
+import { DeviceStateStore } from "../src/device-sources/device-state-store.js";
 import { formatQualifiedId } from "../src/device-sources/qualified-id.js";
 import { ShellyDeviceSource } from "../src/device-sources/shelly-source.js";
 import type { HttpClient, HttpResponse } from "../src/http/http-client.js";
@@ -2013,6 +2014,59 @@ describe("ShellyDeviceSource end-to-end per-channel", () => {
     const setCalls = routed.calls.filter((url) => url.includes("Switch.Set"));
     expect(setCalls).toHaveLength(1);
     expect(setCalls[0]).toContain("id=0");
+
+    source.stop();
+  });
+
+  // -------------------------------------------------------------------------
+  // Durable device state store (design.md D2, D4; task 2.1)
+  // -------------------------------------------------------------------------
+
+  it("seeds enumeration from the durable store's last-known state before any observation (task 2.1)", async () => {
+    const store = new DeviceStateStore(logger, { persist: false });
+    const storedObservation = {
+      mode: "polled" as const,
+      observedAt: 1_700_000_000_000,
+      refreshIntervalMs: 1_000_000,
+    };
+    store.record("shelly:plug", { on: true, power: 12 }, storedObservation);
+
+    const http = createMockHttp({ output: false, apower: 0, voltage: 230, current: 0 });
+    const shelly = new ShellyService(http, mqttMock.mqtt, logger);
+    shelly.register("plug", "192.168.1.50", "switch");
+    // A long poll interval means no observation is made during start(), so the
+    // descriptor's state must come from the store's seed.
+    const source = new ShellyDeviceSource(shelly, mqttMock.mqtt, logger, 1_000_000, store);
+    await source.start();
+
+    const device = source.get("plug");
+    expect(device?.state).toEqual({ on: true, power: 12 });
+    expect(device?.observation).toEqual(storedObservation);
+
+    source.stop();
+  });
+
+  it("a fresh observation supersedes the seed and updates the store (task 2.1)", async () => {
+    const store = new DeviceStateStore(logger, { persist: false });
+    store.record(
+      "shelly:plug",
+      { on: false },
+      { mode: "polled" as const, observedAt: 1_700_000_000_000, refreshIntervalMs: 1_000_000 },
+    );
+
+    const http = createMockHttp({ output: true, apower: 12, voltage: 231, current: 0.05 });
+    const shelly = new ShellyService(http, mqttMock.mqtt, logger);
+    shelly.register("plug", "192.168.1.50", "switch");
+    const source = new ShellyDeviceSource(shelly, mqttMock.mqtt, logger, 20, store);
+    await source.start();
+
+    await new Promise((r) => setTimeout(r, 50));
+
+    const device = source.get("plug");
+    expect(device?.state.on).toBe(true);
+    expect(device?.observation.mode).toBe("polled");
+    expect(store.get("shelly:plug")?.state).toEqual(device?.state);
+    expect(store.get("shelly:plug")?.observation.observedAt).toBeGreaterThan(1_700_000_000_000);
 
     source.stop();
   });

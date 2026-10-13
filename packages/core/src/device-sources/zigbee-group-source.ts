@@ -30,6 +30,7 @@ import type {
   DeviceSource,
 } from "./device-source.js";
 import { qualifyDeviceId } from "./device-source.js";
+import type { DeviceStateStore } from "./device-state-store.js";
 import { ZIGBEE_SOURCE_ID } from "./zigbee-source.js";
 
 export const ZIGBEE_GROUP_SOURCE_ID = "zigbee-group";
@@ -294,6 +295,7 @@ export class ZigbeeGroupDeviceSource implements DeviceSource {
     private readonly registry: DeviceRegistry | null,
     private readonly mqtt: MqttService,
     private readonly logger: Logger,
+    private readonly deviceStateStore?: DeviceStateStore,
   ) {}
 
   get available(): boolean {
@@ -421,6 +423,13 @@ export class ZigbeeGroupDeviceSource implements DeviceSource {
 
   private notify(group: ZigbeeGroup): void {
     const descriptor = this.toDescriptor(group);
+    // A member's state changed — a real observation of the group's derived
+    // state, recorded at the point it is delivered, never on a read
+    // (design.md D2).
+    // Recorded for durability/pruning only: `toDescriptor` derives from the
+    // registry's independently persisted member state, so the store's seed
+    // path is intentionally never consulted here (design.md D2, Risks).
+    this.deviceStateStore?.record(descriptor.qualifiedId, descriptor.state, descriptor.observation);
     for (const listener of this.listeners) {
       try {
         listener(descriptor);

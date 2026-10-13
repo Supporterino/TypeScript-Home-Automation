@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it, jest, mock } from "bun:test";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import pino from "pino";
 import { Automation, type Trigger } from "../src/automation.js";
 import { createEngine, type Engine } from "../src/engine.js";
+import type { ShellyService } from "../src/services/shelly-service.js";
 
 const logger = pino({ level: "silent" });
 
@@ -11,6 +14,15 @@ const logger = pino({ level: "silent" });
 // engine creation. The createEngine() factory builds all internal objects
 // synchronously, making them available as engine.mqtt etc.
 // ---------------------------------------------------------------------------
+
+// Device-state persistence defaults to on in the config schema; disable it so
+// engine tests never write `./device-state.json` unless a test opts back in via
+// `overrides` or its own explicit `deviceState` slice.
+const DEVICE_STATE_DISABLED = {
+  persist: false,
+  filePath: "./device-state.json",
+  flushIntervalMs: 1000,
+};
 
 /** Create an engine with mocked MQTT connect/disconnect so start() can complete. */
 function createTestEngine(overrides: Record<string, unknown> = {}): Engine {
@@ -24,6 +36,7 @@ function createTestEngine(overrides: Record<string, unknown> = {}): Engine {
       // test explicitly opts back in via `overrides`.
       state: { persist: false, filePath: "./state.json", flushIntervalMs: 1000 },
       deviceRegistry: { enabled: false, persist: false, filePath: "./device-registry.json" },
+      deviceState: DEVICE_STATE_DISABLED,
       ...overrides,
     },
   });
@@ -482,6 +495,7 @@ describe("createEngine", () => {
           httpServer: { port: 0, token: "" },
           state: { persist: false, filePath: "./state.json", flushIntervalMs: 1000 },
           deviceRegistry: { enabled: false, persist: false, filePath: "./device-registry.json" },
+          deviceState: DEVICE_STATE_DISABLED,
         },
         stateToggles: [{ stateKey: "night_mode", name: "Night Mode" }],
       });
@@ -506,6 +520,7 @@ describe("createEngine", () => {
           httpServer: { port: 0, token: "" },
           state: { persist: false, filePath: "./state.json", flushIntervalMs: 1000 },
           deviceRegistry: { enabled: false, persist: false, filePath: "./device-registry.json" },
+          deviceState: DEVICE_STATE_DISABLED,
         },
         stateToggles: [{ stateKey: "night_mode", name: "Night Mode" }],
       });
@@ -529,6 +544,7 @@ describe("createEngine", () => {
           httpServer: { port: 0, token: "" },
           state: { persist: false, filePath: "./state.json", flushIntervalMs: 1000 },
           deviceRegistry: { enabled: false, persist: false, filePath: "./device-registry.json" },
+          deviceState: DEVICE_STATE_DISABLED,
         },
         stateToggles: [{ stateKey: "night_mode", name: "Night Mode" }],
       });
@@ -577,6 +593,7 @@ describe("createEngine", () => {
           httpServer: { port: 0, token: "" },
           state: { persist: false, filePath: "./state.json", flushIntervalMs: 1000 },
           deviceRegistry: { enabled: false, persist: false, filePath: "./device-registry.json" },
+          deviceState: DEVICE_STATE_DISABLED,
         },
         stateToggles: [{ stateKey: "night_mode", name: "Night Mode" }],
       });
@@ -613,6 +630,7 @@ describe("createEngine", () => {
           httpServer: { port: 0, token: "" },
           state: { persist: false, filePath: "./state.json", flushIntervalMs: 1000 },
           deviceRegistry: { enabled: false, persist: false, filePath: "./device-registry.json" },
+          deviceState: DEVICE_STATE_DISABLED,
         },
         stateToggles: [{ stateKey: "night_mode", name: "Night Mode" }],
       });
@@ -645,6 +663,7 @@ describe("createEngine", () => {
           httpServer: { port: 0, token: "" },
           state: { persist: false, filePath: "./state.json", flushIntervalMs: 1000 },
           deviceRegistry: { enabled: false, persist: false, filePath: "./device-registry.json" },
+          deviceState: DEVICE_STATE_DISABLED,
         },
         services: {
           homekit: ((ctx: Record<string, unknown>) => {
@@ -671,6 +690,72 @@ describe("createEngine", () => {
       expect(keys).not.toContain("nanoleaf-source");
       expect(keys).not.toContain("state-source");
       expect(keys).not.toContain("devices");
+    });
+  });
+
+  // ── Durable device state store (design.md D1, D4; task 3.2) ──────────────
+
+  describe("device state store", () => {
+    it("restores a device's last-known state into the first enumeration (task 3.2)", async () => {
+      const dir = await mkdtemp(join(tmpdir(), "ts-ha-device-state-"));
+      const filePath = join(dir, "device-state.json");
+      const recordedAt = 1_700_000_000_000;
+      const storedObservation = {
+        mode: "polled",
+        observedAt: recordedAt,
+        refreshIntervalMs: 10000,
+      };
+      await writeFile(
+        filePath,
+        JSON.stringify({
+          "shelly:living_room_plug": {
+            state: { on: true, power: 12 },
+            observation: storedObservation,
+          },
+        }),
+        "utf-8",
+      );
+
+      // A minimal Shelly service: one HTTP-transport device with no discoverable
+      // components, so it materializes as its base entry and — because HTTP
+      // devices are polled on an interval, not at start — makes no observation
+      // during startup. Its descriptor's state can therefore only come from the
+      // restored store.
+      const fakeShelly = {
+        getDevices: () => [{ name: "living_room_plug", type: "switch", transport: "http" }],
+        onDeviceRegistered: () => {},
+        offDeviceRegistered: () => {},
+        discoverComponents: () => Promise.resolve([]),
+        registerChannel: () => {},
+        pruneChannels: () => {},
+        clearChannelRecords: () => {},
+      } as unknown as ShellyService;
+
+      engine = createEngine({
+        automationsDir: fixturesDir,
+        logger,
+        config: {
+          httpServer: { port: 0, token: "" },
+          state: { persist: false, filePath: "./state.json", flushIntervalMs: 1000 },
+          deviceRegistry: { enabled: false, persist: false, filePath: "./device-registry.json" },
+          deviceState: { persist: true, filePath, flushIntervalMs: 1000 },
+          devices: { shellyPollMs: 60_000, nanoleafPollMs: 60_000 },
+        },
+        services: { shelly: fakeShelly },
+      });
+      (engine.mqtt as { connect: unknown }).connect = mock(() => Promise.resolve());
+      (engine.mqtt as { disconnect: unknown }).disconnect = mock(() => Promise.resolve());
+
+      await engine.start();
+
+      const device = engine.devices.list().find((d) => d.qualifiedId === "shelly:living_room_plug");
+      expect(device?.state).toEqual({ on: true, power: 12 });
+      // The restored observation is used verbatim — not stamped with the read
+      // time (design.md D4).
+      expect(device?.observation).toEqual(storedObservation);
+
+      await engine.stop();
+      await rm(dir, { recursive: true, force: true });
     });
   });
 
@@ -760,6 +845,7 @@ describe("createEngine", () => {
           httpServer: { port: 0, token: "" },
           state: { persist: false, filePath: "./state.json", flushIntervalMs: 1000 },
           deviceRegistry: { enabled: false, persist: false, filePath: "./device-registry.json" },
+          deviceState: DEVICE_STATE_DISABLED,
         },
         stateToggles: [{ stateKey: "night_mode", name: "Night Mode" }],
       });

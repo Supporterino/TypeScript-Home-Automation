@@ -5,6 +5,10 @@ import { AUTOMATION_ENABLED_PREFIX, AutomationManager } from "./automation-manag
 import { type Config, loadConfig } from "./config.js";
 import { AggregateDeviceSource } from "./device-sources/aggregate.js";
 import { wireDeviceEvents } from "./device-sources/device-event-bridge.js";
+import {
+  DeviceStateStore,
+  type DeviceStateStoreOptions,
+} from "./device-sources/device-state-store.js";
 import { NanoleafDeviceSource } from "./device-sources/nanoleaf-source.js";
 import { ShellyDeviceSource } from "./device-sources/shelly-source.js";
 import { StateDeviceSource, type StateToggleConfig } from "./device-sources/state-source.js";
@@ -199,6 +203,28 @@ export interface EngineOptions {
      */
     filePath?: string;
   };
+
+  /**
+   * Device state store options.
+   *
+   * Controls whether every device's last-known state and the observation that
+   * produced it are persisted to disk and restored on startup, so enumeration
+   * reports it before a new observation arrives (design.md D1, D4). The store
+   * is a seed, never an authority — a reported observation always wins over
+   * the restored value.
+   *
+   * @example
+   * ```ts
+   * const engine = createEngine({
+   *   automationsDir: "...",
+   *   deviceState: {
+   *     persist: true,
+   *     filePath: "./data/device-state.json",
+   *   },
+   * });
+   * ```
+   */
+  deviceState?: DeviceStateStoreOptions;
 
   /**
    * Boolean `StateManager` keys to present as devices through the unified
@@ -571,6 +597,21 @@ export function createEngine(options: EngineOptions): Engine {
     eventBus.emit({ category: "device_visibility", qualifiedId, hidden });
   });
 
+  // ── Device state store ────────────────────────────────────────────────────
+  //
+  // One durable home for every device's last-known state and the observation
+  // that produced it, keyed by qualified id (design.md D1, D3). Constructed
+  // here — after the config and logger, before the device sources — so each
+  // source can record observations into it and seed a descriptor from it. It
+  // is loaded in `start()` after `deviceRegistry.load()` and before
+  // `deviceSources.start()`, so a restored value is available to the first
+  // enumeration.
+  const deviceStateStore = new DeviceStateStore(logger.child({ service: "device-state" }), {
+    persist: options.deviceState?.persist ?? config.deviceState.persist,
+    filePath: options.deviceState?.filePath ?? config.deviceState.filePath,
+    flushIntervalMs: options.deviceState?.flushIntervalMs ?? config.deviceState.flushIntervalMs,
+  });
+
   // ── Unified device sources ────────────────────────────────────────────────
   //
   // Constructed here — after the device registry and every optional service
@@ -585,27 +626,36 @@ export function createEngine(options: EngineOptions): Engine {
   // with `deviceRegistry`.
   const deviceSources = new AggregateDeviceSource(
     [
-      new ZigbeeDeviceSource(deviceRegistry, mqtt, logger.child({ service: "devices-zigbee" })),
+      new ZigbeeDeviceSource(
+        deviceRegistry,
+        mqtt,
+        logger.child({ service: "devices-zigbee" }),
+        deviceStateStore,
+      ),
       new ZigbeeGroupDeviceSource(
         deviceRegistry,
         mqtt,
         logger.child({ service: "devices-zigbee-group" }),
+        deviceStateStore,
       ),
       new ShellyDeviceSource(
         shellyService,
         mqtt,
         logger.child({ service: "devices-shelly" }),
         config.devices.shellyPollMs,
+        deviceStateStore,
       ),
       new NanoleafDeviceSource(
         nanoleafService,
         logger.child({ service: "devices-nanoleaf" }),
         config.devices.nanoleafPollMs,
+        deviceStateStore,
       ),
       new StateDeviceSource(
         stateManager,
         options.stateToggles ?? [],
         logger.child({ service: "devices-state" }),
+        deviceStateStore,
       ),
     ],
     deviceVisibility,
@@ -778,6 +828,9 @@ export function createEngine(options: EngineOptions): Engine {
         httpServer?.start();
         await stateManager.load();
         await deviceRegistry?.load();
+        // Loaded after the device registry and before any source starts, so a
+        // restored record is available to the first enumeration (design.md D1).
+        await deviceStateStore.load();
 
         // Run onStart() lifecycle hooks for all registered ServicePlugins.
         const coreCtx: CoreContext = {
@@ -805,8 +858,9 @@ export function createEngine(options: EngineOptions): Engine {
         // (design.md D1; tasks 7.4, 7.5). Re-wired on every start() since
         // `deviceSources.stop()` clears its listener set; seeding from
         // `list()` here means whatever's already known at this point in
-        // startup never itself emits a spurious `device_appeared`.
-        wireDeviceEvents(deviceSources, eventBus);
+        // startup never itself emits a spurious `device_appeared`. The store
+        // prunes a device that drops out of enumeration (design.md D5).
+        wireDeviceEvents(deviceSources, eventBus, deviceStateStore);
 
         deviceRegistry?.start();
         const recursive = options.recursive ?? config.automations.recursive;
@@ -910,6 +964,7 @@ export function createEngine(options: EngineOptions): Engine {
         // flush() (not save()) so a pending coalesced write from the current
         // debounce window is not lost on shutdown (design.md D6; task 2.3).
         await safe(() => stateManager.flush(), "save-state");
+        await safe(() => deviceStateStore.flush(), "save-device-state");
         await safe(() => mqtt.disconnect(), "disconnect-mqtt");
         await safe(() => httpServer?.stop(), "stop-http");
       } finally {

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, mock } from "bun:test";
 import type { ZigbeeDevice } from "@ts-ha/shared/types";
 import pino from "pino";
 import type { Config } from "../src/config.js";
+import { DeviceStateStore } from "../src/device-sources/device-state-store.js";
 import { formatQualifiedId } from "../src/device-sources/qualified-id.js";
 import { ZigbeeDeviceSource } from "../src/device-sources/zigbee-source.js";
 import type { MqttMessageHandler, MqttService } from "../src/mqtt/mqtt-service.js";
@@ -230,5 +231,28 @@ describe("ZigbeeDeviceSource", () => {
     mqttMock.emit("zigbee2mqtt/lamp", { state: "ON" });
 
     expect(seen).toHaveLength(0);
+  });
+
+  // -------------------------------------------------------------------------
+  // Durable device state store (design.md D2; task 2.1)
+  // -------------------------------------------------------------------------
+
+  it("records a state-change observation into the durable store (task 2.1)", () => {
+    const store = new DeviceStateStore(logger, { persist: false });
+    const withStore = new ZigbeeDeviceSource(registry, mqttMock.mqtt, logger, store);
+
+    mqttMock.emit("zigbee2mqtt/bridge/devices", [
+      makeDevice("lamp", "0xaaa", [STATE_EXPOSE]),
+    ] as unknown as Record<string, unknown>);
+    withStore.start();
+
+    mqttMock.emit("zigbee2mqtt/lamp", { state: "ON" });
+
+    const record = store.get(formatQualifiedId("zigbee", "0xaaa"));
+    expect(record?.state).toEqual({ state: "ON" });
+    expect(record?.observation.mode).toBe("push");
+    expect(withStore.get("0xaaa")?.state).toEqual(record?.state);
+
+    withStore.stop();
   });
 });
