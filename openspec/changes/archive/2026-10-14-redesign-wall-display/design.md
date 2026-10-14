@@ -125,11 +125,22 @@ handled as in D3 via the registry's per-type minimum dimensions.
 ## D5 — On-demand wall stylesheet delivery
 
 **Decision.** `hearth.css` is imported by the wall **surface** modules (not by the
-entry `index.tsx`). Because `WallView.tsx` is reached only through a dynamic
-import in `App.tsx`, `Bun.build`'s `splitting: true` emits the wall's CSS as a
-separate `chunk` asset, which `build-web-ui.ts` already marks `firstPaint: false`.
-No build-script change is expected; the behaviour is verified, and the asset test
-is extended.
+entry `index.tsx`, the editor, or `views/WallsView.tsx`). Delivering it as its
+own content-hashed asset, excluded from first paint, required a build-machinery
+change — contrary to this decision's original expectation. On the pinned Bun
+(1.4.3), `Bun.build` **folds every imported stylesheet into the entry CSS**, so a
+plain `import "./hearth.css"` puts Hearth in the dashboard's first paint, and the
+`import … with { type: "file" }` route panics Bun when `bun-plugin-tailwind` is
+loaded. `build-web-ui.ts` therefore gains a small `wallStylesheetPlugin()`: a
+`hearth.css` import whose importer is under `wall/` is loaded with the `file`
+loader, so Bun emits it as its own content-hashed stylesheet referenced by the
+wall chunk and absent from the entry CSS, while a `hearth.css` import from
+anywhere else falls through to the normal CSS path so `web-ui-assets.test.ts`
+fails rather than silently shipping Hearth to every dashboard load. The build's
+`firstPaint` classification additionally excludes copied `file` assets
+(`artifact.kind !== "chunk" && artifact.loader !== "file"`). `wall/WallGrid.tsx`
+links the emitted URL when the wall chunk is evaluated, ahead of the wall's first
+render. The behaviour is verified and the asset test is extended.
 
 **Why.** The "On-Demand Wall Stylesheet" requirement states the wall stylesheet
 loads only with the wall and never on the dashboard's first paint. The existing

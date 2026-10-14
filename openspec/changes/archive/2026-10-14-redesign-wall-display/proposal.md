@@ -128,11 +128,14 @@ possible.
   wall surface, not to the entry.
 - **Entry stylesheet (`packages/web-ui/src/app/styles/app.css`)**: unchanged as
   the dashboard's Lumen entry; Hearth is a separate stylesheet.
-- **Build (`packages/web-ui/scripts/build-web-ui.ts`)**: unchanged in
-  machinery — `splitting: true` already emits on-demand chunks and the build
-  already excludes `chunk` outputs from the first-paint budget; the wall's CSS
-  becomes such an asset by virtue of being reached only through the dynamic wall
-  import.
+- **Build (`packages/web-ui/scripts/build-web-ui.ts`)**: a small change is
+  required. `splitting: true` already emits on-demand JS chunks and the build
+  excludes `chunk` outputs from the first-paint budget, but Bun 1.4.3 folds an
+  imported stylesheet into the entry CSS, so the wall's CSS must be loaded with
+  the `file` loader (via a `wall/`-scoped build plugin) to become its own
+  content-hashed asset; the first-paint classification also excludes copied
+  `file` assets. The wall surface links the emitted asset when its chunk is
+  evaluated.
 - **Design system (`design-system/ts-ha/pages/wall.md`)**: rewritten for Hearth
   and the redesigned widget vocabulary; `design-system/ts-ha/MASTER.md` (the
   dashboard system) is unchanged.
