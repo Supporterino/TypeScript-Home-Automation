@@ -14,7 +14,14 @@ wall already lives in a code-split chunk. Its presentation is:
   `wall/editor/**` + `views/WallsView.tsx` — the admin editor.
 - The wall device tile is the shared `components/DeviceTile.tsx` in its
   `size="wall"` mode (which imports `WALL_BODY_FONT_SIZE` / `WALL_METRIC_FONT_SIZE`
-  from `wall/type-ramp.ts`).
+  from `wall/type-ramp.ts`). On the wall it selects a card archetype
+  (`lib/card-archetype.ts`): `light` (an on/off control plus a brightness
+  slider), `toggle`, `cover`, and `readout` (a chrome-less dominant value for a
+  device with no actuatable property — how a temperature sensor renders today).
+- The eight widget renderers (`wall/widgets/**`) are largely thin shells over
+  shared primitives: e.g. `DeviceWidget`/`FavoritesWidget`/`RoomWidget` delegate
+  to `WallDeviceTile`, `SceneWidget` draws a centred Play glyph over its label,
+  and `StatusWidget` renders a metric grid.
 
 Today the wall's colour/spacing/radius tokens come from the dashboard's Lumen
 system (`src/app/styles/app.css`, imported once by `src/app/index.tsx`), and the
@@ -23,10 +30,12 @@ wall's own scale is a page override documented in
 unit).
 
 Behaviour is fixed by `openspec/specs/wall-display/spec.md`. This change modifies
-only "Wall Glanceability" and "Touch Operation" and adds "Wall Visual Language"
-and "On-Demand Wall Stylesheet"; the widget catalog, composition model, device
-presentation, cover transport, scene buttons, editor flow, live updates, and
-always-on behaviour are unchanged.
+"Wall Glanceability", "Touch Operation", "Widget Catalog", and "Wall Device
+Presentation", and adds "Wall Visual Language" and "On-Demand Wall Stylesheet";
+the composition model, cover transport, scene triggers, live updates, and
+always-on behaviour are unchanged. The widget *presentations* are redesigned, and
+the catalog gains a temperature widget type, so the shared wall contract changes
+additively (see D13).
 
 The build (`scripts/build-web-ui.ts`) uses a single entry (`src/app/index.tsx`)
 with `splitting: true` and marks an output `firstPaint: artifact.kind !== "chunk"`,
@@ -134,30 +143,36 @@ modules, then asserting its absence from the first-paint assets in
 `tests/web-ui-assets.test.ts`, mirroring the existing `WALL_CHUNK_MARKER`
 (`registry.ts`) guard.
 
-## D6 — Composition and card grammar retained
+## D6 — Grid, gutter, and composition model retained
 
 **Decision.** The author-placed, fixed-column grid (`grid.ts`), the clamped row
 unit and single gutter (`WallGlanceability`), the centered-short-profile rule, the
-ambient-vs-control widget grammar (`registry.ts` + `WidgetFrame.tsx`), the opt-in
-title rule, and the widget catalog are all retained. Hearth changes the wall's
-*language* (tokens, ramp, targets, surfaces), not its *model*.
+ambient-vs-control widget grammar (`registry.ts` + `WidgetFrame.tsx`), and the
+opt-in title rule are all retained. Hearth changes the wall's *presentation* —
+tokens, ramp, targets, surfaces, and the widgets' own composition (D11) — not its
+composition *model*.
 
-**Why.** The user chose explicit, author-placed composition and a behavioural
-re-scope limited to presentation; the composition model and catalog are correct as
-they are. Retaining them keeps the change tight and the risk low.
+**Why.** The user chose explicit, author-placed composition; the grid is correct
+as it is. Retaining it keeps the change tight and the risk low, while the widget
+presentations within each cell are redesigned (D11–D14) and the catalog gains one
+type (D13).
 
 **Trade-off.** Hearth cannot exploit an auto-composing ambient register (rejected);
 accepted.
 
-## D7 — Wall device tile and state encoding retained
+## D7 — Wall device tile behaviour retained, presentation redesigned
 
-**Decision.** `components/DeviceTile.tsx` keeps its props and contracts; only its
-`size="wall"` mode is re-skinned to Hearth. Whole-card actuation, the suppressed
-favorite/hide/details affordances, the glyph-only observation indicator, the
-card archetypes, capability ranking, and the optimistic override are unchanged.
+**Decision.** `components/DeviceTile.tsx` keeps its props and contracts, and the
+dashboard's rendering is untouched. Its `size="wall"` mode moves onto Hearth and
+its `light` archetype is redesigned (D12). Whole-card actuation for a plain
+`toggle`, the suppressed favorite/hide/details affordances, the glyph-only
+observation indicator, the full archetype set, capability ranking, and the
+optimistic override are unchanged.
 
-**Why.** "Wall Device Presentation" is not modified; the tile's behaviour is
-shared with the dashboard and must not fork. Only its appearance moves to Hearth.
+**Why.** The tile's behaviour is shared with the dashboard and must not fork; only
+its wall appearance and the light card's controls change. "Wall Device
+Presentation" is modified only for the light card's controls and the readout
+card's presentation (D12, D13) — the rest is presentational.
 
 ## D8 — The editor stays on Lumen
 
@@ -179,9 +194,19 @@ change could bring the editor onto Hearth if desired.
 - Wall presentation tests are re-pointed at Hearth, preserving each test's intent:
   `wall-type-ramp.test.ts` (new ramp + re-derived floor),
   `wall-scale.test.ts`, `wall-frame.test.ts`, `wall-grid.test.ts`,
-  `wall-registry.test.ts` (56 px target), `wall-card-archetypes.test.ts`,
-  `wall-single-surface.test.ts`, `wall-read-only.test.ts`, plus the per-widget
-  model tests where presentation is asserted.
+  `wall-registry.test.ts` (56 px target + the temperature descriptor),
+  `wall-card-archetypes.test.ts`, `wall-single-surface.test.ts`,
+  `wall-read-only.test.ts`, plus the per-widget model tests where presentation is
+  asserted.
+- New tests cover the redesigned widgets: the temperature widget (config
+  validation, reading presentation, and containment of an unknown device), the
+  light card's icon-affordance toggle/brightness bar/colour controls (including
+  that a control is omitted when the capability is absent), the redesigned readout
+  card, and the redesigned scene tile (pressed/busy/error states preserved).
+- Cover transport is covered end to end: a core test that each declared transport
+  value reaches the matching Shelly RPC (and that a stop command is now accepted
+  rather than rejected), and a web-ui test that a position-less cover renders
+  transport while a cover that cannot stop still omits Stop (D15).
 - `web-ui-assets.test.ts` gains a wall-stylesheet-not-in-first-paint assertion.
 - Pure wall logic (`wall/*-model.ts`, `wall/live.ts`, `wall/clock.ts`) is
   unchanged and its tests keep passing.
@@ -201,13 +226,143 @@ re-scoped"; this change deliberately reverses that for the wall, so the two must
 not both own the wall's appearance. Keeping them separate preserves the near-final
 change's history and review.
 
+## D11 — Widget presentation vocabulary
+
+**Decision.** Every wall widget is re-thought onto one Hearth card vocabulary so
+the surface reads as a designed whole rather than a set of independent tiles: an
+icon or glyph leading the card, a title, a primary metric sized on the wall ramp,
+and — for control widgets — a clear action affordance. Ambient widgets
+(`clock`, `weather`, `energy`, `status`, and the new `temperature` readout) keep
+their chrome-less readout form but adopt the vocabulary's type and spacing;
+control widgets (`room`, `favorites`, `device`, `scene`) share the
+badge/metric/affordance grammar. The widget renderers in `wall/widgets/**` are
+rewritten to this vocabulary rather than re-pointed at tokens.
+
+**Why.** The user asked for the widgets to be rethought, not re-skinned; the
+current renderers each invent their own layout. One vocabulary makes the wall
+coherent and makes the redesigned widgets (D12–D14) consistent with the rest.
+
+**Trade-off.** A shared vocabulary can flatten widget-specific needs (e.g. a
+cover's transport, a scene's press feedback). Handled by keeping the vocabulary
+to the card's *frame* (badge, title, metric, affordance slot) and letting each
+widget own what fills the affordance slot — exactly as `DeviceTile` already owns
+its archetypes.
+
+## D12 — Light card: icon-affordance toggle, brightness bar, colour controls
+
+**Decision.** The wall `light` archetype is redesigned on the supplied reference:
+the device-icon badge (top-left) is a distinct, touch-sized on/off affordance; the
+device name and a percentage readout sit beside it; and a full-width brightness
+bar below is the brightness value control. Where the device declares a
+colour-temperature capability the bar renders that spectrum (blue→warm) and
+drives it, and where the device declares a colour capability a colour control is
+added. While the light is off the bar carries an off-state visual and activating
+it turns the light on. State is not conveyed by colour alone (the badge changes
+shape/fill, not only hue). Everything runs on the existing optimistic channels
+(`useOptimisticDeviceProperty`), so reflection, reconciliation, and revert are
+unchanged, and every affordance meets the 56 px target (D4).
+
+**Why.** The reference expresses a light's state and level far more directly than
+the current name + chip + slider rows, and the user asked for colour and
+colour-temperature control. The change is confined to the wall mode, so the
+dashboard tile and the shared ranking/override code are untouched (D7).
+
+**Trade-off.** Colour-temperature and colour controls are added only when the
+capability exists, so two lights of the same type can show different controls.
+Accepted: a control the device cannot express would be inert, and the spec forbids
+that. Existing capability helpers cover on/off and brightness; the colour and
+colour-temperature selection is added beside them in the wall tile.
+
+## D13 — Temperature widget and a redesigned readout
+
+**Decision.** A dedicated **`temperature`** widget type is added to the catalog,
+carrying a reading from a configured sensor device (config
+`{ qualifiedId, title? }`). It is an additive shared-contract change: a
+`temperature` member of `WALL_WIDGET_TYPES`, a `WallTemperatureWidgetConfig` type,
+and its schema in `WALL_WIDGET_CONFIG_SCHEMAS` (`packages/shared/src/wall.ts`,
+`wall-schema.ts`), plus a `WALL_WIDGET_REGISTRY` descriptor
+(`wall/registry.ts`), a renderer (`wall/widgets/TemperatureWidget.tsx`), and an
+editor field (`wall/editor/WidgetConfigFields.tsx`). Separately, the wall
+`readout` archetype (`DeviceTile`) is redesigned onto the D11 vocabulary — a
+leading glyph, the reading on the metric ramp, and a quiet label — for sensors
+shown inside `device`/`favorites`/`room`.
+
+**Why.** The user asked for a temperature widget and for the sensor readout to be
+rethought. The widget is a renderer over existing device state and the existing
+readout ranking (`capability-ranking.ts` already ranks `temperature`); it needs
+no new backend, service, or endpoint. Adding one catalog type is the minimum
+shared change.
+
+**Trade-off.** A new widget type grows the shared contract, the editor, and the
+test matrix, and it is a config-shape addition (`WALL_PROFILE_VERSION` stays 1 —
+the change is additive). Accepted as the user's explicit request. Multi-sensor
+composition is deliberately not supported (one configured device, like the
+existing `device` widget).
+
+## D14 — Scene tile redesign
+
+**Decision.** `SceneWidget` is redesigned from the centred Play glyph into a
+Hearth scene tile — a leading scene glyph and label composed per D11, with the
+existing pressed/busy/error states preserved (paint-only, so the tile does not
+shift while operated). The manual-trigger path
+(`manualTriggerContext`/`triggerAutomation`) and the failure-surfacing behaviour
+are unchanged.
+
+**Why.** The user named `scene` among the disliked widgets; the behaviour is
+specified elsewhere and correct, so only its presentation changes.
+
+**Trade-off.** None material; the scene trigger contract is untouched.
+
+## D15 — Cover transport: up/down/stop as a declared capability
+
+**Decision.** A cover declares the transport it accepts in its capability
+description — a writable action enum (`open`/`close`/`stop`) — wherever the source
+can perform those actions, and the source translates a command naming that action
+into its own transport primitive. Concretely:
+`device-sources/shelly-capabilities.ts` gains a writable `action` enum
+(`["open","close","stop"]`) beside the existing writable `position` and read-only
+`state`, and `device-sources/shelly-source.ts`'s `command()` maps
+`action: "open"|"close"|"stop"` to `ShellyService.coverOpen`/`coverClose`/
+`coverStop` (`Cover.Open`/`Cover.Close`/`Cover.Stop`). A Zigbee cover already
+declares a writable `state`/`action` enum and needs no change. The wall's cover
+detection (`lib/card-archetype.ts`) is broadened so a device is a cover when its
+primary action is a `position` **or** it declares a writable transport action —
+so a position-less cover no longer falls back to a generic enum control — and
+`components/CoverTransport.tsx` presents up/down/stop using the declared
+transport action, falling back to the position extremes. Stop stays gated by
+`coverStopCommand()` (`capability-ranking.ts`), which already finds a stop token
+on any writable enum; it is now satisfied for a Shelly shutter. A cover that
+genuinely cannot stop still omits Stop. The dashboard keeps its existing
+presentation — transport remains wall-only.
+
+**Why.** The investigation showed `ShellyService.coverStop()` exists and works,
+but nothing upstream could ask for it: the Shelly cover's `state` is read-only and
+`ShellySource.command()` dispatches only `position`, so `coverStopCommand()`
+correctly found no stop and the wall omitted Stop. Declaring the transport as a
+capability follows the descriptor's existing pattern for on/off encoding and
+colour, keeps one source-neutral vocabulary, and needs no Shelly special-case in
+the UI.
+
+**Trade-off.** A Shelly cover gains a second writable property (`action`) beside
+`position`; a consumer may set either. Accepted: `position` is go-to and `action`
+is discrete transport, mirroring how HomeKit and the service already split
+target-position from stop. A source that cannot stop omits `stop` from its
+declared values rather than declaring then refusing it.
+
 ## Dependency direction and shared contracts
 
-Hearth is presentational only. `@ts-ha/web-ui` remains a pure client of
-`/api/*` and the event stream; no `@ts-ha/shared`/`@ts-ha/core`/`@ts-ha/cli`
-contract changes, and the `shared` ← `web-ui` direction and the "no `core`
-import" rule are unchanged. The widget catalog and its shared config schemas
-(`@ts-ha/shared/wall-schema`) are untouched.
+Hearth is presentational, and `@ts-ha/web-ui` remains a pure client of `/api/*`
+and the event stream. The one shared change is additive: `temperature` joins
+`WALL_WIDGET_TYPES` and gains a config type and schema in
+`packages/shared/src/wall.ts` / `wall-schema.ts` (D13), so the server's write
+validation and the editor resolve the new type from the same definition site.
+`scripts/contract-inventory.json` is updated if the new type is a tracked
+contract. The one core change is `@ts-ha/core`'s cover transport (D15):
+`device-sources/shelly-capabilities.ts` declares the transport action and
+`shelly-source.ts` dispatches it; no other core behaviour changes and no shared
+capability type is added (the existing generic `Capability` contract carries the
+action enum). There is no `@ts-ha/cli` change, and the `shared` ← `web-ui`
+direction and the "no `core` import" rule are unchanged.
 
 ## Risks
 
@@ -219,5 +374,17 @@ import" rule are unchanged. The widget catalog and its shared config schemas
   assertion (D5).
 - **Light-scheme dilution**: a true-black dark scheme can tempt a mechanical light
   inversion. The spec's "The light wall scheme is designed" scenario guards this.
-- **Scope creep into behaviour**: the widget catalog and composition model are
-  non-goals; any proposal to change them is a separate change.
+- **Sparse colour capability coverage**: not every light declares colour
+  temperature or colour, so the same archetype shows different controls per
+  device. Mitigated by rendering a control only when the device declares the
+  capability and never rendering it inert (D12).
+- **Cover transport overstated**: a cover that cannot truly stop must not offer
+  Stop. Mitigated by keeping Stop gated on the declared stop value — a source
+  omits `stop` from its transport values when it cannot stop (D15).
+- **Shared-contract growth**: the temperature widget adds a type and config to
+  `@ts-ha/shared`, which the guard scripts and inventory must reflect. Mitigated
+  by keeping the addition additive (`WALL_PROFILE_VERSION` unchanged) and fixing
+  the contract at its single definition site (D13).
+- **Scope creep into composition or runtime**: the composition model and any new
+  backend/service remain non-goals; the only catalog change is the additive
+  temperature widget. Anything beyond that is a separate change.

@@ -93,6 +93,229 @@ command fails.
   against the device's reported state, reverting and surfacing the failure if
   the command fails
 
+### Requirement: Widget Catalog
+
+The system MUST provide at least the following widget types, each independently
+configurable:
+
+- a clock and date readout, derived from the client clock and requiring no
+  server data
+- current weather and, when the registered service provides it, a forecast
+- instantaneous energy and consumption
+- a room's devices as touch-operable tiles, including a room-wide command
+- the user's favorited devices as tiles
+- a single configured device as its own control
+- a temperature reading from a configured sensor device
+- a status and presence summary
+- one or more scene buttons that trigger an automation
+
+A widget whose backing feature is unconfigured — for example weather when no
+weather service is registered — MUST report the feature as unconfigured within
+its own area, and MUST NOT prevent the rest of the profile from rendering.
+
+#### Scenario: A clock renders without server data
+
+- **WHEN** a profile containing only a clock widget is opened with the engine
+  unreachable
+- **THEN** the clock renders the current time
+
+#### Scenario: An unconfigured widget is contained
+
+- **WHEN** a profile contains a weather widget and no weather service is
+  registered
+- **THEN** the weather widget reports the feature as unconfigured and every
+  other widget in the profile renders normally
+
+#### Scenario: A room widget commands the room
+
+- **WHEN** a user activates a room widget's all-off action
+- **THEN** every actuatable member of that room is commanded off through the
+  room batch command
+
+#### Scenario: A temperature widget shows its sensor's reading
+
+- **WHEN** a profile contains a temperature widget bound to a configured sensor
+  device
+- **THEN** the device's temperature reading is presented on the widget
+
+#### Scenario: An unknown temperature device is contained
+
+- **WHEN** a temperature widget's configured device is not, or is no longer,
+  available
+- **THEN** the widget reports the device as unavailable within its own area and
+  every other widget in the profile renders normally
+
+### Requirement: Wall Device Presentation
+
+A device shown on a wall MUST present its actuation and its state, and MUST NOT
+present device-management affordances. On the wall, a device tile MUST NOT offer
+a favorite toggle, a hide/unhide toggle, or an explicit open-detail affordance.
+
+A wall device card MUST select its presentation from the device's ranked
+capabilities rather than applying a single template to every device. At minimum
+it MUST distinguish:
+
+- a device whose primary action is a pure toggle (an on/off card presented as a
+  single dominant action),
+- a light that combines a toggle with one or more value controls (an on/off
+  control and a brightness control coexisting, and — where the device declares
+  them — a colour-temperature control and a colour control: a wall-only exception
+  to the one-dominant-action rule),
+- a device with no actuatable property (a read-only readout card), and
+- a cover (presenting transport controls, per "Cover Transport Controls").
+
+For a card whose primary action is a toggle and which presents no other control,
+the whole card MUST be the actuation target. A card that presents a value control
+MUST use that embedded control as the value's actuation target, since a bare tile
+activation cannot express the value to set.
+
+A light card MUST present its on/off control as a distinct affordance of its own
+— for example its device-icon affordance — and, while the light is off, MUST
+present its brightness control in an off state that turns the light on when
+activated. A light card MUST present a colour-temperature or colour control only
+when the device declares the corresponding capability, and MUST NOT present a
+control the device cannot express.
+
+A readout card MUST present its value as the card's dominant content without a
+control surface competing with it.
+
+A wall device card MUST encode state by more than color alone and MUST still
+distinguish a push-backed observation, a polled observation, and an unreachable
+device. The observation state MUST be presented as a non-textual indicator, so
+that connectivity state does not compete with the card's control or readout;
+unreachable MAY additionally be marked. Every wall control MUST actuate as device
+actuation behaves elsewhere: reflected immediately, reconciled against reported
+state, and reverted with the failure surfaced when the command fails.
+
+A device with no actuatable property MUST render on the wall as a read-only
+readout without presenting a navigation affordance.
+
+A device card rendered inside a wall widget frame MUST be a single surface — it
+MUST NOT nest one control surface inside another.
+
+#### Scenario: No management affordances are presented
+
+- **WHEN** a device is shown on a wall
+- **THEN** no favorite, hide/unhide, or open-detail control is presented
+
+#### Scenario: The whole tile actuates a toggle
+
+- **WHEN** a user activates a wall card for a device whose only primary action is
+  a toggle
+- **THEN** the device is actuated without opening any other view
+
+#### Scenario: A light card presents both a toggle and a value control
+
+- **WHEN** a device declares both an on/off capability and a brightness
+  capability
+- **THEN** its wall card presents an on/off control and a brightness control
+  together, each independently operable
+
+#### Scenario: A light card can be turned on from its affordances
+
+- **WHEN** a light card is shown with its light off and the user activates either
+  its on/off affordance or its brightness control
+- **THEN** the light is commanded on and the card reflects the request
+  immediately
+
+#### Scenario: Colour controls appear only when supported
+
+- **WHEN** a light declares a colour-temperature capability, a colour
+  capability, or neither
+- **THEN** its wall card presents a control for a declared capability only and
+  presents no control for an undeclared one
+
+#### Scenario: A value device keeps its embedded control
+
+- **WHEN** a device whose primary action sets a value is shown on a wall
+- **THEN** its embedded control is the value's actuation target
+
+#### Scenario: State is still encoded
+
+- **WHEN** a wall device card is shown
+- **THEN** its state is conveyed by at least one non-color channel in addition to
+  any color
+
+#### Scenario: Observation is a quiet indicator
+
+- **WHEN** a wall device card is shown while its device is push-backed, polled,
+  or unreachable
+- **THEN** the observation is presented as a non-textual indicator that
+  distinguishes those states from one another
+
+#### Scenario: A sensor is read-only
+
+- **WHEN** a device with no actuatable property is shown on a wall
+- **THEN** its reading is presented as the card's dominant content and no
+  navigation affordance is offered
+
+#### Scenario: A card is a single surface
+
+- **WHEN** a device card is rendered inside a wall widget frame
+- **THEN** one control surface is drawn, not a surface nested inside another
+
+#### Scenario: Actuation reconciles and reverts
+
+- **WHEN** a device is actuated from a wall card and the command fails
+- **THEN** the card reverts and surfaces the failure
+
+### Requirement: Cover Transport Controls
+
+A cover — a device whose primary action positions it, or which declares a
+writable transport action — MUST present, on the wall, transport controls — open
+(up), close (down), and stop — rather than a bare position slider, so the cover
+is operable as a discrete, touch-friendly action. When the device declares a
+transport action, open and close MUST use it rather than only the position
+extremes.
+
+A stop control MUST be presented only when the device declares a writable
+transport property capable of expressing stop. When the device cannot express
+stop, the stop control MUST be omitted rather than rendered inert, and open and
+close MUST remain available.
+
+Transport controls MUST meet the wall's minimum touch target, MUST not require a
+hover interaction, and MUST actuate optimistically — reflected immediately,
+reconciled against reported state, and reverted with the failure surfaced when
+the command fails.
+
+#### Scenario: Open and close move the cover
+
+- **WHEN** a user activates a cover's open control
+- **THEN** the cover is commanded to its fully-open position
+
+#### Scenario: Open and close use the declared transport
+
+- **WHEN** a cover declares a writable transport action
+- **THEN** its open and close controls command the device's declared open and
+  close values
+
+#### Scenario: A position-less cover still gets transport
+
+- **WHEN** a cover declares a writable transport action but no writable position
+- **THEN** the wall presents transport controls for it rather than a generic
+  control
+
+#### Scenario: A stop-capable cover shows stop
+
+- **WHEN** a cover declares a writable transport property that can express stop
+- **THEN** a stop control is presented and commands the cover to stop
+
+#### Scenario: A cover that cannot stop omits stop
+
+- **WHEN** a cover does not declare any writable property capable of expressing
+  stop
+- **THEN** no stop control is presented and open and close remain operable
+
+#### Scenario: Transport controls are touch-sized
+
+- **WHEN** a cover's transport controls are shown on a wall
+- **THEN** each control meets the wall's minimum touch target
+
+#### Scenario: A transport command reconciles and reverts
+
+- **WHEN** a transport command is issued from a wall card and it fails
+- **THEN** the control reverts and surfaces the failure
+
 ## ADDED Requirements
 
 ### Requirement: Wall Visual Language
