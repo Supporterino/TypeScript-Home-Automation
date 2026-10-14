@@ -1,8 +1,10 @@
 /**
- * Pure decisions for the widget frame (design.md D2, D3; specs/wall-display
- * "Wall Glanceability"). Dependency-free so the ambient-vs-control presentation
- * and the opt-in title rule are reachable by `bun test` without a DOM, while
- * {@link WidgetFrame} stays a thin wrapper.
+ * Pure decisions for the widget frame (design.md D2, D6; specs/wall-display
+ * "Wall Glanceability", "Wall Visual Language"). Dependency-free so the
+ * ambient-vs-control presentation and the opt-in title rule are reachable by
+ * `bun test` without a DOM, while {@link WidgetFrame} stays a thin wrapper. The
+ * composition model is unchanged: only the tokens the frame draws with move from
+ * Lumen to Hearth.
  */
 import type { WallWidget, WallWidgetType } from "@ts-ha/shared";
 import type { WallWidgetGrammar } from "./registry.js";
@@ -10,8 +12,9 @@ import type { WallWidgetGrammar } from "./registry.js";
 /**
  * The surface a frame draws for a widget's grammar. `ambient` readouts are
  * chrome-less — no surface, no border, no background — so large type sits
- * directly on the panel; `control` widgets draw a `--surface` tile with a
- * hairline border and the shared tile radius (design.md D2).
+ * directly on the panel; `control` widgets draw a Hearth surface tile with a
+ * hairline border and the Hearth radius (design.md D2, "Wall Visual Language").
+ * Every token is wall-owned (`--hearth-*`), never a Lumen alias.
  */
 export interface WallFrameChrome {
   /** Whether the frame renders a control surface. */
@@ -31,9 +34,9 @@ export function wallFrameChrome(grammar: WallWidgetGrammar): WallFrameChrome {
   }
   return {
     surface: true,
-    background: "var(--surface)",
-    borderColor: "var(--hairline)",
-    radius: "var(--radius-tile)",
+    background: "var(--hearth-surface)",
+    borderColor: "var(--hearth-hairline)",
+    radius: "var(--hearth-radius-md)",
   };
 }
 

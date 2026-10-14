@@ -36,6 +36,7 @@ export const WALL_WIDGET_TYPES = [
   "room",
   "favorites",
   "device",
+  "temperature",
   "status",
   "scene",
 ] as const;
@@ -68,6 +69,12 @@ export interface WallRoomWidgetConfig {
 
 /** Config for the single-device widget: the device to control, with an optional title. */
 export interface WallDeviceWidgetConfig {
+  readonly qualifiedId: string;
+  readonly title?: string;
+}
+
+/** Config for the temperature widget: the sensor device to read, with an optional title. */
+export interface WallTemperatureWidgetConfig {
   readonly qualifiedId: string;
   readonly title?: string;
 }

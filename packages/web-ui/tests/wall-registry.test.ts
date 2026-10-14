@@ -1,7 +1,9 @@
 import { describe, expect, it } from "bun:test";
 import { WALL_GRID_COLUMNS, WALL_WIDGET_TYPES } from "@ts-ha/shared";
+import { WALL_WIDGET_CONFIG_SCHEMAS } from "@ts-ha/shared/wall-schema";
 import {
   getWidgetDescriptor,
+  WALL_MIN_CONTROL_GAP,
   WALL_MIN_TOUCH_TARGET,
   WALL_WIDGET_REGISTRY,
 } from "../src/app/wall/registry.js";
@@ -56,7 +58,7 @@ describe("WALL_WIDGET_REGISTRY", () => {
   });
 
   it("classifies readouts as ambient and touch controls as control", () => {
-    const ambient = ["clock", "weather", "energy", "status"] as const;
+    const ambient = ["clock", "weather", "energy", "temperature", "status"] as const;
     const control = ["room", "favorites", "device", "scene"] as const;
     for (const type of ambient) expect(WALL_WIDGET_REGISTRY[type].grammar).toBe("ambient");
     for (const type of control) expect(WALL_WIDGET_REGISTRY[type].grammar).toBe("control");
@@ -74,7 +76,28 @@ describe("WALL_WIDGET_REGISTRY", () => {
     expect(getWidgetDescriptor("scene")).toBe(WALL_WIDGET_REGISTRY.scene);
   });
 
-  it("sets a wall touch-target minimum larger than the desktop standard", () => {
-    expect(WALL_MIN_TOUCH_TARGET).toBeGreaterThanOrEqual(44);
+  it("sets a kiosk-class wall touch-target minimum", () => {
+    expect(WALL_MIN_TOUCH_TARGET).toBeGreaterThanOrEqual(56);
+  });
+
+  it("keeps at least an 8px separation between adjacent wall controls", () => {
+    expect(WALL_MIN_CONTROL_GAP).toBeGreaterThanOrEqual(8);
+    expect(WALL_MIN_CONTROL_GAP).toBeLessThan(WALL_MIN_TOUCH_TARGET);
+  });
+});
+
+describe("temperature descriptor", () => {
+  it("presents temperature as an ambient readout bound to the shared schema", () => {
+    const descriptor = WALL_WIDGET_REGISTRY.temperature;
+    expect(descriptor.type).toBe("temperature");
+    expect(descriptor.label.length).toBeGreaterThan(0);
+    expect(descriptor.grammar).toBe("ambient");
+    expect(descriptor.configSchema).toBe(WALL_WIDGET_CONFIG_SCHEMAS.temperature);
+  });
+
+  it("validates a configured sensor through its descriptor schema", () => {
+    const { configSchema } = WALL_WIDGET_REGISTRY.temperature;
+    expect(configSchema.safeParse({ qualifiedId: "zigbee:0xabc" }).success).toBe(true);
+    expect(configSchema.safeParse({}).success).toBe(false);
   });
 });

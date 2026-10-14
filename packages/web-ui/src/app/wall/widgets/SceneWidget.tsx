@@ -1,15 +1,16 @@
 /**
- * The wall scene-button widget (design.md D13; specs/wall-display "Scene
+ * The wall scene-button widget (design.md D11, D14; specs/wall-display "Scene
  * Buttons Trigger Automations"). A configurable label triggers an existing
  * automation through the same manual-trigger path the admin interface uses —
  * no scene subsystem.
  *
- * The button is a full-bleed pressable tile — a large icon over the label,
- * centered in the widget's surface — with an explicit pressed/active state and
- * a busy state while triggering. Both states are token-driven and change only
- * paint (background, elevation, opacity), never geometry, so the tile does not
- * shift while it is operated. A trigger failure is caught and surfaced on the
- * tile itself, so a broken or deleted automation never takes down the profile.
+ * Redesigned from the centred Play glyph into a Hearth scene tile on the shared
+ * card vocabulary: a leading scene glyph beside the label, the whole tile as
+ * the trigger affordance. It keeps an explicit pressed/active state and a busy
+ * state while triggering. Both states are token-driven and change only paint
+ * (background, elevation, opacity), never geometry, so the tile does not shift
+ * while it is operated. A trigger failure is caught and surfaced on the tile
+ * itself, so a broken or deleted automation never takes down the profile.
  */
 import { Play } from "lucide-react";
 import { useState } from "react";
@@ -18,11 +19,12 @@ import { useDataStore } from "../../lib/data-store.js";
 import { Spinner } from "../../ui/index.js";
 import type { WallWidgetProps } from "../registry.js";
 import { wallTileMetrics } from "../scale.js";
-import { WALL_BODY_FONT_SIZE } from "../type-ramp.js";
+import { WALL_LABEL_FONT_SIZE } from "../type-ramp.js";
+import { WALL_CARD_GLYPH_SIZE, WallCardLabel } from "./card-vocab.js";
 import { sceneTriggerRequest } from "./scene-model.js";
 
-/** The tile's icon side, in CSS pixels — large enough to read across a room. */
-const SCENE_ICON_SIZE = 48;
+/** The scene glyph's icon side, in CSS pixels — large enough to read across a room. */
+const SCENE_GLYPH_SIZE = WALL_CARD_GLYPH_SIZE;
 
 export function SceneWidget({ widget }: WallWidgetProps) {
   const { automations } = useDataStore();
@@ -52,14 +54,14 @@ export function SceneWidget({ widget }: WallWidgetProps) {
 
   if (!automationName) {
     return (
-      <p className="text-muted" style={{ fontSize: WALL_BODY_FONT_SIZE }}>
+      <p style={{ margin: 0, color: "var(--hearth-text-muted)", fontSize: WALL_LABEL_FONT_SIZE }}>
         No automation configured.
       </p>
     );
   }
 
   return (
-    <div className="relative flex h-full w-full">
+    <div style={{ position: "relative", display: "flex", height: "100%", width: "100%" }}>
       <button
         type="button"
         data-pressed={pressed ? "" : undefined}
@@ -76,32 +78,55 @@ export function SceneWidget({ widget }: WallWidgetProps) {
           if (event.key === "Enter" || event.key === " ") setPressed(true);
         }}
         onKeyUp={() => setPressed(false)}
-        className="flex h-full w-full cursor-pointer flex-col items-center justify-center gap-3 rounded-tile p-3 text-ink motion-toggle disabled:cursor-progress"
         style={{
+          display: "flex",
+          height: "100%",
+          width: "100%",
           minHeight: minTouchTarget,
-          background: pressed ? "var(--surface-2)" : "transparent",
-          boxShadow: pressed ? "var(--e2)" : "var(--e1)",
+          cursor: busy ? "progress" : "pointer",
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "flex-start",
+          gap: "var(--hearth-space-3)",
+          borderRadius: "var(--hearth-radius-md)",
+          padding: "var(--hearth-space-3)",
+          textAlign: "left",
+          color: "var(--hearth-text)",
+          background: pressed ? "var(--hearth-surface-raised)" : "transparent",
+          boxShadow: pressed ? "var(--hearth-e2)" : "var(--hearth-e1)",
         }}
       >
         <span
-          className="relative flex items-center justify-center"
-          style={{ width: minTouchTarget, height: minTouchTarget }}
+          style={{
+            position: "relative",
+            display: "flex",
+            flex: "none",
+            alignItems: "center",
+            justifyContent: "center",
+            width: minTouchTarget,
+            height: minTouchTarget,
+            borderRadius: "var(--hearth-radius-sm)",
+            background: "var(--hearth-surface-raised)",
+          }}
         >
-          <Play size={SCENE_ICON_SIZE} aria-hidden style={{ opacity: busy ? 0 : 1 }} />
-          {busy && <Spinner size={SCENE_ICON_SIZE} label="" className="absolute" />}
+          <Play size={SCENE_GLYPH_SIZE} aria-hidden style={{ opacity: busy ? 0 : 1 }} />
+          {busy && <Spinner size={SCENE_GLYPH_SIZE} label="" className="absolute" />}
         </span>
-        <span
-          className="font-semibold"
-          style={{ fontSize: WALL_BODY_FONT_SIZE, opacity: busy ? 0.6 : 1 }}
-        >
-          {label}
-        </span>
+        <WallCardLabel color="var(--hearth-text)">{label}</WallCardLabel>
       </button>
       {error && (
         <p
           role="alert"
-          className="absolute inset-x-0 bottom-0 text-center text-danger"
-          style={{ fontSize: WALL_BODY_FONT_SIZE }}
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            bottom: 0,
+            margin: 0,
+            textAlign: "center",
+            color: "var(--hearth-danger)",
+            fontSize: WALL_LABEL_FONT_SIZE,
+          }}
         >
           {error}
         </p>

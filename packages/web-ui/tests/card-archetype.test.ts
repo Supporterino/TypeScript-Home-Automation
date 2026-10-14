@@ -57,6 +57,50 @@ describe("cardArchetype", () => {
     expect(archetypeFor(capabilities)).toBe("cover");
   });
 
+  it("selects the cover archetype for a position-less cover with a declared transport action", () => {
+    // No writable position: the broadened detection recognises the cover by its
+    // transport action rather than falling back to a generic enum control
+    // (design.md D15; specs/wall-display "A position-less cover still gets transport").
+    const capabilities: Capability[] = [
+      {
+        kind: "cover",
+        access: rw,
+        valueType: "composite",
+        features: [
+          {
+            kind: "enum",
+            property: "action",
+            access: rw,
+            valueType: "enum",
+            permittedValues: ["open", "close", "stop"],
+          },
+        ],
+      },
+    ];
+    expect(archetypeFor(capabilities)).toBe("cover");
+  });
+
+  it("keeps a non-transport enum on the default archetype", () => {
+    // Open+close transport tokens are required, so a generic enum is not a cover.
+    const capabilities: Capability[] = [
+      {
+        kind: "fan",
+        access: rw,
+        valueType: "composite",
+        features: [
+          {
+            kind: "enum",
+            property: "effect",
+            access: rw,
+            valueType: "enum",
+            permittedValues: ["low", "high"],
+          },
+        ],
+      },
+    ];
+    expect(archetypeFor(capabilities)).toBe("default");
+  });
+
   it("selects the readout archetype for a read-only sensor", () => {
     expect(archetypeFor([numeric("temperature", ro, "°C")])).toBe("readout");
   });

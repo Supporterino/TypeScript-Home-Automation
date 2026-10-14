@@ -291,11 +291,27 @@ export function rankDeviceTile(capabilities: Capability[]): TileRanking {
 /** The stop-like permitted values a cover can be commanded to (design.md D6). */
 const COVER_STOP_TOKENS: ReadonlySet<string> = new Set(["stop"]);
 
+/** The open-like permitted values a cover's declared transport action can name (design.md D15). */
+const COVER_OPEN_TOKENS: ReadonlySet<string> = new Set(["open", "up", "raise"]);
+
+/** The close-like permitted values a cover's declared transport action can name (design.md D15). */
+const COVER_CLOSE_TOKENS: ReadonlySet<string> = new Set(["close", "down", "lower"]);
+
 /** The stop-like permitted value a capability declares, preserving its authored case (design.md D6). */
 function findStopToken(values: (string | number)[] | undefined): string | undefined {
   return (values ?? []).find(
     (value): value is string =>
       typeof value === "string" && COVER_STOP_TOKENS.has(value.trim().toLowerCase()),
+  );
+}
+
+/** The transport-like permitted value a capability declares, preserving its authored case (design.md D15). */
+function findTransportToken(
+  values: (string | number)[] | undefined,
+  tokens: ReadonlySet<string>,
+): string | undefined {
+  return (values ?? []).find(
+    (value): value is string => typeof value === "string" && tokens.has(value.trim().toLowerCase()),
   );
 }
 
@@ -329,4 +345,103 @@ export function coverStopCommand(capabilities: Capability[]): CoverStopCommand |
     }
   }
   return null;
+}
+
+/** The declared transport action a cover accepts (design.md D15). */
+export interface CoverTransportAction {
+  /** The writable property the transport values are set on. */
+  property: string;
+  /** The declared open value. */
+  open: string;
+  /** The declared close value. */
+  close: string;
+  /** The declared stop value, present only when the device can stop. */
+  stop?: string;
+}
+
+/**
+ * The writable transport action a cover declares, or `null` when it declares
+ * none (design.md D15; specs/device-sources "Cover Transport Action").
+ *
+ * Detection stays conservative so a generic enum is never mistaken for
+ * transport: the property must be a writable enum that names both an open-like
+ * and a close-like permitted value — a fan's speed or a light's effect names
+ * neither — and the exact authored values are returned so Open/Close command
+ * what the device accepts (a device expecting `"OPEN"` is not sent `"open"`).
+ * A device that can stop names a stop-like value too; one that cannot omits it,
+ * so the wall omits Stop rather than rendering it inert (specs/wall-display "A
+ * cover that cannot stop omits stop").
+ */
+export function coverTransportAction(capabilities: Capability[]): CoverTransportAction | null {
+  for (const c of flattenCapabilities(capabilities)) {
+    if (!c.access.writable || c.valueType !== "enum") continue;
+    const open = findTransportToken(c.permittedValues, COVER_OPEN_TOKENS);
+    const close = findTransportToken(c.permittedValues, COVER_CLOSE_TOKENS);
+    if (open === undefined || close === undefined) continue;
+    const stop = findStopToken(c.permittedValues);
+    return stop === undefined
+      ? { property: c.property, open, close }
+      : { property: c.property, open, close, stop };
+  }
+  return null;
+}
+
+/** The values a cover's Open and Close controls command (design.md D15). */
+export interface CoverTransportTargets {
+  /** Open's value: the declared open value, else the position maximum. */
+  open: unknown;
+  /** Close's value: the declared close value, else the position minimum. */
+  close: unknown;
+}
+
+/**
+ * Resolves the values a cover's Open and Close controls command (design.md D15;
+ * specs/wall-display "Open and close use the declared transport"): the declared
+ * transport action's own values when the device declares one, falling back to
+ * the position extremes otherwise — so a cover that only positions (a Shelly
+ * cover's read-only movement state) still commands its fully-open/closed ends.
+ */
+export function coverTransportTargets(
+  transport: CoverTransportAction | null,
+  position: FlatCapability | undefined,
+): CoverTransportTargets {
+  return {
+    open: transport?.open ?? position?.range?.max ?? 100,
+    close: transport?.close ?? position?.range?.min ?? 0,
+  };
+}
+
+/**
+ * The writable colour-temperature control a wall light card offers, or
+ * `undefined` when the device declares none (design.md D12; specs/wall-display
+ * "Wall Device Presentation" — "Colour controls appear only when supported").
+ * Only a writable numeric `color_temp` can be driven by a control; a
+ * colour-temperature the device only reports, or a non-numeric one, is not
+ * offered rather than rendered inert. Consulted only inside the wall `light`
+ * archetype, so no other card pays for the lookup.
+ */
+export function writableColorTemperatureCapability(
+  capabilities: Capability[],
+): FlatCapability | undefined {
+  return find(
+    flattenCapabilities(capabilities),
+    (c) => c.property === "color_temp" && c.valueType === "numeric" && c.access.writable,
+  );
+}
+
+/**
+ * The writable colour control a wall light card offers, or `undefined` when the
+ * device declares none (design.md D12). The canonical colour channel across
+ * sources is `hue` — Nanoleaf authors it directly and a Zigbee colour light
+ * exposes it beneath its `color` composite — so a writable numeric `hue`
+ * qualifies; a writable numeric `color` does too. A composite (an xy/hs pair),
+ * an enum, or a read-only colour cannot be driven by a single control and is
+ * not offered, so the card never renders an inert control.
+ */
+export function writableColorCapability(capabilities: Capability[]): FlatCapability | undefined {
+  const flat = flattenCapabilities(capabilities);
+  return (
+    find(flat, (c) => c.property === "hue" && c.valueType === "numeric" && c.access.writable) ??
+    find(flat, (c) => c.property === "color" && c.valueType === "numeric" && c.access.writable)
+  );
 }

@@ -305,6 +305,63 @@ describe("wall chunk laziness", () => {
       }
     }
   });
+
+  it("keeps the wall stylesheet out of first paint and inside a lazy chunk", () => {
+    // Hearth (`wall/hearth.css`) ships as its own content-hashed stylesheet,
+    // referenced by the wall chunk and fetched only when a wall is opened — the
+    // dashboard's entry document never references it (design.md D5;
+    // specs/wall-display "On-Demand Wall Stylesheet"; specs/web-ui "On-Demand
+    // Feature Stylesheets"). The marker is a Hearth colour token, so a
+    // regression that folds the wall sheet into the entry CSS — or otherwise
+    // reaches it from first paint — fails here rather than silently shipping
+    // Hearth to every dashboard load.
+    const marker = "--hearth-canvas";
+    const decoded = ASSETS.map((asset) => ({
+      asset,
+      text: Buffer.from(asset.rawBase64, "base64").toString("utf8"),
+    }));
+
+    const carrying = decoded.filter(({ text }) => text.includes(marker));
+    expect(carrying.length).toBeGreaterThanOrEqual(1);
+
+    for (const { asset } of carrying) {
+      expect(asset.contentType).toBe("text/css");
+      expect(asset.firstPaint).toBe(false);
+    }
+    for (const { asset, text } of decoded) {
+      if (asset.firstPaint) expect(text).not.toContain(marker);
+    }
+  });
+
+  it("references the wall stylesheet from the wall chunk and from no other chunk", () => {
+    // The on-demand stylesheet is linked by the wall's lazy route chunk alone
+    // (design.md D5). A stray import from the entry or the editor would have the
+    // emitted stylesheet referenced from another chunk — or its name appear in
+    // one — so asserting the reference is unique to the wall chunk catches a
+    // chunk hoisting that the content marker above might miss. The build's
+    // `wallStylesheetPlugin` excludes `wall/editor/**` for exactly this reason.
+    const marker = "--hearth-canvas";
+    const decoded = ASSETS.map((asset) => ({
+      asset,
+      text: Buffer.from(asset.rawBase64, "base64").toString("utf8"),
+    }));
+
+    const hearthCss = decoded.filter(
+      ({ asset, text }) => asset.contentType === "text/css" && text.includes(marker),
+    );
+    expect(hearthCss.length).toBe(1);
+    const hearthAsset = hearthCss[0].asset;
+
+    const jsChunks = decoded.filter(({ asset }) => asset.contentType === "application/javascript");
+    const referencing = jsChunks.filter(({ text }) => text.includes(hearthAsset.fileName));
+    expect(referencing.length).toBe(1);
+    // The one referencing chunk is the wall's own lazy chunk — it renders the
+    // wall grid — and is never a first-paint asset. The wall chunk marker itself
+    // is reached from a shared chunk, so the grid's `data-wall-chunk` root
+    // identifies this chunk.
+    expect(referencing[0].text).toContain("data-wall-chunk");
+    expect(referencing[0].asset.firstPaint).toBe(false);
+  });
 });
 
 // ── Code splitting ───────────────────────────────────────────────────────────

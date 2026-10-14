@@ -1,10 +1,10 @@
 /**
  * The per-type config form a wall widget exposes in the editor (design.md D13;
  * specs/wall-display "Wall Configuration Editor"). Driven by the widget type:
- * a room widget picks a room, a device widget picks a device, a scene widget
- * picks an automation and a label, and the rest take an optional title. The
- * values written here are validated by the type's descriptor schema in
- * `model.ts` before a save, so a blank required field surfaces inline rather
+ * a room widget picks a room, a device or temperature widget picks a device, a
+ * scene widget picks an automation and a label, and the rest take an optional
+ * title. The values written here are validated by the type's descriptor schema
+ * in `model.ts` before a save, so a blank required field surfaces inline rather
  * than reaching the server.
  *
  * Rebuilt on the Lumen primitive layer (`ui/*`); the `ui/` layer carries no
@@ -115,15 +115,17 @@ export function WidgetConfigFields({ widget, onChange }: WidgetConfigFieldsProps
         </Stack>
       );
 
-    case "device": {
+    case "device":
+    case "temperature": {
+      const sensor = widget.type === "temperature";
       const devices = [...devicesByQualifiedId.values()].sort((a, b) =>
         humanizeDeviceName(a.displayName).localeCompare(humanizeDeviceName(b.displayName)),
       );
       return (
         <Stack gap={2}>
           <SelectField
-            label="Device"
-            placeholder="Choose a device"
+            label={sensor ? "Sensor device" : "Device"}
+            placeholder={sensor ? "Choose a sensor" : "Choose a device"}
             value={text("qualifiedId")}
             options={devices.map((device) => ({
               value: device.qualifiedId,

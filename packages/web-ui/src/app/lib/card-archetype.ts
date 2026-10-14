@@ -14,6 +14,7 @@
 
 import type { Capability } from "@ts-ha/shared";
 import {
+  coverTransportAction,
   type FlatCapability,
   flattenCapabilities,
   type TileRanking,
@@ -39,12 +40,18 @@ export function writableBrightnessCapability(
 /**
  * Selects the wall card archetype for a device from its {@link rankDeviceTile}
  * ranking. `capabilities` is the schema the ranking was computed from, consulted
- * only to confirm the brightness control a `light` card needs is writable.
+ * to confirm the brightness control a `light` card needs is writable and, for a
+ * cover, whether the device declares a writable transport action (design.md
+ * D15).
  */
 export function cardArchetype(ranking: TileRanking, capabilities: Capability[]): CardArchetype {
   const action = ranking.action;
   if (!action) return ranking.readout ? "readout" : "default";
-  if (action.kind === "position") return "cover";
+  // A cover positions (a writable `position`) or transports (a declared
+  // writable transport action), so a position-less cover no longer falls back
+  // to a generic enum control (design.md D15; specs/wall-display "A position-less
+  // cover still gets transport").
+  if (action.kind === "position" || coverTransportAction(capabilities) !== null) return "cover";
   if (action.kind === "on_off") {
     return writableBrightnessCapability(capabilities) ? "light" : "toggle";
   }

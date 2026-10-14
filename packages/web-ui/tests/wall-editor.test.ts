@@ -44,12 +44,14 @@ function widgetAt(config: WallProfileConfig, index: number): WallWidget {
 
 /**
  * The minimum type-specific config a widget needs to validate. A room, device,
- * or scene widget cannot be meaningful without a selection, so the profile
- * validator rejects it until one is made — the editor surfaces exactly that.
+ * temperature, or scene widget cannot be meaningful without a selection, so the
+ * profile validator rejects it until one is made — the editor surfaces exactly
+ * that.
  */
 const REQUIRED_CONFIG: Partial<Record<WallWidgetType, Record<string, unknown>>> = {
   room: { roomId: "kitchen" },
   device: { qualifiedId: "zigbee:0xabc123" },
+  temperature: { qualifiedId: "zigbee:0xabc123" },
   scene: { automation: "good-night", label: "Good night" },
 };
 

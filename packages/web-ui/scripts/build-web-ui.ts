@@ -14,7 +14,7 @@
  */
 
 import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import tailwind from "bun-plugin-tailwind";
 import type { BuiltAsset } from "../src/assets/asset-types.js";
 
@@ -32,6 +32,48 @@ const FONT_SOURCE = join(APP_DIR, "fonts/plus-jakarta-sans-latin.woff2");
 const FONT_CSS_REF = "../fonts/plus-jakarta-sans-latin.woff2";
 
 const WATCH = process.argv.includes("--watch");
+
+/**
+ * Whether a `hearth.css` import comes from a wall **display** module — the only
+ * place Hearth belongs (design.md D5, D8; task 1.3). The editor
+ * (`wall/editor/**`) is deliberately excluded: it stays on Lumen and lives in a
+ * different lazy chunk, so a stray editor import must fall through to the normal
+ * CSS path and be caught by `web-ui-assets.test.ts` rather than being silently
+ * emitted as an on-demand asset.
+ */
+function isWallDisplayImporter(importer: string): boolean {
+  return /[\\/]wall[\\/]/.test(importer) && !/[\\/]wall[\\/]editor[\\/]/.test(importer);
+}
+
+/**
+ * Delivers the wall's stylesheet on demand (design.md D5; specs/wall-display
+ * "On-Demand Wall Stylesheet"; specs/web-ui "On-Demand Feature Stylesheets").
+ *
+ * Bun folds every imported stylesheet into the entry CSS, so a plain CSS import
+ * would put Hearth in the dashboard's first paint. A wall-display import is
+ * loaded here as a `file` asset instead, so Bun emits it as its own
+ * content-hashed stylesheet, referenced by the wall chunk and absent from the
+ * entry CSS. A wall sheet imported from anywhere else — the entry or the editor
+ * — is left to the normal CSS path on purpose, where `web-ui-assets.test.ts`
+ * fails rather than silently shipping Hearth to every dashboard load. Registered
+ * before `bun-plugin-tailwind` so this loader wins for the wall sheet.
+ */
+function wallStylesheetPlugin(): Bun.BunPlugin {
+  const NAMESPACE = "wall-stylesheet";
+  return {
+    name: "wall-stylesheet",
+    setup(build) {
+      build.onResolve({ filter: /hearth\.css$/ }, (args) => {
+        if (!isWallDisplayImporter(args.importer)) return undefined;
+        return { path: resolve(args.resolveDir, args.path), namespace: NAMESPACE };
+      });
+      build.onLoad({ filter: /hearth\.css$/, namespace: NAMESPACE }, async ({ path }) => ({
+        contents: await Bun.file(path).text(),
+        loader: "file",
+      }));
+    },
+  };
+}
 
 /** MIME type for a given emitted file extension. */
 function contentTypeFor(path: string): string {
@@ -78,7 +120,7 @@ async function buildOnce(): Promise<boolean> {
     // (design.md D2). `app.css` is the CSS entry, reached through the entry
     // module's import; no PostCSS pipeline is introduced.
     // `bun-plugin-tailwind` default-exports the plugin instance, not a factory.
-    plugins: [tailwind],
+    plugins: [wallStylesheetPlugin(), tailwind],
     target: "browser",
     format: "esm",
     minify: true,
@@ -136,9 +178,11 @@ async function buildOnce(): Promise<boolean> {
       hash: artifact.hash ?? "",
       rawBase64: Buffer.from(rawBytes).toString("base64"),
       gzipBase64: Buffer.from(gzipBytes).toString("base64"),
-      // "chunk" artifacts are only reachable via a dynamic import and are
-      // therefore excluded from the first-paint budget (design.md D24).
-      firstPaint: artifact.kind !== "chunk",
+      // "chunk" artifacts and copied "file" assets are only reachable through
+      // the dynamic import that references them — the lazy route chunks and the
+      // wall's on-demand stylesheet — so they are excluded from the first-paint
+      // budget (design.md D5, D24).
+      firstPaint: artifact.kind !== "chunk" && artifact.loader !== "file",
     });
   }
 

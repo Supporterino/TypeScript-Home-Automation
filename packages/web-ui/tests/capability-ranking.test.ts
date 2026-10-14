@@ -2,6 +2,8 @@ import { describe, expect, it } from "bun:test";
 import type { Capability } from "@ts-ha/shared";
 import {
   coverStopCommand,
+  coverTransportAction,
+  coverTransportTargets,
   flattenCapabilities,
   isOperableDevice,
   rankDeviceTile,
@@ -23,6 +25,11 @@ function numeric(property: string, access = rw, unit?: string): Capability {
 
 function light(features: Capability[]): Capability {
   return { kind: "light", access: rw, valueType: "composite", features };
+}
+
+/** A writable transport enum, e.g. a cover's declared `action`/`state` values. */
+function transportEnum(property: string, permittedValues: string[], access = rw): Capability {
+  return { kind: "enum", property, access, valueType: "enum", permittedValues };
 }
 
 /** An output-kind container of the given kind, e.g. a fan with only a discrete speed choice. */
@@ -327,7 +334,10 @@ describe("coverStopCommand (design D6)", () => {
     expect(coverStopCommand(capabilities)).toEqual({ property: "action", value: "stop" });
   });
 
-  it("returns null for a Shelly cover whose movement state is read-only", () => {
+  it("returns null when a cover's stop-capable state enum is read-only", () => {
+    // No writable transport action is declared, so a read-only movement state
+    // that names `stopped` still cannot be commanded — the case a Shelly cover
+    // had before task 1.5 gave it a writable `action` (design.md D15).
     const capabilities: Capability[] = [
       numeric("position"),
       {
@@ -358,5 +368,92 @@ describe("coverStopCommand (design D6)", () => {
   it("returns null for a device with no transport property", () => {
     expect(coverStopCommand([numeric("temperature", ro, "°C")])).toBeNull();
     expect(coverStopCommand([])).toBeNull();
+  });
+
+  it("finds stop on a Shelly cover's declared transport action", () => {
+    // Task 1.5 gave the Shelly cover a writable `action` enum, so the stop it
+    // could always perform is now expressible (design.md D15).
+    const capabilities = [numeric("position"), transportEnum("action", ["open", "close", "stop"])];
+    expect(coverStopCommand(capabilities)).toEqual({ property: "action", value: "stop" });
+  });
+
+  it("returns null when a declared transport action cannot stop", () => {
+    const capabilities = [numeric("position"), transportEnum("action", ["open", "close"])];
+    expect(coverStopCommand(capabilities)).toBeNull();
+  });
+});
+
+describe("coverTransportAction (design D15)", () => {
+  it("finds the declared transport and its exact open/close/stop values", () => {
+    const capabilities = [numeric("position"), transportEnum("action", ["open", "close", "stop"])];
+    expect(coverTransportAction(capabilities)).toEqual({
+      property: "action",
+      open: "open",
+      close: "close",
+      stop: "stop",
+    });
+  });
+
+  it("preserves the authored case of the declared values", () => {
+    const capabilities = [transportEnum("state", ["OPEN", "CLOSE", "STOP"])];
+    expect(coverTransportAction(capabilities)).toEqual({
+      property: "state",
+      open: "OPEN",
+      close: "CLOSE",
+      stop: "STOP",
+    });
+  });
+
+  it("omits stop when the declared transport names no stop value", () => {
+    expect(coverTransportAction([transportEnum("action", ["open", "close"])])).toEqual({
+      property: "action",
+      open: "open",
+      close: "close",
+    });
+  });
+
+  it("recognises a position-less cover by its transport alone", () => {
+    expect(coverTransportAction([transportEnum("action", ["open", "close", "stop"])])).toEqual({
+      property: "action",
+      open: "open",
+      close: "close",
+      stop: "stop",
+    });
+  });
+
+  it("ignores a read-only transport and a non-transport enum", () => {
+    const readOnly = transportEnum("state", ["open", "close", "stop"], ro);
+    const effect = transportEnum("effect", ["low", "high"]);
+    expect(coverTransportAction([readOnly])).toBeNull();
+    expect(coverTransportAction([effect])).toBeNull();
+    expect(coverTransportAction([])).toBeNull();
+  });
+
+  it("returns null for a cover that only declares a position", () => {
+    expect(coverTransportAction([numeric("position")])).toBeNull();
+  });
+});
+
+describe("coverTransportTargets (design D15)", () => {
+  it("commands the declared transport values when one is declared", () => {
+    const capabilities = [numeric("position"), transportEnum("action", ["open", "close", "stop"])];
+    expect(coverTransportTargets(coverTransportAction(capabilities), undefined)).toEqual({
+      open: "open",
+      close: "close",
+    });
+  });
+
+  it("falls back to the position extremes when no transport is declared", () => {
+    // A `FlatCapability` is what the caller already resolved for the tile; the
+    // helper only reads its declared range.
+    expect(
+      coverTransportTargets(null, {
+        property: "position",
+        valueType: "numeric",
+        access: rw,
+        range: { min: 10, max: 90 },
+        kind: "numeric",
+      }),
+    ).toEqual({ open: 90, close: 10 });
   });
 });

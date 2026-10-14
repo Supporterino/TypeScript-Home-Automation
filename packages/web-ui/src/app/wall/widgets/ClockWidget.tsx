@@ -1,11 +1,16 @@
 /**
- * The wall clock/date widget (specs/wall-display "Widget Catalog", "Always-On
- * Operation"; design.md D13). Ticks once a second from the client clock and
- * needs no server data, so it renders correctly while the engine is
- * unreachable. An ambient readout: chrome-less, its large type on the panel.
+ * The wall clock/date widget (design.md D11; specs/wall-display "Widget
+ * Catalog", "Always-On Operation"). Ticks once a second from the client clock
+ * and needs no server data, so it renders correctly while the engine is
+ * unreachable.
+ *
+ * Composed on the shared Hearth card vocabulary (design.md D11): a leading
+ * clock glyph and the date as the title, with the time as the hero metric.
+ * Ambient — chrome-less, its large type sits directly on the panel.
  */
+import { Clock } from "lucide-react";
 import { useNow } from "../../lib/use-now.js";
-import { WALL_HERO_FONT_SIZE, WALL_LABEL_FONT_SIZE } from "../type-ramp.js";
+import { WALL_CARD_GLYPH_SIZE, WallCardStat } from "./card-vocab.js";
 import { formatClock } from "./clock.js";
 
 export function ClockWidget() {
@@ -13,16 +18,12 @@ export function ClockWidget() {
   const { time, date } = formatClock(now);
 
   return (
-    <div className="flex h-full flex-col items-center justify-center">
-      <p
-        className="font-display font-bold"
-        style={{ fontSize: WALL_HERO_FONT_SIZE, lineHeight: 1.05 }}
-      >
+    <div
+      style={{ display: "flex", flexDirection: "column", justifyContent: "center", height: "100%" }}
+    >
+      <WallCardStat icon={<Clock size={WALL_CARD_GLYPH_SIZE} />} label={date} size="hero">
         {time}
-      </p>
-      <p className="text-center text-muted" style={{ fontSize: WALL_LABEL_FONT_SIZE }}>
-        {date}
-      </p>
+      </WallCardStat>
     </div>
   );
 }

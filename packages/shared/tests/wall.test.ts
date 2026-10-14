@@ -38,6 +38,7 @@ describe("wall grid constants", () => {
       "room",
       "favorites",
       "device",
+      "temperature",
       "status",
       "scene",
     ]);

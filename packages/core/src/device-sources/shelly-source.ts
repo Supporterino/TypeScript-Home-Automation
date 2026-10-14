@@ -275,6 +275,16 @@ export class ShellyDeviceSource implements DeviceSource {
         if (typeof properties.position === "number") {
           await this.shelly.coverGoToPosition(entry.id, properties.position);
         }
+        // The descriptor declares the discrete transport as a writable enum,
+        // so validation has already confined `action` to one of these values;
+        // each one maps to the matching `Cover.*` primitive (design.md D15).
+        if (properties.action === "open") {
+          await this.shelly.coverOpen(entry.id);
+        } else if (properties.action === "close") {
+          await this.shelly.coverClose(entry.id);
+        } else if (properties.action === "stop") {
+          await this.shelly.coverStop(entry.id);
+        }
       } else if (typeof properties.on === "boolean") {
         if (properties.on) {
           await this.shelly.turnOn(entry.id);

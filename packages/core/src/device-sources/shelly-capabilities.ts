@@ -8,7 +8,12 @@
  * consumes it. The normalised property names declared here (`on`, `power`,
  * `position`, …) are also the property names `ShellyDeviceSource` uses when
  * it builds a device's `state`, so the capability schema and the state it
- * describes always agree.
+ * describes agree — with one deliberate exception: a command-only property is
+ * declared write-only (`access.writable` without `access.readable`) and has no
+ * reported-state counterpart. `ShellyDeviceSource.normalize()` never produces
+ * such a property, so declaring it readable would advertise a value the device
+ * does not report and let a capability-driven consumer render an inert
+ * readout (design.md D15).
  */
 import type { Capability } from "@ts-ha/shared";
 import type { ShellyDeviceType } from "@ts-ha/shared/types/shelly";
@@ -78,7 +83,24 @@ function switchCapabilities(kind: "switch" | "outlet", metered: boolean): Capabi
 /** Possible cover states, mirroring `ShellyCoverState`. */
 const COVER_STATE_VALUES = ["open", "closed", "opening", "closing", "stopped", "calibrating"];
 
-/** Capability description for a Shelly cover (position + read-only movement state). */
+/**
+ * The discrete transport commands a Shelly cover accepts, one per
+ * `Cover.Open`/`Cover.Close`/`Cover.Stop` RPC (design.md D15). Declaring them
+ * as a writable enum is what lets a source-neutral consumer — the wall's
+ * cover transport — command stop without knowing Shelly exists; a Shelly
+ * cover that cannot stop would omit `stop` here rather than declare and then
+ * refuse it. The transport is a command, not a reported value: it is declared
+ * write-only, so no readout is offered for it — the cover's movement is
+ * reported by the read-only `state` below.
+ */
+const COVER_TRANSPORT_VALUES = ["open", "close", "stop"];
+
+/**
+ * Capability description for a Shelly cover (go-to position, discrete
+ * transport action, and read-only movement state). The transport `action` is a
+ * command, so it is declared write-only; the reported `state` records the
+ * cover's movement.
+ */
 const COVER_CAPABILITIES: Capability[] = [
   {
     kind: "numeric",
@@ -86,6 +108,13 @@ const COVER_CAPABILITIES: Capability[] = [
     access: { readable: true, writable: true },
     valueType: "numeric",
     range: { min: 0, max: 100 },
+  },
+  {
+    kind: "enum",
+    property: "action",
+    access: { readable: false, writable: true },
+    valueType: "enum",
+    permittedValues: COVER_TRANSPORT_VALUES,
   },
   {
     kind: "enum",

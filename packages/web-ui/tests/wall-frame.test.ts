@@ -20,12 +20,12 @@ describe("wallFrameChrome", () => {
     expect(chrome.radius).toBeNull();
   });
 
-  it("renders a control widget as a bordered surface tile", () => {
+  it("renders a control widget as a Hearth surface tile", () => {
     const chrome = wallFrameChrome("control");
     expect(chrome.surface).toBe(true);
-    expect(chrome.background).toBe("var(--surface)");
-    expect(chrome.borderColor).toBe("var(--hairline)");
-    expect(chrome.radius).toBe("var(--radius-tile)");
+    expect(chrome.background).toBe("var(--hearth-surface)");
+    expect(chrome.borderColor).toBe("var(--hearth-hairline)");
+    expect(chrome.radius).toBe("var(--hearth-radius-md)");
   });
 
   it("derives the surface from each type's descriptor grammar", () => {

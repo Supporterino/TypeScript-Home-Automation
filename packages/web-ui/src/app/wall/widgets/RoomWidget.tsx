@@ -1,6 +1,6 @@
 /**
- * The wall room widget (design.md D13; specs/wall-display "Widget Catalog", "A
- * room widget commands the room"). Shows a configured room's devices as
+ * The wall room widget (design.md D11, D13; specs/wall-display "Widget Catalog",
+ * "A room widget commands the room"). Shows a configured room's devices as
  * touch-sized tiles plus room-wide all-on/all-off controls.
  *
  * The batch command reuses the same flow as `RoomView`: capable members are
@@ -10,10 +10,13 @@
  * stream or the deadline, failed reverts and is surfaced, skipped is reported
  * separately. Report-only members are never commanded.
  *
- * A control widget: the frame draws the surface, so each contained tile draws
+ * Composed on the shared Hearth card vocabulary (design.md D11): a leading room
+ * glyph and the room name as the title, the member count as the metric, and the
+ * room-wide all-on/all-off controls as the card's action-affordance slot. A
+ * control widget: the frame draws the surface, so each contained tile draws
  * none of its own (specs/wall-display "A card is a single surface").
  */
-import { Info, Power } from "lucide-react";
+import { House, Info, Power } from "lucide-react";
 import { useState } from "react";
 import { sendRoomCommand } from "../../api.js";
 import { useDataStore } from "../../lib/data-store.js";
@@ -23,9 +26,19 @@ import {
   mergeRoomCommandResults,
 } from "../../lib/room-command.js";
 import type { DeviceDescriptor } from "../../types.js";
-import { Badge, Button, Grid, ScrollArea, Spinner, Stack } from "../../ui/index.js";
+import { Spinner } from "../../ui/index.js";
 import type { WallWidgetProps } from "../registry.js";
 import { WALL_BODY_FONT_SIZE } from "../type-ramp.js";
+import {
+  WALL_CARD_GLYPH_SIZE,
+  WallButton,
+  WallCardAffordance,
+  WallCardHead,
+  WallCardLabel,
+  WallCardMessage,
+  WallCardMetric,
+  wallControlGapPx,
+} from "./card-vocab.js";
 import { actuatableRoomMembers } from "./room-model.js";
 import { WallDeviceTile } from "./WallDeviceTile.js";
 
@@ -40,9 +53,9 @@ export function RoomWidget({ widget, contained }: WallWidgetProps) {
 
   if (!room) {
     return (
-      <p className="text-muted" style={{ fontSize: WALL_BODY_FONT_SIZE }}>
+      <WallCardMessage>
         {roomId ? `Room "${roomId}" is not configured.` : "No room configured."}
-      </p>
+      </WallCardMessage>
     );
   }
 
@@ -113,51 +126,79 @@ export function RoomWidget({ widget, contained }: WallWidgetProps) {
     }
   }
 
+  const memberCount = room.members.length;
+
   return (
-    <Stack gap={2} className="h-full min-h-0">
+    <div
+      style={{
+        display: "flex",
+        height: "100%",
+        minHeight: 0,
+        flexDirection: "column",
+        gap: "var(--hearth-space-3)",
+      }}
+    >
+      <WallCardHead icon={<House size={WALL_CARD_GLYPH_SIZE} />} title={room.name} />
+
+      <span style={{ display: "flex", alignItems: "baseline", gap: "var(--hearth-space-2)" }}>
+        <WallCardMetric>{memberCount}</WallCardMetric>
+        <WallCardLabel>{memberCount === 1 ? "device" : "devices"}</WallCardLabel>
+      </span>
+
       {hasActuatable && (
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            size="lg"
-            variant="soft"
-            disabled={commandBusy}
-            onClick={() => void handleRoomCommand(true)}
-          >
+        <WallCardAffordance>
+          <WallButton disabled={commandBusy} onClick={() => void handleRoomCommand(true)}>
             {commandBusy ? <Spinner size={18} label="" /> : <Power size={18} aria-hidden />}
             All on
-          </Button>
-          <Button
-            size="lg"
-            variant="soft"
-            disabled={commandBusy}
-            onClick={() => void handleRoomCommand(false)}
-          >
+          </WallButton>
+          <WallButton disabled={commandBusy} onClick={() => void handleRoomCommand(false)}>
             {commandBusy ? <Spinner size={18} label="" /> : <Power size={18} aria-hidden />}
             All off
-          </Button>
-        </div>
+          </WallButton>
+        </WallCardAffordance>
       )}
 
       {commandError && (
-        <p role="alert" className="text-danger" style={{ fontSize: WALL_BODY_FONT_SIZE }}>
+        <p
+          role="alert"
+          style={{ margin: 0, color: "var(--hearth-danger)", fontSize: WALL_BODY_FONT_SIZE }}
+        >
           {commandError}
         </p>
       )}
 
       {skippedCount > 0 && (
-        <Badge tone="neutral">
-          <Info size={12} aria-hidden />
+        <span
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "var(--hearth-space-1)",
+            alignSelf: "flex-start",
+            padding: "2px var(--hearth-space-2)",
+            borderRadius: "var(--hearth-radius-pill)",
+            border: "1px solid var(--hearth-hairline)",
+            color: "var(--hearth-text-muted)",
+            fontSize: "var(--hearth-text-chip)",
+            fontWeight: "var(--hearth-weight-semibold)",
+          }}
+        >
+          <Info size={14} aria-hidden />
           {skippedCount} skipped (no control)
-        </Badge>
+        </span>
       )}
 
       {availableMembers.length === 0 && unavailableMembers.length === 0 ? (
-        <p className="text-muted" style={{ fontSize: WALL_BODY_FONT_SIZE }}>
-          No devices in this room yet.
-        </p>
+        <WallCardMessage>No devices in this room yet.</WallCardMessage>
       ) : (
-        <ScrollArea className="min-h-0 flex-1">
-          <Grid columns={1} md={2} gap={2} className="pr-2">
+        <div style={{ minHeight: 0, flex: 1, overflowY: "auto" }}>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 180px), 1fr))",
+              alignContent: "start",
+              gap: `${wallControlGapPx()}px`,
+            }}
+          >
             {availableMembers.map((member) =>
               member.device ? (
                 <WallDeviceTile
@@ -175,9 +216,9 @@ export function RoomWidget({ widget, contained }: WallWidgetProps) {
                 contained={contained}
               />
             ))}
-          </Grid>
-        </ScrollArea>
+          </div>
+        </div>
       )}
-    </Stack>
+    </div>
   );
 }

@@ -1,9 +1,12 @@
 /**
- * The wall energy widget (specs/wall-display "Widget Catalog"; specs/energy-
- * monitoring; design.md D13). Reads `GET /api/energy` and refetches, debounced,
+ * The wall energy widget (design.md D11; specs/wall-display "Widget Catalog";
+ * specs/energy-monitoring). Reads `GET /api/energy` and refetches, debounced,
  * on every device event that can change the aggregated totals, so the totals
- * update live without a manual refresh. An ambient readout: chrome-less, its
- * metrics on the panel.
+ * update live without a manual refresh.
+ *
+ * Composed on the shared Hearth card vocabulary (design.md D11): a metric per
+ * reading (instantaneous power and accumulated consumption), each with its own
+ * leading glyph and label. Ambient — chrome-less, its metrics on the panel.
  */
 import type { EnergyData } from "@ts-ha/shared";
 import { Database, Zap } from "lucide-react";
@@ -12,7 +15,8 @@ import { fetchEnergy } from "../../api.js";
 import { useDataStore } from "../../lib/data-store.js";
 import { isEnergyRelevantEvent } from "../../lib/energy.js";
 import { Spinner } from "../../ui/index.js";
-import { WALL_BODY_FONT_SIZE, WALL_LABEL_FONT_SIZE, WALL_METRIC_FONT_SIZE } from "../type-ramp.js";
+import { WALL_BODY_FONT_SIZE } from "../type-ramp.js";
+import { WALL_CARD_GLYPH_SIZE, WallCardStat } from "./card-vocab.js";
 import { energyDisplay } from "./energy-model.js";
 
 /** Coalesces a burst of device events into one endpoint refetch. */
@@ -22,30 +26,17 @@ function Metric({
   icon,
   label,
   value,
-  colorVar,
+  color,
 }: {
   icon: ReactNode;
   label: string;
   value: string;
-  colorVar: string;
+  color: string;
 }) {
   return (
-    <div>
-      <div className="flex items-center gap-1.5">
-        <span className="flex" style={{ color: `var(${colorVar})` }}>
-          {icon}
-        </span>
-        <p
-          className="font-semibold uppercase text-muted"
-          style={{ fontSize: WALL_LABEL_FONT_SIZE }}
-        >
-          {label}
-        </p>
-      </div>
-      <p className="font-display font-bold" style={{ fontSize: WALL_METRIC_FONT_SIZE }}>
-        {value}
-      </p>
-    </div>
+    <WallCardStat icon={icon} label={label} color={color}>
+      {value}
+    </WallCardStat>
   );
 }
 
@@ -94,7 +85,7 @@ export function EnergyWidget() {
 
   if (error !== null) {
     return (
-      <p className="text-danger" style={{ fontSize: WALL_BODY_FONT_SIZE }}>
+      <p style={{ margin: 0, color: "var(--hearth-danger)", fontSize: WALL_BODY_FONT_SIZE }}>
         Energy data unavailable: {error}
       </p>
     );
@@ -102,7 +93,9 @@ export function EnergyWidget() {
 
   if (data === null) {
     return (
-      <div className="flex h-full items-center justify-center">
+      <div
+        style={{ display: "flex", height: "100%", alignItems: "center", justifyContent: "center" }}
+      >
         <Spinner />
       </div>
     );
@@ -111,16 +104,29 @@ export function EnergyWidget() {
   const display = energyDisplay(data);
 
   return (
-    <div className="flex h-full flex-col justify-center gap-2">
-      <Metric icon={<Zap size={15} />} label="Power" value={display.power} colorVar="--info" />
+    <div
+      style={{
+        display: "flex",
+        height: "100%",
+        flexDirection: "column",
+        justifyContent: "center",
+        gap: "var(--hearth-space-3)",
+      }}
+    >
       <Metric
-        icon={<Database size={15} />}
+        icon={<Zap size={WALL_CARD_GLYPH_SIZE} />}
+        label="Power"
+        value={display.power}
+        color="var(--hearth-info)"
+      />
+      <Metric
+        icon={<Database size={WALL_CARD_GLYPH_SIZE} />}
         label="Total"
         value={display.consumption}
-        colorVar="--on"
+        color="var(--hearth-on)"
       />
       {display.meteringCount === 0 && (
-        <p className="text-muted" style={{ fontSize: WALL_BODY_FONT_SIZE }}>
+        <p style={{ margin: 0, color: "var(--hearth-text-muted)", fontSize: WALL_BODY_FONT_SIZE }}>
           No metering devices report yet.
         </p>
       )}

@@ -1,0 +1,135 @@
+/**
+ * Hearth — the wall's own visual language (design.md D1, D2; specs/wall-display
+ * "Wall Visual Language", "On-Demand Wall Stylesheet").
+ *
+ * The full-bleed wall (`/wall/:name`) does not consume Lumen (`styles/app.css`):
+ * it declares its own `--hearth-*` colour, type, spacing, radius, elevation, and
+ * motion tokens here, so the dashboard system is not the wall's transitive
+ * dependency. No value below aliases a Lumen token — every token is a literal
+ * (or a scheme-independent scale), and dark is the authoritative scheme.
+ *
+ * Scope: the wall surface root carries `data-wall-chunk` (see
+ * `wall/WallGrid.tsx` / `wall/registry.ts`), which is this stylesheet's wall
+ * root scope. It is imported only by the wall surface modules, so the tokens
+ * reach the wall chunk and never the dashboard's first paint (design.md D5).
+ *
+ * Scheme: dark is authoritative and lives on the wall root; light is a designed
+ * scheme under the global `[data-theme="light"]` attribute (set on `<html>` by
+ * the theme bootstrap), not an inversion of dark. Every colour token is
+ * declared in both schemes.
+ *
+ * The type ramp re-derives the wall's body floor from the ramp itself: no wall
+ * body text may render below `--hearth-text-body` (18 px, up from the old hard
+ * 16 px); the compact status-chip exception is retained (design.md D3).
+ */
+
+[data-wall-chunk] {
+  color-scheme: dark;
+
+  /* The wall root is the wall's own surface: it paints Hearth's canvas and
+     foreground here, from the tokens below, so no wall component repeats a
+     `--hearth-*` colour (the `--hearth-canvas` marker stays stylesheet-only —
+     see `tests/web-ui-assets.test.ts`). Both schemes resolve from the token
+     values, so light needs no restatement. */
+  background: var(--hearth-canvas);
+  color: var(--hearth-text);
+
+  /* ── Colour — dark (authoritative, true-black; no full-white surface) ────── */
+  --hearth-canvas: #000000;
+  --hearth-surface: #0c0c0e;
+  --hearth-surface-raised: #16161a;
+  --hearth-surface-sunken: #050506;
+  --hearth-hairline: rgba(255, 255, 255, 0.1);
+  --hearth-text: #f5f5f7;
+  --hearth-text-muted: #a8a8b3;
+  --hearth-on: #6fd39a;
+  --hearth-off: #8a8a94;
+  --hearth-stale: #e3b341;
+  --hearth-danger: #f0716f;
+  --hearth-info: #74b6ff;
+  --hearth-accent: #f0a35e;
+  --hearth-accent-fg: #1b1103;
+  --hearth-focus: #ffca8a;
+  --hearth-scrim: rgba(0, 0, 0, 0.72);
+
+  /* ── Typography — the distance ramp (scheme-independent) ─────────────────── */
+  /* Reuses the self-hosted display face declared in `styles/app.css`; Hearth
+     sets its own ramp on top of it rather than adding a second download. */
+  --hearth-font-display: "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
+
+  --hearth-text-hero: clamp(48px, 7vmin, 104px);
+  --hearth-text-metric: clamp(36px, 5vmin, 76px);
+  --hearth-text-title: clamp(20px, 2.5vmin, 28px);
+  --hearth-text-label: 20px;
+  --hearth-text-body: 18px; /* Re-derived body floor — no wall body text below. */
+  --hearth-text-chip: 16px; /* Compact status-chip exception, retained (design.md D3). */
+
+  --hearth-leading-tight: 1.05;
+  --hearth-leading-snug: 1.2;
+  --hearth-leading-body: 1.45;
+
+  --hearth-weight-medium: 500;
+  --hearth-weight-semibold: 600;
+  --hearth-weight-bold: 700;
+
+  /* ── Spacing — the wall's 4-based rhythm ─────────────────────────────────── */
+  --hearth-space-1: 4px;
+  --hearth-space-2: 8px;
+  --hearth-space-3: 12px;
+  --hearth-space-4: 16px;
+  --hearth-space-5: 24px;
+  --hearth-space-6: 32px;
+  --hearth-space-7: 48px;
+
+  /* ── Radius ──────────────────────────────────────────────────────────────── */
+  --hearth-radius-sm: 10px;
+  --hearth-radius-md: 16px;
+  --hearth-radius-lg: 24px;
+  --hearth-radius-pill: 999px;
+
+  /* ── Elevation — dark shadows for a true-black panel ─────────────────────── */
+  --hearth-e0: none;
+  --hearth-e1: 0 1px 2px rgba(0, 0, 0, 0.6);
+  --hearth-e2: 0 18px 44px rgba(0, 0, 0, 0.7);
+
+  /* ── Motion ──────────────────────────────────────────────────────────────── */
+  --hearth-motion-fast: 130ms;
+  --hearth-motion-base: 200ms;
+  --hearth-motion-enter-translate: 10px;
+  --hearth-motion-ease: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Light — designed for its own contrast on warm paper, not a mechanical
+   inversion of the true-black dark scheme. Every colour token is restated. */
+[data-theme="light"] [data-wall-chunk] {
+  color-scheme: light;
+
+  --hearth-canvas: #f4efe8;
+  --hearth-surface: #fffdf9;
+  --hearth-surface-raised: #faf3ea;
+  --hearth-surface-sunken: #ece4d9;
+  --hearth-hairline: #ded3c4;
+  --hearth-text: #1c1815;
+  --hearth-text-muted: #6b6157;
+  --hearth-on: #0f7a4a;
+  --hearth-off: #6b6157;
+  --hearth-stale: #9a6408;
+  --hearth-danger: #b3261e;
+  --hearth-info: #1f5fbf;
+  --hearth-accent: #b45309;
+  --hearth-accent-fg: #fff8ef;
+  --hearth-focus: #8a4a08;
+  --hearth-scrim: rgba(12, 10, 8, 0.5);
+
+  /* Light declares its own elevation shadows (lower-key on a light panel). */
+  --hearth-e0: none;
+  --hearth-e1: 0 1px 2px rgba(28, 24, 21, 0.12);
+  --hearth-e2: 0 18px 44px rgba(28, 24, 21, 0.2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-wall-chunk] {
+    --hearth-motion-fast: 0.01ms;
+    --hearth-motion-base: 0.01ms;
+  }
+}

@@ -18,6 +18,7 @@ import { FavoritesWidget } from "./widgets/FavoritesWidget.js";
 import { RoomWidget } from "./widgets/RoomWidget.js";
 import { SceneWidget } from "./widgets/SceneWidget.js";
 import { StatusWidget } from "./widgets/StatusWidget.js";
+import { TemperatureWidget } from "./widgets/TemperatureWidget.js";
 import { WeatherWidget } from "./widgets/WeatherWidget.js";
 
 /** Props every wall widget renderer receives: its own configuration and placement. */
@@ -69,10 +70,21 @@ export interface WallWidgetDescriptor {
 
 /**
  * The minimum interactive-control size, in CSS pixels, a wall widget must meet
- * (specs/wall-display "Touch Operation"). Larger than the desktop standard
- * because a wall is operated by touch from a distance.
+ * (design.md D4; specs/wall-display "Touch Operation"). The kiosk-class target —
+ * larger than the desktop standard because a wall is operated by touch from a
+ * distance.
  */
-export const WALL_MIN_TOUCH_TARGET = 48;
+export const WALL_MIN_TOUCH_TARGET = 56;
+
+/**
+ * The minimum space, in CSS pixels, the wall keeps between two adjacent
+ * interactive controls, so a touch intended for one cannot plausibly activate
+ * its neighbour (design.md D4; specs/wall-display "Adjacent controls are
+ * separated"). It is the wall's own floor, matching the Hearth spacing rhythm's
+ * `--hearth-space-2` (8 px) the wall's control rows and the wall gutter draw
+ * with, and is a minimum — a control row may space its controls further.
+ */
+export const WALL_MIN_CONTROL_GAP = 8;
 
 /**
  * A unique marker carried by the lazy `wall` chunk and not by first paint
@@ -149,6 +161,16 @@ export const WALL_WIDGET_REGISTRY: Readonly<Record<WallWidgetType, WallWidgetDes
       max: { w: 6, h: 6 },
       configSchema: WALL_WIDGET_CONFIG_SCHEMAS.device,
       renderer: DeviceWidget,
+    },
+    temperature: {
+      type: "temperature",
+      label: "Temperature",
+      grammar: "ambient",
+      defaults: { w: 3, h: 2 },
+      min: { w: 2, h: 2 },
+      max: { w: 6, h: 4 },
+      configSchema: WALL_WIDGET_CONFIG_SCHEMAS.temperature,
+      renderer: TemperatureWidget,
     },
     status: {
       type: "status",

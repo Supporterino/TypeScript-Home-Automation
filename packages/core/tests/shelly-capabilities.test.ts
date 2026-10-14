@@ -56,13 +56,35 @@ describe("shellyCapabilitiesFor", () => {
       expect(onOff?.kind).toBe("switch");
     });
 
-    it("yields position and movement state, not on/off, for a cover channel", () => {
+    it("yields position, transport action and movement state, not on/off, for a cover channel", () => {
       const capabilities = shellyCapabilitiesFor("cover", { metered: true });
       const properties = capabilities.map((c) => c.property);
 
-      expect(properties).toEqual(["position", "state"]);
+      expect(properties).toEqual(["position", "action", "state"]);
       expect(properties).not.toContain("on");
       expect(properties).not.toContain("energy");
+    });
+  });
+
+  describe("cover transport action (design.md D15)", () => {
+    it("declares a write-only transport enum naming open, close and stop", () => {
+      const action = shellyCapabilitiesFor("cover").find((c) => c.property === "action");
+
+      expect(action).toBeDefined();
+      expect(action?.kind).toBe("enum");
+      expect(action?.valueType).toBe("enum");
+      // A transport is a command, not a reported value: it is writable so a
+      // source-neutral consumer can express it, and not readable so no consumer
+      // renders a readout for a value `normalize()` never produces (design.md D15).
+      expect(action?.access).toEqual({ readable: false, writable: true });
+      expect(action?.permittedValues).toEqual(["open", "close", "stop"]);
+    });
+
+    it("declares no transport action for a switch or an outlet", () => {
+      for (const type of ["switch", "outlet"] as const) {
+        const capabilities = shellyCapabilitiesFor(type);
+        expect(capabilities.some((c) => c.property === "action")).toBe(false);
+      }
     });
   });
 });

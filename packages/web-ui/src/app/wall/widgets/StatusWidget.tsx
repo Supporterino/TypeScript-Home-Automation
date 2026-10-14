@@ -1,46 +1,36 @@
 /**
- * The wall status/presence summary widget (specs/wall-display "Widget
- * Catalog"; design.md D13). Reuses the overview's pure {@link summarizeDevices}
- * over the live device map, so counts update as `device_state`/
- * `device_reachability` events stream in — no manual refresh. An ambient
- * readout: chrome-less, its metrics on the panel.
+ * The wall status/presence summary widget (design.md D11; specs/wall-display
+ * "Widget Catalog"). Reuses the overview's pure {@link summarizeDevices} over
+ * the live device map, so counts update as `device_state`/`device_reachability`
+ * events stream in — no manual refresh.
+ *
+ * Composed on the shared Hearth card vocabulary (design.md D11): each count is
+ * a metric with its own leading glyph and label, laid out on the wall's own
+ * grid. Ambient — chrome-less, its metrics on the panel. State is conveyed by
+ * the label text as well as the glyph, never colour alone.
  */
 import { Activity, Clock, Power, Unplug } from "lucide-react";
 import { type ReactNode, useMemo } from "react";
 import { useDataStore } from "../../lib/data-store.js";
 import { summarizeDevices } from "../../lib/overview.js";
 import { useNow } from "../../lib/use-now.js";
-import { Grid } from "../../ui/index.js";
-import { WALL_LABEL_FONT_SIZE, WALL_METRIC_FONT_SIZE } from "../type-ramp.js";
+import { WALL_CARD_GLYPH_SIZE, WallCardStat } from "./card-vocab.js";
 
 function Metric({
   icon,
   label,
   value,
-  colorVar,
+  color,
 }: {
   icon: ReactNode;
   label: string;
   value: number;
-  colorVar: string;
+  color: string;
 }) {
   return (
-    <div>
-      <div className="flex items-center gap-1.5">
-        <span className="flex" style={{ color: `var(${colorVar})` }}>
-          {icon}
-        </span>
-        <p
-          className="font-semibold uppercase text-muted"
-          style={{ fontSize: WALL_LABEL_FONT_SIZE }}
-        >
-          {label}
-        </p>
-      </div>
-      <p className="font-display font-bold" style={{ fontSize: WALL_METRIC_FONT_SIZE }}>
-        {value}
-      </p>
-    </div>
+    <WallCardStat icon={icon} label={label} color={color}>
+      {value}
+    </WallCardStat>
   );
 }
 
@@ -50,21 +40,39 @@ export function StatusWidget() {
   const summary = useMemo(() => summarizeDevices(devices, now), [devices, now]);
 
   return (
-    <Grid columns={2} gap={2} className="h-full">
-      <Metric icon={<Power size={15} />} label="On" value={summary.on} colorVar="--on" />
+    <div
+      style={{
+        display: "grid",
+        height: "100%",
+        gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+        alignContent: "center",
+        gap: "var(--hearth-space-4)",
+      }}
+    >
       <Metric
-        icon={<Unplug size={15} />}
+        icon={<Power size={WALL_CARD_GLYPH_SIZE} />}
+        label="On"
+        value={summary.on}
+        color="var(--hearth-on)"
+      />
+      <Metric
+        icon={<Unplug size={WALL_CARD_GLYPH_SIZE} />}
         label="Unreachable"
         value={summary.unreachable}
-        colorVar="--danger"
+        color="var(--hearth-danger)"
       />
-      <Metric icon={<Clock size={15} />} label="Stale" value={summary.stale} colorVar="--stale" />
       <Metric
-        icon={<Activity size={15} />}
+        icon={<Clock size={WALL_CARD_GLYPH_SIZE} />}
+        label="Stale"
+        value={summary.stale}
+        color="var(--hearth-stale)"
+      />
+      <Metric
+        icon={<Activity size={WALL_CARD_GLYPH_SIZE} />}
         label="Motion"
         value={summary.motion}
-        colorVar="--info"
+        color="var(--hearth-info)"
       />
-    </Grid>
+    </div>
   );
 }

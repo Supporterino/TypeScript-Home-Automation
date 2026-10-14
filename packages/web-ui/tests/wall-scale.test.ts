@@ -1,11 +1,13 @@
 import { describe, expect, it } from "bun:test";
 import { WALL_MIN_TOUCH_TARGET } from "../src/app/wall/registry.js";
 import { deviceTilePresentation, deviceTileText, wallTileMetrics } from "../src/app/wall/scale.js";
+import { WALL_TYPE_RAMP } from "../src/app/wall/type-ramp.js";
 
 // Pure size-token logic — no DOM. The wall tile's interactive controls must
-// meet the wall minimum; the default token must not change the tile's
-// existing rendering (design.md D7; task 5.11). The presentation helper is the
-// single availability decision for the wall's affordances (design.md D4).
+// meet the wall minimum and its text must meet Hearth's re-derived body floor;
+// the default token must not change the tile's existing rendering (design.md
+// D3, D4, D7). The presentation helper is the single availability decision for
+// the wall's affordances (design.md D4).
 
 /** The numeric value of an `<n>px` token. */
 function px(token: string): number {
@@ -47,10 +49,10 @@ describe("deviceTilePresentation", () => {
 });
 
 describe("deviceTileText", () => {
-  it("keeps every wall chip and body size at or above the 16px floor", () => {
+  it("keeps every wall chip and body size at or above the Hearth body floor", () => {
     const wall = deviceTileText("wall");
-    expect(px(wall.chip)).toBeGreaterThanOrEqual(16);
-    expect(px(wall.body)).toBeGreaterThanOrEqual(16);
+    expect(px(wall.chip)).toBeGreaterThanOrEqual(WALL_TYPE_RAMP.bodyMin);
+    expect(px(wall.body)).toBeGreaterThanOrEqual(WALL_TYPE_RAMP.bodyMin);
   });
 
   it("reproduces the dashboard tile's existing sizes exactly", () => {

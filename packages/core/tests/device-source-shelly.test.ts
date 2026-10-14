@@ -809,6 +809,76 @@ describe("ShellyDeviceSource", () => {
     source.stop();
   });
 
+  it("dispatches each declared transport action to the matching Cover RPC", async () => {
+    const routed = createRoutedHttpMock({ components: [makeComponent("cover:0")] });
+    const shelly = new ShellyService(routed.http, mqttMock.mqtt, logger);
+    shelly.register("blinds", "192.168.1.60", "cover");
+    const source = new ShellyDeviceSource(shelly, mqttMock.mqtt, logger, 1_000_000);
+    await source.start();
+
+    // The transport is declared write-only — a command with no reported-state
+    // counterpart — so a capability-driven consumer never renders a readout for
+    // it, yet validation and dispatch still accept every declared value.
+    const declared = source.get("blinds")?.capabilities.find((c) => c.property === "action");
+    expect(declared?.access).toEqual({ readable: false, writable: true });
+
+    const transports: [string, string][] = [
+      ["open", "Cover.Open"],
+      ["close", "Cover.Close"],
+      ["stop", "Cover.Stop"],
+    ];
+    for (const [action, method] of transports) {
+      routed.calls.length = 0;
+      expect(await source.command("blinds", { action })).toEqual({ status: "ok" });
+      const rpcCalls = routed.calls.filter((url) => url.includes("/rpc/"));
+      expect(rpcCalls).toHaveLength(1);
+      expect(rpcCalls[0]).toContain(method);
+    }
+
+    source.stop();
+  });
+
+  it("now accepts a stop command for a cover, which it previously rejected (design.md D15)", async () => {
+    const routed = createRoutedHttpMock({ components: [makeComponent("cover:0")] });
+    const shelly = new ShellyService(routed.http, mqttMock.mqtt, logger);
+    shelly.register("blinds", "192.168.1.60", "cover");
+    const source = new ShellyDeviceSource(shelly, mqttMock.mqtt, logger, 1_000_000);
+    await source.start();
+
+    // The descriptor declares the transport, so a client that knows only the
+    // source-neutral vocabulary can express stop instead of the command being
+    // rejected as an unknown property. It is declared write-only: a command the
+    // device does not report, only accepts.
+    const action = source.get("blinds")?.capabilities.find((c) => c.property === "action");
+    expect(action?.access).toEqual({ readable: false, writable: true });
+    expect(action?.permittedValues).toContain("stop");
+
+    routed.calls.length = 0;
+    expect(await source.command("blinds", { action: "stop" })).toEqual({ status: "ok" });
+    expect(routed.calls.some((url) => url.includes("Cover.Stop"))).toBe(true);
+
+    source.stop();
+  });
+
+  it("rejects an undeclared transport action with a descriptive error and sends nothing", async () => {
+    const routed = createRoutedHttpMock({ components: [makeComponent("cover:0")] });
+    const shelly = new ShellyService(routed.http, mqttMock.mqtt, logger);
+    shelly.register("blinds", "192.168.1.60", "cover");
+    const source = new ShellyDeviceSource(shelly, mqttMock.mqtt, logger, 1_000_000);
+    await source.start();
+
+    routed.calls.length = 0;
+    const outcome = await source.command("blinds", { action: "raise" });
+
+    expect(outcome.status).toBe("invalid");
+    expect((outcome as { error: string }).error).toBe(
+      'Property "action" value "raise" is not one of the permitted values: open, close, stop',
+    );
+    expect(routed.calls).toHaveLength(0);
+
+    source.stop();
+  });
+
   it("returns not_found for an unknown device id", async () => {
     const http = createMockHttp({});
     const shelly = new ShellyService(http, mqttMock.mqtt, logger);

@@ -1,10 +1,14 @@
 /**
- * The wall weather widget (specs/wall-display "Widget Catalog", "An
- * unconfigured widget is contained"; design.md D13). Reads `GET /api/weather`;
- * when the service is unconfigured it reports that inside its own area and
- * never throws, so the rest of the profile keeps rendering. An ambient readout:
- * chrome-less, condition conveyed by icon shape plus description text — never
- * colour alone.
+ * The wall weather widget (design.md D11; specs/wall-display "Widget Catalog",
+ * "An unconfigured widget is contained"). Reads `GET /api/weather`; when the
+ * service is unconfigured it reports that inside its own area and never throws,
+ * so the rest of the profile keeps rendering.
+ *
+ * Composed on the shared Hearth card vocabulary (design.md D11): the condition
+ * glyph leads, the condition description is the title, and the temperature is
+ * the metric; humidity, wind, and the forecast sit below in the body tier.
+ * Ambient — chrome-less, condition conveyed by icon shape plus description
+ * text, never colour alone.
  */
 import type { WeatherData, WeatherUnavailable } from "@ts-ha/shared";
 import {
@@ -22,13 +26,17 @@ import { fetchWeather } from "../../api.js";
 import { useDataStore } from "../../lib/data-store.js";
 import { unavailableMessage, windDirectionLabel } from "../../lib/weather.js";
 import { Spinner } from "../../ui/index.js";
-import { WALL_BODY_FONT_SIZE, WALL_LABEL_FONT_SIZE, WALL_METRIC_FONT_SIZE } from "../type-ramp.js";
+import { WALL_BODY_FONT_SIZE, WALL_LABEL_FONT_SIZE } from "../type-ramp.js";
+import { WALL_CARD_GLYPH_SIZE, WallCardGlyph, WallCardStat } from "./card-vocab.js";
 import { weatherForecastDays, weatherWidgetState } from "./weather-model.js";
 
 type WeatherCondition = WeatherData["current"]["condition"];
 
 /** Condition is conveyed by icon shape plus description text, never color alone (MASTER "State Encoding Rule"). */
-function conditionIcon(condition: WeatherCondition, size = 40): ReactNode {
+function conditionIcon(
+  condition: WeatherCondition,
+  size: number = WALL_CARD_GLYPH_SIZE,
+): ReactNode {
   switch (condition) {
     case "clear":
       return <Sun size={size} />;
@@ -48,6 +56,24 @@ function conditionIcon(condition: WeatherCondition, size = 40): ReactNode {
     default:
       return <Cloud size={size} />;
   }
+}
+
+/** A secondary condition reading (humidity, wind) in the vocabulary's body tier. */
+function WeatherDetail({ icon, children }: { icon: ReactNode; children: ReactNode }) {
+  return (
+    <span
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: "var(--hearth-space-2)",
+        color: "var(--hearth-text-muted)",
+        fontSize: WALL_BODY_FONT_SIZE,
+      }}
+    >
+      <WallCardGlyph>{icon}</WallCardGlyph>
+      {children}
+    </span>
+  );
 }
 
 export function WeatherWidget() {
@@ -81,7 +107,9 @@ export function WeatherWidget() {
 
   if (state.status === "loading") {
     return (
-      <div className="flex h-full items-center justify-center">
+      <div
+        style={{ display: "flex", height: "100%", alignItems: "center", justifyContent: "center" }}
+      >
         <Spinner />
       </div>
     );
@@ -90,10 +118,17 @@ export function WeatherWidget() {
   if (state.status === "error") {
     return (
       <div role="alert">
-        <p className="font-semibold text-danger" style={{ fontSize: WALL_LABEL_FONT_SIZE }}>
+        <p
+          style={{
+            margin: 0,
+            fontWeight: "var(--hearth-weight-semibold)",
+            color: "var(--hearth-danger)",
+            fontSize: WALL_LABEL_FONT_SIZE,
+          }}
+        >
           Weather unavailable
         </p>
-        <p className="text-muted" style={{ fontSize: WALL_BODY_FONT_SIZE }}>
+        <p style={{ margin: 0, color: "var(--hearth-text-muted)", fontSize: WALL_BODY_FONT_SIZE }}>
           {state.message}
         </p>
       </div>
@@ -103,10 +138,17 @@ export function WeatherWidget() {
   if (state.status === "unavailable") {
     return (
       <div data-testid="wall-weather-unconfigured">
-        <p className="font-semibold text-muted" style={{ fontSize: WALL_LABEL_FONT_SIZE }}>
+        <p
+          style={{
+            margin: 0,
+            fontWeight: "var(--hearth-weight-semibold)",
+            color: "var(--hearth-text-muted)",
+            fontSize: WALL_LABEL_FONT_SIZE,
+          }}
+        >
           Weather is not configured
         </p>
-        <p className="text-muted" style={{ fontSize: WALL_BODY_FONT_SIZE }}>
+        <p style={{ margin: 0, color: "var(--hearth-text-muted)", fontSize: WALL_BODY_FONT_SIZE }}>
           {unavailableMessage(state.reason)}
         </p>
       </div>
@@ -117,53 +159,71 @@ export function WeatherWidget() {
   const forecast = weatherForecastDays(state.data);
 
   return (
-    <div className="flex h-full flex-col justify-center gap-3">
-      <div className="flex flex-wrap items-center gap-3">
-        <span className="flex text-info" aria-hidden>
-          {conditionIcon(current.condition)}
-        </span>
-        <div className="flex flex-col">
-          <p
-            className="font-display font-bold"
-            style={{ fontSize: WALL_METRIC_FONT_SIZE, lineHeight: 1.1 }}
-          >
-            {Math.round(current.temperature)}°C
-          </p>
-          <p className="capitalize text-muted" style={{ fontSize: WALL_LABEL_FONT_SIZE }}>
-            {current.description}
-          </p>
-        </div>
-      </div>
+    <div
+      style={{
+        display: "flex",
+        height: "100%",
+        flexDirection: "column",
+        justifyContent: "center",
+        gap: "var(--hearth-space-3)",
+      }}
+    >
+      <WallCardStat
+        icon={conditionIcon(current.condition)}
+        label={current.description}
+        color="var(--hearth-info)"
+      >
+        {Math.round(current.temperature)}°C
+      </WallCardStat>
 
-      <div className="flex flex-wrap items-center gap-4">
-        <div className="flex items-center gap-1">
-          <Droplet size={18} aria-hidden />
-          <p className="font-mono" style={{ fontSize: WALL_BODY_FONT_SIZE }}>
-            {Math.round(current.humidity)}%
-          </p>
-        </div>
-        <div className="flex items-center gap-1">
-          <Wind size={18} aria-hidden />
-          <p className="font-mono" style={{ fontSize: WALL_BODY_FONT_SIZE }}>
-            {current.wind.speed.toFixed(1)} m/s {windDirectionLabel(current.wind.direction)}
-          </p>
-        </div>
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          alignItems: "center",
+          gap: "var(--hearth-space-4)",
+        }}
+      >
+        <WeatherDetail icon={<Droplet size={18} />}>{Math.round(current.humidity)}%</WeatherDetail>
+        <WeatherDetail icon={<Wind size={18} />}>
+          {current.wind.speed.toFixed(1)} m/s {windDirectionLabel(current.wind.direction)}
+        </WeatherDetail>
       </div>
 
       {forecast.length > 0 && (
         <div
-          className="flex flex-wrap items-start justify-between gap-3"
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "flex-start",
+            justifyContent: "space-between",
+            gap: "var(--hearth-space-3)",
+          }}
           data-testid="wall-weather-forecast"
         >
           {forecast.map((day) => (
-            <div key={day.date} className="flex flex-col items-center gap-0.5">
-              <p className="font-mono text-muted" style={{ fontSize: WALL_BODY_FONT_SIZE }}>
+            <div
+              key={day.date}
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: "var(--hearth-space-1)",
+              }}
+            >
+              <p
+                style={{
+                  margin: 0,
+                  color: "var(--hearth-text-muted)",
+                  fontSize: WALL_BODY_FONT_SIZE,
+                }}
+              >
                 {day.label}
               </p>
-              <span className="flex text-info" aria-hidden>
+              <WallCardGlyph color="var(--hearth-info)">
                 {conditionIcon(day.condition, 26)}
-              </span>
-              <p className="font-mono" style={{ fontSize: WALL_BODY_FONT_SIZE }}>
+              </WallCardGlyph>
+              <p style={{ margin: 0, fontSize: WALL_BODY_FONT_SIZE }}>
                 {day.high}°/{day.low}°
               </p>
             </div>

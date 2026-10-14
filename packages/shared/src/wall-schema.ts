@@ -25,6 +25,7 @@ import {
   type WallProfileConfig,
   type WallRoomWidgetConfig,
   type WallSceneWidgetConfig,
+  type WallTemperatureWidgetConfig,
   type WallTitledWidgetConfig,
   type WallWidget,
   type WallWidgetType,
@@ -53,6 +54,12 @@ export const wallSceneWidgetConfigSchema: z.ZodType<WallSceneWidgetConfig> = z.o
   label: z.string().optional(),
 });
 
+/** The temperature widget's config: a required sensor device and an optional title. */
+export const wallTemperatureWidgetConfigSchema: z.ZodType<WallTemperatureWidgetConfig> = z.object({
+  qualifiedId: z.string().min(1),
+  title: z.string().optional(),
+});
+
 /** The favorites widget's config: no required options. */
 export const wallFavoritesWidgetConfigSchema: z.ZodType<WallFavoritesWidgetConfig> = z.record(
   z.string(),
@@ -72,6 +79,7 @@ export const WALL_WIDGET_CONFIG_SCHEMAS: Readonly<Record<WallWidgetType, z.ZodTy
   status: wallTitledWidgetConfigSchema,
   room: wallRoomWidgetConfigSchema,
   device: wallDeviceWidgetConfigSchema,
+  temperature: wallTemperatureWidgetConfigSchema,
   scene: wallSceneWidgetConfigSchema,
   favorites: wallFavoritesWidgetConfigSchema,
 };

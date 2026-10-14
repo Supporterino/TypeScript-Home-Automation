@@ -27,12 +27,12 @@ export interface WallTileMetrics {
 
 /**
  * Interactive-control metrics for a size token. The `wall` token enlarges the
- * control to meet {@link WALL_MIN_TOUCH_TARGET}; the default reproduces the
- * tile's existing desktop scale.
+ * control to meet {@link WALL_MIN_TOUCH_TARGET} (the kiosk-class 56 px target,
+ * design.md D4); the default reproduces the tile's existing desktop scale.
  */
 export function wallTileMetrics(size: WallTileSize = "default"): WallTileMetrics {
   if (size === "wall") {
-    return { control: 48, controlSize: "lg", padding: "md" };
+    return { control: 56, controlSize: "lg", padding: "md" };
   }
   return { control: 32, controlSize: "sm", padding: "sm" };
 }
@@ -86,8 +86,8 @@ export function deviceTilePresentation(size: WallTileSize = "default"): DeviceTi
 
 /**
  * A device tile's text sizes, keyed by size token (design-system/ts-ha/pages/
- * wall.md "Type ramp"). The wall token meets the distance-readable 16px floor;
- * the dashboard token reproduces the tile's existing sizes exactly.
+ * wall.md "Type ramp"). The wall token meets the distance-readable Hearth body
+ * floor; the dashboard token reproduces the tile's existing sizes exactly.
  */
 export interface DeviceTileText {
   /** The on/off and observation chip label size. */
@@ -98,8 +98,8 @@ export interface DeviceTileText {
 
 /**
  * Resolves the tile's text sizes. The dashboard token returns the existing
- * sizes unchanged (`xs` chip, `sm` body); the wall token returns the
- * ramp's 16px body floor, so no wall tile text falls below it.
+ * sizes unchanged (`xs` chip, `sm` body); the wall token returns the Hearth
+ * ramp's own body floor, so no wall tile text falls below it.
  */
 export function deviceTileText(size: WallTileSize = "default"): DeviceTileText {
   if (size === "wall") {

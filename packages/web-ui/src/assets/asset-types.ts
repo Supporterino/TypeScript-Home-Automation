@@ -30,9 +30,11 @@ export interface BuiltAsset {
    */
   gzipBase64: string;
   /**
-   * Whether this asset is required for first paint. `false` for chunks only
-   * reachable via a dynamic import, which are excluded from the first-paint
-   * budget and not fetched until the feature that imports them is opened.
+   * Whether this asset is required for first paint. `false` for chunks and
+   * copied `file` assets only reachable via a dynamic import (the lazy route
+   * chunks and any on-demand feature stylesheet), which are excluded from the
+   * first-paint budget and not fetched until the feature that imports them is
+   * opened.
    */
   firstPaint: boolean;
 }
