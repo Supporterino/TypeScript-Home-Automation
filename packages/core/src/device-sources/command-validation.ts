@@ -7,7 +7,11 @@
  * property or an out-of-range/non-permitted value is rejected with a
  * descriptive error and never reaches a device (task 7.3).
  */
-import type { Capability, CapabilityValueType } from "@ts-ha/shared";
+import {
+  type Capability,
+  type CapabilityValueType,
+  composeBooleanCapabilityValue,
+} from "@ts-ha/shared";
 
 export type CommandValidationResult = { ok: true } | { ok: false; error: string };
 
@@ -146,4 +150,38 @@ export function validateCommand(
   }
 
   return { ok: true };
+}
+
+/**
+ * Translates a validated command's properties into the target capability's
+ * declared encoding immediately before dispatch (design.md D2; device-sources
+ * "Command Dispatch").
+ *
+ * Validation deliberately accepts a real boolean for a boolean property, so a
+ * caller with no source-specific knowledge — HomeKit, an automation, the API,
+ * the CLI — stays able to actuate any device. The dispatch step is where that
+ * accepted form is made right: a real boolean is composed into the
+ * capability's declared on/off value through the single shared rule
+ * (`composeBooleanCapabilityValue`), so a device is never sent a value its
+ * declared capability does not express for the requested state. A value
+ * already in the declared encoding, and any non-boolean property, is left
+ * untouched.
+ */
+export function translateCommandProperties(
+  capabilities: Capability[],
+  properties: Record<string, unknown>,
+): Record<string, unknown> {
+  const byProperty = flattenByProperty(capabilities);
+  const translated: Record<string, unknown> = {};
+
+  for (const [key, value] of Object.entries(properties)) {
+    const capability = byProperty.get(key);
+    if (capability?.valueType === "boolean" && typeof value === "boolean") {
+      translated[key] = composeBooleanCapabilityValue(capability, value);
+      continue;
+    }
+    translated[key] = value;
+  }
+
+  return translated;
 }

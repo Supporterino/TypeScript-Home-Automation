@@ -306,6 +306,18 @@ by refetching that device rather than discarding the event; an incremental delta
 for an unknown device carries no full descriptor and would otherwise be dropped
 silently.
 
+Descriptors ingested from either path MUST carry the complete declared
+capability contract through to the components that consume them. A device
+snapshot is not a display payload that may be narrowed: every field a control
+reads from a capability — including the values a boolean property declares for on
+and off — MUST survive ingestion, so a device the dashboard learns about only
+from the stream is exactly as controllable as one it read from the read
+endpoints. A normaliser that reconstructs a capability from a fixed field list
+MUST NOT omit a field the declared contract requires, and MUST be extended rather
+than left behind whenever that contract grows; a declared field silently dropped
+at ingestion is indistinguishable to the user from a device that does not support
+it.
+
 The dashboard MUST NOT poll all endpoints on a fixed interval while the event
 stream is healthy.
 
@@ -332,6 +344,21 @@ stream is healthy.
 
 - **WHEN** a device event arrives for an identifier the dashboard does not hold
 - **THEN** the dashboard refetches that device instead of discarding the event
+
+#### Scenario: A device known only from the stream keeps its declared encoding
+
+- **WHEN** the dashboard learns a device from the event stream's snapshot, or
+  from a recovery refetch, whose boolean capability declares string on and off
+  values
+- **THEN** the capability the controls receive still declares those values, and a
+  control for that device reads and composes through them
+
+#### Scenario: Ingestion does not narrow a declared capability
+
+- **WHEN** a descriptor is ingested from the read endpoints or from the event
+  stream
+- **THEN** every field the declared capability contract requires survives
+  ingestion, so the same device is controllable whichever path it arrived on
 
 ### Requirement: Asset Delivery and Caching
 
@@ -1054,8 +1081,15 @@ wrong state and the command has no effect, which is the most damaging failure a
 control surface can have because nothing appears to be broken.
 
 Actuating a control MUST reflect the requested change immediately and MUST
-reconcile against the device's reported state when it arrives. A command that is
-rejected or fails MUST revert the displayed value and surface the error.
+reconcile against the device's reported state when it arrives. A report
+reconciles a control when it carries the value the newest request for that
+property asked for; a report carrying any other value is a report for a
+superseded or ignored command and MUST NOT move the control, which its deadline
+reverts instead. A device report carries no request identity, so the value it
+carries is the only thing that can attribute it to a request; reconciling on a
+report regardless of its value would let the confirmation for an intermediate
+value move a control the user has already moved past. A command that is rejected
+or fails MUST revert the displayed value and surface the error.
 
 A command that is neither confirmed nor rejected MUST also revert, after a
 deadline derived from the device's own observation mode. A push-backed device
@@ -1075,13 +1109,23 @@ the interface MUST coalesce the adjustment so that at most one command per devic
 and property is outstanding at a time, issuing the latest requested value once
 the previous command settles.
 
-Only the most recent outstanding command for a device and property MUST own the
-revert deadline and the reconciliation. Without this, a confirmation for a
-superseded intermediate value arrives after the user has moved on and snaps the
-control back to a value nobody asked for, and each intermediate command restarts
-a deadline that then applies to the wrong value. The visible failure is a control
-that jumps backwards during or just after a drag, which reads as the device
-refusing the command.
+Only the most recent request for a device and property MUST own the revert
+deadline and the reconciliation. Without this, a confirmation for a superseded
+intermediate value arrives after the user has moved on and snaps the control back
+to a value nobody asked for, and each intermediate command restarts a deadline
+that then applies to the wrong value. The visible failure is a control that jumps
+backwards during or just after a drag, which reads as the device refusing the
+command.
+
+Owning the deadline and the reconciliation MUST NOT depend on the transport
+request still being in flight. A command is accepted or rejected long before its
+deadline expires and before the device reports back; a request that has been
+dispatched successfully, or has been superseded by the coalescer, MUST still
+revert at its deadline when nothing confirms it and MUST still yield to a
+device report when it carries the value the request asked for. An accepted
+response is not a confirmation of
+physical device state, and treating it as one leaves the control displaying a
+value the device never reached, with no error and no reversion.
 
 Coalescing MUST apply per device and property, so adjusting one device does not
 delay a command to another.
@@ -1138,6 +1182,30 @@ device is unreachable.
 - **WHEN** a command to a push-backed device is neither confirmed nor rejected
 - **THEN** the displayed value reverts after a short deadline rather than
   remaining optimistically wrong
+
+#### Scenario: An accepted command that the device ignores still reverts
+
+- **WHEN** a toggle has been dispatched and accepted, the device has not reported
+  a matching state, and the deadline for the device's own observation mode
+  elapses
+- **THEN** the control returns to the device's last reported state, so a command
+  the device never carried out cannot remain displayed as applied
+
+#### Scenario: A device report still reconciles a settled command
+
+- **WHEN** a device reports, for a property, the value a settled command for that
+  property asked for
+- **THEN** the control follows the device's report rather than holding the
+  optimistic value
+
+#### Scenario: A report for a superseded value does not move the control
+
+- **WHEN** the device reports a value for a property while a newer request for
+  that property is awaiting confirmation, and the reported value is not the value
+  the newer request asked for
+- **THEN** the control continues to show the newer request's requested value and
+  is reverted only by that request's deadline if the device never reports that
+  value
 
 #### Scenario: A polled device is given until its next refresh
 

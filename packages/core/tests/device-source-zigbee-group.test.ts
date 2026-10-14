@@ -358,6 +358,30 @@ describe("ZigbeeGroupDeviceSource", () => {
     ]);
   });
 
+  it("dispatches an accepted real boolean in the group capability's declared encoding (task 3.2)", async () => {
+    seedMembers();
+    seedGroup();
+    source.start();
+
+    const outcome = await source.command("5", { state: true });
+    expect(outcome).toEqual({ status: "ok" });
+    expect(mqttMock.publishToDeviceCalls).toEqual([
+      { friendlyName: "lamp", payload: { state: "ON" } },
+    ]);
+  });
+
+  it("dispatches a real false as the group capability's declared off value", async () => {
+    seedMembers();
+    seedGroup();
+    source.start();
+
+    const outcome = await source.command("5", { state: false });
+    expect(outcome).toEqual({ status: "ok" });
+    expect(mqttMock.publishToDeviceCalls).toEqual([
+      { friendlyName: "lamp", payload: { state: "OFF" } },
+    ]);
+  });
+
   it("rejects an undeclared property with nothing published", async () => {
     seedMembers();
     seedGroup();

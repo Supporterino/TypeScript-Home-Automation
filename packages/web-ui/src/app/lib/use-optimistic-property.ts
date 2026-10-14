@@ -14,6 +14,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { DeviceObservation } from "../types.js";
 import { coalescingKey } from "./command-coalescing.js";
 import { useDataStore } from "./data-store.js";
+import { reportedValueConfirms } from "./reconcile-report.js";
 import { computeRevertDeadlineMs } from "./revert-deadline.js";
 
 export interface OptimisticProperty<T> {
@@ -56,12 +57,14 @@ export function useOptimisticDeviceProperty<T = unknown>(
   const observationRef = useRef(observation);
   observationRef.current = observation;
 
-  // Reconciliation: a device_state event confirming this property clears
-  // the override — but only if this override's token is still the latest
-  // for this key, so a confirmation for a superseded intermediate value
-  // (already replaced by a newer request) is ignored rather than snapping
-  // the control backwards (design.md D31 "A superseded confirmation does
-  // not move the control").
+  // Reconciliation: a device_state event carries no request token, so the
+  // only thing that can attribute it to a request is the value it carries
+  // (design.md D3). A report confirms the override — and clears it — only
+  // when its value equals the value the newest request asked for; a report
+  // carrying any other value belongs to a superseded or ignored command and
+  // is left to the override's deadline rather than snapping the control
+  // backwards (design.md D31 "A superseded confirmation does not move the
+  // control").
   useEffect(() => {
     return subscribe((event) => {
       if (event.category !== "device_state") return;
@@ -69,11 +72,11 @@ export function useOptimisticDeviceProperty<T = unknown>(
       if (!(property in event.properties)) return;
       setOverride((current) => {
         if (!current) return current;
-        if (!commandCoalescer.isLatest(key, current.token)) return current;
+        if (!reportedValueConfirms(current.value, event.properties[property])) return current;
         return null;
       });
     });
-  }, [subscribe, commandCoalescer, qualifiedId, property, key]);
+  }, [subscribe, qualifiedId, property]);
 
   const setValue = useCallback(
     (next: T) => {
@@ -104,7 +107,7 @@ export function useOptimisticDeviceProperty<T = unknown>(
       setTimeout(() => {
         setOverride((current) => {
           if (!current || current.token !== token) return current;
-          if (!commandCoalescer.isLatest(key, token)) return current;
+          if (commandCoalescer.isSuperseded(key, token)) return current;
           return null; // Neither confirmed nor rejected within the deadline — revert.
         });
       }, deadlineMs);

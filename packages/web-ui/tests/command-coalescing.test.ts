@@ -88,6 +88,50 @@ describe("CommandCoalescer", () => {
     expect(coalescer.isLatest("dev:pos", tokenB)).toBe(true);
   });
 
+  it("does not treat the newest request as superseded once its send settles", async () => {
+    const first = deferred<"ok">();
+    const coalescer = new CommandCoalescer<number, "ok">(() => first.promise);
+
+    const token = coalescer.request("dev:pos", 1, () => {});
+    expect(coalescer.isSuperseded("dev:pos", token)).toBe(false);
+
+    first.resolve("ok");
+    await Promise.resolve();
+    await Promise.resolve();
+
+    // The send has settled and the token is no longer outstanding, but no newer
+    // request has arrived, so the newest request is still not superseded.
+    expect(coalescer.isSuperseded("dev:pos", token)).toBe(false);
+  });
+
+  it("marks a request superseded while its successor is queued", () => {
+    const first = deferred<"ok">();
+    const coalescer = new CommandCoalescer<number, "ok">(() => first.promise);
+
+    const tokenA = coalescer.request("dev:pos", 1, () => {});
+    const tokenB = coalescer.request("dev:pos", 2, () => {});
+
+    expect(coalescer.isSuperseded("dev:pos", tokenA)).toBe(true);
+    expect(coalescer.isSuperseded("dev:pos", tokenB)).toBe(false);
+  });
+
+  it("keeps a superseded request superseded after its successor settles", async () => {
+    const first = deferred<"ok">();
+    const coalescer = new CommandCoalescer<number, "ok">(() => first.promise);
+
+    const tokenA = coalescer.request("dev:pos", 1, () => {});
+    const tokenB = coalescer.request("dev:pos", 2, () => {});
+    expect(coalescer.isSuperseded("dev:pos", tokenA)).toBe(true);
+
+    first.resolve("ok");
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(coalescer.isSuperseded("dev:pos", tokenA)).toBe(true);
+    expect(coalescer.isSuperseded("dev:pos", tokenB)).toBe(false);
+  });
+
   it("does not block a different device or property", async () => {
     const first = deferred<"ok">();
     const sentKeys: string[] = [];

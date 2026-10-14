@@ -134,6 +134,16 @@ export function normalizeHomekitStatus(value: unknown): HomekitStatus | null {
 
 const VALUE_TYPES = new Set(["boolean", "numeric", "enum", "text", "composite", "list", "unknown"]);
 
+/**
+ * Whether a declared on/off value is usable as a boolean capability's
+ * encoding. A malformed declaration degrades to absent, so a reader falls back
+ * to the `?? true` / `?? false` default (`@ts-ha/shared` `capabilities.ts`)
+ * exactly as for a capability that declares nothing.
+ */
+function isBooleanEncodingValue(value: unknown): value is string | number | boolean {
+  return typeof value === "string" || typeof value === "number" || typeof value === "boolean";
+}
+
 export function normalizeCapability(value: unknown): Capability {
   const rec = asRecord(value);
   const accessRec = asRecord(rec.access);
@@ -165,6 +175,10 @@ export function normalizeCapability(value: unknown): Capability {
       (v): v is string | number => typeof v === "string" || typeof v === "number",
     );
   }
+  // The declared boolean encoding is part of the contract a control reads and
+  // composes through (design.md D1); ingestion must not narrow it away.
+  if (isBooleanEncodingValue(rec.valueOn)) capability.valueOn = rec.valueOn;
+  if (isBooleanEncodingValue(rec.valueOff)) capability.valueOff = rec.valueOff;
   if (Array.isArray(rec.features)) {
     capability.features = rec.features.map(normalizeCapability);
   }
@@ -175,6 +189,41 @@ export function normalizeCapability(value: unknown): Capability {
 export function normalizeCapabilities(value: unknown): Capability[] {
   return asArray<unknown>(value).map(normalizeCapability);
 }
+
+// ── Capability contract drift pin (design.md D1) ─────────────────────────────
+//
+// `normalizeCapability` rebuilds a `Capability` from an explicit field list, so
+// the contract is declared a second time here and can drift from
+// `@ts-ha/shared`'s `Capability`. This module is compiled by
+// `tsc -p src/app/tsconfig.json` — the test tree is not — so the pin lives here,
+// not in a test: adding a field to the contract, or dropping one, makes one of
+// the aliases below non-`never` and fails the typecheck gate rather than
+// silently dropping the field. Type-only; it emits no runtime code.
+
+type CapabilityContractKey =
+  | "kind"
+  | "name"
+  | "property"
+  | "access"
+  | "valueType"
+  | "range"
+  | "step"
+  | "permittedValues"
+  | "unit"
+  | "features"
+  | "valueOn"
+  | "valueOff"
+  | "raw";
+
+/** Compiles only while both arguments are `never`: the key set matches exactly. */
+type CapabilityContractPinned<Added extends never, Dropped extends never> = [Added, Dropped];
+
+type _CapabilityContractKeyAdded = Exclude<keyof Capability, CapabilityContractKey>;
+type _CapabilityContractKeyDropped = Exclude<CapabilityContractKey, keyof Capability>;
+type _CapabilityContractPin = CapabilityContractPinned<
+  _CapabilityContractKeyAdded,
+  _CapabilityContractKeyDropped
+>;
 
 // ── Device descriptors (design.md D2) ───────────────────────────────────────
 

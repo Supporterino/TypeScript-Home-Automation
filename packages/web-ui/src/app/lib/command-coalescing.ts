@@ -35,6 +35,13 @@ interface PendingEntry<TValue, TResult> {
 export class CommandCoalescer<TValue, TResult> {
   private readonly outstandingToken = new Map<string, symbol>();
   private readonly pendingByKey = new Map<string, PendingEntry<TValue, TResult>>();
+  /**
+   * The most recent token requested for each key, never deleted. Unlike
+   * {@link outstandingToken} (cleared once a send settles), it remembers the
+   * newest request so a settled request can still be told apart from a
+   * superseded one (design.md D3).
+   */
+  private readonly latestTokenByKey = new Map<string, symbol>();
 
   constructor(private readonly send: (key: string, value: TValue) => Promise<TResult>) {}
 
@@ -53,9 +60,9 @@ export class CommandCoalescer<TValue, TResult> {
    * is ever sent.
    *
    * Returns a token identifying this request; compare it against
-   * {@link isLatest} before reconciling anything against a later response,
-   * since a response can arrive after this request has already been
-   * superseded.
+   * {@link isSuperseded} (or {@link isLatest}) before reconciling anything
+   * against a later response, since a response can arrive after this request
+   * has already been superseded.
    */
   request(
     key: string,
@@ -63,6 +70,7 @@ export class CommandCoalescer<TValue, TResult> {
     onSettle: (outcome: CoalescedOutcome<TResult>) => void,
   ): symbol {
     const token = Symbol(key);
+    this.latestTokenByKey.set(key, token);
 
     if (!this.outstandingToken.has(key)) {
       this.outstandingToken.set(key, token);
@@ -76,11 +84,40 @@ export class CommandCoalescer<TValue, TResult> {
     return token;
   }
 
-  /** Whether `token` is still the most recent request for `key` — in flight or queued. */
+  /**
+   * Whether `token` is the request that currently *owns* `key` — the queued
+   * follow-up if one exists, else the in-flight one — and so is `false` once its
+   * send settles and `advance()` deletes its token.
+   *
+   * Retained per design.md D3 as the "what it already serves" companion to
+   * {@link isSuperseded}: the two answer different questions, and this one's
+   * answer is deliberately history-dependent. After the optimistic layer moved
+   * to {@link isSuperseded} it is exercised by tests in
+   * `command-coalescing.test.ts` rather than by that hook — kept honest here so
+   * a future reader knows why both predicates exist.
+   */
   isLatest(key: string, token: symbol): boolean {
     const queued = this.pendingByKey.get(key);
     if (queued) return queued.token === token;
     return this.outstandingToken.get(key) === token;
+  }
+
+  /**
+   * Whether a newer request for `key` has arrived than `token` — that is,
+   * whether this request has been superseded, whether or not it was ever sent.
+   *
+   * This answers a different question from {@link isLatest}. `isLatest` reports
+   * which request currently *owns* the key (the queued follow-up, else the
+   * in-flight one) and is `false` for a request once its send settles and
+   * `advance()` deletes its token. This predicate asks only whether some later
+   * request for the same key exists, so it does **not** become `false` merely
+   * because the send settled. The optimistic layer needs that history-stable
+   * question: a command that has already settled must still own its revert
+   * deadline and still yield to a device report (design.md D3).
+   */
+  isSuperseded(key: string, token: symbol): boolean {
+    const latest = this.latestTokenByKey.get(key);
+    return latest !== undefined && latest !== token;
   }
 
   /** Whether any request for `key` is currently in flight. */

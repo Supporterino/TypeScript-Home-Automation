@@ -1,6 +1,9 @@
 import { describe, expect, it } from "bun:test";
 import type { Capability } from "@ts-ha/shared";
-import { validateCommand } from "../src/device-sources/command-validation.js";
+import {
+  translateCommandProperties,
+  validateCommand,
+} from "../src/device-sources/command-validation.js";
 
 // A Zigbee-shaped capability set: an on/off switch (Z2M "state" convention)
 // plus a ranged numeric brightness and an enumerated effect — enough to
@@ -180,5 +183,67 @@ describe("validateCommand — Shelly switch (declared real-boolean encoding)", (
     const result = validateCommand(SHELLY_SWITCH_CAPABILITIES, { on: "ON" });
     expect(result.ok).toBe(false);
     expect((result as { error: string }).error).toMatch(/must be a boolean/);
+  });
+});
+
+// A top-level boolean property (not nested in a container), used to confirm
+// the translation resolves capabilities at every depth.
+const TOP_LEVEL_POWER: Capability[] = [
+  {
+    kind: "binary",
+    property: "power",
+    access: { readable: true, writable: true },
+    valueType: "boolean",
+    valueOn: "on",
+    valueOff: "off",
+  },
+];
+
+describe("translateCommandProperties — dispatch encoding (design D2)", () => {
+  it("composes a real boolean into the declared on value of a nested capability", () => {
+    expect(translateCommandProperties(ZIGBEE_LIGHT_CAPABILITIES, { state: true })).toEqual({
+      state: "ON",
+    });
+  });
+
+  it("composes a real boolean into the capability's declared off value", () => {
+    expect(translateCommandProperties(ZIGBEE_LIGHT_CAPABILITIES, { state: false })).toEqual({
+      state: "OFF",
+    });
+  });
+
+  it("resolves a top-level boolean property too", () => {
+    expect(translateCommandProperties(TOP_LEVEL_POWER, { power: true })).toEqual({ power: "on" });
+  });
+
+  it("leaves a value already in the declared encoding untouched", () => {
+    expect(translateCommandProperties(ZIGBEE_LIGHT_CAPABILITIES, { state: "OFF" })).toEqual({
+      state: "OFF",
+    });
+  });
+
+  it("leaves a real boolean untouched when the capability declares no encoding", () => {
+    expect(translateCommandProperties(STATE_TOGGLE_CAPABILITIES, { on: true })).toEqual({
+      on: true,
+    });
+    expect(translateCommandProperties(STATE_TOGGLE_CAPABILITIES, { on: false })).toEqual({
+      on: false,
+    });
+  });
+
+  it("leaves a non-boolean property untouched", () => {
+    expect(translateCommandProperties(ZIGBEE_LIGHT_CAPABILITIES, { brightness: 120 })).toEqual({
+      brightness: 120,
+    });
+  });
+
+  it("translates only the boolean property of a mixed command", () => {
+    expect(
+      translateCommandProperties(ZIGBEE_LIGHT_CAPABILITIES, { state: true, brightness: 120 }),
+    ).toEqual({ state: "ON", brightness: 120 });
+  });
+
+  it("returns an empty object for an empty command", () => {
+    expect(translateCommandProperties(ZIGBEE_LIGHT_CAPABILITIES, {})).toEqual({});
   });
 });

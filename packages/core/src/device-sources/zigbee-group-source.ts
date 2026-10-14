@@ -22,7 +22,11 @@ import type {
   DeviceStateChangeHandler,
   GroupsChangedHandler,
 } from "../zigbee/device-registry.js";
-import { flattenByProperty, validateCommand } from "./command-validation.js";
+import {
+  flattenByProperty,
+  translateCommandProperties,
+  validateCommand,
+} from "./command-validation.js";
 import type {
   DeviceChangeListener,
   DeviceCommandOutcome,
@@ -348,8 +352,14 @@ export class ZigbeeGroupDeviceSource implements DeviceSource {
 
     // Published once, to the group's friendly name — Zigbee2MQTT multicasts
     // it to every member (design.md D5). No optimistic state write: the
-    // group's reported state stays derived from what members report.
-    this.mqtt.publishToDevice(group.friendly_name, properties);
+    // group's reported state stays derived from what members report. The
+    // request may carry a real boolean, which validation accepts for a
+    // boolean property; translate it into the capability's declared encoding
+    // before it reaches the transport (design.md D2).
+    this.mqtt.publishToDevice(
+      group.friendly_name,
+      translateCommandProperties(capabilities, properties),
+    );
     return { status: "ok" };
   }
 

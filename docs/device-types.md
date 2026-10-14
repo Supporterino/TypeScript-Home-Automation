@@ -98,6 +98,14 @@ import type { PhilipsHueMotionSensorPayload } from "@ts-ha/core";
 | `PowerOnBehavior` | `"on"` \| `"off"` \| `"previous"` |
 | `ColorXY` | `{ x: number; y: number }` |
 
+A capability declares its on/off encoding through `valueOn`/`valueOff`;
+`DeviceState` is the Zigbee payload type whose `"ON"`/`"OFF"` values those
+mirror. The device command endpoints
+(`POST /api/device-catalog/:qualifiedId/command` and
+`POST /api/rooms/:id/command`) accept a boolean property as either a real
+boolean or the capability's declared value, and dispatch it in that declared
+encoding — see [API Reference](api-reference.md#httpserver).
+
 ---
 
 ## Adding device types

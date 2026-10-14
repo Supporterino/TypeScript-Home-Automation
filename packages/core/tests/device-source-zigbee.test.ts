@@ -166,6 +166,32 @@ describe("ZigbeeDeviceSource", () => {
     ]);
   });
 
+  it("dispatches an accepted real boolean in the capability's declared encoding (design D2; task 3.2)", async () => {
+    mqttMock.emit("zigbee2mqtt/bridge/devices", [
+      makeDevice("lamp", "0xaaa", [STATE_EXPOSE]),
+    ] as unknown as Record<string, unknown>);
+    source.start();
+
+    const outcome = await source.command("0xaaa", { state: true });
+    expect(outcome).toEqual({ status: "ok" });
+    expect(mqttMock.publishToDeviceCalls).toEqual([
+      { friendlyName: "lamp", payload: { state: "ON" } },
+    ]);
+  });
+
+  it("dispatches a real false as the capability's declared off value", async () => {
+    mqttMock.emit("zigbee2mqtt/bridge/devices", [
+      makeDevice("lamp", "0xaaa", [STATE_EXPOSE]),
+    ] as unknown as Record<string, unknown>);
+    source.start();
+
+    const outcome = await source.command("0xaaa", { state: false });
+    expect(outcome).toEqual({ status: "ok" });
+    expect(mqttMock.publishToDeviceCalls).toEqual([
+      { friendlyName: "lamp", payload: { state: "OFF" } },
+    ]);
+  });
+
   it("rejects a command naming an unknown property without publishing", async () => {
     mqttMock.emit("zigbee2mqtt/bridge/devices", [
       makeDevice("lamp", "0xaaa", [STATE_EXPOSE]),

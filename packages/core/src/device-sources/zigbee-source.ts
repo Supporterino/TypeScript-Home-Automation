@@ -19,7 +19,7 @@ import type {
   DeviceRemovedHandler,
   DeviceStateChangeHandler,
 } from "../zigbee/device-registry.js";
-import { validateCommand } from "./command-validation.js";
+import { translateCommandProperties, validateCommand } from "./command-validation.js";
 import type {
   DeviceChangeListener,
   DeviceCommandOutcome,
@@ -100,10 +100,17 @@ export class ZigbeeDeviceSource implements DeviceSource {
     const device = this.findByIeeeAddress(deviceId);
     if (!device) return { status: "not_found" };
 
-    const validation = validateCommand(device.definition?.exposes ?? [], properties);
+    const capabilities = device.definition?.exposes ?? [];
+    const validation = validateCommand(capabilities, properties);
     if (!validation.ok) return { status: "invalid", error: validation.error };
 
-    this.mqtt.publishToDevice(device.friendly_name, properties);
+    // The request may carry a real boolean, which validation accepts for a
+    // boolean property; translate it into the capability's declared encoding
+    // before it reaches the transport (design.md D2).
+    this.mqtt.publishToDevice(
+      device.friendly_name,
+      translateCommandProperties(capabilities, properties),
+    );
     return { status: "ok" };
   }
 

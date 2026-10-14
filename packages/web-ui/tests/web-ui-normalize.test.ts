@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import type { Capability } from "../src/app/types.js";
 import {
   asArray,
   asBoolean,
@@ -204,6 +205,44 @@ describe("normalizeCapability", () => {
     expect(result.range).toEqual({ min: undefined, max: 100 });
     expect(result.permittedValues).toEqual(["a", 1]);
   });
+
+  it("carries a declared string encoding through", () => {
+    const result = normalizeCapability({
+      kind: "switch",
+      property: "state",
+      access: { readable: true, writable: true },
+      valueType: "boolean",
+      valueOn: "ON",
+      valueOff: "OFF",
+    });
+    expect(result.valueOn).toBe("ON");
+    expect(result.valueOff).toBe("OFF");
+  });
+
+  it("carries a numeric or boolean declaration through", () => {
+    expect(normalizeCapability({ valueOn: 1, valueOff: 0 })).toMatchObject({
+      valueOn: 1,
+      valueOff: 0,
+    });
+    expect(normalizeCapability({ valueOn: true, valueOff: false })).toMatchObject({
+      valueOn: true,
+      valueOff: false,
+    });
+  });
+
+  it("leaves a malformed declaration absent rather than narrowing it", () => {
+    const object = normalizeCapability({ valueOn: { nested: true }, valueOff: { nested: true } });
+    expect(object.valueOn).toBeUndefined();
+    expect(object.valueOff).toBeUndefined();
+
+    const array = normalizeCapability({ valueOn: ["ON"], valueOff: ["OFF"] });
+    expect(array.valueOn).toBeUndefined();
+    expect(array.valueOff).toBeUndefined();
+
+    const nul = normalizeCapability({ valueOn: null, valueOff: null });
+    expect(nul.valueOn).toBeUndefined();
+    expect(nul.valueOff).toBeUndefined();
+  });
 });
 
 describe("normalizeCapabilities", () => {
@@ -305,6 +344,34 @@ describe("normalizeRoomWithMembers", () => {
       ],
     });
     expect(result.members[0]?.device?.qualifiedId).toBe("zigbee:0xabc");
+  });
+
+  it("retains a member device's declared encoding", () => {
+    const result = normalizeRoomWithMembers({
+      id: "r1",
+      name: "Living Room",
+      members: [
+        {
+          qualifiedId: "zigbee:0xabc",
+          available: true,
+          device: {
+            qualifiedId: "zigbee:0xabc",
+            capabilities: [
+              {
+                kind: "switch",
+                property: "state",
+                access: { readable: true, writable: true },
+                valueType: "boolean",
+                valueOn: "ON",
+                valueOff: "OFF",
+              },
+            ],
+          },
+        },
+      ],
+    });
+    expect(result.members[0]?.device?.capabilities[0]?.valueOn).toBe("ON");
+    expect(result.members[0]?.device?.capabilities[0]?.valueOff).toBe("OFF");
   });
 });
 
@@ -439,6 +506,29 @@ describe("normalizeStreamEvent", () => {
     }
   });
 
+  it("retains a boolean capability's declared encoding through a device_appeared frame", () => {
+    const result = normalizeStreamEvent({
+      category: "device_appeared",
+      device: {
+        qualifiedId: "zigbee:0xabc",
+        capabilities: [
+          {
+            kind: "switch",
+            property: "state",
+            access: { readable: true, writable: true },
+            valueType: "boolean",
+            valueOn: "ON",
+            valueOff: "OFF",
+          },
+        ],
+      },
+    });
+    expect(result.category).toBe("device_appeared");
+    if (result.category !== "device_appeared") throw new Error("expected device_appeared");
+    expect(result.device.capabilities[0]?.valueOn).toBe("ON");
+    expect(result.device.capabilities[0]?.valueOff).toBe("OFF");
+  });
+
   it("normalises a device_disappeared event", () => {
     expect(normalizeStreamEvent({ category: "device_disappeared", qualifiedId: "x" })).toEqual({
       category: "device_disappeared",
@@ -534,5 +624,88 @@ describe("normalizeStreamEvent", () => {
       name: "kitchen",
       kind: "updated",
     });
+  });
+});
+
+// ── Capability contract drift guard ────────────────────────────────────────
+//
+// The normaliser rebuilds a capability from a fixed field list, so the shape is
+// declared a second time in the client. The compile-time half of the guard — an
+// exhaustive pin of `Capability`'s key set — lives in `src/app/utils/normalize.ts`:
+// that is the module the drift would occur in, and the one `tsc -p
+// src/app/tsconfig.json` actually compiles (this file is not typechecked). The
+// runtime half below asserts that every declared field `normalizeCapability`
+// carries survives a stream-ingested descriptor, including inside nested
+// `features` (design.md D1, D5). `raw` is deliberately not carried by
+// `normalizeCapability` — it is the opaque, untouched source entry a
+// consumer may fall back to, and no client view reads it — so it is excluded
+// here rather than ingested.
+
+const REQUIRED_CAPABILITY_FIELDS = [
+  "kind",
+  "name",
+  "property",
+  "valueType",
+  "access",
+  "unit",
+  "permittedValues",
+  "range",
+  "step",
+  "valueOn",
+  "valueOff",
+] as const satisfies readonly (keyof Capability)[];
+
+function expectCapabilityFieldsPreserved(source: Capability, ingested: Capability): void {
+  for (const field of REQUIRED_CAPABILITY_FIELDS) {
+    expect(ingested[field]).toEqual(source[field]);
+  }
+}
+
+describe("capability contract drift guard", () => {
+  it("keeps every declared capability field through a stream-ingested descriptor", () => {
+    const nested: Capability = {
+      kind: "switch",
+      name: "Nested switch",
+      property: "state",
+      access: { readable: true, writable: true },
+      valueType: "boolean",
+      range: { min: 0, max: 1 },
+      step: 1,
+      permittedValues: ["ON", "OFF"],
+      unit: "%",
+      valueOn: "ON",
+      valueOff: "OFF",
+    };
+    const source: Capability = {
+      kind: "light",
+      name: "Lamp",
+      property: "state",
+      access: { readable: true, writable: true },
+      valueType: "boolean",
+      range: { min: 0, max: 100 },
+      step: 1,
+      permittedValues: ["ON", "OFF"],
+      unit: "%",
+      valueOn: "ON",
+      valueOff: "OFF",
+      features: [nested],
+    };
+
+    const event = normalizeStreamEvent({
+      category: "device_appeared",
+      device: { qualifiedId: "zigbee:0xabc", capabilities: [source] },
+    });
+    expect(event.category).toBe("device_appeared");
+    if (event.category !== "device_appeared") throw new Error("expected device_appeared");
+
+    const ingested = event.device.capabilities[0];
+    expect(ingested).toBeDefined();
+    if (!ingested) throw new Error("expected an ingested capability");
+    expectCapabilityFieldsPreserved(source, ingested);
+
+    const ingestedNested = ingested.features?.[0];
+    expect(ingestedNested).toBeDefined();
+    if (!ingestedNested) throw new Error("expected an ingested nested feature");
+    expectCapabilityFieldsPreserved(nested, ingestedNested);
   });
 });
