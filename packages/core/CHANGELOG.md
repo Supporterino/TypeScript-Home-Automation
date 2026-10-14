@@ -1,5 +1,12 @@
 # @ts-ha/core
 
+## 0.5.1
+
+### Patch Changes
+
+- Updated dependencies [d9d2f64]
+  - @ts-ha/shared@0.6.0
+
 ## 0.5.0
 
 ### Minor Changes
