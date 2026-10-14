@@ -4,6 +4,7 @@ import {
   WALL_GRID_MAX_ROWS,
   WALL_PROFILE_VERSION,
   WALL_WIDGET_TYPES,
+  WALL_ZONE_MAX_LENGTH,
   type WallProfile,
 } from "../src/index.js";
 import { wallProfileSchema, wallWidgetSchema } from "../src/wall-schema.js";
@@ -41,6 +42,8 @@ describe("wall grid constants", () => {
       "temperature",
       "status",
       "scene",
+      "link",
+      "devices",
     ]);
   });
 });
@@ -111,6 +114,206 @@ describe("wallWidgetSchema", () => {
 
   it("rejects a widget missing its placement", () => {
     const result = wallWidgetSchema.safeParse({ id: "a", type: "clock", config: {}, x: 0, y: 0 });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("wall zone label", () => {
+  it("accepts a widget carrying a zone label", () => {
+    const result = wallWidgetSchema.safeParse({
+      id: "lamp",
+      type: "device",
+      config: { qualifiedId: "light.lamp" },
+      x: 0,
+      y: 0,
+      w: 2,
+      h: 2,
+      zone: "Kitchen",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.zone).toBe("Kitchen");
+  });
+
+  it("trims surrounding whitespace from a zone label", () => {
+    const result = wallWidgetSchema.safeParse({
+      id: "lamp",
+      type: "device",
+      config: { qualifiedId: "light.lamp" },
+      x: 0,
+      y: 0,
+      w: 2,
+      h: 2,
+      zone: "  Kitchen  ",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.zone).toBe("Kitchen");
+  });
+
+  it("accepts a widget that declares no zone", () => {
+    const result = wallWidgetSchema.safeParse({
+      id: "clock",
+      type: "clock",
+      config: {},
+      x: 0,
+      y: 0,
+      w: 6,
+      h: 2,
+    });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.zone).toBeUndefined();
+  });
+
+  it("rejects an empty or whitespace-only zone label", () => {
+    for (const zone of ["", "   "]) {
+      const result = wallWidgetSchema.safeParse({
+        id: "clock",
+        type: "clock",
+        config: {},
+        x: 0,
+        y: 0,
+        w: 6,
+        h: 2,
+        zone,
+      });
+      expect(result.success).toBe(false);
+    }
+  });
+
+  it("rejects a zone label that is not a string", () => {
+    const result = wallWidgetSchema.safeParse({
+      id: "clock",
+      type: "clock",
+      config: {},
+      x: 0,
+      y: 0,
+      w: 6,
+      h: 2,
+      zone: 42,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a zone label longer than the bound", () => {
+    const result = wallWidgetSchema.safeParse({
+      id: "clock",
+      type: "clock",
+      config: {},
+      x: 0,
+      y: 0,
+      w: 6,
+      h: 2,
+      zone: "z".repeat(WALL_ZONE_MAX_LENGTH + 1),
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("wall link and device-grid configs", () => {
+  it("accepts a link widget with a target and a label", () => {
+    const result = wallWidgetSchema.safeParse({
+      id: "to-kitchen",
+      type: "link",
+      config: { target: "Kitchen", label: "Kitchen" },
+      x: 0,
+      y: 0,
+      w: 2,
+      h: 2,
+    });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.config).toMatchObject({ target: "Kitchen" });
+  });
+
+  it("accepts a link widget carrying only its target", () => {
+    const result = wallWidgetSchema.safeParse({
+      id: "to-kitchen",
+      type: "link",
+      config: { target: "Kitchen" },
+      x: 0,
+      y: 0,
+      w: 2,
+      h: 2,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects a link widget with no target", () => {
+    const result = wallWidgetSchema.safeParse({
+      id: "to-nowhere",
+      type: "link",
+      config: { label: "Nowhere" },
+      x: 0,
+      y: 0,
+      w: 2,
+      h: 2,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a link widget with an empty target", () => {
+    const result = wallWidgetSchema.safeParse({
+      id: "to-nowhere",
+      type: "link",
+      config: { target: "" },
+      x: 0,
+      y: 0,
+      w: 2,
+      h: 2,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts a device grid with an explicit selection", () => {
+    const result = wallWidgetSchema.safeParse({
+      id: "lights",
+      type: "devices",
+      config: { qualifiedIds: ["light.a", "light.b"], title: "Lights" },
+      x: 0,
+      y: 0,
+      w: 6,
+      h: 4,
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.config).toMatchObject({ qualifiedIds: ["light.a", "light.b"] });
+    }
+  });
+
+  it("rejects a device grid with an empty selection", () => {
+    const result = wallWidgetSchema.safeParse({
+      id: "lights",
+      type: "devices",
+      config: { qualifiedIds: [] },
+      x: 0,
+      y: 0,
+      w: 6,
+      h: 4,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a device grid whose selection is not a list of device ids", () => {
+    const result = wallWidgetSchema.safeParse({
+      id: "lights",
+      type: "devices",
+      config: { qualifiedIds: "light.a" },
+      x: 0,
+      y: 0,
+      w: 6,
+      h: 4,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a device grid with a blank device id", () => {
+    const result = wallWidgetSchema.safeParse({
+      id: "lights",
+      type: "devices",
+      config: { qualifiedIds: [""] },
+      x: 0,
+      y: 0,
+      w: 6,
+      h: 4,
+    });
     expect(result.success).toBe(false);
   });
 });
@@ -213,6 +416,74 @@ describe("wallProfileSchema", () => {
             { id: "b", type: "weather", x: 0, y: 0, w: 6, h: 2 },
           ],
         },
+      },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("still parses a profile written before zones existed", () => {
+    const result = wallProfileSchema.safeParse(validProfile());
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.config.widgets.every((widget) => widget.zone === undefined)).toBe(true);
+    }
+  });
+
+  it("accepts a profile whose widgets share a zone label", () => {
+    const result = wallProfileSchema.safeParse({
+      ...validProfile(),
+      config: {
+        widgets: [
+          { id: "a", type: "clock", config: {}, x: 0, y: 0, w: 4, h: 2, zone: "Climate" },
+          { id: "b", type: "weather", config: {}, x: 4, y: 0, w: 4, h: 2, zone: "Climate" },
+        ],
+      },
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.config.widgets.map((widget) => widget.zone)).toEqual([
+        "Climate",
+        "Climate",
+      ]);
+    }
+  });
+
+  it("rejects a profile whose widget carries an empty zone label", () => {
+    const result = wallProfileSchema.safeParse({
+      ...validProfile(),
+      config: {
+        widgets: [{ id: "a", type: "clock", config: {}, x: 0, y: 0, w: 4, h: 2, zone: "  " }],
+      },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts a profile containing the link and device-grid widgets", () => {
+    const result = wallProfileSchema.safeParse({
+      ...validProfile(),
+      config: {
+        widgets: [
+          { id: "to-kitchen", type: "link", config: { target: "Kitchen" }, x: 0, y: 0, w: 3, h: 2 },
+          {
+            id: "lights",
+            type: "devices",
+            config: { qualifiedIds: ["light.a", "light.b"] },
+            x: 3,
+            y: 0,
+            w: 6,
+            h: 4,
+          },
+        ],
+      },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects a profile containing an unconfigured link widget", () => {
+    const result = wallProfileSchema.safeParse({
+      ...validProfile(),
+      config: {
+        widgets: [{ id: "to-kitchen", type: "link", config: {}, x: 0, y: 0, w: 3, h: 2 }],
       },
     });
     expect(result.success).toBe(false);

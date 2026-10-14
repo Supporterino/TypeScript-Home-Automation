@@ -1,14 +1,21 @@
 /**
- * The wall-profile editor (design.md D5, D9, D13; specs/wall-display "Wall
- * Configuration Editor"). A full-screen overlay within `/walls` — the wall is
- * not a route the editor lives under — that composes a profile's base layout:
- * add a widget of any registered type, configure it, and move/resize it with
- * cell/span controls that are keyboard-accessible and need no drag. Every
- * mutation is delegated to the pure `model.ts` functions, and saving funnels
- * through `submitProfileDraft`, so an invalid draft is rejected inline and
- * never reaches the API. The widget list is a responsive grid (two columns on a
- * wide viewport, one narrow) so a long profile stays scannable without
- * horizontal scrolling; each widget stays a self-contained card.
+ * The wall-profile editor (design.md D5, D9, D13; wall-zones-and-fit D7;
+ * specs/wall-display "Wall Configuration Editor"). A full-screen overlay within
+ * `/walls` — the wall is not a route the editor lives under — that composes a
+ * profile's base layout: add a widget of any registered type, configure it, give
+ * it a zone, and move/resize it with cell/span controls that are
+ * keyboard-accessible and need no drag. Every mutation is delegated to the pure
+ * `model.ts` functions, and saving funnels through `submitProfileDraft`, so an
+ * invalid or unfittable draft is rejected inline and never reaches the API. The
+ * widget list is a responsive grid (two columns on a wide viewport, one narrow)
+ * so a long profile stays scannable without horizontal scrolling; each widget
+ * stays a self-contained card.
+ *
+ * The draft preview (design.md D7) shows the composition at the wall's target
+ * panel aspect ratio — the zones, the fit verdict, and how many pages each device
+ * grid would present — as a wireframe drawn with the editor's own Lumen tokens.
+ * It renders no wall widget and reaches no Hearth, so the wall's stylesheet stays
+ * on demand.
  *
  * Loaded only inside the lazy `wall` chunk; imported only from `WallsView`.
  * Rebuilt on the Lumen primitive layer (`ui/*`) and `lucide-react`.
@@ -45,15 +52,20 @@ import {
   Spinner,
   Stack,
 } from "../../ui/index.js";
+import { widgetTitle } from "../frame.js";
 import { getWidgetDescriptor, WALL_WIDGET_REGISTRY } from "../registry.js";
+import { WALL_TITLE_ROWS } from "../span.js";
 import {
   addWidget,
   removeWidget,
+  setLinkTarget,
   submitProfileDraft,
   updateWidgetConfig,
   updateWidgetPlacement,
+  updateWidgetZone,
   type WallPlacement,
 } from "./model.js";
+import { resolveDraftPreview, type WallDraftPreview, type WallPreviewBox } from "./preview.js";
 import { WidgetConfigFields } from "./WidgetConfigFields.js";
 
 export interface WallEditorProps {
@@ -77,6 +89,12 @@ export function WallEditor({ profile, onClose, onSaved }: WallEditorProps) {
   const [addType, setAddType] = useState<WallWidgetType>("clock");
   const [errors, setErrors] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+
+  // The draft's preview at the wall's target panel (design.md D7): the zones, the
+  // fit verdict, and each device grid's page count — the same pure resolver the
+  // wall renders through.
+  const preview = resolveDraftPreview(config);
+  const unfittable = preview.fit === "tooLarge";
 
   function edit(next: WallProfileConfig) {
     setConfig(next);
@@ -142,7 +160,7 @@ export function WallEditor({ profile, onClose, onSaved }: WallEditorProps) {
               <Button variant="ghost" onClick={onClose}>
                 Cancel
               </Button>
-              <Button onClick={() => void handleSave()} disabled={saving}>
+              <Button onClick={() => void handleSave()} disabled={saving || unfittable}>
                 {saving && <Spinner size={14} label="" />}
                 Save
               </Button>
@@ -153,6 +171,8 @@ export function WallEditor({ profile, onClose, onSaved }: WallEditorProps) {
             {config.widgets.length} widget{config.widgets.length === 1 ? "" : "s"} on a{" "}
             {WALL_GRID_COLUMNS}-column grid. Move and resize with the cell controls — no dragging.
           </p>
+
+          <DraftPreviewCard preview={preview} unfittable={unfittable} />
 
           {errors.length > 0 && (
             <div role="alert" className="rounded-tile border border-danger/40 bg-danger/10 p-3">
@@ -181,6 +201,8 @@ export function WallEditor({ profile, onClose, onSaved }: WallEditorProps) {
                     edit(updateWidgetPlacement(config, widget.id, placement))
                   }
                   onConfig={(patch) => edit(updateWidgetConfig(config, widget.id, patch))}
+                  onZoneChange={(zone) => edit(updateWidgetZone(config, widget.id, zone))}
+                  onLinkTarget={(target) => edit(setLinkTarget(config, widget.id, target))}
                   onRemove={() => edit(removeWidget(config, widget.id))}
                 />
               ))}
@@ -196,7 +218,108 @@ interface WidgetRowProps {
   widget: WallWidget;
   onPlacement: (placement: WallPlacement) => void;
   onConfig: (patch: Record<string, unknown>) => void;
+  onZoneChange: (zone: string) => void;
+  onLinkTarget: (target: string) => void;
   onRemove: () => void;
+}
+
+/** A box's position and size as percentages of the panel's own dimensions. */
+function boxStyle(box: WallPreviewBox, panel: WallDraftPreview["panel"]) {
+  return {
+    left: `${(box.left / panel.width) * 100}%`,
+    top: `${(box.top / panel.height) * 100}%`,
+    width: `${(box.width / panel.width) * 100}%`,
+    height: `${(box.height / panel.height) * 100}%`,
+  };
+}
+
+/**
+ * The draft's wireframe: the panel's own pixel geometry, drawn with the editor's
+ * Lumen tokens. It renders no wall widget and reaches no Hearth, so the wall's
+ * stylesheet stays on demand (design.md D7) — a wireframe, not the Hearth paint.
+ * A composition taller than the panel is clipped by the panel's own edge, which
+ * is what the fit verdict beside it reports.
+ */
+function DraftWireframe({ preview }: { preview: WallDraftPreview }) {
+  return (
+    <div
+      role="img"
+      aria-label={preview.summary}
+      className="relative w-full overflow-hidden rounded-tile border border-hairline bg-canvas"
+      style={{ aspectRatio: `${preview.panel.width} / ${preview.panel.height}` }}
+    >
+      {preview.bands.map((band) => (
+        <div
+          key={`zone:${band.zone}`}
+          className="absolute rounded-[0.25rem] border border-dashed border-hairline bg-surface/60"
+          style={boxStyle(band.box, preview.panel)}
+        >
+          <span className="absolute left-1 top-0.5 text-[0.625rem] font-semibold uppercase tracking-wide text-muted">
+            {band.zone}
+          </span>
+        </div>
+      ))}
+      {preview.widgets.map((widget) => (
+        <div
+          key={widget.id}
+          title={`${widget.label} (${widget.id})`}
+          className="absolute flex items-center justify-center overflow-hidden rounded-[0.25rem] border border-hairline bg-surface-2 px-1 text-[0.625rem] font-medium text-muted"
+          style={boxStyle(widget.box, preview.panel)}
+        >
+          <span className="truncate">{widget.label}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * The draft preview panel (design.md D7; specs/wall-display "The draft is
+ * presented at panel size", "An unfittable draft is refused"): the composition at
+ * the wall's target panel aspect ratio, the fit verdict, and each device grid's
+ * page count, so an author authors against the panel rather than the viewport.
+ */
+function DraftPreviewCard({
+  preview,
+  unfittable,
+}: {
+  preview: WallDraftPreview;
+  unfittable: boolean;
+}) {
+  return (
+    <Card>
+      <Stack gap={3}>
+        <Row justify="between" align="center" gap={2} wrap>
+          <span className="text-sm font-semibold text-ink">Draft preview</span>
+          <Badge tone={unfittable ? "danger" : "neutral"}>
+            {unfittable
+              ? "Does not fit the panel"
+              : `${preview.panel.width} × ${preview.panel.height}`}
+          </Badge>
+        </Row>
+
+        <p className={unfittable ? "text-sm text-danger" : "text-sm text-muted"}>
+          {preview.summary}
+          {unfittable && " Saving is blocked until the draft fits."}
+        </p>
+
+        <DraftWireframe preview={preview} />
+
+        {preview.bands.length > 0 && (
+          <p className="text-xs text-muted">
+            Zones: {preview.bands.map((band) => band.zone).join(", ")}
+          </p>
+        )}
+
+        {preview.grids.map((grid) => (
+          <p key={grid.widgetId} className="text-xs text-muted">
+            {grid.widgetId}: {grid.devices} device{grid.devices === 1 ? "" : "s"} on {grid.pages}{" "}
+            page{grid.pages === 1 ? "" : "s"}
+          </p>
+        ))}
+      </Stack>
+    </Card>
+  );
 }
 
 /** A labelled whole-cell number input; the placement controls never require a drag. */
@@ -229,8 +352,19 @@ function CellField({
   );
 }
 
-function WidgetRow({ widget, onPlacement, onConfig, onRemove }: WidgetRowProps) {
+function WidgetRow({
+  widget,
+  onPlacement,
+  onConfig,
+  onZoneChange,
+  onLinkTarget,
+  onRemove,
+}: WidgetRowProps) {
   const descriptor = getWidgetDescriptor(widget.type);
+  // A configured title is drawn inside the same cell, so a titled card's own
+  // height floor is a row above the type's minimum (the field's `min` matches the
+  // clamp and the draft validator, both of which enforce the same floor).
+  const minHeight = descriptor.min.h + (widgetTitle(widget) !== null ? WALL_TITLE_ROWS : 0);
 
   return (
     <Card>
@@ -269,14 +403,19 @@ function WidgetRow({ widget, onPlacement, onConfig, onRemove }: WidgetRowProps) 
           />
           <CellField
             label="Height"
-            min={descriptor.min.h}
+            min={minHeight}
             max={descriptor.max.h}
             value={widget.h}
             onChange={(value) => onPlacement({ ...widget, h: value })}
           />
         </Grid>
 
-        <WidgetConfigFields widget={widget} onChange={onConfig} />
+        <WidgetConfigFields
+          widget={widget}
+          onChange={onConfig}
+          onZoneChange={onZoneChange}
+          onLinkTarget={onLinkTarget}
+        />
       </Stack>
     </Card>
   );

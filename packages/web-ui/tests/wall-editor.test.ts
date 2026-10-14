@@ -5,20 +5,39 @@ import {
   WALL_GRID_COLUMNS,
   WALL_GRID_MAX_ROWS,
   WALL_WIDGET_TYPES,
+  WALL_ZONE_MAX_LENGTH,
   type WallProfileConfig,
   type WallWidget,
   type WallWidgetType,
 } from "@ts-ha/shared";
 import {
   addWidget,
+  draftFitError,
   emptyWallConfig,
   removeWidget,
+  setLinkTarget,
   submitProfileDraft,
+  toggleDeviceSelection,
   updateWidgetConfig,
   updateWidgetPlacement,
+  updateWidgetZone,
   validateProfileDraft,
 } from "../src/app/wall/editor/model.js";
-import { getWidgetDescriptor } from "../src/app/wall/registry.js";
+import { getWidgetDescriptor, WALL_WIDGET_REGISTRY } from "../src/app/wall/registry.js";
+import { WALL_TITLE_ROWS } from "../src/app/wall/span.js";
+
+const EDITOR_DIR = join(import.meta.dir, "..", "src/app/wall/editor");
+const EDITOR = join(EDITOR_DIR, "WallEditor.tsx");
+const FIELDS = join(EDITOR_DIR, "WidgetConfigFields.tsx");
+
+/** Removes block and line comments so prose is not mistaken for markup. */
+function stripComments(content: string): string {
+  return content.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
+}
+
+async function readSource(path: string): Promise<string> {
+  return stripComments(await readFile(path, "utf8"));
+}
 
 function single(type: WallWidgetType): WallProfileConfig {
   return addWidget(emptyWallConfig(), type);
@@ -44,15 +63,17 @@ function widgetAt(config: WallProfileConfig, index: number): WallWidget {
 
 /**
  * The minimum type-specific config a widget needs to validate. A room, device,
- * temperature, or scene widget cannot be meaningful without a selection, so the
- * profile validator rejects it until one is made — the editor surfaces exactly
- * that.
+ * temperature, scene, link, or device-grid widget cannot be meaningful without a
+ * selection, so the profile validator rejects it until one is made — the editor
+ * surfaces exactly that.
  */
 const REQUIRED_CONFIG: Partial<Record<WallWidgetType, Record<string, unknown>>> = {
   room: { roomId: "kitchen" },
   device: { qualifiedId: "zigbee:0xabc123" },
   temperature: { qualifiedId: "zigbee:0xabc123" },
   scene: { automation: "good-night", label: "Good night" },
+  link: { target: "Kitchen" },
+  devices: { qualifiedIds: ["zigbee:0xabc123"] },
 };
 
 function withRequiredConfig(config: WallProfileConfig): WallProfileConfig {
@@ -222,6 +243,63 @@ describe("validateProfileDraft", () => {
     if (!result.ok) expect(result.errors.join(" ")).toContain("overlap");
   });
 
+  it("normalises a legacy sub-minimum placement when the widget is edited", () => {
+    // A profile authored before a type's minimum was re-derived can still carry a
+    // shorter or narrower cell. The wall explains such a cell rather than clipping
+    // it (`composesMinimumSpan`), and the editor's own clamp is what brings the
+    // widget up to a renderable size on the next edit — deliberate, not
+    // accidental: the draft validator surfaces any resulting overlap or overflow.
+    const legacy: WallProfileConfig = {
+      widgets: [{ id: "fav", type: "favorites", config: {}, x: 0, y: 0, w: 6, h: 3 }],
+    };
+    const edited = updateWidgetPlacement(legacy, "fav", { x: 1, y: 0, w: 6, h: 3 });
+
+    expect(widgetAt(edited, 0).h).toBe(WALL_WIDGET_REGISTRY.favorites.min.h);
+    expect(widgetAt(edited, 0).h).toBeGreaterThan(3);
+
+    // The width axis is normalised the same way, because the guard explains a
+    // sub-minimum width too — a narrow cell reflows a card's control or tile row.
+    const narrow: WallProfileConfig = {
+      widgets: [{ id: "fav", type: "favorites", config: {}, x: 0, y: 0, w: 1, h: 6 }],
+    };
+    const widened = updateWidgetPlacement(narrow, "fav", { x: 0, y: 0, w: 1, h: 6 });
+
+    expect(widgetAt(widened, 0).w).toBe(WALL_WIDGET_REGISTRY.favorites.min.w);
+    expect(WALL_WIDGET_REGISTRY.favorites.min.w).toBeGreaterThan(1);
+  });
+
+  it("floors a titled card one row above the type's minimum", () => {
+    // A configured title is drawn above the renderer inside the same cell, so the
+    // placement control cannot leave a titled card below the box its type's
+    // minimum span needs — the same title block the render guard subtracts.
+    const descriptor = WALL_WIDGET_REGISTRY.device;
+    const config = withRequiredConfig(single("device"));
+    const id = widgetAt(config, 0).id;
+    const titled = updateWidgetConfig(config, id, { title: "Hallway" });
+
+    const resized = updateWidgetPlacement(titled, id, {
+      x: 0,
+      y: 0,
+      w: descriptor.min.w,
+      h: descriptor.min.h,
+    });
+    const widget = widgetAt(resized, 0);
+
+    expect(widget.h).toBe(descriptor.min.h + WALL_TITLE_ROWS);
+    expect(widget.w).toBe(descriptor.min.w);
+    expect(validateProfileDraft("titled", resized).ok).toBe(true);
+
+    // The same card without a title keeps the type's own floor, so the clause is
+    // the title's, not a blanket raise.
+    const untitled = updateWidgetPlacement(config, id, {
+      x: 0,
+      y: 0,
+      w: descriptor.min.w,
+      h: descriptor.min.h,
+    });
+    expect(widgetAt(untitled, 0).h).toBe(descriptor.min.h);
+  });
+
   it("rejects an out-of-grid placement", () => {
     const config: WallProfileConfig = {
       widgets: [{ id: "a", type: "clock", config: {}, x: 10, y: 0, w: 4, h: 2 }],
@@ -238,6 +316,52 @@ describe("validateProfileDraft", () => {
     const result = validateProfileDraft("unknown-type", config);
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.errors.join(" ").toLowerCase()).toContain("invalid");
+  });
+
+  it("reports the titled sub-minimum case a resize cannot see", () => {
+    // A title set after the widget was placed never passes through the placement
+    // clamp, so the validator is what refuses to save it — the wall would have to
+    // explain the card instead of rendering it (specs/wall-display "A widget
+    // cannot be under-sized").
+    const descriptor = WALL_WIDGET_REGISTRY.device;
+    const config = withRequiredConfig(single("device"));
+    const id = widgetAt(config, 0).id;
+    const titled = updateWidgetConfig(config, id, { title: "Hallway" });
+
+    expect(validateProfileDraft("untitled", config).ok).toBe(true);
+
+    const result = validateProfileDraft("titled", titled);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      const message = result.errors.join(" ");
+      expect(message).toContain(id);
+      expect(message).toContain("minimum");
+      expect(message).toContain("title");
+    }
+    expect(descriptor.min.h + WALL_TITLE_ROWS).toBeGreaterThan(descriptor.min.h);
+  });
+
+  it("bounds the height field by the floor the clamp enforces", async () => {
+    const editor = await readSource(EDITOR);
+
+    // The form cannot offer a height the clamp and the validator both refuse, so
+    // the title's extra row is the field's own minimum too.
+    expect(editor).toContain("widgetTitle(widget) !== null ? WALL_TITLE_ROWS : 0");
+    expect(editor).toContain("min={minHeight}");
+    expect(editor).not.toContain("min={descriptor.min.h}");
+  });
+
+  it("rejects a widget placed below its type's minimum width", () => {
+    // The same rule on the width axis, for a profile written through the API: a
+    // sub-minimum width reflows the card's control or tile row.
+    const descriptor = WALL_WIDGET_REGISTRY.favorites;
+    const config: WallProfileConfig = {
+      widgets: [{ id: "fav", type: "favorites", config: {}, x: 0, y: 0, w: 1, h: 6 }],
+    };
+    const result = validateProfileDraft("narrow", config);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.errors.join(" ")).toContain("minimum");
+    expect(descriptor.min.w).toBeGreaterThan(1);
   });
 
   it("rejects a widget whose type-specific config is incomplete", () => {
@@ -316,5 +440,201 @@ describe("submitProfileDraft", () => {
     const calls = (persist as ReturnType<typeof mock>).mock.calls;
     const passed = calls[0]?.[0] as WallProfileConfig | undefined;
     expect(passed?.widgets).toHaveLength(1);
+  });
+});
+
+describe("the zone field (task 6.1)", () => {
+  const ZONED = "Climate";
+  /** A draft with one clock widget, whose id the tests address by. */
+  function clockDraft(): { config: WallProfileConfig; id: string } {
+    const config = addWidget(emptyWallConfig(), "clock");
+    return { config, id: widgetAt(config, 0).id };
+  }
+
+  it("sets a widget's zone label, trimmed", () => {
+    const { config, id } = clockDraft();
+    const zoned = updateWidgetZone(config, id, `  ${ZONED}  `);
+
+    expect(widgetAt(zoned, 0).zone).toBe(ZONED);
+    expect(widgetAt(zoned, 0).config).toEqual({});
+  });
+
+  it("clears a zone outright, so the widget renders outside every band", () => {
+    const { config, id } = clockDraft();
+    const zoned = updateWidgetZone(config, id, ZONED);
+
+    for (const blank of ["", "   "]) {
+      const cleared = updateWidgetZone(zoned, id, blank);
+      expect("zone" in widgetAt(cleared, 0)).toBe(false);
+    }
+  });
+
+  it("leaves another widget's zone untouched", () => {
+    let config = addWidget(emptyWallConfig(), "clock");
+    config = addWidget(config, "weather");
+    const [first, second] = config.widgets;
+    if (!first || !second) throw new Error("expected two widgets");
+
+    const zoned = updateWidgetZone(config, second.id, ZONED);
+    expect("zone" in widgetAt(zoned, 0)).toBe(false);
+    expect(widgetAt(zoned, 1).zone).toBe(ZONED);
+  });
+
+  it("round-trips a zone through save validation", () => {
+    const { config, id } = clockDraft();
+    const zoned = updateWidgetZone(config, id, ZONED);
+    const result = validateProfileDraft("kitchen", zoned);
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.profile.config.widgets[0]?.zone).toBe(ZONED);
+  });
+
+  it("refuses a zone longer than the shared contract's bound", () => {
+    const { config, id } = clockDraft();
+    const zoned = updateWidgetZone(config, id, "z".repeat(WALL_ZONE_MAX_LENGTH + 1));
+
+    expect(validateProfileDraft("kitchen", zoned).ok).toBe(false);
+  });
+
+  it("bounds the field by the shared contract's limit, not a repeated literal", async () => {
+    const fields = await readSource(FIELDS);
+    expect(fields).toContain("maxLength={WALL_ZONE_MAX_LENGTH}");
+    expect(fields).toContain("WALL_ZONE_MAX_LENGTH,");
+  });
+});
+
+describe("the link and device-grid fields (task 6.3)", () => {
+  it("round-trips a link's target profile through save validation", () => {
+    const config = addWidget(emptyWallConfig(), "link");
+    const id = widgetAt(config, 0).id;
+    const withTarget = setLinkTarget(config, id, "  Kitchen  ");
+
+    expect(widgetAt(withTarget, 0).config.target).toBe("Kitchen");
+    expect(validateProfileDraft("kitchen", withTarget).ok).toBe(true);
+  });
+
+  it("refuses an emptied link target rather than saving a link to nothing", () => {
+    const config = addWidget(emptyWallConfig(), "link");
+    const id = widgetAt(config, 0).id;
+
+    expect(validateProfileDraft("kitchen", setLinkTarget(config, id, "   ")).ok).toBe(false);
+  });
+
+  it("round-trips a device grid's explicit selection through save validation", () => {
+    const config = addWidget(emptyWallConfig(), "devices");
+    const id = widgetAt(config, 0).id;
+    const one = toggleDeviceSelection(config, id, "zigbee:a");
+    const two = toggleDeviceSelection(one, id, "zigbee:b");
+
+    // The authored order is the selection order: the grid renders exactly this
+    // set (specs/wall-display "A device grid's devices are selected").
+    expect(widgetAt(two, 0).config.qualifiedIds).toEqual(["zigbee:a", "zigbee:b"]);
+    expect(validateProfileDraft("kitchen", two).ok).toBe(true);
+  });
+
+  it("removes a device from the selection", () => {
+    let config = addWidget(emptyWallConfig(), "devices");
+    const id = widgetAt(config, 0).id;
+    config = toggleDeviceSelection(config, id, "zigbee:a");
+    config = toggleDeviceSelection(config, id, "zigbee:b");
+    const removed = toggleDeviceSelection(config, id, "zigbee:a");
+
+    expect(widgetAt(removed, 0).config.qualifiedIds).toEqual(["zigbee:b"]);
+  });
+
+  it("refuses a selection the author emptied", () => {
+    const config = addWidget(emptyWallConfig(), "devices");
+    const id = widgetAt(config, 0).id;
+    const one = toggleDeviceSelection(config, id, "zigbee:a");
+    const none = toggleDeviceSelection(one, id, "zigbee:a");
+
+    expect(widgetAt(none, 0).config.qualifiedIds).toEqual([]);
+    expect(validateProfileDraft("kitchen", none).ok).toBe(false);
+  });
+
+  it("configures both fields in the widget's own form", async () => {
+    const fields = await readSource(FIELDS);
+    // A link's target profile and a device grid's explicit device selection.
+    expect(fields).toContain('case "link"');
+    expect(fields).toContain('text("target")');
+    expect(fields).toContain('case "devices"');
+    expect(fields).toContain("deviceGridIds(widget.config)");
+    expect(fields).toContain('type="multiple"');
+  });
+
+  it("normalises a link's target through the model, not a raw config patch", async () => {
+    const fields = await readSource(FIELDS);
+    const editor = await readSource(EDITOR);
+
+    // The trim rule lives in the model, so the field hands it the target.
+    expect(fields).toContain("onChange={onLinkTarget}");
+    expect(editor).toContain("setLinkTarget(config, widget.id, target)");
+  });
+});
+
+describe("the draft preview and its save gate (task 6.2)", () => {
+  /** A draft whose composition is taller than the panel at the wall's floors. */
+  function unfittableConfig(): WallProfileConfig {
+    return {
+      widgets: [
+        { id: "tall", type: "clock", config: {}, x: 0, y: 0, w: 12, h: WALL_GRID_MAX_ROWS },
+      ],
+    };
+  }
+
+  it("reports the verdict and refuses to persist an unfittable draft", async () => {
+    const config = unfittableConfig();
+    const fitError = draftFitError(config);
+    expect(fitError).toContain("Too large");
+
+    const persist = mock(async () => {});
+    const result = await submitProfileDraft("kitchen", config, persist);
+
+    expect(result.ok).toBe(false);
+    expect(persist).not.toHaveBeenCalled();
+    if (!result.ok) expect(result.errors).toEqual([fitError]);
+  });
+
+  it("persists a draft that fits its panel", async () => {
+    const persist = mock(async () => {});
+    const config = addWidget(emptyWallConfig(), "clock");
+
+    expect(draftFitError(config)).toBeNull();
+    expect((await submitProfileDraft("kitchen", config, persist)).ok).toBe(true);
+    expect(persist).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders the draft at the panel's ratio, with its verdict and page counts", async () => {
+    const source = await readSource(EDITOR);
+
+    expect(source).toContain("resolveDraftPreview(config)");
+    expect(source).toContain("aspectRatio:");
+    expect(source).toContain("DraftWireframe");
+    expect(source).toContain("preview.summary");
+    expect(source).toContain("preview.grids.map");
+    expect(source).toContain("grid.pages");
+  });
+
+  it("blocks the save control while the draft cannot fit", async () => {
+    const source = await readSource(EDITOR);
+
+    expect(source).toContain('preview.fit === "tooLarge"');
+    expect(source).toContain("disabled={saving || unfittable}");
+    expect(source).toContain("Saving is blocked until the draft fits.");
+  });
+
+  it("draws a wireframe: no wall widget and no Hearth in the editor", async () => {
+    for (const file of [
+      EDITOR,
+      FIELDS,
+      join(EDITOR_DIR, "preview.ts"),
+      join(EDITOR_DIR, "model.ts"),
+    ]) {
+      const source = await readSource(file);
+      expect(source).not.toContain("hearth.css");
+      expect(source).not.toContain("--hearth-");
+      expect(source).not.toContain("<WallGrid");
+      expect(source).not.toContain("WidgetFrame");
+    }
   });
 });

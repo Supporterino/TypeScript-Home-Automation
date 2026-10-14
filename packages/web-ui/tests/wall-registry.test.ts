@@ -2,6 +2,12 @@ import { describe, expect, it } from "bun:test";
 import { WALL_GRID_COLUMNS, WALL_WIDGET_TYPES } from "@ts-ha/shared";
 import { WALL_WIDGET_CONFIG_SCHEMAS } from "@ts-ha/shared/wall-schema";
 import {
+  ROW_UNIT_MIN,
+  WALL_COMPACT_CARD_HEIGHT_PX,
+  WALL_GUTTER_MIN_PX,
+} from "../src/app/wall/grid.js";
+import { WALL_PAGE_RESERVED_PX } from "../src/app/wall/pages.js";
+import {
   getWidgetDescriptor,
   WALL_MIN_CONTROL_GAP,
   WALL_MIN_TOUCH_TARGET,
@@ -83,6 +89,37 @@ describe("WALL_WIDGET_REGISTRY", () => {
   it("keeps at least an 8px separation between adjacent wall controls", () => {
     expect(WALL_MIN_CONTROL_GAP).toBeGreaterThanOrEqual(8);
     expect(WALL_MIN_CONTROL_GAP).toBeLessThan(WALL_MIN_TOUCH_TARGET);
+  });
+
+  it("keeps the paged types' minimum spans tall enough to page", () => {
+    // A paged card must hold, at the wall's floors, its frame inset, the chrome it
+    // draws above the tiles, one tile row, and the page-control row: otherwise a
+    // minimum-span card clips a tile below the wall's touch target
+    // (wall-zones-and-fit D5; specs/wall-display "Panel Fit"). `devices` was
+    // derived for this first; favorites and room are derived the same way.
+    const floors = (rows: number): number => rows * ROW_UNIT_MIN + (rows - 1) * WALL_GUTTER_MIN_PX;
+
+    for (const [type, headerRows] of [
+      ["devices", 0],
+      ["favorites", 2],
+      ["room", 3],
+    ] as const) {
+      const { min } = WALL_WIDGET_REGISTRY[type];
+      const available = floors(min.h) - WALL_PAGE_RESERVED_PX - headerRows * ROW_UNIT_MIN;
+      expect(available, `${type} at its minimum span`).toBeGreaterThanOrEqual(
+        WALL_COMPACT_CARD_HEIGHT_PX,
+      );
+      // The derivation is tight: one row less would not hold the tile row.
+      expect(floors(min.h - 1) - WALL_PAGE_RESERVED_PX - headerRows * ROW_UNIT_MIN).toBeLessThan(
+        WALL_COMPACT_CARD_HEIGHT_PX,
+      );
+    }
+  });
+
+  it("keeps a room's minimum as tall as a favorites card needs", () => {
+    // The room card draws one more chrome row than favorites (its room-wide
+    // command row), so its derived minimum is taller.
+    expect(WALL_WIDGET_REGISTRY.room.min.h).toBeGreaterThan(WALL_WIDGET_REGISTRY.favorites.min.h);
   });
 });
 

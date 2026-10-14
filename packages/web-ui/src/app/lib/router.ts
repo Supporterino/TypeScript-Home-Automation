@@ -235,6 +235,22 @@ export function wallPath(basePath: string, name: string): string {
   return joinBasePath(basePath, `/wall/${encodeURIComponent(name)}`);
 }
 
+/**
+ * The wall a wall was opened from, as the path to return to — or `null` when the
+ * previous route was not a wall (wall-zones-and-fit D11; specs/wall-display "Wall
+ * Navigation"). A wall reached from another wall's link returns to *that* wall's
+ * own address; one reached by a deep link (or from anywhere else in the app) has
+ * no wall to return to and offers no back affordance, because there is nowhere
+ * in-app to go back to. Pure, so the rule is reachable by `bun test`.
+ */
+export function backToWallPath(originPathname: string | null, basePath: string): string | null {
+  if (originPathname === null) return null;
+  const match = resolveRoute(originPathname, basePath);
+  if (match.view !== "wall") return null;
+  const name = match.params.name;
+  return name === undefined ? null : wallPath(basePath, name);
+}
+
 // ── Mobile bottom bar — control-only (design.md D10, D13) ──────────────────
 
 /** The control-surface views the narrow-viewport bottom bar may offer. */

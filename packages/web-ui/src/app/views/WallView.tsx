@@ -23,20 +23,25 @@
  *
  * Rebuilt on the Lumen primitive layer (`ui/*`) and `lucide-react`.
  */
-import { X } from "lucide-react";
+import { ChevronLeft, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchWallOrNull } from "../api.js";
 import { useDataStore } from "../lib/data-store.js";
-import { wallsPath } from "../lib/router.js";
+import { backToWallPath, wallsPath } from "../lib/router.js";
 import { Link, useRouter } from "../lib/router-context.js";
 import type { WallProfile } from "../types.js";
 import { Button, Card, IconButton, Spinner, Stack } from "../ui/index.js";
 import { wallErrorIsFatal, wallEventKindForProfile, wallViewState } from "../wall/live.js";
 import { WallGrid } from "../wall/WallGrid.js";
+import { WALL_CARD_GLYPH_SIZE, wallAffordanceStyle } from "../wall/widgets/card-vocab.js";
 
 export function WallView({ name }: { name: string }) {
-  const { basePath } = useRouter();
+  const { basePath, origin } = useRouter();
   const { subscribe, transport } = useDataStore();
+  // Where this wall was opened from, when that was another wall (design.md D11;
+  // specs/wall-display "Wall Navigation"): a wall reached from a link offers a way
+  // back, a deep link offers none.
+  const backTo = backToWallPath(origin, basePath);
 
   const [profile, setProfile] = useState<WallProfile | null>(null);
   const [notFound, setNotFound] = useState(false);
@@ -124,6 +129,28 @@ export function WallView({ name }: { name: string }) {
           </div>
         )}
         <WallGrid config={profile.config} />
+        {backTo !== null && (
+          // The on-screen way back for a wall opened from a link (design.md D11;
+          // specs/wall-display "Wall Navigation"): a touch-sized Hearth
+          // affordance over the composition, so the hierarchy is walkable by
+          // touch and not only by the browser's own back. It sits at the foot of
+          // the panel, clear of the readouts a wall places along its top edge and
+          // of the refetch banner above.
+          <Link
+            to={backTo}
+            style={{
+              ...wallAffordanceStyle(),
+              position: "absolute",
+              bottom: "var(--hearth-space-4)",
+              left: "var(--hearth-space-4)",
+              zIndex: 20,
+              textDecoration: "none",
+            }}
+          >
+            <ChevronLeft size={WALL_CARD_GLYPH_SIZE} aria-hidden />
+            Back
+          </Link>
+        )}
       </div>
     );
   }
@@ -141,7 +168,16 @@ export function WallView({ name }: { name: string }) {
                 ? `The "${name}" wall profile was deleted while this panel was open. Create a profile with this name to bring it back.`
                 : `No wall profile named "${name}" exists. Create it in the wall editor, then open it at this address.`}
             </p>
-            <Button asChild variant="soft" size="sm">
+            {backTo !== null && (
+              // A link to a profile that does not exist lands here, so the
+              // explanation itself offers the way back to the wall the link was
+              // followed from (design.md D11; specs/wall-display "A broken link
+              // is explained").
+              <Button asChild variant="soft" size="sm" className="self-start">
+                <Link to={backTo}>Back to the previous wall</Link>
+              </Button>
+            )}
+            <Button asChild variant="soft" size="sm" className="self-start">
               <Link to={wallsPath(basePath)}>Open the wall editor</Link>
             </Button>
           </Stack>

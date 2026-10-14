@@ -7,12 +7,19 @@ import {
   ROW_UNIT_MIN,
   resolveLayout,
   resolveRowUnit,
+  WALL_COMPACT_CARD_HEIGHT_PX,
   WALL_GUTTER,
   WALL_GUTTER_MAX_PX,
   WALL_GUTTER_MIN_PX,
+  WALL_MIN_DEVICE_ROWS,
   wallGridMetrics,
   wallGridStyle,
 } from "../src/app/wall/grid.js";
+import {
+  WALL_MIN_CONTROL_GAP,
+  WALL_MIN_TOUCH_TARGET,
+  WALL_WIDGET_REGISTRY,
+} from "../src/app/wall/registry.js";
 
 function widget(id: string, x: number, y: number, w: number, h: number): WallWidget {
   return { id, type: "clock", config: {}, x, y, w, h };
@@ -88,9 +95,10 @@ describe("resolveRowUnit", () => {
 
   it("reserves a supplied gutter when sizing rows", () => {
     // Padding (2×24) and four inter-row gaps (4×24) are removed before dividing:
-    // (600 − 144) / 5 = 91.2, inside the bounds.
-    expect(resolveRowUnit(600, 5, 24)).toBeCloseTo(91.2, 5);
-    expect(resolveRowUnit(600, 5, 24)).toBeLessThan(resolveRowUnit(600, 5, 0));
+    // (500 − 144) / 5 = 71.2, inside the bounds; without the reservation the
+    // same panel would clamp to the ceiling instead.
+    expect(resolveRowUnit(500, 5, 24)).toBeCloseTo(71.2, 5);
+    expect(resolveRowUnit(500, 5, 24)).toBeLessThan(resolveRowUnit(500, 5, 0));
   });
 });
 
@@ -101,14 +109,25 @@ describe("wallGridMetrics", () => {
     expect(metrics.usableHeight).toBe(1024 - 48);
     expect(metrics.rowUnit).toBe(ROW_UNIT_MAX);
     expect(metrics.contentHeight).toBe(5 * ROW_UNIT_MAX + 4 * 24);
+    expect(metrics.outcome).toBe("fits");
     expect(metrics.fits).toBe(true);
   });
 
-  it("reports overflow for a clamped profile taller than the panel", () => {
-    const widgets = [widget("a", 0, 0, 12, 10)];
-    const metrics = wallGridMetrics(300, widgets, 24);
+  it("reports the fits outcome for a composition that fits the panel exactly", () => {
+    // 10 rows on a 1000px panel: the unit resolves to 73.6 and the content is
+    // exactly the usable height, so the composition fits with nothing to spare.
+    const metrics = wallGridMetrics(1000, [widget("a", 0, 0, 12, 10)], 24);
+
+    expect(metrics.rowUnit).toBeCloseTo(73.6, 5);
+    expect(metrics.contentHeight).toBeCloseTo(metrics.usableHeight, 5);
+    expect(metrics.outcome).toBe("fits");
+  });
+
+  it("reports the tooLarge outcome for a composition taller than the panel", () => {
+    const metrics = wallGridMetrics(300, [widget("a", 0, 0, 12, 10)], 24);
     expect(metrics.rowUnit).toBe(ROW_UNIT_MIN);
     expect(metrics.contentHeight).toBeGreaterThan(metrics.usableHeight);
+    expect(metrics.outcome).toBe("tooLarge");
     expect(metrics.fits).toBe(false);
   });
 
@@ -117,7 +136,42 @@ describe("wallGridMetrics", () => {
     // above usableHeight (1814.0000000000002 > 1814); it must still fit.
     const metrics = wallGridMetrics(1862, [widget("a", 0, 0, 12, 19)], 24);
     expect(metrics.contentHeight).toBeGreaterThan(metrics.usableHeight);
-    expect(metrics.fits).toBe(true);
+    expect(metrics.outcome).toBe("fits");
+  });
+});
+
+describe("the row unit's bounds", () => {
+  it("lowers the ceiling to the reduced component scale", () => {
+    expect(ROW_UNIT_MAX).toBe(80);
+    expect(resolveRowUnit(4096, 2)).toBe(ROW_UNIT_MAX);
+  });
+
+  it("derives the floor from the compact light card at the wall's floors", () => {
+    // D4: a minimum-span device cell (2 rows) holds the compact card at the
+    // touch-target and control-gap floors — the derivation `grid.ts` documents.
+    expect(WALL_COMPACT_CARD_HEIGHT_PX).toBe(
+      WALL_MIN_DEVICE_ROWS * WALL_MIN_TOUCH_TARGET + 2 * WALL_MIN_CONTROL_GAP,
+    );
+    expect(ROW_UNIT_MIN).toBe(
+      (WALL_COMPACT_CARD_HEIGHT_PX - WALL_GUTTER_MIN_PX) / WALL_MIN_DEVICE_ROWS,
+    );
+    expect(ROW_UNIT_MIN).toBe(56);
+  });
+
+  it("holds the minimum-span cell for the compact card at the gutter floor", () => {
+    expect(WALL_MIN_DEVICE_ROWS * ROW_UNIT_MIN + WALL_GUTTER_MIN_PX).toBeGreaterThanOrEqual(
+      WALL_COMPACT_CARD_HEIGHT_PX,
+    );
+  });
+
+  it("keeps the floor at the wall's minimum touch target and below the ceiling", () => {
+    expect(ROW_UNIT_MIN).toBeGreaterThanOrEqual(WALL_MIN_TOUCH_TARGET);
+    expect(ROW_UNIT_MIN).toBeLessThan(ROW_UNIT_MAX);
+  });
+
+  it("takes the minimum device span from the widget registry", () => {
+    expect(WALL_MIN_DEVICE_ROWS).toBe(WALL_WIDGET_REGISTRY.device.min.h);
+    expect(WALL_MIN_DEVICE_ROWS).toBe(WALL_WIDGET_REGISTRY.device.min.w);
   });
 });
 
@@ -145,10 +199,24 @@ describe("wallGridStyle", () => {
     expect(style.overflowY).toBe("hidden");
   });
 
-  it("starts and scrolls a profile taller than the panel instead of clipping it", () => {
+  it("never scrolls, not even for a composition taller than the panel", () => {
     const style = wallGridStyle({ widgets: [widget("a", 0, 0, 12, 10)], availableHeight: 300 });
+
     expect(style.alignContent).toBe("start");
-    expect(style.overflowY).toBe("auto");
+    expect(style.overflowY).toBe("hidden");
+  });
+
+  it("keeps hidden overflow in every outcome", () => {
+    const layouts = [
+      { widgets: [widget("a", 0, 0, 3, 2)], availableHeight: 1024 },
+      { widgets: [widget("a", 0, 0, 12, 10)], availableHeight: 1000 },
+      { widgets: [widget("a", 0, 0, 12, 10)], availableHeight: 300 },
+      { widgets: [], availableHeight: 0 },
+    ];
+
+    for (const layout of layouts) {
+      expect(wallGridStyle(layout).overflowY).toBe("hidden");
+    }
   });
 
   it("still centers a profile that fits only within the float tolerance", () => {

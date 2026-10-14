@@ -19,8 +19,11 @@ import {
   WALL_GRID_MAX_ROWS,
   WALL_PROFILE_VERSION,
   WALL_WIDGET_TYPES,
+  WALL_ZONE_MAX_LENGTH,
+  type WallDeviceGridWidgetConfig,
   type WallDeviceWidgetConfig,
   type WallFavoritesWidgetConfig,
+  type WallLinkWidgetConfig,
   type WallProfile,
   type WallProfileConfig,
   type WallRoomWidgetConfig,
@@ -66,6 +69,18 @@ export const wallFavoritesWidgetConfigSchema: z.ZodType<WallFavoritesWidgetConfi
   z.unknown(),
 );
 
+/** A link widget's config: a required target profile and an optional label. */
+export const wallLinkWidgetConfigSchema: z.ZodType<WallLinkWidgetConfig> = z.object({
+  target: z.string().min(1),
+  label: z.string().optional(),
+});
+
+/** A device grid's config: at least one selected device and an optional title. */
+export const wallDeviceGridWidgetConfigSchema: z.ZodType<WallDeviceGridWidgetConfig> = z.object({
+  qualifiedIds: z.array(z.string().min(1)).min(1),
+  title: z.string().optional(),
+});
+
 /**
  * Each widget type's config schema — the single definition site shared by the
  * profile schema below, the server's write validation, and the editor's widget
@@ -82,6 +97,8 @@ export const WALL_WIDGET_CONFIG_SCHEMAS: Readonly<Record<WallWidgetType, z.ZodTy
   temperature: wallTemperatureWidgetConfigSchema,
   scene: wallSceneWidgetConfigSchema,
   favorites: wallFavoritesWidgetConfigSchema,
+  link: wallLinkWidgetConfigSchema,
+  devices: wallDeviceGridWidgetConfigSchema,
 };
 
 /** Whether two widgets occupy at least one grid cell in common. */
@@ -94,6 +111,10 @@ function widgetsOverlap(a: WallWidget, b: WallWidget): boolean {
  * validated against its own type's schema. Annotating the schema with
  * `z.ZodType<WallWidget>` keeps the validator and the wire type mutually
  * checked.
+ *
+ * `zone` is trimmed and bounded so a band caption cannot be blank or absurdly
+ * long (wall-zones-and-fit D1; specs/wall-display "Wall Zones"); omitting it
+ * leaves the widget unzoned and an existing profile parses unchanged.
  */
 export const wallWidgetSchema: z.ZodType<WallWidget> = z
   .object({
@@ -104,6 +125,7 @@ export const wallWidgetSchema: z.ZodType<WallWidget> = z
     y: z.number().int().min(0),
     w: z.number().int().min(1),
     h: z.number().int().min(1),
+    zone: z.string().trim().min(1).max(WALL_ZONE_MAX_LENGTH).optional(),
   })
   .superRefine((widget, ctx) => {
     if (widget.x + widget.w > WALL_GRID_COLUMNS) {

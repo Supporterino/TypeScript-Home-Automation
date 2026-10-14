@@ -1,11 +1,14 @@
 /**
- * Pure wall-profile editor logic (design.md D5, D10; specs/wall-display "Wall
- * Configuration Editor", "Widget Grid Layout"). Every mutation the editor
- * performs — adding, removing, moving, resizing, and reconfiguring a widget,
- * and validating a draft before it is saved — lives here as a pure function so
- * it is reachable by `bun test` without a DOM. The save path funnels through
- * {@link submitProfileDraft}, which validates first and only then calls the
- * persist callback, so an invalid config can never reach the API.
+ * Pure wall-profile editor logic (design.md D5, D10; wall-zones-and-fit D1, D7,
+ * D11, D12; specs/wall-display "Wall Configuration Editor", "Widget Grid
+ * Layout", "Wall Zones", "Wall Navigation", "Device Grid Widget"). Every
+ * mutation the editor performs — adding, removing, moving, resizing, and
+ * reconfiguring a widget, zoning it, choosing a link's target wall, choosing a
+ * device grid's devices, and validating a draft before it is saved — lives here
+ * as a pure function so it is reachable by `bun test` without a DOM. The save
+ * path funnels through {@link submitProfileDraft}, which validates and checks the
+ * draft against its panel first and only then calls the persist callback, so an
+ * invalid or unfittable config can never reach the API.
  *
  * Loaded only inside the lazy `wall` chunk (the editor is its only consumer).
  */
@@ -19,12 +22,16 @@ import {
   type WallWidgetType,
 } from "@ts-ha/shared";
 import { wallProfileSchema } from "@ts-ha/shared/wall-schema";
+import { widgetTitle } from "../frame.js";
 import {
   getWidgetDescriptor,
   WALL_WIDGET_REGISTRY,
   type WallWidgetDescriptor,
   type WallWidgetSpan,
 } from "../registry.js";
+import { WALL_TITLE_ROWS } from "../span.js";
+import { deviceGridIds } from "../widgets/device-grid-model.js";
+import { resolveDraftPreview } from "./preview.js";
 
 /** A widget's absolute placement on the grid. */
 export interface WallPlacement {
@@ -116,11 +123,22 @@ export function removeWidget(config: WallProfileConfig, id: string): WallProfile
  * Clamps a span to its type's minimum and maximum, and to the column bound
  * (specs/wall-display "A widget cannot be under-sized"). Values are rounded to
  * whole cells because the grid places by cell, not by flow.
+ *
+ * A widget that configures a title gains {@link WALL_TITLE_ROWS} of height floor:
+ * the frame draws the title above the renderer inside the same cell, so a titled
+ * card's cell must be taller than its type's own minimum span before the card can
+ * render what that minimum guarantees (wall-zones-and-fit D4; the render-side twin
+ * is `span.ts`'s `composesMinimumSpan`, and `wall-span.test.ts` asserts the row
+ * floor and the box guard agree at every row unit).
  */
-export function clampSpan(span: WallWidgetSpan, descriptor: WallWidgetDescriptor): WallWidgetSpan {
+function clampSpan(
+  span: WallWidgetSpan,
+  descriptor: WallWidgetDescriptor,
+  titled = false,
+): WallWidgetSpan {
   const minW = Math.max(1, descriptor.min.w);
   const maxW = Math.min(WALL_GRID_COLUMNS, Math.max(minW, descriptor.max.w));
-  const minH = Math.max(1, descriptor.min.h);
+  const minH = Math.max(1, descriptor.min.h + (titled ? WALL_TITLE_ROWS : 0));
   const maxH = Math.max(minH, descriptor.max.h);
   return {
     w: Math.min(maxW, Math.max(minW, Math.round(span.w))),
@@ -131,8 +149,10 @@ export function clampSpan(span: WallWidgetSpan, descriptor: WallWidgetDescriptor
 /**
  * Moves and/or resizes a widget, clamping its span to the type's min/max and
  * every cell to the grid: `x` is confined to `[0, columns - w]` and `y` to
- * `[0, rows - h]`. A widget left overlapping another is a valid edit — the
- * draft validator surfaces that rather than the control silently refusing it.
+ * `[0, rows - h]`. A widget that configures a title is floored one row higher, so
+ * a resize can never leave a titled card below the box its type's minimum span
+ * needs. A widget left overlapping another is a valid edit — the draft validator
+ * surfaces that rather than the control silently refusing it.
  */
 export function updateWidgetPlacement(
   config: WallProfileConfig,
@@ -143,7 +163,8 @@ export function updateWidgetPlacement(
   const widgets = config.widgets.map((widget) => {
     if (widget.id !== id) return widget;
     const desc = descriptor ?? getWidgetDescriptor(widget.type);
-    const { w, h } = clampSpan({ w: placement.w, h: placement.h }, desc);
+    const titled = widgetTitle(widget) !== null;
+    const { w, h } = clampSpan({ w: placement.w, h: placement.h }, desc, titled);
     const x = Math.min(Math.max(0, Math.round(placement.x)), WALL_GRID_COLUMNS - w);
     const y = Math.min(Math.max(0, Math.round(placement.y)), Math.max(0, WALL_GRID_MAX_ROWS - h));
     return { ...widget, x, y, w, h };
@@ -161,6 +182,83 @@ export function updateWidgetConfig(
     widget.id === id ? { ...widget, config: { ...widget.config, ...patch } } : widget,
   );
   return { ...config, widgets };
+}
+
+/** The widget without its `zone` key — how a cleared zone is stored. */
+function withoutZone(widget: WallWidget): WallWidget {
+  const { zone: _cleared, ...rest } = widget;
+  return rest;
+}
+
+/**
+ * Sets or clears a widget's zone label (wall-zones-and-fit D1; specs/wall-display
+ * "Wall Zones"). The zone is the widget's own field, not part of its
+ * type-specific config, so it has its own mutation. A blank label clears the
+ * zone outright rather than storing an empty string, so the widget validates as
+ * unzoned and renders outside every band again; the profile schema trims and
+ * bounds what is stored.
+ */
+export function updateWidgetZone(
+  config: WallProfileConfig,
+  id: string,
+  zone: string,
+): WallProfileConfig {
+  const label = zone.trim();
+  const widgets = config.widgets.map((widget) => {
+    if (widget.id !== id) return widget;
+    return label.length === 0 ? withoutZone(widget) : { ...widget, zone: label };
+  });
+  return { ...config, widgets };
+}
+
+/**
+ * Sets a link widget's target profile (wall-zones-and-fit D11; specs/wall-display
+ * "A link target is configured"). The target is trimmed, so a stray space never
+ * becomes part of a profile name the wall would fail to resolve; an emptied
+ * field leaves the widget without a target, which the profile schema rejects —
+ * the editor surfaces that rather than saving a link that opens nothing.
+ */
+export function setLinkTarget(
+  config: WallProfileConfig,
+  id: string,
+  target: string,
+): WallProfileConfig {
+  return updateWidgetConfig(config, id, { target: target.trim() });
+}
+
+/**
+ * Adds or removes one device from a device grid's explicit selection, keeping the
+ * authored order (wall-zones-and-fit D12; specs/wall-display "A device grid's
+ * devices are selected"). The grid renders exactly this selection, so removing
+ * the last device leaves the widget unconfigured and unsaveable — the editor
+ * surfaces that rather than saving a grid that shows nothing.
+ */
+export function toggleDeviceSelection(
+  config: WallProfileConfig,
+  id: string,
+  qualifiedId: string,
+): WallProfileConfig {
+  const device = qualifiedId.trim();
+  if (device.length === 0) return config;
+  const widget = config.widgets.find((candidate) => candidate.id === id);
+  if (!widget) return config;
+
+  const selected = deviceGridIds(widget.config);
+  const next = selected.includes(device)
+    ? selected.filter((candidate) => candidate !== device)
+    : [...selected, device];
+  return updateWidgetConfig(config, id, { qualifiedIds: next });
+}
+
+/**
+ * The smallest `{w, h}` a widget may occupy — its type's own minimum span, plus
+ * the rows a configured title costs inside the same cell (wall-zones-and-fit D4;
+ * specs/wall-display "A widget cannot be under-sized", "Span-Aware Card
+ * Presentation"). This is {@link clampSpan}'s floor, and the row form of the wall's
+ * own render guard (`span.ts`'s `composesMinimumSpan`).
+ */
+function minimumSpanFor(descriptor: WallWidgetDescriptor, titled: boolean): WallWidgetSpan {
+  return { w: descriptor.min.w, h: descriptor.min.h + (titled ? WALL_TITLE_ROWS : 0) };
 }
 
 function formatIssue(issue: { path: readonly PropertyKey[]; message: string }): string {
@@ -225,6 +323,19 @@ export function validateProfileDraft(name: string, config: WallProfileConfig): W
           errors.push(`${widget.id}: ${issue.message}`);
         }
       }
+      // A placement below the type's minimum — including a titled card the title
+      // itself pushed below it, which no resize clamps — cannot render the card
+      // the wall guarantees, so the editor refuses to save it rather than letting
+      // the wall explain it (specs/wall-display "A widget cannot be under-sized").
+      const titled = widgetTitle(widget) !== null;
+      const minimum = minimumSpanFor(descriptor, titled);
+      if (widget.w < minimum.w || widget.h < minimum.h) {
+        errors.push(
+          `${widget.id}: below its minimum size (${minimum.w}×${minimum.h}${
+            titled ? " with a title" : ""
+          })`,
+        );
+      }
     }
   }
 
@@ -233,11 +344,24 @@ export function validateProfileDraft(name: string, config: WallProfileConfig): W
 }
 
 /**
- * The editor's single save boundary: validate the draft first, and only call
- * `persist` with the parsed config when it is valid. Structuring the handler
- * around this guarantees an invalid draft never reaches the API (task 6.4;
- * specs/wall-display "An invalid profile is rejected"). The `persist` callback
- * is expected to call `updateWall`/`createWall`.
+ * Why a draft cannot be saved for its panel, or `null` when it fits (design.md
+ * D7; specs/wall-display "An unfittable draft is refused"). The verdict comes
+ * from the draft preview's resolver — the same fit rule the wall renders
+ * through at the wall's target panel — so an author cannot save a composition
+ * the panel would have to explain instead of render.
+ */
+export function draftFitError(config: WallProfileConfig): string | null {
+  const preview = resolveDraftPreview(config);
+  return preview.fit === "tooLarge" ? preview.summary : null;
+}
+
+/**
+ * The editor's single save boundary: validate the draft first, refuse it when it
+ * cannot fit its panel, and only then call `persist` with the parsed config.
+ * Structuring the handler around this guarantees an invalid or unfittable draft
+ * never reaches the API (task 6.4; specs/wall-display "An invalid profile is
+ * rejected", "An unfittable draft is refused"). The `persist` callback is
+ * expected to call `updateWall`/`createWall`.
  */
 export async function submitProfileDraft(
   name: string,
@@ -246,6 +370,10 @@ export async function submitProfileDraft(
 ): Promise<WallDraftValidation> {
   const validation = validateProfileDraft(name, config);
   if (!validation.ok) return validation;
+
+  const fitError = draftFitError(config);
+  if (fitError !== null) return { ok: false, errors: [fitError] };
+
   await persist(validation.profile.config);
   return validation;
 }

@@ -84,7 +84,7 @@ import {
   deviceTileState,
   deviceTileToggledValue,
 } from "../lib/device-tile-state.js";
-import { humanizeDeviceName } from "../lib/humanize-name.js";
+import { humanizeDeviceName, shortDeviceName } from "../lib/humanize-name.js";
 import { deviceDetailPath } from "../lib/router.js";
 import { useRouter } from "../lib/router-context.js";
 import { useNow } from "../lib/use-now.js";
@@ -96,12 +96,13 @@ import {
   deviceTilePresentation,
   deviceTileText,
   type WallTileSize,
+  wallReadoutFontSize,
   wallTileMetrics,
 } from "../wall/scale.js";
+import type { WallCardForm, WallWidgetTier } from "../wall/span.js";
 import {
   WALL_BODY_FONT_SIZE,
   WALL_LABEL_FONT_SIZE,
-  WALL_METRIC_FONT_SIZE,
   WALL_TITLE_FONT_SIZE,
 } from "../wall/type-ramp.js";
 import { CapabilityControl, formatReadoutValue } from "./CapabilityControl.js";
@@ -300,6 +301,75 @@ function WallOnOffState({ state }: { state: DeviceTileOnOffState }) {
       <StateGlyph icon={state.icon} size={20} token={token} />
       <span>{state.label}</span>
     </span>
+  );
+}
+
+/**
+ * A compact wall value control (wall-zones-and-fit D4; specs/wall-display "A
+ * light card fits its minimum span", "Wall Device Presentation"): one full-height
+ * segment of the wall light card's compact control row, where a span-appropriate
+ * segment stands in for the full-width slider *and* spectrum bar a larger card
+ * draws. The segment's range input is the value's embedded actuation target and
+ * the whole segment is the touch target, so the control keeps the wall's minimum
+ * size inside a card at its minimum span. `track` paints the segment — a plain
+ * surface for brightness, the control's spectrum for a colour — so a colour
+ * control reads as a swatch rather than a bare slider, and every token is
+ * Hearth's own.
+ */
+function WallCompactValueControl({
+  label,
+  min,
+  max,
+  step,
+  value,
+  onChange,
+  disabled,
+  cursor,
+  accent,
+  track,
+}: {
+  label: string;
+  min: number;
+  max: number;
+  step: number;
+  value: number;
+  onChange: (next: number) => void;
+  disabled: boolean;
+  cursor: string;
+  accent: string;
+  track: string;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        flex: "1 1 0",
+        minWidth: 0,
+        borderRadius: "var(--hearth-radius-sm)",
+        border: "1px solid var(--hearth-hairline)",
+        background: track,
+        overflow: "hidden",
+      }}
+    >
+      <input
+        type="range"
+        aria-label={label}
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        disabled={disabled}
+        onChange={(event) => onChange(Number(event.currentTarget.value))}
+        style={{
+          width: "100%",
+          height: "100%",
+          margin: 0,
+          background: "transparent",
+          accentColor: accent,
+          cursor,
+        }}
+      />
+    </div>
   );
 }
 
@@ -598,6 +668,23 @@ interface AvailableProps {
    * tile's ordinary surface rendering.
    */
   contained?: boolean;
+  /**
+   * The span tier the card was placed at, passed by the wall's framed widgets
+   * (wall-zones-and-fit D3; specs/wall-display "Span-Aware Card Presentation").
+   * It selects the *composition's detail* — a readout's tier — while the
+   * capability ranking, optimistic channels, and state encoding stay shared.
+   * Unset (the dashboard, and any card without a registered span) behaves as
+   * `regular`.
+   */
+  wallTier?: WallWidgetTier;
+  /**
+   * The form the card must compose at this placement, passed by the wall's framed
+   * widgets (wall-zones-and-fit D3, D4). A card whose full form is taller than its
+   * cell composes its compact form instead, so the light card can never clip the
+   * controls a device declares. Unset behaves as `regular`'s full form, which is
+   * what the dashboard's own sizing has always produced.
+   */
+  wallCardForm?: WallCardForm;
 }
 
 interface UnavailableProps {
@@ -609,6 +696,10 @@ interface UnavailableProps {
   size?: WallTileSize;
   /** See {@link AvailableProps.contained}. */
   contained?: boolean;
+  /** See {@link AvailableProps.wallTier}. An unavailable card has no controls to compose. */
+  wallTier?: WallWidgetTier;
+  /** See {@link AvailableProps.wallCardForm}. An unavailable card has no controls to compose. */
+  wallCardForm?: WallCardForm;
 }
 
 type Props = AvailableProps | UnavailableProps;
@@ -713,6 +804,23 @@ function UnavailableTile({ qualifiedId, action, size, contained }: UnavailablePr
   );
 }
 
+/**
+ * Whether a card is the wall light card composing its compact form
+ * (wall-zones-and-fit D3, D4; specs/wall-display "A light card fits its minimum
+ * span"): the wall's framed widgets resolve the form from the cell's own height,
+ * so a light card that cannot fit its full stack — every placement shorter than
+ * the full budget, which includes a minimum-span card and any three-row card —
+ * composes the compact form instead of clipping. The compact inset and the
+ * compact composition both key off this, so the two cannot disagree.
+ */
+function wallLightCompactCard(
+  wall: boolean,
+  form: WallCardForm | undefined,
+  archetype: CardArchetype,
+): boolean {
+  return wall && form === "compact" && archetype === "light";
+}
+
 export function DeviceTile(props: Props) {
   if ("unavailable" in props) {
     return <UnavailableTile {...props} />;
@@ -721,11 +829,23 @@ export function DeviceTile(props: Props) {
   return <AvailableTile {...props} />;
 }
 
-function AvailableTile({ device, action, size, contained }: AvailableProps) {
+function AvailableTile({
+  device,
+  action,
+  size,
+  contained,
+  wallTier,
+  wallCardForm,
+}: AvailableProps) {
   const { navigate, basePath } = useRouter();
   const now = useNow();
   const wall = size === "wall";
   const metrics = wall ? wallTileMetrics("wall") : null;
+  // The card's form tier: what the wall's framed widgets resolved from their
+  // type's spans, falling back to `regular` for a card with no registered span
+  // (and for the dashboard, which passes none). Geometry only — the ranking,
+  // optimistic channels, and state encoding below are shared at every tier.
+  const tier: WallWidgetTier = wallTier ?? "regular";
   const presentation = deviceTilePresentation(size);
   const tileText = deviceTileText(size);
   const showObservationLabel = deviceTileObservationText(size);
@@ -853,7 +973,15 @@ function AvailableTile({ device, action, size, contained }: AvailableProps) {
 
   const chipFontSize = tileFontSize(tileText.chip);
   const bodyFontSize = tileFontSize(tileText.body);
-  const padClass = metrics?.padding === "md" ? "p-4" : "p-3";
+  // A compact wall card is budgeted at Hearth's smallest inset — one control gap
+  // per side (`WALL_COMPACT_CARD_INSET_PX`, `p-2`) — so its composition fits the
+  // minimum span the wall's row-unit floor is derived from (wall-zones-and-fit
+  // D4). Every other card keeps its existing inset.
+  const padClass = wallLightCompactCard(wall, wallCardForm, archetype)
+    ? "p-2"
+    : metrics?.padding === "md"
+      ? "p-4"
+      : "p-3";
 
   function openDetail() {
     navigate(deviceDetailPath(basePath, device.qualifiedId));
@@ -902,7 +1030,7 @@ function AvailableTile({ device, action, size, contained }: AvailableProps) {
           title={deviceLabel}
           style={{ fontSize: wall ? WALL_BODY_FONT_SIZE : "var(--text-sm)" }}
         >
-          {deviceLabel}
+          {wall ? shortDeviceName(deviceLabel) : deviceLabel}
         </span>
       </Row>
       {(action != null || presentation.favorite || presentation.visibility) && (
@@ -1037,7 +1165,13 @@ function AvailableTile({ device, action, size, contained }: AvailableProps) {
         className={wall ? undefined : "text-muted"}
         style={
           wall
-            ? { color: "var(--hearth-text-muted)", fontSize: bodyFontSize }
+            ? {
+                color: "var(--hearth-text-muted)",
+                fontSize: bodyFontSize,
+                // A readout's value and unit stay one non-breaking unit
+                // (design.md D6; specs/wall-display "A value stays with its unit").
+                whiteSpace: "nowrap",
+              }
             : { fontSize: bodyFontSize }
         }
       >
@@ -1101,7 +1235,7 @@ function AvailableTile({ device, action, size, contained }: AvailableProps) {
               textTransform: "uppercase",
             }}
           >
-            {deviceLabel}
+            {shortDeviceName(deviceLabel)}
           </span>
         </div>
         {readoutCapability ? (
@@ -1109,9 +1243,18 @@ function AvailableTile({ device, action, size, contained }: AvailableProps) {
             style={{
               color: device.reachable ? "var(--hearth-text)" : "var(--hearth-text-muted)",
               fontFamily: "var(--hearth-font-display)",
-              fontSize: WALL_METRIC_FONT_SIZE,
+              // The reading's tier is chosen by the span the card was placed at:
+              // a card at or near its minimum span (a grouped readout) sits on the
+              // band tier, and only a roomy card grows onto the metric tier
+              // (wall-zones-and-fit D3, D6; specs/wall-display "Span-Aware Card
+              // Presentation").
+              fontSize: wallReadoutFontSize(tier),
               fontWeight: "var(--hearth-weight-bold)",
               lineHeight: "var(--hearth-leading-tight)",
+              // The value and its unit are one non-breaking unit, so a narrow
+              // span never splits them (design.md D6; specs/wall-display "A
+              // value stays with its unit").
+              whiteSpace: "nowrap",
             }}
           >
             {formatReadoutValue(device.state[readoutCapability.property], readoutCapability.unit)}
@@ -1154,60 +1297,256 @@ function AvailableTile({ device, action, size, contained }: AvailableProps) {
       brightnessControl.error ??
       colorTemperatureControl.error ??
       colorControl.error;
-    inner = (
-      <div style={WALL_STACK_STYLE}>
+
+    if (wallLightCompactCard(wall, wallCardForm, archetype)) {
+      // The compact form (wall-zones-and-fit D4; specs/wall-display "A light
+      // card fits its minimum span"). At the type's minimum span the full-width
+      // sliders cannot fit, so every control the device declares takes a
+      // span-appropriate form instead: one touch-target row for the on/off
+      // affordance, the name and the reading, and one for the value controls as
+      // full-height segments. Both rows are the touch target, and the card's
+      // compact inset is one control gap per side, so the whole composition is
+      // exactly the compact height the wall's row-unit floor is derived from —
+      // it never overflows and never drops a declared control.
+      inner = (
         <div
           style={{
+            position: "relative",
             display: "flex",
-            alignItems: "center",
-            gap: "var(--hearth-space-3)",
+            flexDirection: "column",
+            height: "100%",
+            minHeight: 0,
             minWidth: 0,
+            gap: 0,
           }}
         >
-          <button
-            type="button"
-            aria-pressed={lightOn}
-            aria-label={`Turn ${lightOn ? "off" : "on"} ${deviceLabel}`}
-            disabled={!device.reachable}
-            onClick={(event) => {
-              event.stopPropagation();
-              togglePrimary();
-            }}
-            style={{
-              display: "inline-flex",
-              flex: "none",
-              alignItems: "center",
-              justifyContent: "center",
-              width: controlHeight,
-              height: controlHeight,
-              borderRadius: "var(--hearth-radius-pill)",
-              border: "1px solid var(--hearth-hairline)",
-              background: lightOn ? "var(--hearth-surface-raised)" : "var(--hearth-surface-sunken)",
-              color: lightOn ? "var(--hearth-on)" : "var(--hearth-off)",
-              cursor: controlCursor,
-            }}
-          >
-            {lightOn ? (
-              <Lightbulb size={30} fill="currentColor" aria-hidden />
-            ) : (
-              <Lightbulb size={30} aria-hidden />
-            )}
-          </button>
           <div
             style={{
               display: "flex",
-              flexDirection: "column",
-              gap: "var(--hearth-space-1)",
-              flex: 1,
+              alignItems: "center",
+              gap: "var(--hearth-space-2)",
+              minHeight: controlHeight,
               minWidth: 0,
             }}
           >
+            <button
+              type="button"
+              aria-pressed={lightOn}
+              aria-label={`Turn ${lightOn ? "off" : "on"} ${deviceLabel}`}
+              disabled={!device.reachable}
+              onClick={(event) => {
+                event.stopPropagation();
+                togglePrimary();
+              }}
+              style={{
+                display: "inline-flex",
+                flex: "none",
+                alignItems: "center",
+                justifyContent: "center",
+                width: controlHeight,
+                height: controlHeight,
+                borderRadius: "var(--hearth-radius-pill)",
+                border: "1px solid var(--hearth-hairline)",
+                background: lightOn
+                  ? "var(--hearth-surface-raised)"
+                  : "var(--hearth-surface-sunken)",
+                color: lightOn ? "var(--hearth-on)" : "var(--hearth-off)",
+                cursor: controlCursor,
+              }}
+            >
+              {lightOn ? (
+                <Lightbulb size={26} fill="currentColor" aria-hidden />
+              ) : (
+                <Lightbulb size={26} aria-hidden />
+              )}
+            </button>
             <div
               style={{
                 display: "flex",
                 alignItems: "center",
-                justifyContent: "space-between",
                 gap: "var(--hearth-space-2)",
+                flex: 1,
+                minWidth: 0,
+              }}
+            >
+              {isGroup && <GroupMarker wall={wall} />}
+              <span
+                className="truncate font-semibold"
+                title={deviceLabel}
+                style={{
+                  flex: 1,
+                  minWidth: 0,
+                  color: "var(--hearth-text)",
+                  fontSize: WALL_TITLE_FONT_SIZE,
+                }}
+              >
+                {shortDeviceName(deviceLabel)}
+              </span>
+              <span
+                style={{
+                  flex: "none",
+                  color: lightOn ? "var(--hearth-text)" : "var(--hearth-text-muted)",
+                  fontFamily: "var(--hearth-font-display)",
+                  fontSize: wallReadoutFontSize(wallTier ?? "regular"),
+                  fontWeight: "var(--hearth-weight-bold)",
+                  lineHeight: "var(--hearth-leading-tight)",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {lightOn
+                  ? formatBrightnessPercent(brightnessControl.value, brightnessCapability.range)
+                  : "Off"}
+              </span>
+              <span
+                style={{
+                  display: "flex",
+                  flex: "none",
+                  alignItems: "center",
+                  gap: "var(--hearth-space-1)",
+                }}
+              >
+                {device.hidden && <HiddenMarker wall={wall} />}
+                {observation}
+              </span>
+            </div>
+            {action && <ActionSlot action={action} />}
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              flex: 1,
+              minHeight: 0,
+              minWidth: 0,
+              gap: "var(--hearth-space-2)",
+            }}
+          >
+            <WallCompactValueControl
+              label={brightnessCapability.property}
+              min={brightnessMin}
+              max={brightnessCapability.range?.max ?? 100}
+              step={brightnessCapability.step ?? 1}
+              value={lightOn ? brightnessValue : brightnessMin}
+              onChange={(next) => {
+                // Off-state visual: activating the segment turns the light on
+                // and sets the level, both through the optimistic channels.
+                if (!lightOn) {
+                  actionControl.setValue(
+                    deviceTileToggledValue(actionCapability, actionControl.value),
+                  );
+                }
+                brightnessControl.setValue(next);
+              }}
+              disabled={!device.reachable}
+              cursor={controlCursor}
+              accent={lightOn ? "var(--hearth-accent)" : "var(--hearth-off)"}
+              track="var(--hearth-surface-raised)"
+            />
+            {colorTemperatureCapability && (
+              <WallCompactValueControl
+                label={colorTemperatureCapability.property}
+                min={colorTemperatureCapability.range?.min ?? 0}
+                max={colorTemperatureCapability.range?.max ?? 100}
+                step={colorTemperatureCapability.step ?? 1}
+                value={
+                  typeof colorTemperatureControl.value === "number"
+                    ? colorTemperatureControl.value
+                    : (colorTemperatureCapability.range?.min ?? 0)
+                }
+                onChange={(next) => colorTemperatureControl.setValue(next)}
+                disabled={!device.reachable}
+                cursor={controlCursor}
+                accent="var(--hearth-text)"
+                track="linear-gradient(90deg, var(--hearth-info), var(--hearth-accent))"
+              />
+            )}
+            {colorCapability && (
+              <WallCompactValueControl
+                label={colorCapability.property}
+                min={colorCapability.range?.min ?? 0}
+                max={colorCapability.range?.max ?? 360}
+                step={colorCapability.step ?? 1}
+                value={
+                  typeof colorControl.value === "number"
+                    ? colorControl.value
+                    : (colorCapability.range?.min ?? 0)
+                }
+                onChange={(next) => colorControl.setValue(next)}
+                disabled={!device.reachable}
+                cursor={controlCursor}
+                accent="var(--hearth-text)"
+                track="linear-gradient(90deg, var(--hearth-danger), var(--hearth-stale), var(--hearth-on), var(--hearth-info), var(--hearth-accent))"
+              />
+            )}
+          </div>
+
+          {controlError && (
+            <p
+              role="alert"
+              style={{
+                position: "absolute",
+                left: 0,
+                right: 0,
+                bottom: 0,
+                margin: 0,
+                textAlign: "center",
+                color: "var(--hearth-danger)",
+                fontSize: WALL_LABEL_FONT_SIZE,
+              }}
+            >
+              {controlError}
+            </p>
+          )}
+        </div>
+      );
+    } else {
+      inner = (
+        <div style={WALL_STACK_STYLE}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "var(--hearth-space-3)",
+              minWidth: 0,
+            }}
+          >
+            <button
+              type="button"
+              aria-pressed={lightOn}
+              aria-label={`Turn ${lightOn ? "off" : "on"} ${deviceLabel}`}
+              disabled={!device.reachable}
+              onClick={(event) => {
+                event.stopPropagation();
+                togglePrimary();
+              }}
+              style={{
+                display: "inline-flex",
+                flex: "none",
+                alignItems: "center",
+                justifyContent: "center",
+                width: controlHeight,
+                height: controlHeight,
+                borderRadius: "var(--hearth-radius-pill)",
+                border: "1px solid var(--hearth-hairline)",
+                background: lightOn
+                  ? "var(--hearth-surface-raised)"
+                  : "var(--hearth-surface-sunken)",
+                color: lightOn ? "var(--hearth-on)" : "var(--hearth-off)",
+                cursor: controlCursor,
+              }}
+            >
+              {lightOn ? (
+                <Lightbulb size={30} fill="currentColor" aria-hidden />
+              ) : (
+                <Lightbulb size={30} aria-hidden />
+              )}
+            </button>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "var(--hearth-space-1)",
+                flex: 1,
                 minWidth: 0,
               }}
             >
@@ -1215,162 +1554,175 @@ function AvailableTile({ device, action, size, contained }: AvailableProps) {
                 style={{
                   display: "flex",
                   alignItems: "center",
+                  justifyContent: "space-between",
                   gap: "var(--hearth-space-2)",
-                  flex: 1,
                   minWidth: 0,
                 }}
               >
-                {isGroup && <GroupMarker wall={wall} />}
-                <span
-                  className="truncate font-semibold"
-                  title={deviceLabel}
+                <div
                   style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "var(--hearth-space-2)",
+                    flex: 1,
                     minWidth: 0,
-                    color: "var(--hearth-text)",
-                    fontSize: WALL_TITLE_FONT_SIZE,
                   }}
                 >
-                  {deviceLabel}
-                </span>
+                  {isGroup && <GroupMarker wall={wall} />}
+                  <span
+                    className="truncate font-semibold"
+                    title={deviceLabel}
+                    style={{
+                      minWidth: 0,
+                      color: "var(--hearth-text)",
+                      fontSize: WALL_TITLE_FONT_SIZE,
+                    }}
+                  >
+                    {shortDeviceName(deviceLabel)}
+                  </span>
+                </div>
+                {action && <ActionSlot action={action} />}
               </div>
-              {action && <ActionSlot action={action} />}
+              <span
+                style={{
+                  color: lightOn ? "var(--hearth-text)" : "var(--hearth-text-muted)",
+                  fontFamily: "var(--hearth-font-display)",
+                  fontSize: wallReadoutFontSize(wallTier ?? "regular"),
+                  fontWeight: "var(--hearth-weight-bold)",
+                  lineHeight: "var(--hearth-leading-tight)",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {lightOn
+                  ? formatBrightnessPercent(brightnessControl.value, brightnessCapability.range)
+                  : "Off"}
+              </span>
             </div>
-            <span
+          </div>
+
+          <input
+            type="range"
+            aria-label={brightnessCapability.property}
+            min={brightnessMin}
+            max={brightnessCapability.range?.max ?? 100}
+            step={brightnessCapability.step ?? 1}
+            value={lightOn ? brightnessValue : brightnessMin}
+            disabled={!device.reachable}
+            onChange={(event) => {
+              const next = Number(event.currentTarget.value);
+              // Off-state visual: activating the bar turns the light on and sets
+              // the level, both through the optimistic channels.
+              if (!lightOn) {
+                actionControl.setValue(
+                  deviceTileToggledValue(actionCapability, actionControl.value),
+                );
+              }
+              brightnessControl.setValue(next);
+            }}
+            style={{
+              width: "100%",
+              height: controlHeight,
+              accentColor: lightOn ? "var(--hearth-accent)" : "var(--hearth-off)",
+              cursor: controlCursor,
+            }}
+          />
+
+          {colorTemperatureCapability && (
+            <div
               style={{
-                color: lightOn ? "var(--hearth-text)" : "var(--hearth-text-muted)",
-                fontFamily: "var(--hearth-font-display)",
-                fontSize: WALL_METRIC_FONT_SIZE,
-                fontWeight: "var(--hearth-weight-bold)",
-                lineHeight: "var(--hearth-leading-tight)",
+                display: "flex",
+                flexDirection: "column",
+                gap: "var(--hearth-space-1)",
+                minWidth: 0,
               }}
             >
-              {lightOn
-                ? formatBrightnessPercent(brightnessControl.value, brightnessCapability.range)
-                : "Off"}
-            </span>
-          </div>
+              <span
+                aria-hidden
+                style={{
+                  height: 6,
+                  borderRadius: "var(--hearth-radius-pill)",
+                  background: "linear-gradient(90deg, var(--hearth-info), var(--hearth-accent))",
+                }}
+              />
+              <input
+                type="range"
+                aria-label={colorTemperatureCapability.property}
+                min={colorTemperatureCapability.range?.min ?? 0}
+                max={colorTemperatureCapability.range?.max ?? 100}
+                step={colorTemperatureCapability.step ?? 1}
+                value={
+                  typeof colorTemperatureControl.value === "number"
+                    ? colorTemperatureControl.value
+                    : (colorTemperatureCapability.range?.min ?? 0)
+                }
+                disabled={!device.reachable}
+                onChange={(event) =>
+                  colorTemperatureControl.setValue(Number(event.currentTarget.value))
+                }
+                style={{
+                  width: "100%",
+                  height: controlHeight,
+                  accentColor: "var(--hearth-accent)",
+                  cursor: controlCursor,
+                }}
+              />
+            </div>
+          )}
+
+          {colorCapability && (
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "var(--hearth-space-1)",
+                minWidth: 0,
+              }}
+            >
+              <span
+                aria-hidden
+                style={{
+                  height: 6,
+                  borderRadius: "var(--hearth-radius-pill)",
+                  background:
+                    "linear-gradient(90deg, var(--hearth-danger), var(--hearth-stale), var(--hearth-on), var(--hearth-info), var(--hearth-accent))",
+                }}
+              />
+              <input
+                type="range"
+                aria-label={colorCapability.property}
+                min={colorCapability.range?.min ?? 0}
+                max={colorCapability.range?.max ?? 360}
+                step={colorCapability.step ?? 1}
+                value={
+                  typeof colorControl.value === "number"
+                    ? colorControl.value
+                    : (colorCapability.range?.min ?? 0)
+                }
+                disabled={!device.reachable}
+                onChange={(event) => colorControl.setValue(Number(event.currentTarget.value))}
+                style={{
+                  width: "100%",
+                  height: controlHeight,
+                  accentColor: "var(--hearth-info)",
+                  cursor: controlCursor,
+                }}
+              />
+            </div>
+          )}
+
+          {controlError && (
+            <p
+              role="alert"
+              style={{ margin: 0, color: "var(--hearth-danger)", fontSize: WALL_BODY_FONT_SIZE }}
+            >
+              {controlError}
+            </p>
+          )}
+
+          {footer}
         </div>
-
-        <input
-          type="range"
-          aria-label={brightnessCapability.property}
-          min={brightnessMin}
-          max={brightnessCapability.range?.max ?? 100}
-          step={brightnessCapability.step ?? 1}
-          value={lightOn ? brightnessValue : brightnessMin}
-          disabled={!device.reachable}
-          onChange={(event) => {
-            const next = Number(event.currentTarget.value);
-            // Off-state visual: activating the bar turns the light on and sets
-            // the level, both through the optimistic channels.
-            if (!lightOn) {
-              actionControl.setValue(deviceTileToggledValue(actionCapability, actionControl.value));
-            }
-            brightnessControl.setValue(next);
-          }}
-          style={{
-            width: "100%",
-            height: controlHeight,
-            accentColor: lightOn ? "var(--hearth-accent)" : "var(--hearth-off)",
-            cursor: controlCursor,
-          }}
-        />
-
-        {colorTemperatureCapability && (
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: "var(--hearth-space-1)",
-              minWidth: 0,
-            }}
-          >
-            <span
-              aria-hidden
-              style={{
-                height: 6,
-                borderRadius: "var(--hearth-radius-pill)",
-                background: "linear-gradient(90deg, var(--hearth-info), var(--hearth-accent))",
-              }}
-            />
-            <input
-              type="range"
-              aria-label={colorTemperatureCapability.property}
-              min={colorTemperatureCapability.range?.min ?? 0}
-              max={colorTemperatureCapability.range?.max ?? 100}
-              step={colorTemperatureCapability.step ?? 1}
-              value={
-                typeof colorTemperatureControl.value === "number"
-                  ? colorTemperatureControl.value
-                  : (colorTemperatureCapability.range?.min ?? 0)
-              }
-              disabled={!device.reachable}
-              onChange={(event) =>
-                colorTemperatureControl.setValue(Number(event.currentTarget.value))
-              }
-              style={{
-                width: "100%",
-                height: controlHeight,
-                accentColor: "var(--hearth-accent)",
-                cursor: controlCursor,
-              }}
-            />
-          </div>
-        )}
-
-        {colorCapability && (
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: "var(--hearth-space-1)",
-              minWidth: 0,
-            }}
-          >
-            <span
-              aria-hidden
-              style={{
-                height: 6,
-                borderRadius: "var(--hearth-radius-pill)",
-                background:
-                  "linear-gradient(90deg, var(--hearth-danger), var(--hearth-stale), var(--hearth-on), var(--hearth-info), var(--hearth-accent))",
-              }}
-            />
-            <input
-              type="range"
-              aria-label={colorCapability.property}
-              min={colorCapability.range?.min ?? 0}
-              max={colorCapability.range?.max ?? 360}
-              step={colorCapability.step ?? 1}
-              value={
-                typeof colorControl.value === "number"
-                  ? colorControl.value
-                  : (colorCapability.range?.min ?? 0)
-              }
-              disabled={!device.reachable}
-              onChange={(event) => colorControl.setValue(Number(event.currentTarget.value))}
-              style={{
-                width: "100%",
-                height: controlHeight,
-                accentColor: "var(--hearth-info)",
-                cursor: controlCursor,
-              }}
-            />
-          </div>
-        )}
-
-        {controlError && (
-          <p
-            role="alert"
-            style={{ margin: 0, color: "var(--hearth-danger)", fontSize: WALL_BODY_FONT_SIZE }}
-          >
-            {controlError}
-          </p>
-        )}
-
-        {footer}
-      </div>
-    );
+      );
+    }
   } else if (wall) {
     // The wall's remaining archetypes — `toggle`, `cover`, and the generic
     // `default` — are framed with Hearth chrome (design.md D1, D7;

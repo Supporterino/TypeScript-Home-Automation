@@ -20,7 +20,7 @@
  * temporal-dead-zone error on that cycle. The value is a constant, so the
  * deferred read is stable.
  */
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { WALL_MIN_CONTROL_GAP } from "../registry.js";
 import { wallTileMetrics } from "../scale.js";
 import {
@@ -190,6 +190,35 @@ export function WallCardAffordance({ children }: { children: ReactNode }) {
 }
 
 /**
+ * The touch-sized Hearth affordance a wall card's control or route draws: a pill
+ * on the raised surface with a hairline border, at least the wall's minimum touch
+ * target in *both* directions (design.md D4; specs/wall-display "Touch
+ * Operation"). {@link WallButton} draws it as a button and a route affordance
+ * draws it as a link (the link widget, design.md D11), so a control and a route
+ * cannot drift apart visually. The minimum side matters for an icon-only
+ * affordance, which would otherwise fall under the wall's touch target.
+ */
+export function wallAffordanceStyle(): CSSProperties {
+  const target = wallTileMetrics("wall").control;
+  return {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "var(--hearth-space-2)",
+    minHeight: target,
+    minWidth: target,
+    padding: "0 var(--hearth-space-4)",
+    borderRadius: "var(--hearth-radius-pill)",
+    border: "1px solid var(--hearth-hairline)",
+    background: "var(--hearth-surface-raised)",
+    color: "var(--hearth-text)",
+    fontFamily: "var(--hearth-font-display)",
+    fontSize: WALL_BODY_FONT_SIZE,
+    fontWeight: "var(--hearth-weight-semibold)",
+  };
+}
+
+/**
  * A wall control: a touch-sized, Hearth-token button (its minimum side is the
  * wall's {@link wallTileMetrics} target, design.md D4).
  */
@@ -211,19 +240,7 @@ export function WallButton({
       disabled={disabled}
       onClick={onClick}
       style={{
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: "var(--hearth-space-2)",
-        minHeight: wallTileMetrics("wall").control,
-        padding: "0 var(--hearth-space-4)",
-        borderRadius: "var(--hearth-radius-pill)",
-        border: "1px solid var(--hearth-hairline)",
-        background: "var(--hearth-surface-raised)",
-        color: "var(--hearth-text)",
-        fontFamily: "var(--hearth-font-display)",
-        fontSize: WALL_BODY_FONT_SIZE,
-        fontWeight: "var(--hearth-weight-semibold)",
+        ...wallAffordanceStyle(),
         cursor: disabled ? "progress" : "pointer",
         opacity: disabled ? 0.6 : 1,
       }}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import type { Capability, DeviceDescriptor, RoomMember } from "@ts-ha/shared";
-import { actuatableRoomMembers } from "../src/app/wall/widgets/room-model.js";
+import { actuatableRoomMembers, roomTiles } from "../src/app/wall/widgets/room-model.js";
 
 // Pure member selection for the wall room widget — no DOM. An all-off/all-on
 // command must include every actuatable member and exclude report-only (and
@@ -87,5 +87,45 @@ describe("actuatableRoomMembers", () => {
     ];
 
     expect(actuatableRoomMembers(members)).toEqual([]);
+  });
+});
+
+describe("roomTiles", () => {
+  it("carries each available member with its live device", () => {
+    const members: RoomMember[] = [
+      member("zigbee:lamp", descriptor("zigbee:lamp", [writableOnOff()])),
+    ];
+
+    const tiles = roomTiles(members);
+    expect(tiles.map((tile) => tile.qualifiedId)).toEqual(["zigbee:lamp"]);
+    expect(tiles[0]?.device?.qualifiedId).toBe("zigbee:lamp");
+  });
+
+  it("draws the available members first, then the unavailable ones", () => {
+    // The order the card has always drawn: live tiles, then the members whose
+    // device is gone (design.md D13; specs/wall-display "Widget Catalog").
+    const members: RoomMember[] = [
+      member("zigbee:gone", null),
+      member("zigbee:lamp", descriptor("zigbee:lamp", [writableOnOff()])),
+      member("zigbee:unpaired", null),
+      member("zigbee:plug", descriptor("zigbee:plug", [writableOnOff()])),
+    ];
+
+    expect(roomTiles(members).map((tile) => tile.qualifiedId)).toEqual([
+      "zigbee:lamp",
+      "zigbee:plug",
+      "zigbee:gone",
+      "zigbee:unpaired",
+    ]);
+    expect(roomTiles(members).map((tile) => tile.device !== null)).toEqual([
+      true,
+      true,
+      false,
+      false,
+    ]);
+  });
+
+  it("returns no tiles for an empty room", () => {
+    expect(roomTiles([])).toEqual([]);
   });
 });

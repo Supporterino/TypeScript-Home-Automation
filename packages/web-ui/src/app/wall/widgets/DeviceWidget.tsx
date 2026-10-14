@@ -15,7 +15,7 @@ import type { WallWidgetProps } from "../registry.js";
 import { WallCardMessage } from "./card-vocab.js";
 import { WallDeviceTile } from "./WallDeviceTile.js";
 
-export function DeviceWidget({ widget, contained }: WallWidgetProps) {
+export function DeviceWidget({ widget, contained, tier, cardForm }: WallWidgetProps) {
   const { devicesByQualifiedId } = useDataStore();
   const qualifiedId =
     typeof widget.config.qualifiedId === "string" ? widget.config.qualifiedId : "";
@@ -38,5 +38,5 @@ export function DeviceWidget({ widget, contained }: WallWidgetProps) {
     );
   }
 
-  return <WallDeviceTile device={device} contained={contained} />;
+  return <WallDeviceTile device={device} contained={contained} tier={tier} cardForm={cardForm} />;
 }

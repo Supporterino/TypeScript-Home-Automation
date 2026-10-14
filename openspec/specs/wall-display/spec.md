@@ -44,9 +44,10 @@ MUST NOT render as a blank panel without explanation.
 ### Requirement: Widget Grid Layout
 
 Each widget in a profile MUST be placed on a fixed-column grid, declaring its
-position and its width and height in grid cells. The grid MUST reflow so a
-profile renders usably in both portrait and landscape orientations without
-requiring a separate profile per orientation.
+position and its width and height in grid cells, and MAY declare a zone label
+(see "Wall Zones"). The grid MUST reflow so a profile renders usably in both
+portrait and landscape orientations without requiring a separate profile per
+orientation.
 
 Every widget MUST have sensible default dimensions, and a widget type MAY
 declare minimum and maximum dimensions that the editor MUST respect so a
@@ -68,6 +69,34 @@ widget cannot be sized smaller than it can meaningfully render.
 - **WHEN** a user attempts to size a widget below its type's declared minimum
 - **THEN** the editor prevents the undersized placement
 
+#### Scenario: A zone label does not change placement
+
+- **WHEN** widgets that share a zone label are placed on the grid
+- **THEN** each occupies the grid cells its configuration declares
+
+### Requirement: Wall Zones
+
+A wall widget MAY declare an optional zone label. The wall MUST group the widgets
+that share a zone label into one zone: a labelled region drawn with the wall's
+band surface. A widget that declares no zone label MUST render outside any zone.
+Grouping MUST NOT change a widget's authored placement.
+
+#### Scenario: A shared zone label forms one band
+
+- **WHEN** a profile places widgets that share a zone label
+- **THEN** those widgets render inside one band carrying the zone's label and the
+  wall's band surface
+
+#### Scenario: An unzoned widget renders outside a band
+
+- **WHEN** a widget declares no zone label
+- **THEN** it renders without a band
+
+#### Scenario: A zone does not move its widgets
+
+- **WHEN** widgets that share a zone label are rendered
+- **THEN** each still occupies the grid cells its configuration declares
+
 ### Requirement: Wall Glanceability
 
 A wall MUST be composed so it is legible at a glance from across a room, and its
@@ -81,9 +110,13 @@ natural height, centered, rather than stretching every card to fill the panel.
 
 The wall MUST apply a type scale larger than the dashboard's body scale, sized
 for viewing at distance, and MUST present ambient readouts distinctly from touch
-controls. The wall's type ramp MUST be owned by the wall and MUST declare its own
-minimum body size; no wall body text may render below that floor. The floor MUST
-be at least 16 px and is expected to exceed it for distance legibility.
+controls — by their surface and by the container level they occupy. The wall's
+type ramp MUST be owned by the wall, MUST declare a tier for a grouped readout
+distinct from the hero and metric tiers, and MUST declare its own minimum body
+size; no wall body text may render below that floor. The floor MUST be at least
+16 px and is expected to exceed it for distance legibility. A readout's value
+MUST NOT be rendered separately from its unit, and a name too long for its card
+MUST be shortened rather than truncated to a prefix that several cards share.
 
 A widget's title MUST be shown only when the profile explicitly configures one;
 otherwise the widget's own content provides its labelling.
@@ -125,6 +158,42 @@ The wall MUST maintain a minimum gutter between widgets and from the panel edge.
 - **THEN** adjacent widgets and the panel edge are separated by at least the
   wall's minimum gutter
 
+#### Scenario: Grouped readouts do not compete with the hero
+
+- **WHEN** a profile presents a hero readout and a group of readouts
+- **THEN** the grouped readouts render on a tier below the hero tier
+
+#### Scenario: A name is shortened, not truncated
+
+- **WHEN** a device's name is longer than its card can show in full
+- **THEN** the card presents a shortened form of the name, rather than a
+  truncated prefix that does not distinguish it from another card
+
+### Requirement: Span-Aware Card Presentation
+
+A card MUST compose its content for its declared span in both directions: its
+content MUST NOT overflow the cells it was placed in, and a card placed at a
+larger span MUST NOT repeat the composition it renders at a smaller span. A
+readout MUST NOT render its value separately from its unit.
+
+#### Scenario: A card's content fits its span
+
+- **WHEN** a card for a device that declares additional controls is placed at its
+  type's minimum span
+- **THEN** every control it presents stays within the card's cells and the card
+  does not overflow
+
+#### Scenario: A large span is composed
+
+- **WHEN** a card is placed at a span larger than its type's minimum
+- **THEN** its composition adapts to the space rather than repeating its
+  minimum-span composition
+
+#### Scenario: A value stays with its unit
+
+- **WHEN** a readout's value and unit are rendered
+- **THEN** they are not split onto separate lines
+
 ### Requirement: Widget Catalog
 
 The system MUST provide at least the following widget types, each independently
@@ -140,6 +209,8 @@ configurable:
 - a temperature reading from a configured sensor device
 - a status and presence summary
 - one or more scene buttons that trigger an automation
+- a link that opens another named wall profile
+- a device grid over an explicitly selected set of devices
 
 A widget whose backing feature is unconfigured — for example weather when no
 weather service is registered — MUST report the feature as unconfigured within
@@ -213,6 +284,69 @@ command fails.
   against the device's reported state, reverting and surfacing the failure if
   the command fails
 
+### Requirement: Wall Navigation
+
+A wall profile MAY include a link widget that opens another named wall profile.
+Activating a link MUST open the target profile's wall at its address. A wall
+opened from a link MUST present an affordance to return to the wall it was opened
+from. A link whose target profile does not exist MUST present the same
+explanation an unknown profile presents, rather than a blank or broken surface.
+Navigation MUST use the wall's minimum touch target and MUST NOT require a hover
+interaction.
+
+#### Scenario: A link opens its target wall
+
+- **WHEN** a user activates a link widget
+- **THEN** the named target profile's wall opens
+
+#### Scenario: A wall reached from a link offers a way back
+
+- **WHEN** a wall is open having been reached from a link
+- **THEN** it presents an affordance that returns to the wall it was opened from
+
+#### Scenario: A broken link is explained
+
+- **WHEN** a link's target profile does not exist
+- **THEN** the target wall presents the unknown-profile explanation rather than a
+  blank surface
+
+#### Scenario: Navigation is touch-operable
+
+- **WHEN** a wall presents a link
+- **THEN** its touch target meets the wall's minimum and it can be activated
+  without hovering
+
+### Requirement: Device Grid Widget
+
+A wall MUST provide a device-grid widget whose device set the profile author
+explicitly selects in the editor. It MUST render the selection as a uniform grid
+of simple device tiles that actuate and report state as a wall device card does
+elsewhere. When the selection cannot fit the widget's span at the wall's floors,
+the widget MUST page it rather than overflow or scroll, and MUST present a page
+affordance. It MUST meet the wall's touch target and not require hover.
+
+#### Scenario: The selected devices are rendered
+
+- **WHEN** a device grid widget is configured with a set of devices
+- **THEN** it renders exactly those devices as a uniform grid of tiles
+
+#### Scenario: A selection too large pages rather than scrolls
+
+- **WHEN** a device grid's selection cannot fit its span at the floors
+- **THEN** the grid pages the selection, presents a page affordance, and does not
+  scroll
+
+#### Scenario: Each tile behaves like a wall device
+
+- **WHEN** a device grid tile is activated or its device changes
+- **THEN** it actuates and reports state as a wall device card does elsewhere
+
+#### Scenario: A device grid is touch-operable
+
+- **WHEN** a device grid is shown on a wall
+- **THEN** every tile and page control meets the wall's minimum touch target and
+  is operable without hovering
+
 ### Requirement: Wall Device Presentation
 
 A device shown on a wall MUST present its actuation and its state, and MUST NOT
@@ -242,7 +376,10 @@ A light card MUST present its on/off control as a distinct affordance of its own
 present its brightness control in an off state that turns the light on when
 activated. A light card MUST present a colour-temperature or colour control only
 when the device declares the corresponding capability, and MUST NOT present a
-control the device cannot express.
+control the device cannot express. A light card MUST fit the type's declared
+minimum span: where the controls' full form does not fit that span, the card MUST
+use a compact form that still presents every control the device declares, rather
+than dropping a control or overflowing the card.
 
 A readout card MUST present its value as the card's dominant content without a
 control surface competing with it.
@@ -292,6 +429,13 @@ MUST NOT nest one control surface inside another.
   capability, or neither
 - **THEN** its wall card presents a control for a declared capability only and
   presents no control for an undeclared one
+
+#### Scenario: A light card fits its minimum span
+
+- **WHEN** a light that declares brightness, colour-temperature, and colour is
+  placed at its type's minimum span
+- **THEN** its card presents every declared control within its cells and no
+  control overflows the card
 
 #### Scenario: A value device keeps its embedded control
 
@@ -400,6 +544,39 @@ MUST use the same manual-trigger path the admin interface uses.
 - **WHEN** a scene button's automation cannot be triggered
 - **THEN** the failure is surfaced on the wall without taking down the profile
 
+### Requirement: Panel Fit
+
+The wall MUST NOT scroll. It MUST resolve a composition to fit its panel, with
+every control at or above the wall's minimum touch target and no wall body text
+below the wall's body floor. An authored composition that cannot fit those floors
+MUST render a contained explanation. A widget whose own content cannot fit the
+span it was placed at MUST page its content rather than overflow or scroll, and
+MUST present a page affordance.
+
+#### Scenario: A composition fits the panel
+
+- **WHEN** a profile's widgets fit the panel at the floors
+- **THEN** the composition is rendered within the panel and the panel does not
+  scroll
+
+#### Scenario: An unfittable profile is explained
+
+- **WHEN** an authored composition cannot fit the panel at the floors
+- **THEN** the panel presents a contained explanation rather than a clipped or
+  scrolling composition
+
+#### Scenario: The floors hold
+
+- **WHEN** any composition is resolved
+- **THEN** every control meets the wall's minimum touch target and no wall body
+  text falls below the wall's body floor
+
+#### Scenario: A widget pages rather than scrolls
+
+- **WHEN** a widget holds more content than its span can present at the floors
+- **THEN** it pages the content and presents a page affordance, and the wall does
+  not scroll
+
 ### Requirement: Wall Configuration Editor
 
 Wall profiles MUST be created, renamed, deleted, and configured from the admin
@@ -418,6 +595,13 @@ so a profile with many widgets remains scannable without excessive scrolling.
 Each widget MUST remain a self-contained, labelled group carrying its placement
 controls and its type-specific configuration, and a smaller viewport MUST NOT be
 made to scroll horizontally.
+
+The editor MUST present the draft profile at the wall's target panel aspect
+ratio, so a user sees the composition as the panel will render it, and MUST
+report whether the draft fits the panel at the wall's floors and how many pages a
+device grid widget in the draft would present. The editor MUST allow configuring
+a link widget's target profile and a device grid widget's selected devices. The
+editor MUST refuse to save a draft that cannot fit.
 
 #### Scenario: A profile is built in the editor
 
@@ -444,6 +628,31 @@ made to scroll horizontally.
 - **WHEN** a profile with many widgets is edited on a wide viewport
 - **THEN** the widgets are laid out in two or more columns, each remaining a
   self-contained group, without horizontal scrolling
+
+#### Scenario: The draft is presented at panel size
+
+- **WHEN** a user is editing a profile
+- **THEN** the draft is presented at the wall's target panel aspect ratio
+
+#### Scenario: An unfittable draft is refused
+
+- **WHEN** a draft cannot fit the panel at the wall's floors
+- **THEN** the editor reports it and refuses to save the draft
+
+#### Scenario: A link target is configured
+
+- **WHEN** a user configures a link widget
+- **THEN** the widget's target wall profile is set and saved
+
+#### Scenario: A device grid's devices are selected
+
+- **WHEN** a user configures a device grid widget
+- **THEN** the devices it presents are the ones the user selected
+
+#### Scenario: A device grid's pages are reported
+
+- **WHEN** a device grid widget's selection cannot fit its span at the floors
+- **THEN** the editor reports how many pages it would present
 
 ### Requirement: Profile Changes Reach Open Walls
 

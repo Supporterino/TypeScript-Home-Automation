@@ -1,0 +1,64 @@
+/**
+ * The wall device-grid widget (wall-zones-and-fit D12; specs/wall-display
+ * "Device Grid Widget", "Panel Fit", "Widget Catalog"). Renders the device set
+ * the author selected explicitly as a uniform grid of the shared wall device
+ * card, one page at a time.
+ *
+ * The grid's own content can exceed the span it was placed at, and the wall never
+ * scrolls (design.md D5): the page math in `wall/pages.ts` decides how many
+ * devices a page presents, and the grid draws exactly that page through the
+ * shared {@link PagedTileGrid} — touch page controls rather than overflow or
+ * scroll. Every tile is the shared {@link WallDeviceTile}, so ranking, optimistic
+ * override, state encoding, and the touch-target scale stay single-sourced; the
+ * frame draws the card's surface, so the contained tiles draw none of their own.
+ */
+import { useDataStore } from "../../lib/data-store.js";
+import { widgetTitle } from "../frame.js";
+import type { WallWidgetProps } from "../registry.js";
+import { WallCardMessage } from "./card-vocab.js";
+import { deviceGridIds } from "./device-grid-model.js";
+import { PagedTileGrid } from "./PagedTileGrid.js";
+import { WallDeviceTile } from "./WallDeviceTile.js";
+
+export function DeviceGridWidget({ widget, contained, rowUnit }: WallWidgetProps) {
+  const { devicesByQualifiedId } = useDataStore();
+  const ids = deviceGridIds(widget.config);
+
+  if (ids.length === 0) {
+    return (
+      <div style={{ display: "flex", height: "100%", alignItems: "center" }}>
+        <WallCardMessage>
+          No devices selected. Choose the devices this grid shows in the wall editor.
+        </WallCardMessage>
+      </div>
+    );
+  }
+
+  return (
+    <PagedTileGrid
+      items={ids}
+      keyOf={(qualifiedId) => qualifiedId}
+      // Each tile is the device card at its minimum span — the cell the page plan
+      // and the wall's row-unit floor are derived for — so its form is `compact`
+      // (wall-zones-and-fit D3, D4).
+      renderTile={(qualifiedId) => {
+        const device = devicesByQualifiedId.get(qualifiedId);
+        return device ? (
+          <WallDeviceTile device={device} contained={contained} tier="compact" cardForm="compact" />
+        ) : (
+          <WallDeviceTile
+            unavailable
+            qualifiedId={qualifiedId}
+            contained={contained}
+            tier="compact"
+            cardForm="compact"
+          />
+        );
+      }}
+      span={widget}
+      rowUnit={rowUnit}
+      titled={widgetTitle(widget) !== null}
+      label="devices"
+    />
+  );
+}

@@ -1,7 +1,8 @@
 /**
- * The wall room widget (design.md D11, D13; specs/wall-display "Widget Catalog",
- * "A room widget commands the room"). Shows a configured room's devices as
- * touch-sized tiles plus room-wide all-on/all-off controls.
+ * The wall room widget (design.md D11, D13; wall-zones-and-fit D5;
+ * specs/wall-display "Widget Catalog", "A room widget commands the room", "Panel
+ * Fit"). Shows a configured room's devices as touch-sized tiles plus room-wide
+ * all-on/all-off controls.
  *
  * The batch command reuses the same flow as `RoomView`: capable members are
  * grouped by the on/off property family they declare, every actuatable member
@@ -15,6 +16,10 @@
  * room-wide all-on/all-off controls as the card's action-affordance slot. A
  * control widget: the frame draws the surface, so each contained tile draws
  * none of its own (specs/wall-display "A card is a single surface").
+ *
+ * A room larger than the card can show pages its tiles through the wall's shared
+ * pagination layer — one page at a time with touch page controls — rather than
+ * scrolling its tile area, so the wall never scrolls (wall-zones-and-fit D5).
  */
 import { House, Info, Power } from "lucide-react";
 import { useState } from "react";
@@ -27,6 +32,7 @@ import {
 } from "../../lib/room-command.js";
 import type { DeviceDescriptor } from "../../types.js";
 import { Spinner } from "../../ui/index.js";
+import { widgetTitle } from "../frame.js";
 import type { WallWidgetProps } from "../registry.js";
 import { WALL_BODY_FONT_SIZE } from "../type-ramp.js";
 import {
@@ -39,10 +45,22 @@ import {
   WallCardMetric,
   wallControlGapPx,
 } from "./card-vocab.js";
-import { actuatableRoomMembers } from "./room-model.js";
+import { PagedTileGrid } from "./PagedTileGrid.js";
+import { actuatableRoomMembers, roomTiles } from "./room-model.js";
 import { WallDeviceTile } from "./WallDeviceTile.js";
 
-export function RoomWidget({ widget, contained }: WallWidgetProps) {
+/**
+ * The grid rows the card's own chrome — the room glyph with its name, the member
+ * count, and the room-wide command row — consumes above the tiles at the resolved
+ * row unit. The page plan reserves it, so a page never promises a tile row the
+ * card cannot show. The command's outcome is deliberately *not* part of it: the
+ * error and the skipped count are drawn over the card's foot, so reporting a
+ * command neither eats a tile row on a card at its minimum span nor reflows (and
+ * so re-pages) the tiles that command just actuated.
+ */
+const ROOM_HEADER_ROWS = 3;
+
+export function RoomWidget({ widget, contained, rowUnit }: WallWidgetProps) {
   const { rooms, applyOptimisticOverride, revertOptimisticOverride } = useDataStore();
   const roomId = typeof widget.config.roomId === "string" ? widget.config.roomId : "";
   const room = rooms.find((candidate) => candidate.id === roomId);
@@ -59,8 +77,8 @@ export function RoomWidget({ widget, contained }: WallWidgetProps) {
     );
   }
 
-  const availableMembers = room.members.filter((member) => member.available && member.device);
-  const unavailableMembers = room.members.filter((member) => !member.available);
+  const tileCount = room.members.length;
+  const tiles = roomTiles(room.members);
   const hasActuatable = actuatableRoomMembers(room.members).length > 0;
 
   /**
@@ -127,10 +145,12 @@ export function RoomWidget({ widget, contained }: WallWidgetProps) {
   }
 
   const memberCount = room.members.length;
+  const hasNotice = commandError !== null || skippedCount > 0;
 
   return (
     <div
       style={{
+        position: "relative",
         display: "flex",
         height: "100%",
         minHeight: 0,
@@ -158,65 +178,94 @@ export function RoomWidget({ widget, contained }: WallWidgetProps) {
         </WallCardAffordance>
       )}
 
-      {commandError && (
-        <p
-          role="alert"
-          style={{ margin: 0, color: "var(--hearth-danger)", fontSize: WALL_BODY_FONT_SIZE }}
-        >
-          {commandError}
-        </p>
-      )}
-
-      {skippedCount > 0 && (
-        <span
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "var(--hearth-space-1)",
-            alignSelf: "flex-start",
-            padding: "2px var(--hearth-space-2)",
-            borderRadius: "var(--hearth-radius-pill)",
-            border: "1px solid var(--hearth-hairline)",
-            color: "var(--hearth-text-muted)",
-            fontSize: "var(--hearth-text-chip)",
-            fontWeight: "var(--hearth-weight-semibold)",
-          }}
-        >
-          <Info size={14} aria-hidden />
-          {skippedCount} skipped (no control)
-        </span>
-      )}
-
-      {availableMembers.length === 0 && unavailableMembers.length === 0 ? (
+      {tiles.length === 0 ? (
         <WallCardMessage>No devices in this room yet.</WallCardMessage>
       ) : (
-        <div style={{ minHeight: 0, flex: 1, overflowY: "auto" }}>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 180px), 1fr))",
-              alignContent: "start",
-              gap: `${wallControlGapPx()}px`,
-            }}
-          >
-            {availableMembers.map((member) =>
-              member.device ? (
-                <WallDeviceTile
-                  key={member.qualifiedId}
-                  device={member.device}
-                  contained={contained}
-                />
-              ) : null,
-            )}
-            {unavailableMembers.map((member) => (
+        <PagedTileGrid
+          items={tiles}
+          keyOf={(tile) => tile.qualifiedId}
+          renderTile={(tile) =>
+            tile.device ? (
+              // A paged tile is the device card at the wall's minimum-span tile
+              // cell, so it composes the tier and form that cell resolves — the
+              // same ones the device grid gives its tiles (wall-zones-and-fit D4).
               <WallDeviceTile
-                key={member.qualifiedId}
-                unavailable
-                qualifiedId={member.qualifiedId}
+                device={tile.device}
                 contained={contained}
+                tier="compact"
+                cardForm="compact"
               />
-            ))}
-          </div>
+            ) : (
+              <WallDeviceTile
+                unavailable
+                qualifiedId={tile.qualifiedId}
+                contained={contained}
+                tier="compact"
+                cardForm="compact"
+              />
+            )
+          }
+          span={widget}
+          rowUnit={rowUnit}
+          reservedRows={ROOM_HEADER_ROWS}
+          titled={widgetTitle(widget) !== null}
+          label="room devices"
+        />
+      )}
+
+      {/* The command's outcome is drawn *over* the card's foot rather than in its
+          column, so the card's own layout height — the geometry the page plan
+          reserved for its header and its tile rows — does not change when a
+          command reports. A failure must not reflow, and so re-page, the very
+          tiles it just commanded (wall-zones-and-fit D5; specs/wall-display
+          "Panel Fit"). The notices are informational, so they take no pointer
+          events: the tile row under them stays fully operable by touch. */}
+      {hasNotice && (
+        <div
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            bottom: 0,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: "var(--hearth-space-1)",
+            pointerEvents: "none",
+          }}
+        >
+          {commandError && (
+            <p
+              role="alert"
+              style={{
+                margin: 0,
+                textAlign: "center",
+                color: "var(--hearth-danger)",
+                fontSize: WALL_BODY_FONT_SIZE,
+              }}
+            >
+              {commandError}
+            </p>
+          )}
+
+          {skippedCount > 0 && (
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "var(--hearth-space-1)",
+                padding: "2px var(--hearth-space-2)",
+                borderRadius: "var(--hearth-radius-pill)",
+                border: "1px solid var(--hearth-hairline)",
+                color: "var(--hearth-text-muted)",
+                fontSize: "var(--hearth-text-chip)",
+                fontWeight: "var(--hearth-weight-semibold)",
+              }}
+            >
+              <Info size={14} aria-hidden />
+              {skippedCount} skipped (no control)
+            </span>
+          )}
         </div>
       )}
     </div>

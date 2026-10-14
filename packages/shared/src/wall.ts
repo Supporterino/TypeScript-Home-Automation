@@ -28,6 +28,14 @@ export const WALL_GRID_MAX_ROWS = 24;
 /** The profile shape version, carried so the config can evolve (design.md D10). */
 export const WALL_PROFILE_VERSION = 1;
 
+/**
+ * Maximum length of a widget's optional zone label (wall-zones-and-fit D1;
+ * specs/wall-display "Wall Zones"). The label is drawn as a band caption, so a
+ * profile cannot make an arbitrarily long one; the bound is declared once here
+ * so the schema and the editor validate against the same value.
+ */
+export const WALL_ZONE_MAX_LENGTH = 40;
+
 /** The widget types a profile may place (specs/wall-display "Widget Catalog"). */
 export const WALL_WIDGET_TYPES = [
   "clock",
@@ -39,6 +47,8 @@ export const WALL_WIDGET_TYPES = [
   "temperature",
   "status",
   "scene",
+  "link",
+  "devices",
 ] as const;
 
 /** A supported widget type. */
@@ -89,6 +99,29 @@ export interface WallSceneWidgetConfig {
 export type WallFavoritesWidgetConfig = Record<string, unknown>;
 
 /**
+ * Config for a link widget: the wall profile to open, with an optional label
+ * (wall-zones-and-fit D11; specs/wall-display "Wall Navigation", "Widget
+ * Catalog"). `target` names another saved profile; a target that does not
+ * resolve renders the wall's unknown-profile explanation.
+ */
+export interface WallLinkWidgetConfig {
+  readonly target: string;
+  readonly label?: string;
+}
+
+/**
+ * Config for the device-grid widget: the devices the author explicitly
+ * selected, with an optional title (wall-zones-and-fit D12; specs/wall-display
+ * "Device Grid Widget", "Widget Catalog"). The selection is authored rather
+ * than enumerated from the inventory; the grid pages a selection larger than
+ * its span rather than scrolling.
+ */
+export interface WallDeviceGridWidgetConfig {
+  readonly qualifiedIds: readonly string[];
+  readonly title?: string;
+}
+
+/**
  * One configured widget in a profile.
  *
  * `id` is unique within its layout and stable across an edit so a live wall
@@ -98,7 +131,9 @@ export type WallFavoritesWidgetConfig = Record<string, unknown>;
  * `x`/`y`/`w`/`h` place the widget on the {@link WALL_GRID_COLUMNS}-column
  * grid: `x`/`y` are the top-left cell (≥ 0), `w`/`h` the span in cells (≥ 1),
  * `x + w` must not exceed the column count, and `y + h` must not exceed
- * {@link WALL_GRID_MAX_ROWS} (design.md D4).
+ * {@link WALL_GRID_MAX_ROWS} (design.md D4). `zone` is an optional label that
+ * groups the widgets sharing it into one band without changing any placement
+ * (wall-zones-and-fit D1; specs/wall-display "Wall Zones").
  */
 export interface WallWidget {
   readonly id: string;
@@ -108,6 +143,7 @@ export interface WallWidget {
   readonly y: number;
   readonly w: number;
   readonly h: number;
+  readonly zone?: string;
 }
 
 /**

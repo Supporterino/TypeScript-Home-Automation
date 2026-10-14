@@ -1,5 +1,7 @@
 /**
- * Wall tile scaling (design.md D7; specs/wall-display "Touch Operation").
+ * Wall tile scaling (design.md D7; wall-zones-and-fit D3, D4, D6;
+ * specs/wall-display "Touch Operation", "Span-Aware Card Presentation", "Wall
+ * Glanceability").
  *
  * A wall presents exactly the device tile every other collection uses — there
  * is no second device presentation — only larger, so its interactive controls
@@ -9,12 +11,25 @@
  *
  * Deliberately dependency-free: the shared {@link DeviceTile} imports this on
  * first paint, so it must never reach the lazy wall registry or widgets. Its
- * only import is {@link ./type-ramp.js}, itself pure constants.
+ * only imports are {@link ./type-ramp.js} (pure constants) and, for the span
+ * tier, a type.
  */
-import { WALL_BODY_FONT_SIZE } from "./type-ramp.js";
+import type { WallWidgetTier } from "./span.js";
+import { WALL_BAND_FONT_SIZE, WALL_BODY_FONT_SIZE, WALL_METRIC_FONT_SIZE } from "./type-ramp.js";
 
 /** A wall tile's size token. The default preserves the tile's ordinary rendering exactly. */
 export type WallTileSize = "default" | "wall";
+
+/**
+ * A compact wall card's surface inset, in CSS pixels, per side — the wall's
+ * minimum control gap, Hearth's smallest spacing step (`p-2`). A compact card is
+ * budgeted at this inset (wall-zones-and-fit D4): two touch-target rows plus this
+ * padding are exactly the compact card height the wall's row-unit floor is
+ * derived from, so a compact light card fits its minimum span. Declared locally
+ * because this module must stay free of the widget registry; `wall-scale.test.ts`
+ * asserts it against `WALL_MIN_CONTROL_GAP`.
+ */
+export const WALL_COMPACT_CARD_INSET_PX = 8;
 
 export interface WallTileMetrics {
   /** Minimum interactive-control side, in CSS pixels. */
@@ -120,4 +135,18 @@ export function deviceTileText(size: WallTileSize = "default"): DeviceTileText {
  */
 export function deviceTileObservationText(size: WallTileSize = "default"): boolean {
   return size !== "wall";
+}
+
+/**
+ * The tier a wall readout presents its value on, chosen by the span the readout
+ * was placed at (wall-zones-and-fit D3, D6; specs/wall-display "Span-Aware Card
+ * Presentation", "Wall Glanceability"). A readout at or near its type's minimum
+ * span — the grouped readouts of a climate band, or the same readout on a small
+ * card — renders on the band tier, below the metric tier, so a group of readouts
+ * does not compete with a card's hero and its value and unit stay on one line in
+ * a narrow cell. A readout with a genuinely large span grows onto the metric
+ * tier rather than repeating the composition its minimum span draws.
+ */
+export function wallReadoutFontSize(tier: WallWidgetTier): string {
+  return tier === "roomy" ? WALL_METRIC_FONT_SIZE : WALL_BAND_FONT_SIZE;
 }

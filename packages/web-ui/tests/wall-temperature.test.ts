@@ -11,6 +11,8 @@ import {
   validateProfileDraft,
 } from "../src/app/wall/editor/model.js";
 import { getWidgetDescriptor, WALL_WIDGET_REGISTRY } from "../src/app/wall/registry.js";
+import { wallReadoutFontSize } from "../src/app/wall/scale.js";
+import { WALL_BAND_FONT_SIZE } from "../src/app/wall/type-ramp.js";
 import {
   temperatureCapability,
   temperatureWidgetState,
@@ -195,13 +197,34 @@ describe("TemperatureWidget renderer", () => {
     expect(renderer).not.toContain("throw");
   });
 
-  it("presents the reading on the wall metric ramp with a leading glyph and label", async () => {
+  it("presents the reading with a leading glyph and label", async () => {
     const renderer = await source(RENDERER);
-    expect(renderer).toContain("WALL_METRIC_FONT_SIZE");
+    expect(renderer).toContain("wallReadoutFontSize(tier)");
     expect(renderer).toContain("WALL_LABEL_FONT_SIZE");
     expect(renderer).toContain("WALL_BODY_FONT_SIZE");
     expect(renderer).toContain("Thermometer");
     expect(renderer).toContain("formatReadoutValue");
+  });
+
+  it("chooses the reading's tier by the span it was placed at", async () => {
+    const renderer = await source(RENDERER);
+    // A grouped readout — the climate band's temperature, or any readout at its
+    // minimum span — stays on the band tier so it does not compete with a hero,
+    // and the value keeps its unit on one line (design.md D3, D6).
+    expect(renderer).toContain("wallReadoutFontSize(tier)");
+    expect(renderer).not.toContain("WALL_METRIC_FONT_SIZE");
+    expect(wallReadoutFontSize("compact")).toBe(WALL_BAND_FONT_SIZE);
+  });
+
+  it("keeps the reading and its unit on one line", async () => {
+    const renderer = await source(RENDERER);
+    expect(renderer).toContain('whiteSpace: "nowrap"');
+  });
+
+  it("shortens a long device name and keeps the full name for the tooltip", async () => {
+    const renderer = await source(RENDERER);
+    expect(renderer).toContain("shortDeviceName(label)");
+    expect(renderer).toContain("title={label}");
   });
 
   it("is selectable in the editor with its own config field", async () => {

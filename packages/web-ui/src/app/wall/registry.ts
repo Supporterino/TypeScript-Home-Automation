@@ -11,17 +11,23 @@ import type { WallWidget, WallWidgetType } from "@ts-ha/shared";
 import { WALL_WIDGET_CONFIG_SCHEMAS } from "@ts-ha/shared/wall-schema";
 import type { ComponentType } from "react";
 import type { ZodTypeAny } from "zod";
+import type { WallCardForm, WallWidgetTier } from "./span.js";
 import { ClockWidget } from "./widgets/ClockWidget.js";
+import { DeviceGridWidget } from "./widgets/DeviceGridWidget.js";
 import { DeviceWidget } from "./widgets/DeviceWidget.js";
 import { EnergyWidget } from "./widgets/EnergyWidget.js";
 import { FavoritesWidget } from "./widgets/FavoritesWidget.js";
+import { LinkWidget } from "./widgets/LinkWidget.js";
 import { RoomWidget } from "./widgets/RoomWidget.js";
 import { SceneWidget } from "./widgets/SceneWidget.js";
 import { StatusWidget } from "./widgets/StatusWidget.js";
 import { TemperatureWidget } from "./widgets/TemperatureWidget.js";
 import { WeatherWidget } from "./widgets/WeatherWidget.js";
 
-/** Props every wall widget renderer receives: its own configuration and placement. */
+/**
+ * Props every wall widget renderer receives: its own configuration, its
+ * placement, and the resolved geometry of the panel it renders on.
+ */
 export interface WallWidgetProps {
   widget: WallWidget;
   /**
@@ -32,6 +38,46 @@ export interface WallWidgetProps {
    * tile owns the surface.
    */
   contained?: boolean;
+  /**
+   * The widget's presentation tier for the span it was placed at, resolved from
+   * its type's registry spans by `resolveSpanTier` (wall-zones-and-fit D3;
+   * specs/wall-display "Span-Aware Card Presentation"). A renderer uses it for
+   * its *scale* detail — a readout's font tier, a link's label size — never to
+   * select a composition: the area tier answers how much room the placement has,
+   * not what fits the box, and a type whose `min` and `defaults` coincide is
+   * `regular` at every placement above its minimum however short the cell is. A
+   * composition follows the resolved form below, or the renderer's own budget.
+   */
+  tier: WallWidgetTier;
+  /**
+   * The form the card must compose at this placement, resolved from the box the
+   * renderer actually gets — the cell minus the frame's inset and title — by
+   * `resolveCardFormForHeight` over `frame.ts`'s `rendererBoxHeightPx`
+   * (wall-zones-and-fit D3, D4). A card whose full form does not fit composes its
+   * compact form instead, so a card can never overflow or clip at any legal
+   * placement — the area tier above cannot answer this, because a type whose `min`
+   * and `defaults` coincide is `regular` at every placement above its minimum
+   * however short the cell is.
+   */
+  cardForm: WallCardForm;
+  /**
+   * The height, in CSS pixels, the renderer's own box gets at this placement —
+   * the cell minus the frame's inset and its opt-in title, by `frame.ts`'s
+   * `rendererBoxHeightPx` (wall-zones-and-fit D3, D4). The form above is this
+   * number resolved against the wall light card's own budget; a renderer whose
+   * multi-form composition has its *own* budget (the scene tile's row and stacked
+   * forms) resolves against this number instead, so each composition is measured
+   * against what it actually needs rather than one global card budget.
+   */
+  rendererHeightPx: number;
+  /**
+   * The panel's resolved row unit, in CSS pixels — the same value the grid
+   * places the widget with (wall-zones-and-fit D5, D12). A widget whose own
+   * content is span-derived geometry rather than content (the device grid's
+   * pages) resolves it against this, so the renderer and the panel agree without
+   * the widget measuring itself.
+   */
+  rowUnit: number;
 }
 
 /** A `{w, h}` span in grid cells. */
@@ -136,8 +182,15 @@ export const WALL_WIDGET_REGISTRY: Readonly<Record<WallWidgetType, WallWidgetDes
       type: "room",
       label: "Room",
       grammar: "control",
-      defaults: { w: 6, h: 4 },
-      min: { w: 4, h: 4 },
+      defaults: { w: 6, h: 6 },
+      /**
+       * Six rows: the smallest span that holds the card's own chrome — its frame
+       * inset, the room glyph with its name, the member count, and the room-wide
+       * command row — plus one tile row and the page-control row at the wall's
+       * floors, so a paged room card never clips a tile below the touch target
+       * (wall-zones-and-fit D5). `wall-registry.test.ts` asserts the derivation.
+       */
+      min: { w: 4, h: 6 },
       max: { w: 12, h: 10 },
       configSchema: WALL_WIDGET_CONFIG_SCHEMAS.room,
       renderer: RoomWidget,
@@ -146,8 +199,15 @@ export const WALL_WIDGET_REGISTRY: Readonly<Record<WallWidgetType, WallWidgetDes
       type: "favorites",
       label: "Favorites",
       grammar: "control",
-      defaults: { w: 6, h: 4 },
-      min: { w: 3, h: 3 },
+      defaults: { w: 6, h: 6 },
+      /**
+       * Five rows: the smallest span that holds the card's own chrome — its frame
+       * inset, the favorites glyph with its title, and the favorite count — plus
+       * one tile row and the page-control row at the wall's floors, so a paged
+       * favorites card never clips a tile below the touch target
+       * (wall-zones-and-fit D5). `wall-registry.test.ts` asserts the derivation.
+       */
+      min: { w: 3, h: 5 },
       max: { w: 12, h: 8 },
       configSchema: WALL_WIDGET_CONFIG_SCHEMAS.favorites,
       renderer: FavoritesWidget,
@@ -191,6 +251,33 @@ export const WALL_WIDGET_REGISTRY: Readonly<Record<WallWidgetType, WallWidgetDes
       max: { w: 6, h: 4 },
       configSchema: WALL_WIDGET_CONFIG_SCHEMAS.scene,
       renderer: SceneWidget,
+    },
+    link: {
+      type: "link",
+      label: "Link",
+      grammar: "control",
+      defaults: { w: 3, h: 2 },
+      min: { w: 2, h: 2 },
+      max: { w: 6, h: 4 },
+      configSchema: WALL_WIDGET_CONFIG_SCHEMAS.link,
+      renderer: LinkWidget,
+    },
+    devices: {
+      type: "devices",
+      label: "Devices",
+      grammar: "control",
+      defaults: { w: 6, h: 4 },
+      /**
+       * Two tile columns by two tile rows — the smallest span that holds a
+       * page's first row of device tiles at the wall's floors, so a device grid
+       * can never be placed too small to page (wall-zones-and-fit D12;
+       * specs/wall-display "Device Grid Widget"). `wall-device-grid.test.ts`
+       * asserts it against `WALL_TILE_CELL_SPAN`.
+       */
+      min: { w: 4, h: 4 },
+      max: { w: 12, h: 12 },
+      configSchema: WALL_WIDGET_CONFIG_SCHEMAS.devices,
+      renderer: DeviceGridWidget,
     },
   });
 

@@ -1,7 +1,17 @@
 import { describe, expect, it } from "bun:test";
-import { WALL_MIN_TOUCH_TARGET } from "../src/app/wall/registry.js";
-import { deviceTilePresentation, deviceTileText, wallTileMetrics } from "../src/app/wall/scale.js";
-import { WALL_TYPE_RAMP } from "../src/app/wall/type-ramp.js";
+import { WALL_MIN_CONTROL_GAP, WALL_MIN_TOUCH_TARGET } from "../src/app/wall/registry.js";
+import {
+  deviceTilePresentation,
+  deviceTileText,
+  WALL_COMPACT_CARD_INSET_PX,
+  wallReadoutFontSize,
+  wallTileMetrics,
+} from "../src/app/wall/scale.js";
+import {
+  WALL_BAND_FONT_SIZE,
+  WALL_METRIC_FONT_SIZE,
+  WALL_TYPE_RAMP,
+} from "../src/app/wall/type-ramp.js";
 
 // Pure size-token logic — no DOM. The wall tile's interactive controls must
 // meet the wall minimum and its text must meet Hearth's re-derived body floor;
@@ -81,5 +91,31 @@ describe("wallTileMetrics", () => {
 
   it("gives the wall token a larger control than the default token", () => {
     expect(wallTileMetrics("wall").control).toBeGreaterThan(wallTileMetrics("default").control);
+  });
+});
+
+describe("wallReadoutFontSize", () => {
+  it("keeps a grouped readout — one at or near its minimum span — on the band tier", () => {
+    expect(wallReadoutFontSize("compact")).toBe(WALL_BAND_FONT_SIZE);
+    expect(wallReadoutFontSize("regular")).toBe(WALL_BAND_FONT_SIZE);
+  });
+
+  it("grows a readout with a large span onto the metric tier", () => {
+    expect(wallReadoutFontSize("roomy")).toBe(WALL_METRIC_FONT_SIZE);
+    expect(wallReadoutFontSize("roomy")).not.toBe(wallReadoutFontSize("compact"));
+  });
+
+  it("keeps both readout tiers above the wall's body floor", () => {
+    expect(WALL_TYPE_RAMP.bandMin).toBeGreaterThanOrEqual(WALL_TYPE_RAMP.bodyMin);
+    expect(WALL_TYPE_RAMP.metricMin).toBeGreaterThanOrEqual(WALL_TYPE_RAMP.bodyMin);
+  });
+});
+
+describe("WALL_COMPACT_CARD_INSET_PX", () => {
+  it("is one control gap per side — the inset a compact card's budget assumes", () => {
+    // The compact light card's composition is two touch-target rows plus this
+    // inset; `wall-light-card.test.ts` asserts the whole against the derived
+    // compact card height.
+    expect(WALL_COMPACT_CARD_INSET_PX).toBe(WALL_MIN_CONTROL_GAP);
   });
 });

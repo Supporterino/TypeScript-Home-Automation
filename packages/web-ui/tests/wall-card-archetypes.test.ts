@@ -4,7 +4,8 @@ import { join } from "node:path";
 import type { Capability } from "@ts-ha/shared";
 import { rankDeviceTile } from "../src/app/lib/capability-ranking.js";
 import { cardArchetype } from "../src/app/lib/card-archetype.js";
-import { deviceTileObservationText } from "../src/app/wall/scale.js";
+import { deviceTileObservationText, wallReadoutFontSize } from "../src/app/wall/scale.js";
+import { WALL_BAND_FONT_SIZE } from "../src/app/wall/type-ramp.js";
 
 /**
  * Structural assertions for the wall card archetypes (tasks 3.1, 3.2, 3.4).
@@ -102,7 +103,7 @@ describe("readout card rendering", () => {
     const source = await tileSource();
     expect(source).toContain('archetype === "readout"');
     expect(source).toContain("<ReadoutGlyph");
-    expect(source).toContain("WALL_METRIC_FONT_SIZE");
+    expect(source).toContain("wallReadoutFontSize");
     expect(source).toContain("WALL_BODY_FONT_SIZE");
     expect(source).toContain("humanizeDeviceName(device.displayName)");
   });
@@ -112,11 +113,49 @@ describe("readout card rendering", () => {
     expect(source).toContain("cardDrawsNoSurface(archetype, wall, contained === true)");
   });
 
+  it("keeps the readout's value and unit as one non-breaking unit", async () => {
+    const source = await tileSource();
+    const branch = readoutBranch(source);
+
+    expect(branch).toContain('whiteSpace: "nowrap"');
+  });
+
+  it("chooses the reading's tier by the span the card was placed at", async () => {
+    const source = await tileSource();
+    const branch = readoutBranch(source);
+
+    // A readout at or near its minimum span is a grouped readout: it sits on the
+    // band tier, below the metric tier, so a group of readouts does not compete
+    // with a hero and the value keeps its unit on one line (design.md D3, D6).
+    expect(branch).toContain("wallReadoutFontSize(tier)");
+    expect(wallReadoutFontSize("compact")).toBe(WALL_BAND_FONT_SIZE);
+    expect(wallReadoutFontSize("roomy")).not.toBe(WALL_BAND_FONT_SIZE);
+  });
+
+  it("presents a shortened name rather than a shared ellipsized prefix", async () => {
+    const source = await tileSource();
+    const branch = readoutBranch(source);
+
+    expect(branch).toContain("shortDeviceName(deviceLabel)");
+    // The full name stays available to the accessible name and the tooltip.
+    expect(branch).toContain("title={deviceLabel}");
+  });
+
   it("carries the Hidden badge and the group marker into the chrome-less layout", async () => {
     const source = await tileSource();
     const branch = readoutBranch(source);
     expect(branch).toContain("device.hidden");
     expect(branch).toContain("<GroupMarker");
+  });
+
+  it("shortens the wall card's name while the dashboard label is unchanged", async () => {
+    const source = await tileSource();
+
+    // The wall shortens a name its card cannot show in full rather than
+    // ellipsizing it to a prefix several cards share; the dashboard keeps the
+    // full label (specs/wall-display "A name is shortened, not truncated").
+    expect(source).toContain("wall ? shortDeviceName(deviceLabel) : deviceLabel");
+    expect(source).toContain("title={deviceLabel}");
   });
 
   it("offers no navigation affordance in the chrome-less readout branch", async () => {

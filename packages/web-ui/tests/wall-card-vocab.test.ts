@@ -23,6 +23,9 @@ const PRESENTATION_WIDGETS = [
   "RoomWidget.tsx",
   "FavoritesWidget.tsx",
   "SceneWidget.tsx",
+  "DeviceGridWidget.tsx",
+  "LinkWidget.tsx",
+  "PagedTileGrid.tsx",
 ] as const;
 
 const VOCAB_ELEMENTS = [

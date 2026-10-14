@@ -1,8 +1,8 @@
 /**
- * The wall favorites widget (design.md D11, D13; specs/wall-display "Widget
- * Catalog"). Renders the user's favorited devices as the same touch-sized
- * device tiles used everywhere else — favorites logic and the tile
- * presentation are reused, never reimplemented.
+ * The wall favorites widget (design.md D11, D13; wall-zones-and-fit D5;
+ * specs/wall-display "Widget Catalog", "Panel Fit"). Renders the user's
+ * favorited devices as the same touch-sized device tiles used everywhere else —
+ * favorites logic and the tile presentation are reused, never reimplemented.
  *
  * The displayed set is derived from the store's `favorites` list and live
  * device map on every render, so a favorite change streamed from another
@@ -14,9 +14,14 @@
  * card's affordances. A control widget: the frame draws the surface, so each
  * contained tile draws none of its own (specs/wall-display "A card is a single
  * surface").
+ *
+ * A set larger than the card can show pages through the wall's shared pagination
+ * layer — one page at a time with touch page controls — rather than scrolling its
+ * tile area, so the wall never scrolls (wall-zones-and-fit D5).
  */
 import { Star } from "lucide-react";
 import { useDataStore } from "../../lib/data-store.js";
+import { widgetTitle } from "../frame.js";
 import type { WallWidgetProps } from "../registry.js";
 import {
   WALL_CARD_GLYPH_SIZE,
@@ -24,12 +29,19 @@ import {
   WallCardLabel,
   WallCardMessage,
   WallCardMetric,
-  wallControlGapPx,
 } from "./card-vocab.js";
 import { favoriteDevices } from "./favorites-model.js";
+import { PagedTileGrid } from "./PagedTileGrid.js";
 import { WallDeviceTile } from "./WallDeviceTile.js";
 
-export function FavoritesWidget({ contained }: WallWidgetProps) {
+/**
+ * The grid rows the card's own chrome — the star glyph with the title, then the
+ * count with its label — consumes above the tiles at the resolved row unit. The
+ * page plan reserves it, so a page never promises a tile row the card cannot show.
+ */
+const FAVORITES_HEADER_ROWS = 2;
+
+export function FavoritesWidget({ widget, contained, rowUnit }: WallWidgetProps) {
   const { favorites, devicesByQualifiedId } = useDataStore();
   const devices = favoriteDevices(favorites, devicesByQualifiedId);
 
@@ -53,20 +65,26 @@ export function FavoritesWidget({ contained }: WallWidgetProps) {
       {devices.length === 0 ? (
         <WallCardMessage>No favorite devices. Star a device to show it here.</WallCardMessage>
       ) : (
-        <div style={{ minHeight: 0, flex: 1, overflowY: "auto" }}>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 180px), 1fr))",
-              alignContent: "start",
-              gap: `${wallControlGapPx()}px`,
-            }}
-          >
-            {devices.map((device) => (
-              <WallDeviceTile key={device.qualifiedId} device={device} contained={contained} />
-            ))}
-          </div>
-        </div>
+        <PagedTileGrid
+          items={devices}
+          keyOf={(device) => device.qualifiedId}
+          renderTile={(device) => (
+            <WallDeviceTile
+              device={device}
+              contained={contained}
+              // A paged tile is the device card at the wall's minimum-span tile
+              // cell, so it composes the tier and form that cell resolves — the
+              // same ones the device grid gives its tiles (wall-zones-and-fit D4).
+              tier="compact"
+              cardForm="compact"
+            />
+          )}
+          span={widget}
+          rowUnit={rowUnit}
+          reservedRows={FAVORITES_HEADER_ROWS}
+          titled={widgetTitle(widget) !== null}
+          label="favorites"
+        />
       )}
     </div>
   );

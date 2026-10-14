@@ -6,7 +6,9 @@ The interface is built on a single designed visual system — **Lumen**, a
 dark-first, light-designed semantic token layer declared once in the Tailwind CSS
 entry stylesheet (palette, typography, spacing, elevation, radii, motion), where
 the same token block is also the utility source. It is not component-library
-defaults, and it ships with a self-hosted display typeface.
+defaults, and it ships with a self-hosted display typeface. The full-bleed wall is
+the one exception: it is drawn in **Hearth**, its own wall-owned system, loaded on
+demand rather than in the entry stylesheet (see [Wall displays](#wall-displays)).
 
 ---
 
@@ -232,72 +234,198 @@ two families costs at most two requests.
 ## Wall displays
 
 A wall display is a full-bleed surface for a wall-mounted touchscreen: a named
-profile of curated widgets, configured once by the owner and then rendered
-read-only. Unlike every other view, `/wall/:name` is rendered **outside** the
-application shell, so it has no header, no navigation rail, and no footer and
-its widgets use the whole panel (design.md D3).
+profile of curated widgets, configured once by the owner and then rendered as a
+fixed, touch-operated composition. Unlike every other view, `/wall/:name` is
+rendered **outside** the application shell, so it has no header, no navigation
+rail, and no footer and its widgets use the whole panel (design.md D3).
 
 A **profile** is addressed by its name and holds a composition of widgets on a
-fixed 12-column grid; each widget declares its position and span (`{x, y, w, h}`),
-and a profile may carry a per-orientation layout so it reflows between portrait
-and landscape without a second profile. Profiles are stored in the state store's
-reserved internal namespace (`$internal:wall:<name>`) through a dedicated
-`/api/walls` CRUD surface, so they survive a restart, are rejected on write
-through the state API, and are not listed by the State view (design.md D2).
-Creating or renaming a profile to
-a name already in use is rejected; a saved configuration is validated against the
-shared wall-profile schema on the server (and reused by the editor for
-client-side validation), so a malformed composition is rejected rather than
-persisted (design.md D10).
+fixed 12-column grid; each widget declares its position and span (`{x, y, w, h}`)
+and may declare a `zone` label, and a profile may carry a per-orientation layout
+so it reflows between portrait and landscape without a second profile. Profiles
+are stored in the state store's reserved internal namespace
+(`$internal:wall:<name>`) through a dedicated `/api/walls` CRUD surface, so they
+survive a restart, are rejected on write through the state API, and are not
+listed by the State view (design.md D2). Creating or renaming a profile to a name
+already in use is rejected; a saved configuration is validated against the shared
+wall-profile schema on the server (and reused by the editor for client-side
+validation), so a malformed composition is rejected rather than persisted
+(design.md D10).
 
-The widget catalog covers: a clock/date readout (client clock — no server data);
-current weather and, when the registered service provides it, a forecast;
-instantaneous and cumulative energy; a room's devices with an all-on/all-off room
-command; the user's favorites; a single configured device; a status/presence
-summary; and one or more scene buttons that trigger an existing automation through
-the same manual-trigger path the admin interface uses (design.md D8). Device
-controls reuse the standard device tile in a **wall kiosk mode** — a size token
-that enlarges controls to the touch-target minimum, plus a presentation switch
-that omits the favorite, hide/unhide, and open-detail affordances and, for a
-toggle primary, makes the whole card the actuation target (a value-setting
+The wall is drawn in **Hearth**, the wall's own visual language, whose stylesheet
+is loaded only with the wall and never by the dashboard (see
+[Asset delivery](#asset-delivery)). Its eleven widget types are: a clock/date
+readout (client clock — no server data); current weather and, when the registered
+service provides it, a forecast; instantaneous and cumulative energy; a
+temperature reading from a configured sensor; a status/presence summary; a room's
+devices with an all-on/all-off room command; the user's favorites; a single
+configured device; one or more scene buttons that trigger an existing automation
+through the same manual-trigger path the admin interface uses; a **link** that
+opens another named wall profile; and a **device grid** over an explicitly
+selected set of devices (design.md D8). Each type has a fixed **grammar**:
+**ambient** readouts (clock, weather, energy, temperature, status) render
+chrome-less with large type directly on the background, while **control** widgets
+(room, favorites, device, scene, link, devices) render as surfaces whose whole
+card is the touch target. A widget whose backing feature is unconfigured — for
+example weather with no weather service registered — reports that inside its own
+area and never prevents the rest of the profile from rendering.
+
+Device controls reuse the standard device tile in a **wall kiosk mode** — a size
+token that enlarges controls to the touch-target minimum, plus a presentation
+switch that omits the favorite, hide/unhide, and open-detail affordances and, for
+a toggle primary, makes the whole card the actuation target (a value-setting
 primary keeps its embedded control, since a bare tile activation cannot express
-the value). This is **not** a second device presentation:
-the capability ranking, optimistic override, and non-color state encoding stay
-single-source, so a wall control reflects, reconciles, and reverts exactly as it
-does elsewhere. (This is a wall-only revisit of `add-wall-display` design D7; the
-dashboard tile keeps its explicit open-detail affordance.) A widget whose backing
-feature is unconfigured — for example weather with no weather service registered
-— reports that inside its own area and never prevents the rest of the profile
-from rendering.
+the value). This is **not** a second device presentation: the capability ranking,
+optimistic override, and non-color state encoding stay single-source, so a wall
+control reflects, reconciles, and reverts exactly as it does elsewhere. (This is
+a wall-only revisit of `add-wall-display` design D7; the dashboard tile keeps its
+explicit open-detail affordance.)
 
-### Glanceability
+### Composition and panel fit
 
 A wall is composed to be read from across a room. Card heights follow each
-widget's declared span through a bounded row unit that reserves the panel
-padding and inter-row gutters
-(`clamp(72px, (panelHeight − chrome) / occupiedRows, 112px)`) rather than
-stretching to fill the panel, so a small control is never inflated; a profile
-that occupies fewer rows than fill the panel keeps its natural height and is
-**centered**, while one taller than the panel is top-aligned and scrollable
-rather than clipped. Cards are separated from each other, and inset from the
-panel edge, by a single gutter of `clamp(16px, 2vmin, 24px)`. The wall uses a
-larger type ramp than the dashboard — ambient readouts render at 32–64 px,
-labels at 16–20 px, and no body text below 16 px — and splits widgets into two grammars: **ambient** readouts
-(clock, weather, energy, status) render chrome-less with large type directly on
-the background, while **control** widgets (room, favorites, device, scene) render
-as opaque surface tiles whose whole card is the touch target. A widget title
-header is shown only when the profile explicitly configures one; otherwise the
-widget's own content labels it. The wall's density, row-unit bounds, gutter, and
-type ramp are recorded as a design-system page override
+widget's declared span through a bounded row unit that reserves the panel padding
+and inter-row gutters
+(`clamp(56px, (availableHeight − chrome) / occupiedRows, 80px)`) rather than
+stretching to fill the panel, so a small control is never inflated; `chrome`
+reserves the panel padding and the inter-row gaps, and the unit is bounded at
+**56 px** (`ROW_UNIT_MIN`, re-derived from the compact light card) and **80 px**
+(`ROW_UNIT_MAX`). Cards are separated from each other, and inset from the panel
+edge, by a single gutter of `clamp(16px, 2vmin, 24px)`. A widget title header is
+shown only when the profile explicitly configures one; otherwise the widget's own
+content labels it. The wall's density, row-unit bounds, gutter, and type ramp are
+recorded as a design-system page override
 (`design-system/ts-ha/pages/wall.md`).
+
+Fitting is a **resolved outcome**, not a guess. A profile that occupies fewer rows
+than fill the panel keeps its natural height and is **centered**; a profile that
+cannot fit the panel at the wall's floors renders a contained **"Too large for
+this panel"** explanation with a route to the editor, rather than degrading to a
+scroll. `overflowY: hidden` is set in every outcome: the wall **never scrolls**
+(design.md D5/D10). A widget whose *own* content cannot fit the span it was
+placed at does not scroll either — it **pages** its content and shows a page
+affordance. The device grid is the archetype, and the favorites and room tile
+grids resolve their tile area through the same pure pagination rule, so the
+wall's only overflow responses are an explanation (the authored composition) or a
+page (a widget's content).
+
+### Zones
+
+A widget may carry an optional `zone` label. The widgets that share a label are
+grouped into **one labelled band** — the bounding box of its members, drawn as a
+tinted `--hearth-band` field behind the member cells and carrying the zone
+caption. Grouping never moves a widget: each member still occupies the grid cells
+its configuration declares, and a widget that declares no zone renders outside
+every band (design.md D2). The band layer is inert to touch, so a tap between two
+members passes through to the grid. A zone is an additive annotation rather than a
+second layout model, so a disjoint zone — the same label at two unrelated regions
+— yields one band spanning both; the editor's preview draws the draft's bands
+before saving, so that is visible.
+
+### Span-aware cards and the type ramp
+
+A card composes its content for the span it was placed at, in **both** directions:
+it never overflows its cells, and a card at a larger span does not repeat the
+composition its smaller span draws. The tier — `compact`, `regular`, or `roomy` —
+is derived from the widget type's own registry spans (`min`, defaults, `max`, the
+same values the editor's size rule enforces), so composition and legal spans
+cannot drift (design.md D3).
+
+The wall's type ramp is sized for viewing at distance and was reduced roughly
+25–30 % from its former scale (design.md D10):
+
+| Tier | Size | Use |
+|---|---|---|
+| Hero | `clamp(36px, 5vmin, 76px)` | the clock time |
+| Metric | `clamp(26px, 3.6vmin, 54px)` | weather, energy, status; a roomy device readout |
+| Band | `clamp(20px, 2.4vmin, 32px)` | a grouped readout (the climate band, or a readout on a small card) |
+| Title | `clamp(18px, 1.8vmin, 22px)` | device names, card titles |
+| Label | 18 px | metric labels, uppercase card labels |
+| Body (floor) | 18 px | any other wall text |
+| Chip | 16 px | compact status chips (deliberate exception) |
+
+On the wall's 1920 × 1080 panel `vmin` is 10.8 px, so the hero renders at 54 px
+and the metric at 39 px — both above the dashboard's 34 px ceiling. The
+**band-readout** tier sits between the label tier and the metric tier: a grouped
+readout renders on it at a small or default span and grows to the metric tier
+only on a genuinely roomy card, so a group of readouts does not compete with a
+card's hero. No wall body text renders below the 18 px body floor; the compact
+status chip is the one deliberate exception. A readout renders its value and unit
+as one non-breaking unit, and a name too long for its card is **shortened** — the
+distinguishing trailing words — rather than truncated to a prefix several cards
+share, with the full name kept in the card's `title`/`aria-label` (design.md D6).
+
+### Wall device cards
+
+A wall device card selects its presentation from the device's ranked
+capabilities. The wall `light` card is a distinct wall-only design that presents
+**every control the device declares** — on/off, brightness, and colour
+temperature and colour only when declared — at the type's minimum span; only the
+*form* adapts:
+
+- **Compact form** (a card at its minimum span, the case the row-unit floor is
+  derived from): a 56 px on/off icon pill, the device's short name, its brightness
+  level (or `Off`), and the observation glyph on the first row, then a second row
+  of full-height **segments** — one per declared value control — where a segment
+  stands in for the full-width slider and spectrum bar a larger card draws. Each
+  segment is a range input and the whole segment is the touch target.
+- **Regular and roomy forms**: the same controls with room to breathe — the icon
+  pill, the name and readout, a full-width brightness bar, and, for each declared
+  colour capability, a spectrum bar above its slider.
+
+In both forms the bar's off state turns the light on when activated, and actions
+go through the same optimistic channels; a failed command reverts and surfaces
+inline. This is a wall-only departure from the one-dominant-action rule; the
+dashboard tile keeps its single dominant action.
+
+A cover presents discrete **Open / Close / Stop** transport at the wall's minimum
+touch target rather than a bare position slider, offering Stop only when a
+writable property can express it. On the wall a device card presents no favorite
+toggle, no hide/unhide toggle, and no explicit open-detail affordance, and the
+observation is demoted to a glyph-only non-textual indicator (its label and polled
+age stay in `title`/`aria-label`). A device card inside a widget frame — including
+each tile of a device grid — draws one surface, never a surface inside another.
+
+### Cross-wall navigation
+
+A `link` widget (`{ target, label? }`) is a route, not a widget with its own view:
+activating it navigates to the target profile's address through the shared router,
+so the URL changes, the browser's own back button works, and an always-on panel
+restored at that address opens exactly that wall (design.md D11). It renders a
+touch-sized pill carrying the configured label or the target profile's name. A
+wall **opened from a link** presents an on-screen **Back** affordance at the foot
+of the panel, so the hierarchy is walkable by touch as well as by the browser; a
+wall reached by a deep link offers none, because there is nowhere in-app to return
+to. A link whose target names no saved profile is not a separate error path — the
+target wall presents its own unknown-profile explanation, which itself offers the
+way back. Walls therefore form a walkable hierarchy of separate profiles rather
+than a second composition model.
+
+### Device grid
+
+A `devices` widget (`{ qualifiedIds, title? }`) renders the device set the author
+selected **explicitly** (never an enumeration of the whole inventory) as a uniform
+grid of the shared wall device card at its minimum span, so ranking, optimistic
+override, and state encoding stay single-source (design.md D12). Its minimum span
+is 4 × 4 — two tile columns by two tile rows — so it cannot be placed too small to
+present a page. It **pages rather than scrolls**: one page is drawn at a time with
+a `‹ n / m ›` page affordance, drawn only while the selection pages, and a
+selection that fits is one page. An empty selection explains itself inside the
+widget's own area, and the editor reports how many pages a selection implies so an
+author sees a large selection's cost before saving.
+
+### Editing
 
 The wall itself is **read-only**: it presents no control for adding, removing, or
 editing a widget. Profiles are created and configured at `/walls`, an ENGINE
-navigation entry with its own reloadable URL. When a profile is saved or deleted,
-the `wall` realtime event reaches every open wall displaying it, which re-renders
-without a reload; a profile deleted while open — or one that never existed — is
-replaced with an explanatory state and a route back to the editor rather than a
-blank panel (design.md D9).
+navigation entry with its own reloadable URL. The editor configures a widget's
+zone, a link's target profile, and a device grid's selected devices, and presents
+the draft at the wall's target panel aspect ratio (1920 × 1080) with a fit verdict
+and a device grid's page count — refusing to save a draft the resolver reports as
+unfittable. When a profile is saved or deleted, the `wall` realtime event reaches
+every open wall displaying it, which re-renders without a reload; a profile
+deleted while open — or one that never existed — is replaced with an explanatory
+state and a route back to the editor rather than a blank panel (design.md D9).
 
 ### Kiosk limitations
 

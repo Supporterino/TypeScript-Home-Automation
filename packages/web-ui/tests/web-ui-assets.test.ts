@@ -362,6 +362,30 @@ describe("wall chunk laziness", () => {
     expect(referencing[0].text).toContain("data-wall-chunk");
     expect(referencing[0].asset.firstPaint).toBe(false);
   });
+
+  it("keeps Hearth out of the editor's own sources", async () => {
+    // The editor's draft preview is a wireframe (wall-zones-and-fit D7): it
+    // renders no wall widget and reaches no Hearth, so the wall's stylesheet
+    // stays on demand. The build's `wallStylesheetPlugin` already excludes
+    // `wall/editor/**` when attaching the sheet; this asserts the editor never
+    // reaches for it in the first place — a regression that imported the
+    // renderer or a Hearth token would be caught here before the chunking could
+    // hide it.
+    const { readdir, readFile } = await import("node:fs/promises");
+    const dir = join(import.meta.dir, "..", "src/app/wall/editor");
+    const files = (await readdir(dir)).filter(
+      (name) => name.endsWith(".ts") || name.endsWith(".tsx"),
+    );
+    expect(files.length).toBeGreaterThan(0);
+
+    for (const name of files) {
+      const source = await readFile(join(dir, name), "utf8");
+      expect(source, name).not.toContain("hearth.css");
+      expect(source, name).not.toContain("--hearth-");
+      expect(source, name).not.toContain("WallGrid");
+      expect(source, name).not.toContain("WidgetFrame");
+    }
+  });
 });
 
 // ── Code splitting ───────────────────────────────────────────────────────────

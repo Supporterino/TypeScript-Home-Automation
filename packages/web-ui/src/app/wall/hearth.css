@@ -19,8 +19,14 @@
  * declared in both schemes.
  *
  * The type ramp re-derives the wall's body floor from the ramp itself: no wall
- * body text may render below `--hearth-text-body` (18 px, up from the old hard
- * 16 px); the compact status-chip exception is retained (design.md D3).
+ * body text may render below `--hearth-text-body` (18 px); the compact
+ * status-chip exception is retained (design.md D3), and a band-readout tier
+ * (`--hearth-text-band`) sits between the label and metric tiers for grouped
+ * readouts (wall-zones-and-fit D6). The whole component scale is reduced from
+ * the original table (wall-zones-and-fit D10): the hero, metric, title, and
+ * label tiers and their `vmin` coefficients are lowered, while the body floor
+ * (18 px) and the chip (16 px) are held. Every numeric bound here mirrors
+ * `wall/type-ramp.ts`, which `tests/wall-type-ramp.test.ts` asserts.
  */
 
 [data-wall-chunk] {
@@ -39,6 +45,10 @@
   --hearth-surface: #0c0c0e;
   --hearth-surface-raised: #16161a;
   --hearth-surface-sunken: #050506;
+  /* A zone band's field: slightly lifted from the canvas, below a member
+     tile's surface, so a band groups without nesting one surface in another
+     (wall-zones-and-fit D2; specs/wall-display "Wall Zones"). */
+  --hearth-band: #070709;
   --hearth-hairline: rgba(255, 255, 255, 0.1);
   --hearth-text: #f5f5f7;
   --hearth-text-muted: #a8a8b3;
@@ -57,12 +67,13 @@
      sets its own ramp on top of it rather than adding a second download. */
   --hearth-font-display: "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
 
-  --hearth-text-hero: clamp(48px, 7vmin, 104px);
-  --hearth-text-metric: clamp(36px, 5vmin, 76px);
-  --hearth-text-title: clamp(20px, 2.5vmin, 28px);
-  --hearth-text-label: 20px;
-  --hearth-text-body: 18px; /* Re-derived body floor — no wall body text below. */
-  --hearth-text-chip: 16px; /* Compact status-chip exception, retained (design.md D3). */
+  --hearth-text-hero: clamp(36px, 5vmin, 76px);
+  --hearth-text-metric: clamp(26px, 3.6vmin, 54px);
+  --hearth-text-band: clamp(20px, 2.4vmin, 32px);
+  --hearth-text-title: clamp(18px, 1.8vmin, 22px);
+  --hearth-text-label: 18px;
+  --hearth-text-body: 18px; /* Body floor held — no wall body text below. */
+  --hearth-text-chip: 16px; /* Compact status-chip exception, held (design.md D3). */
 
   --hearth-leading-tight: 1.05;
   --hearth-leading-snug: 1.2;
@@ -108,6 +119,9 @@
   --hearth-surface: #fffdf9;
   --hearth-surface-raised: #faf3ea;
   --hearth-surface-sunken: #ece4d9;
+  /* The zone band's light field, between the canvas and a member tile's
+     surface (wall-zones-and-fit D2). */
+  --hearth-band: #f8f4ee;
   --hearth-hairline: #ded3c4;
   --hearth-text: #1c1815;
   --hearth-text-muted: #6b6157;
