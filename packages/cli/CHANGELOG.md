@@ -1,5 +1,16 @@
 # @ts-ha/cli
 
+## 0.2.4
+
+### Patch Changes
+
+- Updated dependencies [1293ec4]
+- Updated dependencies [a2ac4ae]
+- Updated dependencies [a2ac4ae]
+  - @ts-ha/core@0.5.0
+  - @ts-ha/shared@0.5.0
+  - @ts-ha/web-ui@0.7.0
+
 ## 0.2.3
 
 ### Patch Changes
