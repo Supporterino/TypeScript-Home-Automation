@@ -747,7 +747,6 @@ export function DataStoreProvider({
     // Intentionally runs once: reconnection and the fallback poll are
     // handled inside the effect itself, not by re-running it. `fixtures` is a
     // mount-time input, so listing it changes nothing for a stable caller.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refresh, fixtures]);
 
   const devices = useMemo(() => [...devicesByQualifiedId.values()], [devicesByQualifiedId]);

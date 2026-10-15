@@ -114,7 +114,6 @@ export function AutomationDetailView({ name }: { name: string }) {
     setSource(null);
     setSourceOpen(false);
     void loadDetails();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [name]);
 
   // New executions appear without a manual refresh: a completion event for this
@@ -126,7 +125,6 @@ export function AutomationDetailView({ name }: { name: string }) {
         void loadDetails();
       }
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [subscribe, name]);
 
   // The store's log buffer updates from the stream, so this list appends live.
