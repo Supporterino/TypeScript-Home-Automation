@@ -58,6 +58,8 @@
  * ceiling would promise a row the drawn cell cannot hold, which is precisely the
  * clip the tile-row guarantee exists to prevent.
  */
+
+import { WALL_CARD_METRICS } from "./cards/metrics.js";
 import {
   ROW_UNIT_MIN,
   WALL_GUTTER_MIN_PX,
@@ -105,12 +107,16 @@ export const WALL_TILE_GAP_PX = 8;
 export const WALL_TILE_ROW_HEIGHT_CAP = 1.25;
 
 /**
- * The surfaced control frame's content inset, in CSS pixels, per side — Hearth's
- * `--hearth-space-4`, the token the frame pads a control card with. Declared
- * numerically so a page plan can reserve it; `wall-device-grid.test.ts` asserts it
+ * The surfaced control frame's content inset, in CSS pixels, per side — the
+ * **ported card surface's own padding** (`WALL_CARD_METRICS.padding`, mirrored by
+ * `--hearth-card-padding`), the inset the frame pads a control card with. Read from
+ * the card table rather than restated, so the frame's inset and the card it frames
+ * are the same surface and cannot drift (design.md W3; specs/wall-display "A
+ * widget's surface is a card's surface"). The card table is dependency-free, so
+ * this module stays reachable by `bun test`; `wall-device-grid.test.ts` asserts it
  * against `wall/hearth.css`.
  */
-export const WALL_FRAME_INSET_PX = 16;
+export const WALL_FRAME_INSET_PX = WALL_CARD_METRICS.padding;
 
 /**
  * The wall's minimum touch target, in CSS pixels — the page-control row's height.
@@ -122,15 +128,19 @@ const WALL_TOUCH_TARGET_PX = 42;
 
 /**
  * The wall's minimum control gap, in CSS pixels — the space between the tiles and
- * the page-control row. Declared locally for the same reason, and asserted
- * against `WALL_MIN_CONTROL_GAP` by `wall-device-grid.test.ts`.
+ * the page-control row. Declared locally (this module stays free of the widget
+ * registry) and asserted against `WALL_MIN_CONTROL_GAP` by
+ * `wall-device-grid.test.ts`. Exported so the renderer that *draws* the page
+ * chrome reads the gap the plan reserved rather than a value of its own, so the
+ * drawn chrome and {@link WALL_PAGE_CONTROL_RESERVED_PX} cannot drift (the "one
+ * geometry for the plan and the draw" contract above).
  */
-const WALL_CONTROL_GAP_PX = 8;
+export const WALL_CONTROL_GAP_PX = 8;
 
 /**
- * The frame inset above and below a surfaced card, in CSS pixels — Hearth's
- * `--hearth-space-4` on each side. The frame always pads, so this is reserved in
- * *every* plan, whether the widget pages or not.
+ * The frame inset above and below a surfaced card, in CSS pixels — the ported card
+ * surface's own padding ({@link WALL_FRAME_INSET_PX}) on each side. The frame always
+ * pads, so this is reserved in *every* plan, whether the widget pages or not.
  */
 export const WALL_FRAME_RESERVED_PX = 2 * WALL_FRAME_INSET_PX;
 

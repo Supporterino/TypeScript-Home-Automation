@@ -27,6 +27,7 @@ import { useDataStore } from "../../lib/data-store.js";
 import type { DeviceDescriptor } from "../../types.js";
 import { ClimateCard } from "../cards/ClimateCard.js";
 import { CoverCard } from "../cards/CoverCard.js";
+import { WallCardMessage } from "../cards/card-anatomy.js";
 import { placedDeviceCardBox, type WallCardBox } from "../cards/card-composition.js";
 import {
   deviceCanDriveClass,
@@ -45,7 +46,6 @@ import { SelectCard } from "../cards/SelectCard.js";
 import type { WallDeviceCardProps } from "../cards/types.js";
 import { WALL_TILE_CELL_COLUMNS } from "../pages.js";
 import type { WallWidgetProps } from "../registry.js";
-import { WallCardMessage } from "./card-vocab.js";
 
 /**
  * The one card per device class (design.md D1). Typed as a total record so a

@@ -1,10 +1,10 @@
 /**
- * The wall link widget (wall-zones-and-fit D11; specs/wall-display "Wall
- * Navigation", "Widget Catalog"). A link opens another named wall profile: it
- * renders a touch-sized Hearth affordance carrying the configured label (or the
- * target profile's name) and navigates to the target's own address through the
- * shared router, so the address changes, the browser's own back works, and the
- * wall is reload-safe.
+ * The wall link widget (wall-zones-and-fit D11; design.md W1; specs/wall-display
+ * "Wall Navigation", "Widget Catalog"). A link opens another named wall profile:
+ * it draws the wall's own route affordance — the ported control treatment carried
+ * by the shared router, so the address changes, the browser's own back works, and
+ * the wall is reload-safe — with the configured label (or the target profile's
+ * name).
  *
  * A link whose target names no saved profile is resolved when the target wall
  * renders — it shows that wall's own unknown-profile explanation, so a broken
@@ -16,9 +16,10 @@
 import { ArrowRight } from "lucide-react";
 import { shortDeviceName } from "../../lib/humanize-name.js";
 import { wallPath } from "../../lib/router.js";
-import { Link, useRouter } from "../../lib/router-context.js";
+import { useRouter } from "../../lib/router-context.js";
+import { WallCardMessage, WallCardRoute } from "../cards/card-anatomy.js";
+import { WALL_CARD_GLYPH_SIZE } from "../cards/metrics.js";
 import type { WallWidgetProps } from "../registry.js";
-import { WALL_CARD_GLYPH_SIZE, WallCardMessage, wallAffordanceStyle } from "./card-vocab.js";
 import { linkLabel, linkLabelFontSize, linkTarget } from "./link-model.js";
 
 export function LinkWidget({ widget, tier }: WallWidgetProps) {
@@ -45,23 +46,12 @@ export function LinkWidget({ widget, tier }: WallWidgetProps) {
         justifyContent: "center",
       }}
     >
-      <Link
+      <WallCardRoute
         to={wallPath(basePath, target)}
-        style={{ ...wallAffordanceStyle(), textDecoration: "none" }}
-      >
-        <ArrowRight size={WALL_CARD_GLYPH_SIZE} aria-hidden />
-        <span
-          style={{
-            minWidth: 0,
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-            fontSize: linkLabelFontSize(tier),
-          }}
-        >
-          {shortDeviceName(label ?? target)}
-        </span>
-      </Link>
+        glyph={<ArrowRight size={WALL_CARD_GLYPH_SIZE} aria-hidden />}
+        label={shortDeviceName(label ?? target)}
+        labelSize={linkLabelFontSize(tier)}
+      />
     </div>
   );
 }

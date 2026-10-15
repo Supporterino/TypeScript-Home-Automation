@@ -8,9 +8,10 @@
  * fixture-backed render reaches this composition with no engine and no device
  * event can re-trigger a request.
  *
- * Composed on the shared Hearth card vocabulary (design.md D11): a metric per
- * reading (instantaneous power and accumulated consumption), each with its own
- * leading glyph and label. Ambient — chrome-less, its metrics on the panel.
+ * Composed on the wall's single card vocabulary (design.md W1): one state item
+ * per reading (instantaneous power and accumulated consumption), each with the
+ * ported circular affordance, its label, and its value on the wall's own metric
+ * tier (design.md W2). Ambient — chrome-less, its readings on the panel.
  */
 import type { EnergyData } from "@ts-ha/shared";
 import { Database, Zap } from "lucide-react";
@@ -19,8 +20,9 @@ import { fetchEnergy } from "../../api.js";
 import { sourcesOwnReading, useDataStore } from "../../lib/data-store.js";
 import { isEnergyRelevantEvent } from "../../lib/energy.js";
 import { Spinner } from "../../ui/index.js";
-import { WALL_BODY_FONT_SIZE } from "../type-ramp.js";
-import { WALL_CARD_GLYPH_SIZE, WallCardStat } from "./card-vocab.js";
+import { WallCardMessage, WallCardStateItem } from "../cards/card-anatomy.js";
+import { WALL_CARD_GLYPH_SIZE } from "../cards/metrics.js";
+import { WALL_BODY_FONT_SIZE, WALL_METRIC_FONT_SIZE } from "../type-ramp.js";
 import { energyDisplay } from "./energy-model.js";
 
 /** Coalesces a burst of device events into one endpoint refetch. */
@@ -38,9 +40,13 @@ function Metric({
   color: string;
 }) {
   return (
-    <WallCardStat icon={icon} label={label} color={color}>
-      {value}
-    </WallCardStat>
+    <WallCardStateItem
+      icon={icon}
+      label={label}
+      reading={value}
+      readingSize={WALL_METRIC_FONT_SIZE}
+      tint={color}
+    />
   );
 }
 
@@ -135,9 +141,7 @@ export function EnergyWidget() {
         color="var(--hearth-on)"
       />
       {display.meteringCount === 0 && (
-        <p style={{ margin: 0, color: "var(--hearth-text-muted)", fontSize: WALL_BODY_FONT_SIZE }}>
-          No metering devices report yet.
-        </p>
+        <WallCardMessage>No metering devices report yet.</WallCardMessage>
       )}
     </div>
   );

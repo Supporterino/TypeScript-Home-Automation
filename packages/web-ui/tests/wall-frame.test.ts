@@ -2,15 +2,17 @@ import { describe, expect, it } from "bun:test";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { WALL_WIDGET_TYPES, type WallWidget, type WallWidgetType } from "@ts-ha/shared";
+import { WALL_CARD_METRICS } from "../src/app/wall/cards/metrics.js";
 import {
   minimumRendererBoxHeightPx,
   rendererBoxHeightPx,
   wallBandChrome,
+  wallChromeTextStyle,
   wallFrameChrome,
   widgetTitle,
 } from "../src/app/wall/frame.js";
 import { ROW_UNIT_MAX, ROW_UNIT_MIN, WALL_COMPACT_CARD_HEIGHT_PX } from "../src/app/wall/grid.js";
-import { WALL_FRAME_RESERVED_PX } from "../src/app/wall/pages.js";
+import { WALL_FRAME_INSET_PX, WALL_FRAME_RESERVED_PX } from "../src/app/wall/pages.js";
 import { WALL_WIDGET_REGISTRY } from "../src/app/wall/registry.js";
 import {
   cardHeightPx,
@@ -26,6 +28,25 @@ import {
 // title rule are the whole frame's behaviour (design.md D2, D3; specs/wall-
 // display "Wall Glanceability").
 
+const APP_DIR = join(import.meta.dir, "..", "src/app");
+
+/** Removes block and line comments so prose is not mistaken for markup. */
+function stripComments(content: string): string {
+  return content.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
+}
+
+async function source(relative: string): Promise<string> {
+  return stripComments(await readFile(join(APP_DIR, relative), "utf8"));
+}
+
+/**
+ * A Lumen design token — a Tailwind class or a `var(--…)` outside the Hearth
+ * namespace. The wall's own chrome and the frame that draws it name Hearth tokens
+ * only (design.md W3, W4; specs/wall-display "Wall Visual Language").
+ */
+const LUMEN_TOKEN =
+  /(?<!hearth-)(?:text-(?:muted|danger|info|stale|ink)\b|font-display|font-semibold|font-bold|uppercase|tracking-wide|rounded-(?:tile|pill|input)|var\(--(?:text|bg|font|radius|space|e[0-9]|motion)\b)/;
+
 function widget(type: WallWidgetType, config: Record<string, unknown> = {}): WallWidget {
   return { id: "a", type, config, x: 0, y: 0, w: 3, h: 2 };
 }
@@ -37,6 +58,7 @@ describe("wallFrameChrome", () => {
     expect(chrome.background).toBeNull();
     expect(chrome.borderColor).toBeNull();
     expect(chrome.radius).toBeNull();
+    expect(chrome.padding).toBeNull();
   });
 
   it("renders a control widget as a Hearth surface tile", () => {
@@ -44,7 +66,21 @@ describe("wallFrameChrome", () => {
     expect(chrome.surface).toBe(true);
     expect(chrome.background).toBe("var(--hearth-surface)");
     expect(chrome.borderColor).toBe("var(--hearth-hairline)");
-    expect(chrome.radius).toBe("var(--hearth-radius-md)");
+    expect(chrome.radius).toBe("var(--hearth-card-radius)");
+    expect(chrome.padding).toBe("var(--hearth-card-padding)");
+  });
+
+  it("draws the *ported card surface*, not Hearth's own radius scale", () => {
+    // A control widget's tile is a device card's surface: the ported card radius
+    // and padding, so a panel cannot show two different cards (design.md W3;
+    // specs/wall-display "A widget's surface is a card's surface"). The wall's own
+    // `--hearth-radius-md` / `--hearth-space-4` are not this surface's.
+    const chrome = wallFrameChrome("control");
+
+    expect(chrome.radius).toBe("var(--hearth-card-radius)");
+    expect(chrome.radius).not.toBe("var(--hearth-radius-md)");
+    expect(chrome.padding).toBe("var(--hearth-card-padding)");
+    expect(chrome.padding).not.toBe("var(--hearth-space-4)");
   });
 
   it("derives the surface from each type's descriptor grammar", () => {
@@ -56,16 +92,48 @@ describe("wallFrameChrome", () => {
 });
 
 describe("wallBandChrome", () => {
-  it("draws a zone band from Hearth's own band field and radius", () => {
+  it("draws a zone band from Hearth's own band field and the ported card surface", () => {
     const chrome = wallBandChrome();
     expect(chrome.background).toBe("var(--hearth-band)");
-    expect(chrome.radius).toBe("var(--hearth-radius-md)");
+    expect(chrome.radius).toBe("var(--hearth-card-radius)");
+    // A band and the card standing on it are the same surface: the ported card
+    // radius *and* its padding (design.md W3; specs/wall-display "Wall Zones").
+    expect(chrome.padding).toBe("var(--hearth-card-padding)");
   });
 
   it("keeps the band distinct from a member's surface", () => {
     // A band groups *behind* its members: a member keeps its own tile surface,
     // so the band never nests one surface inside another.
     expect(wallBandChrome().background).not.toBe(wallFrameChrome("control").background);
+  });
+
+  it("shares the member card's radius and padding, so one panel shows one surface", () => {
+    const band = wallBandChrome();
+    const control = wallFrameChrome("control");
+
+    expect(band.radius).toBe(control.radius);
+    expect(band.padding).toBe(control.padding);
+  });
+});
+
+describe("the wall chrome's ported text treatment", () => {
+  it("reads the ported family, weight and tracking from the card table", () => {
+    const style = wallChromeTextStyle();
+
+    expect(style.fontFamily).toBe("var(--hearth-font-display)");
+    expect(style.fontWeight).toBe(WALL_CARD_METRICS.primaryWeight);
+    expect(style.letterSpacing).toBe(`${WALL_CARD_METRICS.primaryTracking}px`);
+  });
+
+  it("carries no size and no colour, so a caller keeps the wall's own tier", () => {
+    // The chrome's *sizes* are the wall's (title / label tiers, W2) and its role is
+    // its own — the treatment is the ported table's family/weight/tracking alone, so
+    // a container label is never given a card's semantics (design.md W4).
+    expect(Object.keys(wallChromeTextStyle()).sort()).toEqual([
+      "fontFamily",
+      "fontWeight",
+      "letterSpacing",
+    ]);
   });
 });
 
@@ -89,17 +157,6 @@ describe("widgetTitle", () => {
 });
 
 describe("the span tier the frame hands its renderer", () => {
-  const APP_DIR = join(import.meta.dir, "..", "src/app");
-
-  /** Removes block and line comments so prose is not mistaken for markup. */
-  function stripComments(content: string): string {
-    return content.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
-  }
-
-  async function source(relative: string): Promise<string> {
-    return stripComments(await readFile(join(APP_DIR, relative), "utf8"));
-  }
-
   it("derives the tier from the widget's own registry spans", () => {
     for (const type of WALL_WIDGET_TYPES) {
       const descriptor = WALL_WIDGET_REGISTRY[type];
@@ -253,6 +310,16 @@ describe("rendererBoxHeightPx", () => {
     );
   });
 
+  it("reserves the ported card surface's own padding, not Hearth's spacing scale", () => {
+    // The frame's inset *is* the ported card padding, so the box a renderer gets is
+    // the cell minus the same inset a device card's surface draws (design.md W3).
+    expect(WALL_FRAME_INSET_PX).toBe(WALL_CARD_METRICS.padding);
+    expect(WALL_FRAME_RESERVED_PX).toBe(2 * WALL_CARD_METRICS.padding);
+    expect(rendererBoxHeightPx({ cellHeightPx: CELL, framed: true, titled: false })).toBe(
+      CELL - 2 * WALL_CARD_METRICS.padding,
+    );
+  });
+
   it("subtracts the title block the frame renders above the renderer", () => {
     expect(rendererBoxHeightPx({ cellHeightPx: CELL, framed: false, titled: true })).toBe(
       CELL - WALL_TITLE_BLOCK_PX,
@@ -276,5 +343,50 @@ describe("rendererBoxHeightPx", () => {
     expect(resolveCardFormForHeight(untitled)).toBe("full");
     expect(resolveCardFormForHeight(titled)).toBe("compact");
     expect(resolveCardFormForHeight(titled)).not.toBe(resolveCardFormForHeight(untitled));
+  });
+});
+
+describe("the frame's surface and the wall's own chrome", () => {
+  it("pads the surface with the chrome's own ported inset, never a literal", async () => {
+    const widgetFrame = await source("wall/WidgetFrame.tsx");
+
+    // The surface's radius and padding are the pure chrome's, mapped to real CSS
+    // properties — so a control widget's tile is a device card's surface
+    // (design.md W3; specs/wall-display "A widget's surface is a card's surface").
+    expect(widgetFrame).toContain("padding: chrome.padding ?? undefined");
+    expect(widgetFrame).toContain("borderRadius: chrome.radius ?? undefined");
+    expect(widgetFrame).not.toContain("--hearth-space-4");
+    expect(widgetFrame).not.toContain("--hearth-radius-md");
+  });
+
+  it("draws the opt-in title with the ported treatment and the wall's own title tier", async () => {
+    const widgetFrame = await source("wall/WidgetFrame.tsx");
+
+    // The title is the wall's chrome, not widget content: the ported family/weight/
+    // tracking, the wall's title tier, and its own quiet colour — never a card role's
+    // semantics, never an uppercase treatment of the retired vocabulary (W4).
+    expect(widgetFrame).toContain("...wallChromeTextStyle()");
+    expect(widgetFrame).toContain("fontSize: WALL_TITLE_FONT_SIZE");
+    expect(widgetFrame).not.toContain("uppercase");
+    expect(widgetFrame).not.toContain("font-semibold");
+  });
+
+  it("carries no Lumen token in the chrome", async () => {
+    for (const relative of ["wall/frame.ts", "wall/WidgetFrame.tsx", "wall/WallGrid.tsx"]) {
+      const text = await source(relative);
+
+      expect(text, relative).not.toMatch(LUMEN_TOKEN);
+      expect(text, relative).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
+    }
+  });
+
+  it("reads the chrome's treatment from the ported table, not from a literal pair", async () => {
+    const frameModule = await source("wall/frame.ts");
+
+    // A chrome caption cannot drift from the card surface beside it: the treatment
+    // is read from `WALL_CARD_METRICS` rather than written as a second table
+    // (design.md W4; specs/wall-display "A ported token table is declared once").
+    expect(frameModule).toContain("fontWeight: WALL_CARD_METRICS.primaryWeight");
+    expect(frameModule).toMatch(/letterSpacing: `\$\{WALL_CARD_METRICS\.primaryTracking\}px`/);
   });
 });

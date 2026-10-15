@@ -303,6 +303,14 @@ describe("WALL_TITLE_ROWS", () => {
     expect(WALL_TITLE_ROWS * ROW_UNIT_MIN).toBeGreaterThanOrEqual(WALL_TITLE_BLOCK_PX);
   });
 
+  it("stays one row when the frame's inset is re-derived from the ported padding", () => {
+    // The row floor reads the title block and the row unit — the ported card's own
+    // compact budget — and never the frame's inset, so the inset's re-derivation
+    // (design.md W3) leaves the editor's span floors where they were: 1 row.
+    expect(WALL_TITLE_ROWS).toBe(1);
+    expect(WALL_TITLE_BLOCK_PX).toBeLessThanOrEqual(ROW_UNIT_MIN * WALL_TITLE_ROWS);
+  });
+
   it("is the row form of the render guard, at every type and row unit", () => {
     // The editor floors a titled widget at `min.h + WALL_TITLE_ROWS`; the wall
     // explains a titled card whose box is below the box a minimum-span card gets.

@@ -7,8 +7,9 @@
  * (`wallPath`), never a second form built here.
  */
 
+import { WALL_CARD_PRIMARY_FONT_SIZE } from "../cards/metrics.js";
 import type { WallWidgetTier } from "../span.js";
-import { WALL_LABEL_FONT_SIZE, WALL_TITLE_FONT_SIZE } from "../type-ramp.js";
+import { WALL_TITLE_FONT_SIZE } from "../type-ramp.js";
 
 /**
  * The profile a link opens — the config's `target`, trimmed — or `null` when
@@ -38,11 +39,14 @@ export function linkLabel(config: Record<string, unknown>, target: string | null
 }
 
 /**
- * The tier a link presents its label on (wall-zones-and-fit D3; specs/wall-display
- * "Span-Aware Card Presentation"): a link placed at its minimum span sets its
- * label on the label tier, and one with room uses the title tier — so a large
- * link does not repeat the composition its smallest span draws.
+ * The size a link presents its label on (wall-zones-and-fit D3; design.md W1, W2;
+ * specs/wall-display "Span-Aware Card Presentation", "Supporting text is drawn at
+ * the ported sizes"): a link placed at its minimum span sets its label at the
+ * ported card system's own primary size — the wall's label tier retires with the
+ * rest of its earlier vocabulary — and one with room uses the wall's title tier,
+ * so a large link does not repeat the composition its smallest span draws. Both
+ * are at or above the ported primary size, the smallest the ported table declares.
  */
 export function linkLabelFontSize(tier: WallWidgetTier): string {
-  return tier === "compact" ? WALL_LABEL_FONT_SIZE : WALL_TITLE_FONT_SIZE;
+  return tier === "compact" ? WALL_CARD_PRIMARY_FONT_SIZE : WALL_TITLE_FONT_SIZE;
 }

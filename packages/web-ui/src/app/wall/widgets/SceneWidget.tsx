@@ -4,10 +4,14 @@
  * Presentation"). A configurable label triggers an existing automation through
  * the same manual-trigger path the admin interface uses — no scene subsystem.
  *
- * Redesigned from the centred Play glyph into a Hearth scene tile on the shared
- * card vocabulary: a leading scene glyph beside the label, the whole tile as
- * the trigger affordance. Only on a card with room — a span above the type's own
- * minimum *and* a box the frame actually gives it that holds the scene's own
+ * Redesigned from the centred Play glyph into a Hearth scene tile on the wall's
+ * single card vocabulary (design.md W1): the tile's own button is the vocabulary's
+ * labelled control — the ported control height and radius, the label drawn through
+ * {@link WallCardLabel} at the ported primary size (specs/wall-display "A control
+ * is the ported control", "Touch Operation") — carrying a leading scene glyph
+ * beside the label, the whole tile as the trigger affordance. Only on a card with
+ * room — a span above the type's own minimum *and* a box the frame actually gives
+ * it that holds the scene's own
  * stacked budget — does the tile centre a larger glyph over the label instead, so
  * a scene card composes for the space it has rather than for the light card's
  * budget: a wide, short cell keeps the row and cannot clip, and a genuinely large
@@ -25,10 +29,11 @@ import { useState } from "react";
 import { manualTriggerContext, triggerAutomation } from "../../api.js";
 import { useDataStore } from "../../lib/data-store.js";
 import { Spinner } from "../../ui/index.js";
+import { WallCardLabel } from "../cards/card-anatomy.js";
+import { WALL_CARD_GLYPH_SIZE, WALL_CARD_METRICS } from "../cards/metrics.js";
 import type { WallWidgetProps } from "../registry.js";
 import { wallTileMetrics } from "../scale.js";
 import { WALL_LABEL_FONT_SIZE } from "../type-ramp.js";
-import { WALL_CARD_GLYPH_SIZE, WallCardLabel } from "./card-vocab.js";
 import {
   SCENE_LARGE_GLYPH_PX,
   SCENE_LARGE_GLYPH_SIZE,
@@ -105,13 +110,13 @@ export function SceneWidget({ widget, rendererHeightPx }: WallWidgetProps) {
           display: "flex",
           height: "100%",
           width: "100%",
-          minHeight: minTouchTarget,
+          minHeight: WALL_CARD_METRICS.controlHeight,
           cursor: busy ? "progress" : "pointer",
           flexDirection: stacked ? "column" : "row",
           alignItems: "center",
           justifyContent: stacked ? "center" : "flex-start",
           gap: stacked ? "var(--hearth-space-2)" : "var(--hearth-space-3)",
-          borderRadius: "var(--hearth-radius-md)",
+          borderRadius: WALL_CARD_METRICS.controlRadius,
           padding: "var(--hearth-space-3)",
           textAlign: stacked ? "center" : "left",
           color: "var(--hearth-text)",
@@ -145,7 +150,7 @@ export function SceneWidget({ widget, rendererHeightPx }: WallWidgetProps) {
             />
           )}
         </span>
-        <WallCardLabel color="var(--hearth-text)">{label}</WallCardLabel>
+        <WallCardLabel>{label}</WallCardLabel>
       </button>
       {error && (
         <p

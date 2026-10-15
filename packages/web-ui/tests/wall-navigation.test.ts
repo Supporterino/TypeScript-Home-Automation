@@ -59,10 +59,12 @@ describe("the wall's back affordance", () => {
 
     expect(view).toContain("backToWallPath(origin, basePath)");
     expect(view).toContain("{backTo !== null && (");
-    expect(view).toContain("<Link to={backTo}");
     // A touch-sized Hearth affordance over the composition, never a hover-only
-    // control (specs/wall-display "Navigation is touch-operable").
-    expect(view).toContain("wallAffordanceStyle()");
+    // control (specs/wall-display "Navigation is touch-operable"): the wall's own
+    // route affordance, which draws the ported control treatment and the shared
+    // router's link (design.md W1).
+    expect(view).toContain("<WallCardRoute");
+    expect(view).toContain("to={backTo}");
     expect(view).not.toContain("onMouseEnter");
   });
 

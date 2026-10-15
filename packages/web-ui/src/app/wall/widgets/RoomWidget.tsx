@@ -11,11 +11,13 @@
  * stream or the deadline, failed reverts and is surfaced, skipped is reported
  * separately. Report-only members are never commanded.
  *
- * Composed on the shared Hearth card vocabulary (design.md D11): a leading room
- * glyph and the room name as the title, the member count as the metric, and the
- * room-wide all-on/all-off controls as the card's action-affordance slot. A
- * control widget: the frame draws the surface, so each contained card draws
- * none of its own (specs/wall-display "A card is a single surface").
+ * Composed on the wall's single card vocabulary (design.md W1, W2): the ported
+ * room affordance with the room's name as the widget's head, the member count
+ * beside its label at the ported secondary size — the caption size every widget's
+ * supporting figure takes — and the room-wide all-on/all-off commands as ported
+ * controls in the vocabulary's actions row, spaced by the ported control spacing.
+ * A control widget: the frame draws the surface, so each contained card draws none
+ * of its own (specs/wall-display "A card is a single surface").
  *
  * A room larger than the card can show pages its tiles through the wall's shared
  * pagination layer — one page at a time with touch page controls — rather than
@@ -32,19 +34,18 @@ import {
 } from "../../lib/room-command.js";
 import type { DeviceDescriptor } from "../../types.js";
 import { Spinner } from "../../ui/index.js";
+import {
+  WallCardActions,
+  WallCardControl,
+  WallCardLabel,
+  WallCardMessage,
+  WallCardReading,
+  WallCardStateItem,
+} from "../cards/card-anatomy.js";
+import { WALL_CARD_GLYPH_SIZE, WALL_CARD_SECONDARY_FONT_SIZE } from "../cards/metrics.js";
 import { widgetTitle } from "../frame.js";
 import type { WallWidgetProps } from "../registry.js";
 import { WALL_BODY_FONT_SIZE } from "../type-ramp.js";
-import {
-  WALL_CARD_GLYPH_SIZE,
-  WallButton,
-  WallCardAffordance,
-  WallCardHead,
-  WallCardLabel,
-  WallCardMessage,
-  WallCardMetric,
-  wallControlGapPx,
-} from "./card-vocab.js";
 import { WallDeviceCard, WallDeviceUnavailable, wallTileCardBox } from "./DeviceWidget.js";
 import { PagedTileGrid } from "./PagedTileGrid.js";
 import { actuatableRoomMembers, roomTiles } from "./room-model.js";
@@ -158,24 +159,28 @@ export function RoomWidget({ widget, contained, rowUnit }: WallWidgetProps) {
         gap: "var(--hearth-space-3)",
       }}
     >
-      <WallCardHead icon={<House size={WALL_CARD_GLYPH_SIZE} />} title={room.name} />
+      <WallCardStateItem icon={<House size={WALL_CARD_GLYPH_SIZE} />} label={room.name} />
 
-      <span style={{ display: "flex", alignItems: "baseline", gap: "var(--hearth-space-2)" }}>
-        <WallCardMetric>{memberCount}</WallCardMetric>
+      <div style={{ display: "flex", alignItems: "baseline", gap: "var(--hearth-space-2)" }}>
+        <WallCardReading>{memberCount}</WallCardReading>
         <WallCardLabel>{memberCount === 1 ? "device" : "devices"}</WallCardLabel>
-      </span>
+      </div>
 
       {hasActuatable && (
-        <WallCardAffordance>
-          <WallButton disabled={commandBusy} onClick={() => void handleRoomCommand(true)}>
-            {commandBusy ? <Spinner size={18} label="" /> : <Power size={18} aria-hidden />}
-            All on
-          </WallButton>
-          <WallButton disabled={commandBusy} onClick={() => void handleRoomCommand(false)}>
-            {commandBusy ? <Spinner size={18} label="" /> : <Power size={18} aria-hidden />}
-            All off
-          </WallButton>
-        </WallCardAffordance>
+        <WallCardActions>
+          <WallCardControl
+            disabled={commandBusy}
+            onClick={() => void handleRoomCommand(true)}
+            glyph={commandBusy ? <Spinner size={18} label="" /> : <Power size={18} aria-hidden />}
+            label="All on"
+          />
+          <WallCardControl
+            disabled={commandBusy}
+            onClick={() => void handleRoomCommand(false)}
+            glyph={commandBusy ? <Spinner size={18} label="" /> : <Power size={18} aria-hidden />}
+            label="All off"
+          />
+        </WallCardActions>
       )}
 
       {tiles.length === 0 ? (
@@ -253,7 +258,7 @@ export function RoomWidget({ widget, contained, rowUnit }: WallWidgetProps) {
                 borderRadius: "var(--hearth-radius-pill)",
                 border: "1px solid var(--hearth-hairline)",
                 color: "var(--hearth-text-muted)",
-                fontSize: "var(--hearth-text-chip)",
+                fontSize: WALL_CARD_SECONDARY_FONT_SIZE,
                 fontWeight: "var(--hearth-weight-semibold)",
               }}
             >

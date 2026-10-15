@@ -1,41 +1,88 @@
 import { describe, expect, it } from "bun:test";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { WALL_CARD_METRICS } from "../src/app/wall/cards/metrics.js";
 import { WALL_MIN_CONTROL_GAP } from "../src/app/wall/registry.js";
-import { WALL_CARD_GLYPH_SIZE, wallControlGapPx } from "../src/app/wall/widgets/card-vocab.js";
 
 /**
- * The shared Hearth card vocabulary (design.md D11; specs/wall-display "Widget
- * Catalog", "Touch Operation" — "Adjacent controls are separated"). There is no
- * DOM harness here, so the adjacent-control floor is covered through the pure
- * helper, and each redesigned widget is asserted structurally: it composes the
- * vocabulary and carries no Lumen design token — the same style as
- * `wall-scene-tile.test.ts`.
+ * The wall's single card vocabulary (design.md W1; specs/wall-display "Wall
+ * Visual Language" — "Every wall widget MUST be composed from the wall's single
+ * card vocabulary" and "the wall MUST NOT carry a second card vocabulary" — and
+ * "Touch Operation" — "Adjacent controls are separated").
+ *
+ * There is no DOM harness here, so every surface is asserted structurally: it
+ * composes the ported module, it names no part the wall retired, it declares no
+ * part of its own, and it carries no Lumen token — the same style as the wall's
+ * other structural tests. The vocabulary's own metrics are asserted where they are
+ * declared (`wall-card-anatomy.test.ts`); this file asserts who composes them.
  */
 const APP_DIR = join(import.meta.dir, "..", "src/app");
-const WIDGETS = join(APP_DIR, "wall/widgets");
 
-const PRESENTATION_WIDGETS = [
-  "ClockWidget.tsx",
-  "WeatherWidget.tsx",
-  "EnergyWidget.tsx",
-  "StatusWidget.tsx",
-  "RoomWidget.tsx",
-  "FavoritesWidget.tsx",
-  "SceneWidget.tsx",
-  "DeviceGridWidget.tsx",
-  "LinkWidget.tsx",
-  "PagedTileGrid.tsx",
-] as const;
+/**
+ * The retired non-device vocabulary's module slug, assembled from its parts rather
+ * than written whole: this check exists to prove that no file names it, so a
+ * literal here would be the one reference left in the tree.
+ */
+const RETIRED_VOCABULARY = ["card", "vocab"].join("-");
 
-const VOCAB_ELEMENTS = [
+/** The parts that vocabulary declared — no surface may name one again. */
+const RETIRED_PARTS = [
   "WallCardGlyph",
-  "WallCardLabel",
   "WallCardMetric",
   "WallCardStat",
   "WallCardHead",
   "WallCardAffordance",
+  "WallButton",
+  "wallAffordanceStyle",
+  "wallControlGapPx",
 ] as const;
+
+/** The parts the ported module declares for the wall's widgets and its chrome (design.md W1). */
+const WIDGET_VOCABULARY = [
+  "WallCardLabel",
+  "WallCardReading",
+  "WallCardStateItem",
+  "WallCardControl",
+  "WallCardRoute",
+  "WallCardMessage",
+] as const;
+
+/** The ported module itself — the one declaration site of the widget vocabulary. */
+const ANATOMY = "wall/cards/card-anatomy.tsx";
+
+/** Every widget renderer: the wall's own surfaces, each composing the vocabulary. */
+const WIDGET_SURFACES = [
+  "wall/widgets/ClockWidget.tsx",
+  "wall/widgets/WeatherWidget.tsx",
+  "wall/widgets/EnergyWidget.tsx",
+  "wall/widgets/StatusWidget.tsx",
+  "wall/widgets/TemperatureWidget.tsx",
+  "wall/widgets/SceneWidget.tsx",
+  "wall/widgets/LinkWidget.tsx",
+  "wall/widgets/RoomWidget.tsx",
+  "wall/widgets/FavoritesWidget.tsx",
+  "wall/widgets/DeviceGridWidget.tsx",
+  "wall/widgets/PagedTileGrid.tsx",
+  "wall/widgets/DeviceWidget.tsx",
+] as const;
+
+/**
+ * The chrome a widget is drawn inside — the framed container and the grid that
+ * draws the zone band and the too-large explanation — which composes the same
+ * vocabulary.
+ */
+const CHROME_SURFACES = ["wall/WidgetFrame.tsx", "wall/WallGrid.tsx"] as const;
+
+/**
+ * The wall view draws the wall's own route affordance for a wall reached from a
+ * link, so it composes the vocabulary too. It is deliberately outside this file's
+ * Lumen half: its not-found and deleted explanations are the dashboard shell
+ * explaining a missing profile — a Lumen surface by rule (the change's non-goals) —
+ * so only its composition of the ported parts is asserted here.
+ */
+const WALL_VIEW = "views/WallView.tsx";
+
+const ALL_SURFACES = [...WIDGET_SURFACES, ...CHROME_SURFACES, WALL_VIEW] as const;
 
 /**
  * A Lumen design token — a Tailwind class or a `var(--…)` outside the Hearth
@@ -50,49 +97,148 @@ function stripComments(content: string): string {
   return content.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
 }
 
-async function source(path: string): Promise<string> {
-  return stripComments(await readFile(path, "utf8"));
+async function source(relative: string): Promise<string> {
+  return stripComments(await readFile(join(APP_DIR, relative), "utf8"));
 }
 
-describe("wallControlGapPx", () => {
-  it("keeps at least the wall's 8px adjacent-control floor", () => {
-    expect(wallControlGapPx()).toBeGreaterThanOrEqual(WALL_MIN_CONTROL_GAP);
-    expect(wallControlGapPx()).toBeGreaterThanOrEqual(8);
-  });
+describe("every wall surface composes the ported vocabulary", () => {
+  for (const relative of ALL_SURFACES) {
+    it(`${relative} imports the ported module`, async () => {
+      const text = await source(relative);
 
-  it("sizes the card glyph for a distance read", () => {
-    expect(WALL_CARD_GLYPH_SIZE).toBeGreaterThanOrEqual(16);
-  });
-});
-
-describe("the card vocabulary", () => {
-  it("exposes the glyph, title, metric, and affordance-slot elements", async () => {
-    const vocab = await source(join(WIDGETS, "card-vocab.tsx"));
-    for (const element of VOCAB_ELEMENTS) {
-      expect(vocab).toContain(`function ${element}`);
-    }
-  });
-
-  it("draws only Hearth tokens, never a Lumen token or a literal colour", async () => {
-    const vocab = await source(join(WIDGETS, "card-vocab.tsx"));
-    expect(vocab).toContain("var(--hearth-");
-    expect(vocab).not.toMatch(LUMEN_TOKEN);
-    expect(vocab).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
-  });
-
-  it("separates adjacent controls through the vocabulary's own gap", async () => {
-    const vocab = await source(join(WIDGETS, "card-vocab.tsx"));
-    expect(vocab).toContain("wallControlGapPx()");
-    expect(vocab).toContain("WALL_MIN_CONTROL_GAP");
-  });
-});
-
-describe("redesigned widgets use the Hearth card vocabulary", () => {
-  for (const name of PRESENTATION_WIDGETS) {
-    it(`${name} composes the vocabulary and carries no Lumen token`, async () => {
-      const widget = await source(join(WIDGETS, name));
-      expect(widget).toContain('from "./card-vocab.js"');
-      expect(widget).not.toMatch(LUMEN_TOKEN);
+      expect(text).toMatch(/from "[^"]*cards\/card-anatomy\.js"/);
     });
   }
+});
+
+describe("no wall surface carries a vocabulary of its own", () => {
+  it("retires the wall's earlier non-device vocabulary module", async () => {
+    // The module itself is gone, not merely unreferenced: a file re-created at its
+    // path fails here before it can become a second vocabulary again.
+    const retired = join(APP_DIR, "wall/widgets", `${RETIRED_VOCABULARY}.tsx`);
+    const gone = await readFile(retired, "utf8").then(
+      () => false,
+      () => true,
+    );
+
+    expect(gone, "the retired module is gone").toBe(true);
+  });
+
+  for (const relative of ALL_SURFACES) {
+    it(`${relative} names no retired part and declares no part itself`, async () => {
+      const text = await source(relative);
+
+      // The retired vocabulary is gone: neither its module nor any part it declared
+      // may be named by a surface (specs/wall-display "the wall MUST NOT carry a
+      // second card vocabulary").
+      expect(text).not.toContain(RETIRED_VOCABULARY);
+      for (const part of RETIRED_PARTS) {
+        // A whole word: `WallCardStat` is a prefix of the ported `WallCardStateItem`,
+        // which every surface composes.
+        expect(text, `${part} is retired`).not.toMatch(new RegExp(`\\b${part}\\b`));
+      }
+
+      // The parts are declared once, in the ported module: a surface that declared
+      // one would be a second declaration of a treatment the ported table owns. A
+      // surface uses them — it never re-declares a `function`/`const` of its own.
+      for (const part of WIDGET_VOCABULARY) {
+        expect(text, `${part} is used here, not declared`).not.toContain(`function ${part}`);
+        expect(text, `${part} is used here, not declared`).not.toContain(`const ${part} =`);
+      }
+    });
+  }
+
+  it("declares each widget part exactly once, in the ported module", async () => {
+    const anatomy = await source(ANATOMY);
+
+    for (const part of WIDGET_VOCABULARY) {
+      expect(anatomy).toContain(`export function ${part}`);
+    }
+  });
+});
+
+describe("the wall's own surfaces carry no Lumen token", () => {
+  for (const relative of [...WIDGET_SURFACES, ...CHROME_SURFACES]) {
+    it(`${relative} draws Hearth tokens and no literal colour`, async () => {
+      const text = await source(relative);
+
+      expect(text).not.toMatch(LUMEN_TOKEN);
+      expect(text).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
+    });
+  }
+});
+
+describe("a widget's controls are the ported control treatment", () => {
+  it("keeps the ported control spacing at or above the wall's adjacent-control floor", () => {
+    expect(WALL_CARD_METRICS.controlSpacing).toBeGreaterThanOrEqual(WALL_MIN_CONTROL_GAP);
+  });
+
+  it("draws every widget control from the ported control parts", async () => {
+    // The controls repointed onto the ported treatment, and the part each one draws:
+    // a room's batch commands and the page controls in the vocabulary's actions row,
+    // and the link and the wall view's back link through the route affordance.
+    const expected: Readonly<Record<string, readonly string[]>> = {
+      "wall/widgets/RoomWidget.tsx": ["<WallCardActions>", "<WallCardControl"],
+      "wall/widgets/PagedTileGrid.tsx": ["<WallCardActions", "<WallCardIconButton"],
+      "wall/widgets/LinkWidget.tsx": ["<WallCardRoute"],
+      "views/WallView.tsx": ["<WallCardRoute"],
+    };
+
+    for (const [relative, parts] of Object.entries(expected)) {
+      const text = await source(relative);
+      for (const part of parts) {
+        expect(text, `${relative} draws ${part}`).toContain(part);
+      }
+    }
+  });
+});
+
+describe("the wall view's own overlay chrome", () => {
+  it("carries the wall's Hearth scope, so the ported treatment resolves", async () => {
+    const view = await source(WALL_VIEW);
+
+    // The way back and the refetch banner sit *beside* the grid rather than inside
+    // its Hearth scope, so the ready state carries the scope itself: without it the
+    // ported treatment's tokens resolve to nothing and the affordance a link's
+    // target must present would not be drawn at all (design.md W4; specs/wall-display
+    // "A wall reached from a link offers a way back").
+    expect(view).toContain('data-wall-chunk=""');
+    // A scope, not the wall chunk's own identity marker (which the grid renders).
+    expect(view).not.toContain("WALL_CHUNK_MARKER");
+  });
+
+  it("draws the refetch affordance from the ported parts and the ported surface", async () => {
+    const view = await source(WALL_VIEW);
+    const ready = view.slice(
+      view.indexOf('state === "ready"'),
+      view.indexOf("{backTo !== null && ("),
+    );
+
+    // The wall's own chrome: the ported control for the dismissal and the wall's
+    // message form for the detail, on the ported card surface — never a Lumen
+    // primitive or a card role's semantics (design.md W1, W4).
+    expect(ready).toContain("<WallCardIconButton");
+    expect(ready).toContain("<WallCardMessage>");
+    expect(ready).toContain("var(--hearth-card-radius)");
+    expect(ready).toContain("var(--hearth-card-padding)");
+    expect(ready).not.toContain("<IconButton");
+    expect(ready).not.toContain("rounded-tile");
+  });
+
+  it("draws the way back as the ported route affordance, in the wall's own scope", async () => {
+    const view = await source(WALL_VIEW);
+    // The ready state alone: the unknown-profile explanation's own way back is the
+    // dashboard shell's Lumen button, not a wall surface (the change's non-goals).
+    const ready = view.slice(
+      view.indexOf('state === "ready"'),
+      view.indexOf('state === "unknown"'),
+    );
+    const back = ready.slice(ready.indexOf("{backTo !== null && ("));
+
+    expect(back).toContain("<WallCardRoute");
+    expect(back).toContain("to={backTo}");
+    expect(back).not.toContain("<Link to={backTo}");
+    // Its placement is the wall's own tokens, which the view's scope resolves.
+    expect(back).toContain("var(--hearth-space-4)");
+  });
 });

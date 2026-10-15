@@ -12,12 +12,13 @@ import { WALL_CARD_METRICS } from "../src/app/wall/cards/metrics.js";
 import { WALL_MIN_CONTROL_GAP, WALL_MIN_TOUCH_TARGET } from "../src/app/wall/registry.js";
 
 /**
- * The shared card anatomy (design.md D1, D2; specs/wall-display "Wall Device
- * Presentation" — "A card presents the ported anatomy" — and "Touch Operation").
- * There is no DOM harness, so the geometry is covered through the pure
- * {@link sliderFraction} and the ported metrics, and the components are asserted
- * structurally against the tokens they must draw — the same style as
- * `wall-card-vocab.test.ts`.
+ * The wall's card anatomy — the ported device parts and the widget vocabulary
+ * declared alongside them (design.md D1, D2, W1; specs/wall-display "Wall Device
+ * Presentation" — "A card presents the ported anatomy" — "Wall Visual Language",
+ * and "Touch Operation"). There is no DOM harness, so the geometry is covered
+ * through the pure {@link sliderFraction} and the ported metrics, and the
+ * components are asserted structurally against the tokens they must draw — the
+ * same style as the wall's other structural tests.
  *
  * The ported control height is 42 px (design.md D2, D4); the spec's "Touch
  * Operation" is modified to that value. That value is also the wall's shared
@@ -30,6 +31,39 @@ const ANATOMY = join(APP_DIR, "wall/cards/card-anatomy.tsx");
 
 /** The spec's modified minimum touch target: the ported card system's control height. */
 const PORTED_TOUCH_TARGET_PX = 42;
+
+/**
+ * A metric written as a literal rather than drawn from the ported table
+ * (design.md W1: "The new widget parts consume `WALL_CARD_METRICS` rather than
+ * adding literals"). A `0` reset is a reset, not a metric, so it is not a
+ * literal; a hairline's `1px` border is the wall's own hairline, not a ported
+ * metric, and is not asserted here.
+ */
+const LITERAL_METRIC =
+  /(?:minWidth|maxWidth|minHeight|maxHeight|width|height|padding|paddingTop|gap|borderRadius|fontSize|lineHeight|letterSpacing):\s*(?!0(?:px)?\b)\d/;
+
+/** The widget parts the ported module declares for everything that is not a device card. */
+const WIDGET_VOCABULARY = [
+  "WallCardLabel",
+  "WallCardReading",
+  "WallCardStateItem",
+  "WallCardControl",
+  "WallCardRoute",
+  "WallCardMessage",
+] as const;
+
+/**
+ * The source of one function declaration in the anatomy module, so a part's own
+ * style can be asserted rather than the module's. It runs from the declaration to
+ * the next one (or the end of the file) — a part's props block closes with a
+ * column-zero brace of its own, so the closing brace alone cannot bound it.
+ */
+function functionSource(anatomy: string, name: string): string {
+  const start = anatomy.indexOf(`function ${name}(`);
+  expect(start, `${name} is defined`).toBeGreaterThanOrEqual(0);
+  const next = anatomy.slice(start + 1).search(/\n(?:export )?function /);
+  return anatomy.slice(start, next === -1 ? anatomy.length : start + 1 + next);
+}
 
 /** Removes block and line comments so prose is not mistaken for code. */
 function stripComments(content: string): string {
@@ -116,12 +150,18 @@ describe("the card anatomy components", () => {
     expect(anatomy).not.toContain("flexShrink: 1");
   });
 
-  it("pads the actions row by the ported control spacing on each side", async () => {
-    // The row's own horizontal padding is what `wall/grid.ts`'s minimum column
-    // span derivation accounts for, so it is asserted here against the metric.
+  it("insets the actions row by the ported control spacing, and lets a caller drop it", async () => {
+    // A device card keeps the row's inset — it is what `wall/grid.ts`'s minimum
+    // column span derivation accounts for — while the page-control row drops it,
+    // because the page plan reserves that row at the ported control height alone
+    // (`wall/pages.ts`'s `WALL_PAGE_CONTROL_RESERVED_PX`). The row's controls are
+    // spaced by the ported control spacing either way.
     const anatomy = await source(ANATOMY);
+    const actions = functionSource(anatomy, "WallCardActions");
 
-    expect(anatomy).toMatch(/padding: `\$\{WALL_CARD_METRICS\.controlSpacing\}px`/);
+    expect(actions).toContain("inset = true");
+    expect(actions).toMatch(/padding: inset \? `\$\{WALL_CARD_METRICS\.controlSpacing\}px` : 0/);
+    expect(actions).toMatch(/gap: `\$\{WALL_CARD_METRICS\.controlSpacing\}px`/);
   });
 
   it("draws the ported slider as the wall's own range chrome", async () => {
@@ -217,5 +257,90 @@ describe("the enumerated-control affordance", () => {
     expect(anatomy).toContain('className="hearth-card-select"');
     expect(anatomy).toContain("minWidth: WALL_CARD_METRICS.controlHeight");
     expect(anatomy).toContain("values.map(");
+  });
+});
+
+describe("the widget vocabulary", () => {
+  it("declares every widget part beside the device parts", async () => {
+    // The one card vocabulary (design.md W1; specs/wall-display "Wall Visual
+    // Language"): the parts everything that is not a device card composes.
+    const anatomy = await source(ANATOMY);
+
+    for (const part of WIDGET_VOCABULARY) {
+      expect(anatomy).toContain(`export function ${part}`);
+    }
+  });
+
+  it("sizes the labelled control and the route to the ported control height and radius", async () => {
+    // One treatment, declared once and drawn by both, so a wall control and a
+    // card's control cannot differ (specs/wall-display "A control is the ported
+    // control", "Controls are touch-sized"): the ported control height in *both*
+    // directions — the wall's touch target, met even by an affordance that draws no
+    // text — and the ported control radius.
+    const anatomy = await source(ANATOMY);
+    const treatment = functionSource(anatomy, "wallCardControlStyle");
+
+    expect(treatment).toContain("minWidth: WALL_CARD_METRICS.controlHeight");
+    expect(treatment).toContain("minHeight: WALL_CARD_METRICS.controlHeight");
+    expect(treatment).toContain("borderRadius: WALL_CARD_METRICS.controlRadius");
+    // …and both the labelled control and the route draw that one style rather than a
+    // treatment of their own.
+    expect(functionSource(anatomy, "WallCardControl")).toContain("...wallCardControlStyle()");
+    expect(functionSource(anatomy, "WallCardRoute")).toContain("...wallCardControlStyle()");
+  });
+
+  it("spaces a widget's controls by the ported control spacing", async () => {
+    // The vocabulary's actions row is where a widget's adjacent controls sit,
+    // spaced by the ported control spacing so a touch intended for one cannot
+    // plausibly activate its neighbour (specs/wall-display "Adjacent controls are
+    // separated"), and that spacing is still at or above the wall's own floor.
+    const anatomy = await source(ANATOMY);
+
+    expect(anatomy).toMatch(/gap: `\$\{WALL_CARD_METRICS\.controlSpacing\}px`/);
+    expect(WALL_CARD_METRICS.controlSpacing).toBeGreaterThanOrEqual(WALL_MIN_CONTROL_GAP);
+  });
+
+  it("draws a state item's reading at the size its caller resolved", async () => {
+    // A widget's reading keeps the wall's own readout tier (design.md W2), so the
+    // state item takes the size from its caller rather than declaring one, and the
+    // size it falls back to is the ported secondary size — the smallest text the
+    // ported table declares, which no widget may render below (specs/wall-display
+    // "The ramp defines the body floor", as this change modifies it).
+    const anatomy = await source(ANATOMY);
+    const item = functionSource(anatomy, "WallCardStateItem");
+    const reading = functionSource(anatomy, "WallCardReading");
+
+    expect(item).toContain("size={readingSize}");
+    expect(reading).toContain("size = WALL_CARD_SECONDARY_FONT_SIZE");
+    expect(reading).toContain("fontSize: size");
+  });
+
+  it("keeps a reading's value and its unit on one line", async () => {
+    // A readout's value is never rendered separately from its unit (specs/
+    // wall-display "A value stays with its unit"): the reading is one run, and it
+    // never wraps — so a narrow cell cannot split the two.
+    const anatomy = await source(ANATOMY);
+
+    expect(functionSource(anatomy, "WallCardReading")).toContain('whiteSpace: "nowrap"');
+  });
+
+  it("draws no metric as a literal, in the device parts or the widget parts", async () => {
+    // The ported table is the one declaration site (`wall/cards/metrics.ts`, mirrored
+    // by the `--hearth-card-*` tokens); a part that wrote a number would be a second
+    // one (specs/wall-display "A ported token table is declared once").
+    const anatomy = await source(ANATOMY);
+
+    expect(anatomy).not.toMatch(LITERAL_METRIC);
+    expect(anatomy).toContain("WALL_CARD_METRICS.");
+  });
+
+  it("imports no part of the widget registry, so the vocabulary stays cycle-free", async () => {
+    // The registry imports every widget renderer, which imports this module, so a
+    // registry read here would close that cycle. The ported control height is the
+    // ported table's own, never the registry's copy of it.
+    const anatomy = await source(ANATOMY);
+
+    expect(anatomy).not.toContain("registry.js");
+    expect(anatomy).toContain("./metrics.js");
   });
 });

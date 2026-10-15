@@ -125,6 +125,20 @@ describe("wallGridMetrics", () => {
     expect(metrics.outcome).toBe("fits");
   });
 
+  it("resolves the verdict without the frame's per-widget inset", () => {
+    // The frame's inset is chrome *inside* a widget's cell, so the panel's verdict
+    // is a property of the composition and the panel alone: the panel's padding and
+    // its inter-row gaps. Re-deriving the inset from the ported card padding cannot
+    // move a fit (design.md W3; specs/wall-display "Panel Fit").
+    const panelHeight = 1080;
+    const widgets = [widget("a", 0, 0, 12, 8)];
+    const metrics = wallGridMetrics(panelHeight, widgets, WALL_GUTTER_MAX_PX);
+    const rows = occupiedRows(widgets);
+
+    expect(metrics.usableHeight).toBe(panelHeight - 2 * WALL_GUTTER_MAX_PX);
+    expect(metrics.contentHeight).toBe(rows * metrics.rowUnit + (rows - 1) * WALL_GUTTER_MAX_PX);
+  });
+
   it("reports the tooLarge outcome for a composition taller than the panel", () => {
     const metrics = wallGridMetrics(300, [widget("a", 0, 0, 12, 10)], 24);
     expect(metrics.rowUnit).toBe(ROW_UNIT_MIN);

@@ -21,6 +21,7 @@ import {
   DEVICE_GRID_SELECTION,
   HARNESS_ROOM_ID,
   HARNESS_SCENE_NAME,
+  HARNESS_TEMPERATURE_ONLY_SENSOR_ID,
 } from "./fixtures.js";
 import type { HarnessPanel } from "./messages.js";
 
@@ -108,6 +109,19 @@ const LANDSCAPE: readonly WallWidget[] = [
     h: 2,
     zone: "Living Room",
   },
+  // The widget's other reading case beside the hall sensor's: the attic sensor
+  // declares no humidity, so this placement presents its temperature alone
+  // (design.md W5; task 5.3).
+  {
+    id: "temperature-attic",
+    type: "temperature",
+    config: { qualifiedId: HARNESS_TEMPERATURE_ONLY_SENSOR_ID },
+    x: 10,
+    y: 7,
+    w: 2,
+    h: 2,
+    zone: "Living Room",
+  },
   deviceClassWidget("lock", { x: 4, y: 7 }),
   deviceClassWidget("number", { x: 7, y: 7 }),
   {
@@ -153,6 +167,18 @@ const PORTRAIT: readonly WallWidget[] = [
     x: 0,
     y: 8,
     w: 3,
+    h: 2,
+    zone: "Living Room",
+  },
+  // The same second reading case the landscape list carries, placed in this
+  // layout's own free cells (design.md W5; task 5.3).
+  {
+    id: "temperature-attic",
+    type: "temperature",
+    config: { qualifiedId: HARNESS_TEMPERATURE_ONLY_SENSOR_ID },
+    x: 0,
+    y: 19,
+    w: 2,
     h: 2,
     zone: "Living Room",
   },

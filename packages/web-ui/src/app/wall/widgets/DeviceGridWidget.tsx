@@ -14,9 +14,9 @@
  * none of their own.
  */
 import { useDataStore } from "../../lib/data-store.js";
+import { WallCardMessage } from "../cards/card-anatomy.js";
 import { widgetTitle } from "../frame.js";
 import type { WallWidgetProps } from "../registry.js";
-import { WallCardMessage } from "./card-vocab.js";
 import { WallDeviceCard, WallDeviceUnavailable, wallTileCardBox } from "./DeviceWidget.js";
 import { deviceGridIds } from "./device-grid-model.js";
 import { PagedTileGrid } from "./PagedTileGrid.js";

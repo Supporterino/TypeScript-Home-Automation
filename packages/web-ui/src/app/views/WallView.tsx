@@ -21,6 +21,16 @@
  * likewise never blanks the wall: the last-good composition keeps rendering
  * and the error is shown as a dismissible banner over it.
  *
+ * The overlay chrome this view draws over the composition — the way back to the
+ * wall a link was followed from, and the refetch banner — is the *wall's* own
+ * chrome, so it composes the ported card vocabulary and its tokens (design.md W1,
+ * W4; specs/wall-display "Wall Navigation", "Always-On Operation"). It sits
+ * outside the grid, so the ready state carries the wall's Hearth scope itself:
+ * without it the ported treatment's tokens resolve to nothing and neither
+ * affordance would be presented at all. The unknown-profile and deleted
+ * explanations stay on Lumen: they are the dashboard shell explaining a missing
+ * profile, not a wall surface (the change's non-goals).
+ *
  * Rebuilt on the Lumen primitive layer (`ui/*`) and `lucide-react`.
  */
 import { ChevronLeft, X } from "lucide-react";
@@ -30,10 +40,13 @@ import { useDataStore } from "../lib/data-store.js";
 import { backToWallPath, wallsPath } from "../lib/router.js";
 import { Link, useRouter } from "../lib/router-context.js";
 import type { WallProfile } from "../types.js";
-import { Button, Card, IconButton, Spinner, Stack } from "../ui/index.js";
+import { Button, Card, Spinner, Stack } from "../ui/index.js";
+import { WallCardIconButton, WallCardMessage, WallCardRoute } from "../wall/cards/card-anatomy.js";
+import { WALL_CARD_GLYPH_SIZE } from "../wall/cards/metrics.js";
+import { wallChromeTextStyle } from "../wall/frame.js";
 import { wallErrorIsFatal, wallEventKindForProfile, wallViewState } from "../wall/live.js";
+import { WALL_TITLE_FONT_SIZE } from "../wall/type-ramp.js";
 import { WallGrid } from "../wall/WallGrid.js";
-import { WALL_CARD_GLYPH_SIZE, wallAffordanceStyle } from "../wall/widgets/card-vocab.js";
 
 export function WallView({ name }: { name: string }) {
   const { basePath, origin } = useRouter();
@@ -113,43 +126,74 @@ export function WallView({ name }: { name: string }) {
     // last-good composition (the clock needs no connection) and surface the
     // error over it, dismissibly (specs/wall-display "Always-On Operation").
     return (
-      <div className="relative h-dvh w-screen">
+      // The wall's own Hearth scope, carried on the wall's own chrome rather than
+      // on the grid alone: the way back and the refetch banner are this view's
+      // chrome, drawn over the composition and *beside* the grid, so they inherit
+      // the ported treatment's tokens from here (design.md W4).
+      <div className="relative h-dvh w-screen" data-wall-chunk="">
         {error !== null && (
+          // The refetch affordance, on the ported card surface: the wall's own
+          // surface radius and padding, the wall's message form for the detail,
+          // and the ported control for the dismissal (design.md W4).
           <div
             role="alert"
-            className="absolute inset-x-3 top-3 z-10 flex items-start justify-between gap-3 rounded-tile border border-stale/40 bg-stale/10 p-3"
+            style={{
+              position: "absolute",
+              top: "var(--hearth-space-3)",
+              left: "var(--hearth-space-3)",
+              right: "var(--hearth-space-3)",
+              zIndex: 10,
+              display: "flex",
+              alignItems: "flex-start",
+              justifyContent: "space-between",
+              gap: "var(--hearth-card-control-spacing)",
+              boxSizing: "border-box",
+              padding: "var(--hearth-card-padding)",
+              borderRadius: "var(--hearth-card-radius)",
+              border: "1px solid var(--hearth-hairline)",
+              background: "var(--hearth-surface)",
+              color: "var(--hearth-text)",
+            }}
           >
-            <div>
-              <p className="font-semibold text-ink">Could not refresh this wall</p>
-              <p className="text-sm text-muted">{error}</p>
+            <div style={{ minWidth: 0 }}>
+              <p
+                style={{
+                  ...wallChromeTextStyle(),
+                  margin: 0,
+                  color: "var(--hearth-stale)",
+                  fontSize: WALL_TITLE_FONT_SIZE,
+                }}
+              >
+                Could not refresh this wall
+              </p>
+              <WallCardMessage>{error}</WallCardMessage>
             </div>
-            <IconButton label="Dismiss" size="sm" onClick={() => setError(null)}>
-              <X size={16} />
-            </IconButton>
+            <WallCardIconButton
+              glyph={<X size={WALL_CARD_GLYPH_SIZE} aria-hidden />}
+              label="Dismiss"
+              onClick={() => setError(null)}
+            />
           </div>
         )}
         <WallGrid config={profile.config} />
         {backTo !== null && (
-          // The on-screen way back for a wall opened from a link (design.md D11;
-          // specs/wall-display "Wall Navigation"): a touch-sized Hearth
-          // affordance over the composition, so the hierarchy is walkable by
-          // touch and not only by the browser's own back. It sits at the foot of
-          // the panel, clear of the readouts a wall places along its top edge and
-          // of the refetch banner above.
-          <Link
+          // The on-screen way back for a wall opened from a link (design.md D11,
+          // W1; specs/wall-display "Wall Navigation"): the wall's own route
+          // affordance — the ported control treatment — over the composition, so
+          // the hierarchy is walkable by touch and not only by the browser's own
+          // back. It sits at the foot of the panel, clear of the readouts a wall
+          // places along its top edge and of the refetch banner above.
+          <WallCardRoute
             to={backTo}
+            glyph={<ChevronLeft size={WALL_CARD_GLYPH_SIZE} aria-hidden />}
+            label="Back"
             style={{
-              ...wallAffordanceStyle(),
               position: "absolute",
               bottom: "var(--hearth-space-4)",
               left: "var(--hearth-space-4)",
               zIndex: 20,
-              textDecoration: "none",
             }}
-          >
-            <ChevronLeft size={WALL_CARD_GLYPH_SIZE} aria-hidden />
-            Back
-          </Link>
+          />
         )}
       </div>
     );

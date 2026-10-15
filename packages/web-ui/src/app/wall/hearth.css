@@ -19,14 +19,18 @@
  * declared in both schemes.
  *
  * The type ramp re-derives the wall's body floor from the ramp itself: no wall
- * body text may render below `--hearth-text-body` (18 px); the compact
- * status-chip exception is retained (design.md D3), and a band-readout tier
- * (`--hearth-text-band`) sits between the label and metric tiers for grouped
- * readouts (wall-zones-and-fit D6). The whole component scale is reduced from
- * the original table (wall-zones-and-fit D10): the hero, metric, title, and
- * label tiers and their `vmin` coefficients are lowered, while the body floor
- * (18 px) and the chip (16 px) are held. Every numeric bound here mirrors
- * `wall/type-ramp.ts`, which `tests/wall-type-ramp.test.ts` asserts.
+ * body text may render below `--hearth-text-body`; the floor is the ported card
+ * system's secondary text size (12 px) and the label tier its primary size
+ * (14 px), so a widget's supporting text and a device card's are the same type
+ * (mushroom-wall-widgets W2). The former compact status-chip exception is
+ * retired with `--hearth-text-chip`, because nothing is left below the floor to
+ * except. A band-readout tier (`--hearth-text-band`) sits between the label and
+ * metric tiers for grouped readouts (wall-zones-and-fit D6). The component scale
+ * is reduced from the original table (wall-zones-and-fit D10): the hero, metric,
+ * title, and label tiers and their `vmin` coefficients are lowered, while the
+ * readout tiers that carry a value read from across a room are untouched. Every
+ * numeric bound here mirrors `wall/type-ramp.ts`, which
+ * `tests/wall-type-ramp.test.ts` asserts.
  */
 
 [data-wall-chunk] {
@@ -74,9 +78,8 @@
   --hearth-text-metric: clamp(26px, 3.6vmin, 54px);
   --hearth-text-band: clamp(20px, 2.4vmin, 32px);
   --hearth-text-title: clamp(18px, 1.8vmin, 22px);
-  --hearth-text-label: 18px;
-  --hearth-text-body: 18px; /* Body floor held — no wall body text below. */
-  --hearth-text-chip: 16px; /* Compact status-chip exception, held (design.md D3). */
+  --hearth-text-label: 14px; /* The ported primary size (--hearth-card-primary-size). */
+  --hearth-text-body: 12px; /* Body floor — the ported secondary size; nothing renders below it. */
 
   --hearth-leading-tight: 1.05;
   --hearth-leading-snug: 1.2;

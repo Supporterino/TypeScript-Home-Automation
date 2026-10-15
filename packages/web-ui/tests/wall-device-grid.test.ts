@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { WALL_WIDGET_CONFIG_SCHEMAS } from "@ts-ha/shared/wall-schema";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { WALL_CARD_METRICS } from "../src/app/wall/cards/metrics.js";
 import {
   ROW_UNIT_MIN,
   WALL_COMPACT_CARD_HEIGHT_PX,
@@ -12,11 +13,14 @@ import {
 import {
   resolvePagedTiles,
   resolvePages,
+  WALL_CONTROL_GAP_PX,
   WALL_FRAME_INSET_PX,
   WALL_FRAME_RESERVED_PX,
+  WALL_PAGE_CONTROL_RESERVED_PX,
   WALL_PAGE_RESERVED_PX,
   WALL_TILE_CELL_COLUMNS,
   WALL_TILE_CELL_ROWS,
+  WALL_TILE_GAP_PX,
 } from "../src/app/wall/pages.js";
 import {
   WALL_MIN_CONTROL_GAP,
@@ -36,6 +40,8 @@ const APP_DIR = join(import.meta.dir, "..", "src/app");
 const RENDERER = join(APP_DIR, "wall/widgets/DeviceGridWidget.tsx");
 /** The shared paged tile grid every paging wall widget draws its page through. */
 const PAGED_TILE_GRID = join(APP_DIR, "wall/widgets/PagedTileGrid.tsx");
+/** The ported module where the wall's control treatment is declared once. */
+const ANATOMY = join(APP_DIR, "wall/cards/card-anatomy.tsx");
 const MIN = WALL_WIDGET_REGISTRY.devices.min;
 
 /** Removes block and line comments so prose is not mistaken for markup. */
@@ -246,6 +252,10 @@ describe("the devices descriptor", () => {
   });
 
   it("reserves the frame inset, one control row, and the control gap", () => {
+    // The reservation is the frame's ported inset, read from the card table rather
+    // than restated, one page-control row at the wall's touch target, and the wall's
+    // control gap between them (design.md W3; specs/wall-display "Panel Fit").
+    expect(WALL_FRAME_INSET_PX).toBe(WALL_CARD_METRICS.padding);
     expect(WALL_PAGE_RESERVED_PX).toBe(
       2 * WALL_FRAME_INSET_PX + WALL_MIN_TOUCH_TARGET + WALL_MIN_CONTROL_GAP,
     );
@@ -253,10 +263,10 @@ describe("the devices descriptor", () => {
   });
 
   it("mirrors the frame inset the stylesheet declares", async () => {
-    // The frame pads a control card with `--hearth-space-4`; the reservation must
-    // agree with the token Hearth actually declares.
+    // The frame pads a control card with `--hearth-card-padding`; the reservation
+    // must agree with the token Hearth actually declares (design.md W3).
     const tokens = await hearthTokens();
-    expect(tokens["--hearth-space-4"]).toBe(`${WALL_FRAME_INSET_PX}px`);
+    expect(tokens["--hearth-card-padding"]).toBe(`${WALL_FRAME_INSET_PX}px`);
   });
 });
 
@@ -295,11 +305,28 @@ describe("the device grid renderer", () => {
     const controls = paged.slice(paged.indexOf("pageCount > 1"));
 
     expect(paged).toContain("page.pageCount > 1");
-    expect(controls).toContain("<WallButton");
-    // WallButton draws the wall's touch-sized affordance in both directions.
+    expect(controls).toContain("<WallCardIconButton");
+    // WallCardIconButton draws the wall's touch-sized ported control in both
+    // directions, in the vocabulary's own actions row.
     expect(controls).toContain("setRequestedPage");
     expect(controls).toContain("disabled={page.page === 0}");
     expect(controls).toContain("disabled={page.page >= page.pageCount - 1}");
+  });
+
+  it("draws the page controls at the ported control height and radius", async () => {
+    const paged = await pagedTileGridSource();
+    const anatomy = stripComments(await readFile(ANATOMY, "utf8"));
+
+    // The chrome's page controls are the vocabulary's own parts (design.md W1;
+    // specs/wall-display "A control is the ported control"): the ported control
+    // height and radius, declared once in the anatomy, with the page caption on the
+    // vocabulary's primary line — so the chrome draws no treatment of its own.
+    expect(paged).toContain("<WallCardActions");
+    expect(paged).toContain("<WallCardIconButton");
+    expect(paged).toContain("<WallCardLabel>");
+    expect(anatomy).toContain("width: WALL_CARD_METRICS.controlHeight");
+    expect(anatomy).toContain("borderRadius: WALL_CARD_METRICS.controlRadius");
+    expect(WALL_CARD_METRICS.controlHeight).toBe(WALL_MIN_TOUCH_TARGET);
   });
 
   it("explains an empty selection inside its own area", async () => {
@@ -321,10 +348,11 @@ describe("the paged tile grid's drawn rows", () => {
    * resolves is computed here with the same inputs, so the drawn row height can be
    * compared against `plan.rowHeightPx` rather than against a repeated literal.
    *
-   * `PagedTileGrid` imports the card vocabulary, which imports the widget registry
-   * — a cycle the wall chunk resolves by evaluating the registry first. This
-   * module's own `WALL_WIDGET_REGISTRY` import above keeps that order, so the
-   * static render reaches a fully initialised vocabulary.
+   * `PagedTileGrid` composes the wall's single card vocabulary, which draws its
+   * metrics from `wall/cards/metrics.ts` and imports no part of the widget registry
+   * — so a static render of this module reaches a fully initialised vocabulary with
+   * no import cycle to order (design.md W1). This module's own
+   * `WALL_WIDGET_REGISTRY` import above is what the geometry assertions below read.
    */
   function renderPage(input: { span: { w: number; h: number }; rowUnit: number; count: number }): {
     html: string;
@@ -367,5 +395,43 @@ describe("the paged tile grid's drawn rows", () => {
     expect(plan.rows).toBe(3);
     expect(html).toContain(`grid-template-rows:repeat(${plan.rows}, ${plan.rowHeightPx}px)`);
     expect(html).toContain("align-content:center");
+  });
+
+  it("reserves one control gap plus one control row — the plan's page-control chrome", () => {
+    // `wall/pages.ts` reserves the gap above the page-control row and the row
+    // itself (its `WALL_PAGE_CONTROL_RESERVED_PX`). The row is the wall's touch
+    // target, which is the ported control height — so the reservation and the
+    // ported control agree, and the drawn chrome can be exactly the reservation.
+    expect(WALL_CONTROL_GAP_PX + WALL_CARD_METRICS.controlHeight).toBe(
+      WALL_PAGE_CONTROL_RESERVED_PX,
+    );
+    expect(WALL_TILE_GAP_PX).toBe(WALL_MIN_CONTROL_GAP);
+    expect(WALL_CONTROL_GAP_PX).toBe(WALL_MIN_CONTROL_GAP);
+  });
+
+  it("draws those gaps and that row, with no inset the plan does not reserve", () => {
+    // The regression this guards: task 3.3's recompose drew the layout gaps at
+    // the ported *control spacing* (12) and wrapped the page row in a padded
+    // actions row, so the drawn chrome (12 + 42 + 12 = 66) exceeded the plan's
+    // reservation (8 + 42 = 50) and the tiles grid clipped top and bottom. The
+    // draw now reads the plan's own gaps and the row draws no inset.
+    const { html, plan } = renderPage({ span: MIN, rowUnit: ROW_UNIT_MIN, count: 40 });
+    expect(plan.pageCount).toBeGreaterThan(1);
+
+    // The gap above the page-control row and the inter-tile gap are the plan's.
+    expect(html).toContain(`gap:${WALL_CONTROL_GAP_PX}px`);
+    expect(html).toContain(`gap:${WALL_TILE_GAP_PX}px`);
+    // The row's controls carry the ported control height, and the row adds no
+    // ported control-spacing inset, so the chrome it draws is the reservation.
+    expect(html).toContain(`height:${WALL_CARD_METRICS.controlHeight}px`);
+    expect(html).not.toContain(`padding:${WALL_CARD_METRICS.controlSpacing}px`);
+  });
+
+  it("reads the plan's gaps and drops the row's inset in the renderer's source", async () => {
+    const paged = await pagedTileGridSource();
+
+    expect(paged).toMatch(/gap: `\$\{WALL_CONTROL_GAP_PX\}px`/);
+    expect(paged).toMatch(/gap: `\$\{WALL_TILE_GAP_PX\}px`/);
+    expect(paged).toContain("<WallCardActions inset={false}>");
   });
 });

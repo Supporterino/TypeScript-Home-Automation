@@ -14,20 +14,23 @@ import { getWidgetDescriptor, WALL_WIDGET_REGISTRY } from "../src/app/wall/regis
 import { wallReadoutFontSize } from "../src/app/wall/scale.js";
 import { WALL_BAND_FONT_SIZE } from "../src/app/wall/type-ramp.js";
 import {
+  humidityCapability,
   temperatureCapability,
   temperatureWidgetState,
 } from "../src/app/wall/widgets/temperature-model.js";
 
 /**
- * The temperature widget (task 2.7; design.md D11, D13; specs/wall-display
- * "Widget Catalog" — "A temperature widget shows its sensor's reading", "An
- * unknown temperature device is contained"). There is no DOM harness here, so
- * the reading and its containment are covered through the pure model, and the
- * renderer's wiring is asserted structurally — the same style as the other
- * wall widget tests.
+ * The temperature widget (task 2.7; design.md D11, D13, **W5**; specs/wall-display
+ * "Widget Catalog" — "A temperature widget shows its sensor's reading", "A
+ * temperature widget shows its sensor's humidity", "A sensor without humidity
+ * shows only its temperature", "An unknown temperature device is contained").
+ * There is no DOM harness here, so the readings and their containment are covered
+ * through the pure model, and the renderer's wiring is asserted structurally — the
+ * same style as the other wall widget tests.
  */
 const APP_DIR = join(import.meta.dir, "..", "src/app");
 const RENDERER = join(APP_DIR, "wall/widgets/TemperatureWidget.tsx");
+const ANATOMY = join(APP_DIR, "wall/cards/card-anatomy.tsx");
 const CONFIG_FIELDS = join(APP_DIR, "wall/editor/WidgetConfigFields.tsx");
 
 /** Removes block and line comments so prose is not mistaken for code. */
@@ -49,6 +52,16 @@ function sensorCapability(): Capability {
   };
 }
 
+function humiditySensorCapability(): Capability {
+  return {
+    kind: "sensor",
+    property: "humidity",
+    access: { readable: true, writable: false },
+    valueType: "numeric",
+    unit: "%",
+  };
+}
+
 function sensor(overrides: Partial<DeviceDescriptor> = {}): DeviceDescriptor {
   return {
     source: "zigbee",
@@ -62,6 +75,18 @@ function sensor(overrides: Partial<DeviceDescriptor> = {}): DeviceDescriptor {
     hidden: false,
     ...overrides,
   };
+}
+
+/**
+ * The sensor this home runs: a humidity declared on the same device as its
+ * temperature, which the widget presents beside it (design.md W5).
+ */
+function humiditySensor(overrides: Partial<DeviceDescriptor> = {}): DeviceDescriptor {
+  return sensor({
+    state: { temperature: 21.5, humidity: 48 },
+    capabilities: [sensorCapability(), humiditySensorCapability()],
+    ...overrides,
+  });
 }
 
 function firstWidgetId(config: ReturnType<typeof emptyWallConfig>): string {
@@ -138,6 +163,26 @@ describe("temperatureCapability", () => {
   });
 });
 
+describe("humidityCapability", () => {
+  it("finds the readable humidity leaf through the same plumbing", () => {
+    // The device's humidity is resolved exactly as its temperature is — the same
+    // flattener, the same readable-leaf rule, and the same property name the tile
+    // readout ranking ranks (design.md W5).
+    const capabilities: Capability[] = [sensorCapability(), humiditySensorCapability()];
+
+    expect(humidityCapability(capabilities)?.property).toBe("humidity");
+    expect(humidityCapability(capabilities)?.unit).toBe("%");
+    expect(humidityCapability([sensorCapability()])).toBeUndefined();
+  });
+
+  it("ignores a humidity capability that is not readable", () => {
+    const capabilities: Capability[] = [
+      { ...humiditySensorCapability(), access: { readable: false, writable: true } },
+    ];
+    expect(humidityCapability(capabilities)).toBeUndefined();
+  });
+});
+
 describe("temperatureWidgetState", () => {
   it("reads the configured sensor's temperature and its unit", () => {
     expect(temperatureWidgetState(sensor(), "zigbee:0xabc")).toEqual({
@@ -187,6 +232,72 @@ describe("temperatureWidgetState", () => {
   });
 });
 
+describe("the sensor's humidity reading", () => {
+  it("presents the sensor's humidity beside its temperature, each with its own unit", () => {
+    expect(temperatureWidgetState(humiditySensor(), "zigbee:0xabc")).toEqual({
+      status: "reading",
+      value: 21.5,
+      unit: "°C",
+      humidity: { value: 48, unit: "%" },
+    });
+  });
+
+  it("resolves the humidity through a nested capability tree too", () => {
+    const device = humiditySensor({
+      capabilities: [
+        {
+          kind: "sensor",
+          access: { readable: true, writable: false },
+          valueType: "composite",
+          features: [sensorCapability(), humiditySensorCapability()],
+        },
+      ],
+    });
+
+    expect(temperatureWidgetState(device, "zigbee:0xabc")).toMatchObject({
+      status: "reading",
+      humidity: { value: 48, unit: "%" },
+    });
+  });
+
+  it("presents no humidity for a sensor that declares none, never a placeholder", () => {
+    const state = temperatureWidgetState(sensor(), "zigbee:0xabc");
+    if (state.status !== "reading") throw new Error(`the sensor reads as ${state.status}`);
+
+    // The absent reading is *absent*: not an empty line, not an em dash, and not
+    // a zero-filled second reading (specs/wall-display "A sensor without humidity
+    // shows only its temperature").
+    expect(state.humidity).toBeUndefined();
+  });
+
+  it("withholds a humidity the device reports but does not declare as numeric", () => {
+    const nonNumeric = humiditySensor({ state: { temperature: 21.5, humidity: "unknown" } });
+    const undeclared = sensor({ state: { temperature: 21.5, humidity: 48 } });
+
+    // A reading is the device's *declared* capability, resolved from the state —
+    // a non-numeric value yields none, and a value with no capability behind it
+    // is not a reading at all.
+    expect(temperatureWidgetState(nonNumeric, "zigbee:0xabc")).toEqual({
+      status: "reading",
+      value: 21.5,
+      unit: "°C",
+    });
+    expect(temperatureWidgetState(undeclared, "zigbee:0xabc")).toEqual({
+      status: "reading",
+      value: 21.5,
+      unit: "°C",
+    });
+  });
+
+  it("keeps the containment for a device with neither reading", () => {
+    const noHumidity = humiditySensor({ state: {} });
+    expect(temperatureWidgetState(noHumidity, "zigbee:0xabc")).toEqual({
+      status: "unavailable",
+      message: "No temperature reading.",
+    });
+  });
+});
+
 describe("TemperatureWidget renderer", () => {
   it("resolves the configured device from the store and contains an unavailable one", async () => {
     const renderer = await source(RENDERER);
@@ -197,13 +308,19 @@ describe("TemperatureWidget renderer", () => {
     expect(renderer).not.toContain("throw");
   });
 
-  it("presents the reading with a leading glyph and label", async () => {
+  it("presents the reading on the ported state item, with the ported glyph and label", async () => {
     const renderer = await source(RENDERER);
-    expect(renderer).toContain("wallReadoutFontSize(tier)");
-    expect(renderer).toContain("WALL_LABEL_FONT_SIZE");
-    expect(renderer).toContain("WALL_BODY_FONT_SIZE");
+    // The widget composes the wall's single card vocabulary (design.md W1): the
+    // ported circular affordance, the ported primary label, and the reading — so it
+    // declares no support type of its own.
+    expect(renderer).toContain("WallCardStateItem");
+    expect(renderer).toContain("WALL_CARD_GLYPH_SIZE");
     expect(renderer).toContain("Thermometer");
     expect(renderer).toContain("formatReadoutValue");
+    // The contained explanation is the wall's own message form, never a paragraph
+    // of the renderer's.
+    expect(renderer).toContain("WallCardMessage");
+    expect(renderer).not.toContain("fontSize");
   });
 
   it("chooses the reading's tier by the span it was placed at", async () => {
@@ -216,9 +333,43 @@ describe("TemperatureWidget renderer", () => {
     expect(wallReadoutFontSize("compact")).toBe(WALL_BAND_FONT_SIZE);
   });
 
-  it("keeps the reading and its unit on one line", async () => {
+  it("hands the reading and its unit to the vocabulary as one run", async () => {
     const renderer = await source(RENDERER);
-    expect(renderer).toContain('whiteSpace: "nowrap"');
+    // The value and its unit are resolved together by the shared formatter and drawn
+    // as the state item's reading; the vocabulary's own reading keeps them on one
+    // line (asserted where that part is declared, `wall-card-anatomy.test.ts`), so
+    // the renderer declares no line treatment of its own.
+    expect(renderer).toContain("reading={formatReadoutValue(state.value, state.unit)}");
+    expect(renderer).not.toContain("whiteSpace");
+  });
+
+  it("draws the declared humidity as the widget's secondary reading", async () => {
+    const renderer = await source(RENDERER);
+    const anatomy = await source(ANATOMY);
+
+    // The humidity is the widget's secondary reading (design.md W5; specs/wall-display
+    // "A temperature widget shows its sensor's humidity"): one value with its own unit,
+    // handed to the vocabulary's reading part as one run — so a narrow cell cannot
+    // split them — and never a size the widget names itself.
+    expect(renderer).toContain("state.humidity");
+    expect(renderer).toContain(
+      "<WallCardReading>{formatReadoutValue(humidity.value, humidity.unit)}</WallCardReading>",
+    );
+    // Its type is the ported secondary size, declared once by the part the widget
+    // composes rather than by the renderer (design.md W2).
+    expect(anatomy).toContain("size = WALL_CARD_SECONDARY_FONT_SIZE");
+    expect(renderer).not.toContain("fontSize");
+  });
+
+  it("draws no humidity line for a sensor that declares none", async () => {
+    const renderer = await source(RENDERER);
+
+    // A reading the sensor does not declare is absent rather than an empty line or a
+    // placeholder (specs/wall-display "A sensor without humidity shows only its
+    // temperature"), and the line is guarded by the reading's own presence — so a
+    // temperature-only sensor renders exactly as it did before this reading existed.
+    expect(renderer).toContain("humidity !== undefined &&");
+    expect(renderer).not.toContain("—");
   });
 
   it("shortens a long device name and keeps the full name for the tooltip", async () => {

@@ -3,12 +3,9 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { WALL_WIDGET_CONFIG_SCHEMAS } from "@ts-ha/shared/wall-schema";
 import { wallPath } from "../src/app/lib/router.js";
+import { WALL_CARD_METRICS, WALL_CARD_PRIMARY_FONT_SIZE } from "../src/app/wall/cards/metrics.js";
 import { WALL_WIDGET_REGISTRY } from "../src/app/wall/registry.js";
-import {
-  WALL_LABEL_FONT_SIZE,
-  WALL_TITLE_FONT_SIZE,
-  WALL_TYPE_RAMP,
-} from "../src/app/wall/type-ramp.js";
+import { WALL_TITLE_FONT_SIZE, WALL_TYPE_RAMP } from "../src/app/wall/type-ramp.js";
 import { linkLabel, linkLabelFontSize, linkTarget } from "../src/app/wall/widgets/link-model.js";
 
 /**
@@ -63,15 +60,21 @@ describe("linkLabel", () => {
 });
 
 describe("linkLabelFontSize", () => {
-  it("sets a compact link's label on the label tier", () => {
-    expect(linkLabelFontSize("compact")).toBe(WALL_LABEL_FONT_SIZE);
+  it("sets a compact link's label at the ported primary size", () => {
+    // A link's label is supporting text, so its minimum-span composition draws it at
+    // the ported card system's own primary size rather than the wall's retired label
+    // tier (design.md W1, W2; specs/wall-display "Supporting text is drawn at the
+    // ported sizes").
+    expect(linkLabelFontSize("compact")).toBe(WALL_CARD_PRIMARY_FONT_SIZE);
+    expect(WALL_CARD_PRIMARY_FONT_SIZE).toBe(`${WALL_CARD_METRICS.primarySize}px`);
   });
 
   it("sets a link with room on the title tier", () => {
     expect(linkLabelFontSize("regular")).toBe(WALL_TITLE_FONT_SIZE);
     expect(linkLabelFontSize("roomy")).toBe(WALL_TITLE_FONT_SIZE);
-    // A link with room never repeats the tier its minimum span draws.
-    expect(WALL_TYPE_RAMP.titleMin).toBeGreaterThanOrEqual(WALL_TYPE_RAMP.label);
+    // A link with room never repeats the size its minimum span draws, and the
+    // compact size is the ported primary size — at or below the wall's title tier.
+    expect(WALL_TYPE_RAMP.titleMin).toBeGreaterThanOrEqual(WALL_CARD_METRICS.primarySize);
     expect(linkLabelFontSize("regular")).not.toBe(linkLabelFontSize("compact"));
   });
 });
@@ -117,19 +120,25 @@ describe("navigation resolves the target profile", () => {
 });
 
 describe("the link renderer", () => {
-  it("opens the target with the shared router, so the address changes", async () => {
+  it("opens the target through the wall's route affordance and the shared router", async () => {
     const source = await rendererSource();
 
     expect(source).toContain("wallPath(basePath, target)");
     expect(source).toContain('from "../../lib/router-context.js"');
-    expect(source).toContain("<Link");
+    // The route affordance is the vocabulary's own part, which draws the shared
+    // router's link (design.md W1) — the widget composes it, never a bare anchor.
+    expect(source).toContain("<WallCardRoute");
     expect(source).not.toContain("window.location");
   });
 
   it("renders a touch-sized affordance that needs no hover", async () => {
     const source = await rendererSource();
 
-    expect(source).toContain("wallAffordanceStyle()");
+    // The ported control treatment is the wall's touch target in both directions and
+    // is declared once, in the vocabulary (asserted by `wall-card-anatomy.test.ts`):
+    // the route draws the ported control height and radius, never a pill of its own.
+    expect(source).toContain("<WallCardRoute");
+    expect(WALL_CARD_METRICS.controlHeight).toBeGreaterThanOrEqual(42);
     expect(source).not.toContain("onMouseEnter");
     expect(source).not.toContain(":hover");
   });

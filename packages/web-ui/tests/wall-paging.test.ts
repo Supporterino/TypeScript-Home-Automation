@@ -7,6 +7,7 @@ import {
   WALL_CARD_FULL_HEIGHT_PX,
   WALL_CARD_REGULAR_HEIGHT_PX,
 } from "../src/app/wall/cards/card-composition.js";
+import { WALL_CARD_METRICS } from "../src/app/wall/cards/metrics.js";
 import {
   ROW_UNIT_MAX,
   ROW_UNIT_MIN,
@@ -25,7 +26,7 @@ import {
   WALL_TILE_CELL_ROWS,
   WALL_TILE_GAP_PX,
 } from "../src/app/wall/pages.js";
-import { WALL_WIDGET_REGISTRY } from "../src/app/wall/registry.js";
+import { WALL_MIN_TOUCH_TARGET, WALL_WIDGET_REGISTRY } from "../src/app/wall/registry.js";
 import {
   cardHeightPx,
   resolveCardFormForHeight,
@@ -454,18 +455,50 @@ describe("the wall's paging chrome", () => {
   it("draws the shared page controls at the wall's touch target", async () => {
     const paged = await source(join(WIDGETS, "PagedTileGrid.tsx"));
 
-    expect(paged).toContain("<WallCardAffordance>");
-    expect(paged).toContain("<WallButton");
+    expect(paged).toContain("<WallCardActions");
+    expect(paged).toContain("<WallCardIconButton");
     expect(paged).toContain("resolvePagedTiles(");
     expect(paged).not.toContain("onMouseEnter");
+  });
+
+  it("draws the chrome at the ported control metrics and leaves the page count alone", async () => {
+    const paged = await source(join(WIDGETS, "PagedTileGrid.tsx"));
+    const anatomy = await source(join(APP_DIR, "wall/cards/card-anatomy.tsx"));
+
+    // The chrome's controls are the vocabulary's own parts (design.md W1; specs/
+    // wall-display "A control is the ported control"): the ported control height and
+    // radius, declared once in the anatomy, with the page caption on the vocabulary's
+    // primary line — so the chrome declares no treatment of its own.
+    expect(paged).toContain("<WallCardIconButton");
+    expect(paged).toContain("<WallCardLabel>");
+    expect(anatomy).toContain("width: WALL_CARD_METRICS.controlHeight");
+    expect(anatomy).toContain("borderRadius: WALL_CARD_METRICS.controlRadius");
+    expect(WALL_CARD_METRICS.controlHeight).toBe(WALL_MIN_TOUCH_TARGET);
+
+    // The treatment is not a plan input: the page count is the plan's — the content,
+    // the span, the row unit and the reserved rows alone (specs/wall-display "Paged
+    // Tile Sizing") — so the chrome moving onto the ported control cannot move it.
+    const items = Array.from({ length: 40 }, (_, index) => `device.${index}`);
+    const plan = resolvePagedTiles({
+      items,
+      span: WALL_WIDGET_REGISTRY.devices.min,
+      rowUnit: ROW_UNIT_MIN,
+      page: 0,
+    });
+    expect(plan.tilesPerPage).toBe(2);
+    expect(plan.pageCount).toBe(20);
   });
 });
 
 describe("the paged types' minimum spans", () => {
   it("reserves the frame inset in every plan, paging or not", () => {
     // The frame always pads, so both plans hold its inset back — a widget that
-    // fits one page must not claim the frame's own room for its tiles.
-    expect(WALL_FRAME_RESERVED_PX).toBe(2 * WALL_FRAME_INSET_PX);
+    // fits one page must not claim the frame's own room for its tiles. The inset is
+    // the ported card surface's own padding, read from the card table rather than
+    // restated, so the frame's reservation and the card it frames cannot drift
+    // (design.md W3).
+    expect(WALL_FRAME_INSET_PX).toBe(WALL_CARD_METRICS.padding);
+    expect(WALL_FRAME_RESERVED_PX).toBe(2 * WALL_CARD_METRICS.padding);
 
     // A four-row span at the floors: holding the frame's inset back costs it a
     // tile row it would otherwise claim.

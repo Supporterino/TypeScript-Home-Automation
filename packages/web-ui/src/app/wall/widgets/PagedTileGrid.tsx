@@ -21,9 +21,10 @@
  */
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { type ReactNode, useState } from "react";
-import { resolvePagedTiles } from "../pages.js";
+import { WallCardActions, WallCardIconButton, WallCardLabel } from "../cards/card-anatomy.js";
+import { WALL_CARD_GLYPH_SIZE } from "../cards/metrics.js";
+import { resolvePagedTiles, WALL_CONTROL_GAP_PX, WALL_TILE_GAP_PX } from "../pages.js";
 import type { WallWidgetSpan } from "../registry.js";
-import { WallButton, WallCardAffordance, WallCardLabel, wallControlGapPx } from "./card-vocab.js";
 
 /**
  * The box a paged tile is drawn into (design.md D4, D7; specs/wall-display
@@ -94,7 +95,11 @@ export function PagedTileGrid<T>({
         flex: 1,
         minHeight: 0,
         flexDirection: "column",
-        gap: `${wallControlGapPx()}px`,
+        // The gap above the page-control row, drawn at the value the plan
+        // reserved for it (`WALL_CONTROL_GAP_PX`) rather than one of the
+        // renderer's own, so the drawn chrome is the plan's reservation and a
+        // promised page never clips (`wall/pages.ts`).
+        gap: `${WALL_CONTROL_GAP_PX}px`,
       }}
     >
       {/* One page's tiles, on a uniform grid sized to the plan: each row is drawn
@@ -108,7 +113,10 @@ export function PagedTileGrid<T>({
           display: "grid",
           gridTemplateColumns: `repeat(${page.tilesAcross}, minmax(0, 1fr))`,
           gridTemplateRows: `repeat(${page.rows}, ${page.rowHeightPx}px)`,
-          gap: `${wallControlGapPx()}px`,
+          // The inter-tile gap the plan packed the rows by, drawn at the same
+          // value (`WALL_TILE_GAP_PX`), so the rows the plan promises are the
+          // rows the wall draws.
+          gap: `${WALL_TILE_GAP_PX}px`,
           alignContent: "center",
           flex: 1,
           minHeight: 0,
@@ -126,25 +134,26 @@ export function PagedTileGrid<T>({
       </div>
 
       {/* The page affordance, drawn only while the content pages. Each control is
-          a touch-sized Hearth affordance, operable without hovering. */}
+          the vocabulary's own ported control — the ported control height and
+          radius, spaced by the ported control spacing — in a row that draws no
+          inset: the plan reserves this row at the ported control height alone, so
+          the row the wall draws is the row the plan promised. */}
       {page.pageCount > 1 && (
-        <WallCardAffordance>
-          <WallButton
+        <WallCardActions inset={false}>
+          <WallCardIconButton
             label={`Show the previous page of ${label}`}
             disabled={page.page === 0}
             onClick={() => setRequestedPage(page.page - 1)}
-          >
-            <ChevronLeft size={20} aria-hidden />
-          </WallButton>
+            glyph={<ChevronLeft size={WALL_CARD_GLYPH_SIZE} aria-hidden />}
+          />
           <WallCardLabel>{`${page.page + 1} / ${page.pageCount}`}</WallCardLabel>
-          <WallButton
+          <WallCardIconButton
             label={`Show the next page of ${label}`}
             disabled={page.page >= page.pageCount - 1}
             onClick={() => setRequestedPage(page.page + 1)}
-          >
-            <ChevronRight size={20} aria-hidden />
-          </WallButton>
-        </WallCardAffordance>
+            glyph={<ChevronRight size={WALL_CARD_GLYPH_SIZE} aria-hidden />}
+          />
+        </WallCardActions>
       )}
     </div>
   );

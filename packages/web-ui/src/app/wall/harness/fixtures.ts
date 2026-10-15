@@ -8,8 +8,11 @@
  * number, an enumerated select, a climate, and a lock — plus a selection large
  * enough that the device grid must page, one scene automation, one room with
  * members, and the weather and energy readings those two widgets would otherwise
- * fetch. {@link MISSING_DEVICE_ID} is deliberately not a device in the map, so
- * `DeviceWidget`'s "is not available" path renders.
+ * fetch. Two read-only sensors carry the temperature widget's two reading cases:
+ * the hall sensor declares a humidity beside its temperature and the attic sensor
+ * declares a temperature alone (design.md W5). {@link MISSING_DEVICE_ID} is
+ * deliberately not a device in the map, so `DeviceWidget`'s "is not available"
+ * path renders.
  *
  * The set is typed as the store's own `DataStoreFixtures`, and every device as
  * `DeviceDescriptor`, so a change to either contract is a compile error in
@@ -132,8 +135,40 @@ function coverCapabilities(): Capability[] {
   ];
 }
 
-/** A read-only sensor: a readable temperature and nothing actuatable, so its entity card is a read-only reading. */
+/**
+ * A read-only sensor: a readable temperature beside a readable humidity on the
+ * same device — the sensor this home runs, which reports both — and nothing
+ * actuatable, so its entity card is a read-only reading. A temperature widget
+ * bound to it presents both readings (design.md W5; specs/wall-display "A
+ * temperature widget shows its sensor's humidity").
+ */
 function sensorCapabilities(): Capability[] {
+  return [
+    {
+      kind: "sensor",
+      property: "temperature",
+      access: READ_ONLY,
+      valueType: "numeric",
+      unit: "°C",
+    },
+    {
+      kind: "sensor",
+      property: "humidity",
+      access: READ_ONLY,
+      valueType: "numeric",
+      unit: "%",
+    },
+  ];
+}
+
+/**
+ * A temperature-only sensor: the same read-only shape with no humidity leaf, so
+ * the roster carries both halves of a temperature widget's reading rule — a
+ * sensor that declares a humidity and one that does not, which presents only its
+ * temperature (design.md W5; specs/wall-display "A sensor without humidity shows
+ * only its temperature").
+ */
+function temperatureOnlySensorCapabilities(): Capability[] {
   return [
     {
       kind: "sensor",
@@ -308,8 +343,20 @@ const COVER = fixtureDevice({
 const SENSOR = fixtureDevice({
   id: "sensor-hall",
   displayName: "Hall sensor",
-  state: { temperature: 21.5 },
+  state: { temperature: 21.5, humidity: 48 },
   capabilities: sensorCapabilities(),
+});
+
+/**
+ * The temperature-only sensor: bound by a placed `temperature` widget beside the
+ * hall sensor's, so a harness walk reaches the widget's other reading case — a
+ * sensor that declares no humidity, which presents its temperature alone.
+ */
+const TEMPERATURE_ONLY_SENSOR = fixtureDevice({
+  id: "sensor-attic",
+  displayName: "Attic sensor",
+  state: { temperature: 16.2 },
+  capabilities: temperatureOnlySensorCapabilities(),
 });
 
 const VALUE = fixtureDevice({
@@ -348,12 +395,17 @@ const LOCK = fixtureDevice({
 });
 
 /**
- * How many extra devices the paging selection carries. The device grid draws at
- * most 30 tiles on any legal placement — 6 across by 5 rows at the widget's
- * largest span (12 × 12) and the wall's smallest row unit, and a larger row unit
- * fits fewer rows — so a selection of this size always pages.
- * `tests/wall-harness-fixtures.test.ts` asserts the paging through
- * `resolveDeviceGridPage` rather than trusting this note.
+ * How many extra devices the paging selection carries — larger than any one page
+ * the wall can draw, so the selection always pages. The bound is a derivation, not
+ * the number below: the most tiles any legal placement presents is `devices` at its
+ * largest span, the wall's smallest row unit and the gutter's floor, with the chrome
+ * a *one-page* placement reserves held back — which is the frame's ported inset
+ * alone (`WALL_FRAME_RESERVED_PX`; design.md W3; specs/wall-display "Panel Fit"). A
+ * placement whose content fits one page draws no page-control row, so it reserves no
+ * room for one and keeps that cell for tiles; only a placement that pages pays
+ * `WALL_PAGE_CONTROL_RESERVED_PX`. A row unit above the floor fits fewer rows, so
+ * that is the ceiling. `tests/wall-harness-fixtures.test.ts` asserts the roster
+ * exceeds it through `resolvePages` rather than trusting this note.
  */
 const PAGING_DEVICE_COUNT = 36;
 
@@ -376,7 +428,8 @@ const METERING_PLUG = fixtureDevice({
 
 /**
  * Every fixture device: one per wall device class first, so the grid's own first
- * page shows every typed card, then the metering plug and the paging roster.
+ * page shows every typed card, then the metering plug, the temperature-only
+ * sensor and the paging roster.
  */
 const DEVICES: DeviceDescriptor[] = [
   LIGHT,
@@ -389,6 +442,7 @@ const DEVICES: DeviceDescriptor[] = [
   CLIMATE,
   LOCK,
   METERING_PLUG,
+  TEMPERATURE_ONLY_SENSOR,
   ...PAGING_DEVICES,
 ];
 
@@ -411,6 +465,13 @@ export const DEVICE_CLASS_DEVICE_IDS: Readonly<Record<WallDeviceClass, string>> 
 
 /** The `devices` widget's selection: the whole roster, which always exceeds one page (task 5.2). */
 export const DEVICE_GRID_SELECTION: readonly string[] = DEVICES.map((device) => device.qualifiedId);
+
+/**
+ * The sensor that declares no humidity, which a placed `temperature` widget is
+ * bound to beside the hall sensor's — so the walk reaches a temperature widget
+ * that presents its temperature alone (design.md W5; task 5.3).
+ */
+export const HARNESS_TEMPERATURE_ONLY_SENSOR_ID = TEMPERATURE_ONLY_SENSOR.qualifiedId;
 
 /**
  * The room the panel points a `room` widget at. Its members span several wall

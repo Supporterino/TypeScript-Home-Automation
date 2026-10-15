@@ -15,15 +15,21 @@
  *
  * Re-skinned onto Hearth (design.md D6): an ambient readout draws no surface and
  * sits its large type directly on the panel background, while a control widget
- * draws a `--hearth-surface` tile with a `--hearth-hairline` border and the
- * Hearth radius. The surface tokens come from {@link wallFrameChrome} and the
- * title/padding use Hearth's own tokens — never a Lumen alias or a literal.
+ * draws a `--hearth-surface` tile with a `--hearth-hairline` border at the ported
+ * card surface — `--hearth-card-radius` and `--hearth-card-padding` — so a
+ * control widget's tile and a device card's are the same surface (design.md W3).
+ * The surface tokens come from {@link wallFrameChrome}; the title is the wall's own
+ * chrome, so it keeps the wall's title tier and adopts the ported
+ * family/weight/tracking ({@link wallChromeTextStyle}, design.md W4) — never a
+ * Lumen alias, a card role's semantics or a literal.
  */
 import type { WallWidget } from "@ts-ha/shared";
+import { WallCardMessage } from "./cards/card-anatomy.js";
 import {
   minimumRendererBoxHeightPx,
   rendererBoxHeightPx,
   WALL_TOO_SMALL_MESSAGE,
+  wallChromeTextStyle,
   wallFrameChrome,
   wallFrameDrawsSurface,
   widgetTitle,
@@ -36,7 +42,6 @@ import {
   resolveSpanTier,
 } from "./span.js";
 import { WALL_TITLE_FONT_SIZE } from "./type-ramp.js";
-import { WallCardMessage } from "./widgets/card-vocab.js";
 
 export function WidgetFrame({ widget, rowUnit }: { widget: WallWidget; rowUnit: number }) {
   const descriptor = getWidgetDescriptor(widget.type);
@@ -79,9 +84,14 @@ export function WidgetFrame({ widget, rowUnit }: { widget: WallWidget; rowUnit: 
   const content = (
     <>
       {title !== null && (
+        // The opt-in title is the wall's chrome, not widget content (design.md
+        // W4): it keeps the wall's own title tier and draws it with the ported
+        // family/weight/tracking, so a container label is never given a card
+        // role's semantics.
         <p
-          className="truncate font-semibold uppercase"
+          className="truncate"
           style={{
+            ...wallChromeTextStyle(),
             color: "var(--hearth-text-muted)",
             fontSize: WALL_TITLE_FONT_SIZE,
             marginBottom: "var(--hearth-space-2)",
@@ -122,7 +132,7 @@ export function WidgetFrame({ widget, rowUnit }: { widget: WallWidget; rowUnit: 
       className="flex h-full flex-col overflow-hidden border"
       style={{
         minHeight: 0,
-        padding: "var(--hearth-space-4)",
+        padding: chrome.padding ?? undefined,
         background: chrome.background ?? undefined,
         borderColor: chrome.borderColor ?? undefined,
         borderRadius: chrome.radius ?? undefined,

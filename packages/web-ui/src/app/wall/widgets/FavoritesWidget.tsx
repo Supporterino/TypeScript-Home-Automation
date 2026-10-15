@@ -8,11 +8,12 @@
  * device map on every render, so a favorite change streamed from another
  * client reconciles through the existing `state` handling with no local action.
  *
- * Composed on the shared Hearth card vocabulary (design.md D11): a leading star
- * glyph and the title, with the favorite count as the metric; the tiles are the
- * card's affordances. A control widget: the frame draws the surface, so each
- * contained tile draws none of its own (specs/wall-display "A card is a single
- * surface").
+ * Composed on the wall's single card vocabulary (design.md W1, W2): the ported
+ * star affordance with the title as the widget's head, and the favorite count
+ * beside its label at the ported secondary size — the caption size every widget's
+ * supporting figure takes; the tiles are the card's own content. A control widget:
+ * the frame draws the surface, so each contained tile draws none of its own
+ * (specs/wall-display "A card is a single surface").
  *
  * A set larger than the card can show pages through the wall's shared pagination
  * layer — one page at a time with touch page controls — rather than scrolling its
@@ -20,15 +21,15 @@
  */
 import { Star } from "lucide-react";
 import { useDataStore } from "../../lib/data-store.js";
-import { widgetTitle } from "../frame.js";
-import type { WallWidgetProps } from "../registry.js";
 import {
-  WALL_CARD_GLYPH_SIZE,
-  WallCardHead,
   WallCardLabel,
   WallCardMessage,
-  WallCardMetric,
-} from "./card-vocab.js";
+  WallCardReading,
+  WallCardStateItem,
+} from "../cards/card-anatomy.js";
+import { WALL_CARD_GLYPH_SIZE } from "../cards/metrics.js";
+import { widgetTitle } from "../frame.js";
+import type { WallWidgetProps } from "../registry.js";
 import { WallDeviceCard, wallTileCardBox } from "./DeviceWidget.js";
 import { favoriteDevices } from "./favorites-model.js";
 import { PagedTileGrid } from "./PagedTileGrid.js";
@@ -54,12 +55,12 @@ export function FavoritesWidget({ widget, contained, rowUnit }: WallWidgetProps)
         gap: "var(--hearth-space-3)",
       }}
     >
-      <WallCardHead icon={<Star size={WALL_CARD_GLYPH_SIZE} />} title="Favorites" />
+      <WallCardStateItem icon={<Star size={WALL_CARD_GLYPH_SIZE} />} label="Favorites" />
 
-      <span style={{ display: "flex", alignItems: "baseline", gap: "var(--hearth-space-2)" }}>
-        <WallCardMetric>{devices.length}</WallCardMetric>
+      <div style={{ display: "flex", alignItems: "baseline", gap: "var(--hearth-space-2)" }}>
+        <WallCardReading>{devices.length}</WallCardReading>
         <WallCardLabel>{devices.length === 1 ? "favorite" : "favorites"}</WallCardLabel>
-      </span>
+      </div>
 
       {devices.length === 0 ? (
         <WallCardMessage>No favorite devices. Star a device to show it here.</WallCardMessage>

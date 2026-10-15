@@ -1,13 +1,17 @@
 /**
- * Pure decisions for the widget frame (design.md D2, D6; specs/wall-display
- * "Wall Glanceability", "Wall Visual Language"). Dependency-free so the
- * ambient-vs-control presentation and the opt-in title rule are reachable by
- * `bun test` without a DOM, while {@link WidgetFrame} stays a thin wrapper. The
- * composition model is unchanged: only the tokens the frame draws with move from
- * Lumen to Hearth.
+ * Pure decisions for the widget frame and the wall's own chrome (design.md D2,
+ * D6, W3, W4; specs/wall-display "Wall Glanceability", "Wall Visual Language").
+ * Dependency-free so the ambient-vs-control presentation, the opt-in title rule
+ * and the chrome's ported text treatment are reachable by `bun test` without a
+ * DOM, while {@link WidgetFrame} stays a thin wrapper. The composition model is
+ * unchanged: the frame and the band draw the *ported card surface* (its radius and
+ * its padding), and the wall's own chrome — the title, the band caption, the
+ * panel's explanations — adopts the ported family/weight/tracking while keeping
+ * the wall's own title and label tiers.
  */
 import type { WallWidget, WallWidgetType } from "@ts-ha/shared";
 import { isWallDeviceClass } from "./cards/device-class.js";
+import { WALL_CARD_METRICS } from "./cards/metrics.js";
 import { WALL_FRAME_RESERVED_PX } from "./pages.js";
 import type { WallWidgetGrammar } from "./registry.js";
 import { cardHeightPx, WALL_TITLE_BLOCK_PX, type WallSpanDescriptor } from "./span.js";
@@ -16,8 +20,11 @@ import { cardHeightPx, WALL_TITLE_BLOCK_PX, type WallSpanDescriptor } from "./sp
  * The surface a frame draws for a widget's grammar. `ambient` readouts are
  * chrome-less — no surface, no border, no background — so large type sits
  * directly on the panel; `control` widgets draw a Hearth surface tile with a
- * hairline border and the Hearth radius (design.md D2, "Wall Visual Language").
- * Every token is wall-owned (`--hearth-*`), never a Lumen alias.
+ * hairline border at the **ported card surface** — its radius and its padding —
+ * so a control widget's tile and a device card's are the same surface (design.md
+ * W3; specs/wall-display "A widget's surface is a card's surface"). Every token
+ * is wall-owned (`--hearth-*`), never a Lumen alias, and the surface's radius and
+ * padding are the ported card's own, mirrored by `wall/cards/metrics.ts`.
  */
 export interface WallFrameChrome {
   /** Whether the frame renders a control surface. */
@@ -28,27 +35,32 @@ export interface WallFrameChrome {
   borderColor: string | null;
   /** The control surface corner radius token, or `null` for a chrome-less readout. */
   radius: string | null;
+  /** The control surface content inset token, or `null` for a chrome-less readout. */
+  padding: string | null;
 }
 
-/** Maps a widget's grammar to the frame surface it draws (design.md D2). */
+/** Maps a widget's grammar to the frame surface it draws (design.md D2, W3). */
 export function wallFrameChrome(grammar: WallWidgetGrammar): WallFrameChrome {
   if (grammar === "ambient") {
-    return { surface: false, background: null, borderColor: null, radius: null };
+    return { surface: false, background: null, borderColor: null, radius: null, padding: null };
   }
   return {
     surface: true,
     background: "var(--hearth-surface)",
     borderColor: "var(--hearth-hairline)",
-    radius: "var(--hearth-radius-md)",
+    radius: "var(--hearth-card-radius)",
+    padding: "var(--hearth-card-padding)",
   };
 }
 
 /**
- * The zone band's surface (wall-zones-and-fit D2; specs/wall-display "Wall
- * Zones"). A band is one container level *behind* its member tiles: a tinted,
- * radiused field carrying the zone's caption, drawn from Hearth's own
+ * The zone band's surface (wall-zones-and-fit D2; design.md W3; specs/wall-display
+ * "Wall Zones"). A band is one container level *behind* its member tiles: a
+ * tinted field carrying the zone's caption, drawn from Hearth's own
  * `--hearth-band` token — a slightly lifted field between the canvas and a
- * member's surface. Member widgets keep their own surface, so a band never
+ * member's surface — at the **ported card surface**, so a band and the card
+ * standing on it are the same surface (specs/wall-display "A widget's surface is
+ * a card's surface"). Member widgets keep their own surface, so a band never
  * nests one surface in another ("A card is a single surface").
  */
 export interface WallBandChrome {
@@ -56,11 +68,47 @@ export interface WallBandChrome {
   background: string;
   /** The band's corner radius token. */
   radius: string;
+  /** The band's content inset token — the ported card surface's own padding. */
+  padding: string;
 }
 
-/** The zone band's surface tokens, from Hearth's own band and radius scale. */
+/** The zone band's surface tokens, from Hearth's own band field and the ported card surface. */
 export function wallBandChrome(): WallBandChrome {
-  return { background: "var(--hearth-band)", radius: "var(--hearth-radius-md)" };
+  return {
+    background: "var(--hearth-band)",
+    radius: "var(--hearth-card-radius)",
+    padding: "var(--hearth-card-padding)",
+  };
+}
+
+/**
+ * The wall chrome's ported text treatment (design.md W4; specs/wall-display "Wall
+ * Visual Language"): the ported card table's family, weight and tracking — nothing
+ * else. The wall's own chrome — the opt-in widget title, the zone band's caption
+ * and the panel's own explanations — sits outside a widget's content and labels
+ * containers rather than readings, so it adopts the *treatment* while keeping the
+ * wall's own title/label tier as its size and its own colour: a container label is
+ * never given a card role's semantics (`WallCardLabel` carries a card's role).
+ *
+ * The three values are read from {@link WALL_CARD_METRICS} rather than restated, so
+ * a chrome caption cannot drift from the card surface it sits beside.
+ */
+export interface WallChromeTextStyle {
+  /** The ported card table's display face. */
+  fontFamily: string;
+  /** The ported primary line's weight. */
+  fontWeight: number;
+  /** The ported primary line's letter spacing. */
+  letterSpacing: string;
+}
+
+/** The ported family/weight/tracking the wall's own chrome is drawn with (design.md W4). */
+export function wallChromeTextStyle(): WallChromeTextStyle {
+  return {
+    fontFamily: "var(--hearth-font-display)",
+    fontWeight: WALL_CARD_METRICS.primaryWeight,
+    letterSpacing: `${WALL_CARD_METRICS.primaryTracking}px`,
+  };
 }
 
 /**

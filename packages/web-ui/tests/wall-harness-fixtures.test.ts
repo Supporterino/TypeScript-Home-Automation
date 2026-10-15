@@ -20,13 +20,20 @@ import { resolveDeviceClass, WALL_DEVICE_CLASSES } from "../src/app/wall/cards/d
 import { lockCardModel } from "../src/app/wall/cards/LockCard.js";
 import { numberCardControl } from "../src/app/wall/cards/NumberCard.js";
 import { selectCardModel } from "../src/app/wall/cards/SelectCard.js";
-import { ROW_UNIT_MAX, ROW_UNIT_MIN, WALL_MIN_DEVICE_COLUMNS } from "../src/app/wall/grid.js";
+import {
+  ROW_UNIT_MAX,
+  ROW_UNIT_MIN,
+  WALL_GUTTER_MIN_PX,
+  WALL_MIN_DEVICE_COLUMNS,
+} from "../src/app/wall/grid.js";
 import {
   DEVICE_CLASS_DEVICE_IDS,
   DEVICE_GRID_SELECTION,
+  HARNESS_TEMPERATURE_ONLY_SENSOR_ID,
   MISSING_DEVICE_ID,
   WALL_HARNESS_FIXTURES,
 } from "../src/app/wall/harness/fixtures.js";
+import { resolvePages, WALL_FRAME_RESERVED_PX } from "../src/app/wall/pages.js";
 import { WALL_WIDGET_REGISTRY } from "../src/app/wall/registry.js";
 import { resolveDeviceGridPage } from "../src/app/wall/widgets/device-grid-model.js";
 import { energyDisplay } from "../src/app/wall/widgets/energy-model.js";
@@ -114,12 +121,29 @@ describe("the fixture roster", () => {
     });
   });
 
-  it("gives the read-only sensor a temperature the temperature widget reads", () => {
+  it("gives the read-only sensor a temperature and a humidity the temperature widget reads", () => {
     const sensor = fixtureDevice(DEVICE_CLASS_DEVICE_IDS.entity);
 
+    // The sensor this home runs declares its humidity on the same device, so the
+    // widget bound to it presents both readings (design.md W5; specs/wall-display
+    // "A temperature widget shows its sensor's humidity").
     expect(temperatureWidgetState(sensor, sensor.qualifiedId)).toEqual({
       status: "reading",
       value: 21.5,
+      unit: "°C",
+      humidity: { value: 48, unit: "%" },
+    });
+  });
+
+  it("keeps a second sensor that declares no humidity, so the other case is walked", () => {
+    const temperatureOnly = fixtureDevice(HARNESS_TEMPERATURE_ONLY_SENSOR_ID);
+
+    // The other half of the reading rule: a sensor with a temperature and no
+    // humidity presents only its temperature, never a placeholder (design.md W5;
+    // specs/wall-display "A sensor without humidity shows only its temperature").
+    expect(temperatureWidgetState(temperatureOnly, temperatureOnly.qualifiedId)).toEqual({
+      status: "reading",
+      value: 16.2,
       unit: "°C",
     });
   });
@@ -160,6 +184,48 @@ describe("the fixture selection and rooms", () => {
       expect(plan.pageCount, `row unit ${rowUnit}`).toBeGreaterThan(1);
       expect(plan.ids.length).toBeGreaterThan(0);
     }
+  });
+
+  it("carries more devices than the most tiles any legal placement presents", () => {
+    // The roster's size is a derivation, not a number: the most tiles one page can
+    // hold is `devices` at its largest span, the wall's smallest row unit and the
+    // gutter's floor, with the chrome a *one-page* placement reserves held back —
+    // which is the frame's ported inset alone (design.md W3; specs/wall-display
+    // "Panel Fit"). A placement whose content fits one page draws no page-control
+    // row, so it reserves no room for one and keeps that cell for tiles; only a
+    // placement that pages pays `WALL_PAGE_CONTROL_RESERVED_PX` (resolvePagedTiles
+    // resolves the larger plan only once the content pages). A larger row unit fits
+    // no more rows, so an untitled placement at the floors is the ceiling.
+    const mostTiles = resolvePages({
+      span: WALL_WIDGET_REGISTRY.devices.max,
+      count: 1,
+      rowUnit: ROW_UNIT_MIN,
+      gutterPx: WALL_GUTTER_MIN_PX,
+      reservedPx: WALL_FRAME_RESERVED_PX,
+    }).tilesPerPage;
+
+    // The ceiling is exact: that many devices still fit the one page the frame-only
+    // plan promises, and the next one pages — so any roster above this ceiling
+    // necessarily resolves to more than one page, the property `fixtures.ts` claims.
+    const span = WALL_WIDGET_REGISTRY.devices.max;
+    expect(
+      resolveDeviceGridPage({
+        ids: DEVICE_GRID_SELECTION.slice(0, mostTiles),
+        span,
+        rowUnit: ROW_UNIT_MIN,
+        page: 0,
+      }).pageCount,
+    ).toBe(1);
+    expect(
+      resolveDeviceGridPage({
+        ids: DEVICE_GRID_SELECTION.slice(0, mostTiles + 1),
+        span,
+        rowUnit: ROW_UNIT_MIN,
+        page: 0,
+      }).pageCount,
+    ).toBeGreaterThan(1);
+
+    expect(DEVICE_GRID_SELECTION.length).toBeGreaterThan(mostTiles);
   });
 
   it("selects only devices it actually carries", () => {

@@ -4,17 +4,20 @@
  * the live device map, so counts update as `device_state`/`device_reachability`
  * events stream in — no manual refresh.
  *
- * Composed on the shared Hearth card vocabulary (design.md D11): each count is
- * a metric with its own leading glyph and label, laid out on the wall's own
- * grid. Ambient — chrome-less, its metrics on the panel. State is conveyed by
- * the label text as well as the glyph, never colour alone.
+ * Composed on the wall's single card vocabulary (design.md W1): each count is a
+ * state item — the ported circular affordance, its label, and the count on the
+ * wall's own metric tier (design.md W2) — laid out on the wall's own grid.
+ * Ambient — chrome-less, its readings on the panel. State is conveyed by the
+ * label text as well as the glyph, never colour alone.
  */
 import { Activity, Clock, Power, Unplug } from "lucide-react";
 import { type ReactNode, useMemo } from "react";
 import { useDataStore } from "../../lib/data-store.js";
 import { summarizeDevices } from "../../lib/overview.js";
 import { useNow } from "../../lib/use-now.js";
-import { WALL_CARD_GLYPH_SIZE, WallCardStat } from "./card-vocab.js";
+import { WallCardStateItem } from "../cards/card-anatomy.js";
+import { WALL_CARD_GLYPH_SIZE } from "../cards/metrics.js";
+import { WALL_METRIC_FONT_SIZE } from "../type-ramp.js";
 
 function Metric({
   icon,
@@ -28,9 +31,13 @@ function Metric({
   color: string;
 }) {
   return (
-    <WallCardStat icon={icon} label={label} color={color}>
-      {value}
-    </WallCardStat>
+    <WallCardStateItem
+      icon={icon}
+      label={label}
+      reading={value}
+      readingSize={WALL_METRIC_FONT_SIZE}
+      tint={color}
+    />
   );
 }
 

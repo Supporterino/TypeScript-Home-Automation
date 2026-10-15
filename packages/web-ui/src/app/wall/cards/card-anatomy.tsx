@@ -1,9 +1,11 @@
 /**
- * The shared device-card anatomy, ported from `piitaya/lovelace-mushroom`
- * (Apache-2.0) into Hearth (design.md D1, D2, D7; specs/wall-display "Wall
- * Device Presentation" — "A card presents the ported anatomy" — and "Touch
- * Operation"). Every typed device card is composed from these four parts, so the
- * catalogue reads as one designed system rather than eight independent tiles:
+ * The wall's card anatomy — the **one** card vocabulary every wall surface
+ * composes, ported from `piitaya/lovelace-mushroom` (Apache-2.0) into Hearth
+ * (design.md D1, D2, D7, **W1**; specs/wall-display "Wall Device Presentation" —
+ * "A card presents the ported anatomy" — "Wall Visual Language" — "the wall MUST
+ * NOT carry a second card vocabulary" — and "Touch Operation"). Every typed
+ * device card is composed from these four parts, so the catalogue reads as one
+ * designed system rather than eight independent tiles:
  *
  * - {@link WallCardIcon} — the leading circular icon affordance: a glyph on a
  *   tinted shape of the device's own colour (Mushroom `src/shared/shape-icon.ts`),
@@ -24,6 +26,22 @@
  * distinguishes a push-backed, polled, and unreachable device (specs/wall-display
  * "Observation is a quiet indicator").
  *
+ * **This is the wall's *widget* vocabulary too, not only its device cards'**
+ * (design.md W1). Everything the wall draws outside a device card — an
+ * ambient readout's stat, a control card's head and count, a scene's label, a
+ * room's batch command, a link's route and the wall view's back link, and the
+ * contained explanations the frame, the grid and every widget show — is composed
+ * from the widget parts declared below ({@link WallCardLabel},
+ * {@link WallCardReading}, {@link WallCardStateItem}, {@link WallCardControl},
+ * {@link WallCardRoute}, {@link WallCardMessage}), each drawn from
+ * {@link WALL_CARD_METRICS} in the same way the four device parts are. The wall's
+ * earlier non-device vocabulary — a bare glyph with no shape, an 18 px uppercase
+ * label, a pill affordance and its own 8 px control gap — retires with that
+ * change, so a panel cannot mix a designed card system with a second invention.
+ * The two halves share one table: a widget's label is the ported primary line, its
+ * reading keeps the wall's own readout tier (design.md W2), and its controls are
+ * the ported control treatment.
+ *
  * Every metric comes from {@link WALL_CARD_METRICS} (mirrored by the
  * `--hearth-card-*` tokens in `wall/hearth.css`), and the device colour from
  * {@link improveColorContrast} — never a repeated literal. The interactive
@@ -32,8 +50,16 @@
  * sets it, never a card or panel surface (specs/wall-display "Wall Visual
  * Language").
  *
- * Wall-chunk only: imported by the typed cards under `wall/cards/`, so it lands
- * in the lazy wall chunk and never in first paint (design.md D10).
+ * This module imports no part of `wall/registry.ts`: the registry imports every
+ * widget renderer, which imports this module, so a registry read here would close
+ * that cycle — the rule the wall's retired non-device vocabulary documented, kept
+ * here as the vocabulary moved in. Nothing below needs it: every metric is the
+ * ported table's own ({@link WALL_CARD_METRICS}), so the ported control height is
+ * the ported control height and not the registry's copy of it.
+ *
+ * Wall-chunk only: imported by the typed cards under `wall/cards/`, the widget
+ * renderers under `wall/widgets/`, the frame, the grid and the wall view, so it
+ * lands in the lazy wall chunk and never in first paint (design.md D10).
  */
 import { Clock, Unplug, Wifi, WifiOff } from "lucide-react";
 import type { CSSProperties, ReactNode } from "react";
@@ -41,7 +67,8 @@ import type {
   DeviceTileObservationIcon,
   DeviceTileObservationState,
 } from "../../lib/device-tile-state.js";
-import { WALL_BAND_FONT_SIZE } from "../type-ramp.js";
+import { Link } from "../../lib/router-context.js";
+import { WALL_BAND_FONT_SIZE, WALL_BODY_FONT_SIZE } from "../type-ramp.js";
 import {
   resolveEnumControlForm,
   WALL_CARD_CONTROL_MAX_WIDTH_PX,
@@ -248,8 +275,23 @@ export function WallCardText({
  * activate its neighbour (specs/wall-display "Adjacent controls are separated").
  * The top padding is dropped, so the row sits directly under the state item's
  * own padding.
+ *
+ * `inset` is the row's own padding, the ported control spacing on each side. A
+ * device card keeps it — it is what `wall/grid.ts`'s minimum column span accounts
+ * for — while the page-control row drops it: the page plan reserves that row at
+ * the ported control height alone (`wall/pages.ts`'s
+ * `WALL_PAGE_CONTROL_RESERVED_PX`), so a row that padded itself would draw
+ * taller than the plan promised and clip the tiles above it. The controls in the
+ * row are still spaced by the ported control spacing either way.
  */
-export function WallCardActions({ children }: { children: ReactNode }): ReactNode {
+export function WallCardActions({
+  children,
+  inset = true,
+}: {
+  children: ReactNode;
+  /** Whether the row carries its own ported control-spacing inset; a device card does, the page-control row does not. */
+  inset?: boolean;
+}): ReactNode {
   return (
     <div
       style={{
@@ -258,7 +300,7 @@ export function WallCardActions({ children }: { children: ReactNode }): ReactNod
         alignItems: "center",
         justifyContent: "flex-start",
         gap: `${WALL_CARD_METRICS.controlSpacing}px`,
-        padding: `${WALL_CARD_METRICS.controlSpacing}px`,
+        padding: inset ? `${WALL_CARD_METRICS.controlSpacing}px` : 0,
         paddingTop: 0,
         boxSizing: "border-box",
         minWidth: 0,
@@ -667,5 +709,259 @@ export function WallCardObservation({
     >
       <ObservationGlyph icon={observation.icon} size={size} token={token} />
     </span>
+  );
+}
+
+/* ── The widget vocabulary ────────────────────────────────────────────────────
+   What the wall draws outside a device card (design.md W1): the stat
+   the ambient readouts lead with, the labelled control and the route a scene, a
+   room, a link and the wall view draw, and the contained explanation every
+   unconfigured, empty, or failed surface shows. Nothing here is a second
+   declaration of a value the ported table owns — each part reads
+   {@link WALL_CARD_METRICS}, exactly as the four device parts above do. */
+
+/**
+ * A widget's label — the ported primary line (design.md W1; specs/wall-display
+ * "Supporting text is drawn at the ported sizes"). The wall's earlier uppercase
+ * 18 px label retires with the rest of that vocabulary; a widget's label is now
+ * the ported card's own primary treatment — the display face at the ported
+ * primary size, weight and tracking, in sentence case — so a widget's label and a
+ * device card's name are the same line of type.
+ *
+ * `size` is the wall's own tier where a caller needs one (a link's label grows on
+ * a card with room, wall-zones-and-fit D3); a caller that names none draws the
+ * ported primary size (design.md W2). A name too long for its card is shortened
+ * by the caller and truncated here, never wrapped: the wall's one-line label.
+ */
+export function WallCardLabel({
+  children,
+  size,
+}: {
+  children: ReactNode;
+  /** The label's size — the ported primary size unless the caller names the wall's own tier. */
+  size?: string;
+}): ReactNode {
+  return (
+    <span
+      style={{
+        minWidth: 0,
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap",
+        color: "var(--hearth-text)",
+        fontFamily: "var(--hearth-font-display)",
+        fontSize: size ?? WALL_CARD_PRIMARY_FONT_SIZE,
+        fontWeight: WALL_CARD_METRICS.primaryWeight,
+        letterSpacing: `${WALL_CARD_METRICS.primaryTracking}px`,
+      }}
+    >
+      {children}
+    </span>
+  );
+}
+
+/**
+ * A widget's reading — the value a readout presents (design.md W1, W2;
+ * specs/wall-display "A readout's value is not shrunk to the card's type sizes",
+ * "Supporting text is drawn at the ported sizes"). The size is the **caller's**,
+ * because the readout tiers stay the wall's own: a clock's time keeps the hero
+ * tier, a weather or energy figure the metric tier, and a grouped readout the
+ * band tier (`wallReadoutFontSize`), all above the ported type sizes. A caller
+ * that names none draws the ported secondary size, the smallest text the ported
+ * table declares — never a size below it.
+ *
+ * The reading keeps the wall's own reading treatment (the display face at the
+ * wall's bold weight and tight leading) rather than the ported table's label
+ * line, so a value still reads as a value; the value and its unit are handed in
+ * as one run and kept on one line, never split.
+ */
+export function WallCardReading({
+  children,
+  size = WALL_CARD_SECONDARY_FONT_SIZE,
+}: {
+  children: ReactNode;
+  /** The reading's size — the caller's readout tier; the ported secondary size by default. */
+  size?: string;
+}): ReactNode {
+  return (
+    <p
+      style={{
+        margin: 0,
+        minWidth: 0,
+        whiteSpace: "nowrap",
+        color: "var(--hearth-text)",
+        fontFamily: "var(--hearth-font-display)",
+        fontSize: size,
+        fontWeight: "var(--hearth-weight-bold)",
+        lineHeight: "var(--hearth-leading-tight)",
+      }}
+    >
+      {children}
+    </p>
+  );
+}
+
+/**
+ * The widget state item (design.md W1; specs/wall-display "Wall Visual Language"
+ * — the ported "primary line over a secondary line"): a leading
+ * {@link WallCardIcon} — the ported 36 px circular tinted shape — beside a
+ * {@link WallCardLabel} over a {@link WallCardReading}. One part serves the
+ * ambient readouts' stats, a control card's head, and the count a room or
+ * favorites card carries, so a widget's own content is the card system rather
+ * than a treatment of its own.
+ *
+ * Both of the item's own slots are optional because the same anatomy serves all
+ * three: a count leads with text alone (no icon), a head has no reading, and the
+ * wall's own chrome is a label by itself. The reading's size is the caller's, so
+ * a readout's value keeps the wall's distance tier while everything supporting it
+ * is drawn at the ported sizes (design.md W2).
+ */
+export function WallCardStateItem({
+  icon,
+  label,
+  reading,
+  readingSize,
+  tint,
+}: {
+  /** The leading affordance's glyph; omitted for a state item that leads with text alone. */
+  icon?: ReactNode;
+  label: ReactNode;
+  /** The reading under the label; omitted for a head. */
+  reading?: ReactNode;
+  /** The reading's size — the caller's readout tier; the ported secondary size by default. */
+  readingSize?: string;
+  /** The leading glyph's colour token — the wall's muted foreground unless the caller names a state's own. */
+  tint?: string;
+}): ReactNode {
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: `${WALL_CARD_METRICS.padding}px`,
+        minWidth: 0,
+      }}
+    >
+      {icon !== undefined && <WallCardIcon glyph={icon} tint={tint} />}
+      <div style={{ display: "flex", flexDirection: "column", minWidth: 0, flex: "1 1 0" }}>
+        <WallCardLabel>{label}</WallCardLabel>
+        {reading !== undefined && <WallCardReading size={readingSize}>{reading}</WallCardReading>}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The wall's ported control treatment (design.md W1; specs/wall-display "A
+ * control is the ported control"): the ported control height and corner radius —
+ * the wall's touch target in *both* directions, so an affordance that draws no
+ * text cannot fall under it — on the raised surface, at the ported padding.
+ * Declared once and drawn by both {@link WallCardControl} and
+ * {@link WallCardRoute}, so a control and a route cannot drift apart.
+ */
+function wallCardControlStyle(): CSSProperties {
+  return {
+    display: "inline-flex",
+    flex: "none",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: `${WALL_CARD_METRICS.padding}px`,
+    minWidth: WALL_CARD_METRICS.controlHeight,
+    minHeight: WALL_CARD_METRICS.controlHeight,
+    padding: `0 ${WALL_CARD_METRICS.padding}px`,
+    boxSizing: "border-box",
+    borderRadius: WALL_CARD_METRICS.controlRadius,
+    border: "1px solid var(--hearth-hairline)",
+    background: "var(--hearth-surface-raised)",
+    color: "var(--hearth-text)",
+    textDecoration: "none",
+  };
+}
+
+/**
+ * A labelled, touch-sized control (design.md W1; specs/wall-display "Touch
+ * Operation", "A control is the ported control"): a scene's button, a room's
+ * batch command. The ported control treatment carrying the ported primary label
+ * and, where the control leads with one, a glyph — so a widget's control is the
+ * ported control and not a pill of its own, and adjacent controls are spaced by
+ * the ported control spacing through the {@link WallCardActions} row they sit in.
+ */
+export function WallCardControl({
+  glyph,
+  label,
+  onClick,
+  disabled,
+}: {
+  /** The control's glyph, drawn before its label. */
+  glyph?: ReactNode;
+  /** The control's own label, drawn as the ported primary line. */
+  label: ReactNode;
+  onClick: () => void;
+  disabled?: boolean;
+}): ReactNode {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      style={{
+        ...wallCardControlStyle(),
+        cursor: disabled ? "progress" : "pointer",
+        opacity: disabled ? 0.6 : 1,
+      }}
+    >
+      {glyph}
+      <WallCardLabel>{label}</WallCardLabel>
+    </button>
+  );
+}
+
+/**
+ * A route affordance (design.md W1; specs/wall-display "Wall Navigation",
+ * "Navigation is touch-operable"): the link widget's target and the wall view's
+ * back link. It is the same ported control treatment {@link WallCardControl}
+ * draws, carried by the shared router's own link — so the address changes, the
+ * browser's back works, and the wall is reload-safe — and never a treatment the
+ * caller declares. The caller's `style` is its *placement* (the back link
+ * overlays the composition), not a restyle of the control.
+ */
+export function WallCardRoute({
+  to,
+  glyph,
+  label,
+  labelSize,
+  style,
+}: {
+  /** The address the route opens, resolved by the router's own `wallPath`. */
+  to: string;
+  /** The route's glyph, drawn before its label. */
+  glyph?: ReactNode;
+  /** The route's own label, drawn as the ported primary line. */
+  label: ReactNode;
+  /** The label's size — the ported primary size unless the caller names the wall's own tier. */
+  labelSize?: string;
+  /** Where the route is placed, for a caller that overlays it on the composition. */
+  style?: CSSProperties;
+}): ReactNode {
+  return (
+    <Link to={to} style={{ ...wallCardControlStyle(), ...style }}>
+      {glyph}
+      <WallCardLabel size={labelSize}>{label}</WallCardLabel>
+    </Link>
+  );
+}
+
+/**
+ * A contained explanation inside a widget's own area — unconfigured, empty, or
+ * unavailable (design.md W1: moved to this module, unchanged, from the wall's
+ * retired card vocabulary; specs/wall-display "Panel Fit"). It is the wall's one
+ * message form: the frame's too-small explanation, the grid's too-large one, and
+ * every widget's own contained state draw it, never a paragraph of their own.
+ */
+export function WallCardMessage({ children }: { children: ReactNode }): ReactNode {
+  return (
+    <p style={{ margin: 0, color: "var(--hearth-text-muted)", fontSize: WALL_BODY_FONT_SIZE }}>
+      {children}
+    </p>
   );
 }

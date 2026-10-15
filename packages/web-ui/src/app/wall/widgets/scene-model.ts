@@ -72,8 +72,8 @@ export type SceneTileLayout = "row" | "column";
  * The scene tile's own minimum span — the registry's `scene.min`, declared here
  * because the tile resolves its own compositions and this module stays free of
  * the widget registry (whose import cycle would make a module-scope read a
- * temporal-dead-zone error, as `card-vocab.tsx` documents). `wall-scene-tile.test.ts`
- * asserts it against `WALL_WIDGET_REGISTRY.scene.min`.
+ * temporal-dead-zone error, the rule `wall/cards/card-anatomy.tsx` documents).
+ * `wall-scene-tile.test.ts` asserts it against `WALL_WIDGET_REGISTRY.scene.min`.
  */
 export const SCENE_MIN_SPAN: WallWidgetSpan = { w: 2, h: 2 };
 

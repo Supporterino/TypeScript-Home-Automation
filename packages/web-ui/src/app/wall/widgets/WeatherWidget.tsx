@@ -7,11 +7,25 @@
  * "A widget that sources its own reading prefers the fixture"), so a
  * fixture-backed render reaches this composition with no engine.
  *
- * Composed on the shared Hearth card vocabulary (design.md D11): the condition
- * glyph leads, the condition description is the title, and the temperature is
- * the metric; humidity, wind, and the forecast sit below in the body tier.
- * Ambient — chrome-less, condition conveyed by icon shape plus description
- * text, never colour alone.
+ * Composed on the wall's single card vocabulary (design.md W1): the ported
+ * circular condition affordance leads, the condition description is the label,
+ * and the temperature is the reading on the wall's own metric tier (design.md
+ * W2) — what is read at distance. The humidity, the wind and the forecast are
+ * the widget's supporting figures, so each is drawn at the ported secondary size
+ * with a ported-size glyph (specs/wall-display "Supporting text is drawn at the
+ * ported sizes") rather than at a tier of the widget's own. Ambient —
+ * chrome-less, condition conveyed by icon shape plus description text, never
+ * colour alone.
+ *
+ * The widget resolves its own composition from the box the frame hands it
+ * (specs/wall-display "Span-Aware Card Presentation"; design.md W1): the full
+ * composition only where the box holds every part, the condition and its details
+ * alone where the forecast does not fit, and the leading affordance with its
+ * temperature alone where neither does — so a card at the type's minimum span
+ * composes for the space it has rather than clipping. The condition and the
+ * temperature reading are drawn in every composition; they are what is read at
+ * distance. The budgets are the widget's own (see `weather-model.ts`), so it is
+ * measured against its content rather than one global card budget.
  */
 import type { WeatherData, WeatherUnavailable } from "@ts-ha/shared";
 import {
@@ -29,9 +43,15 @@ import { fetchWeather } from "../../api.js";
 import { sourcesOwnReading, useDataStore } from "../../lib/data-store.js";
 import { unavailableMessage, windDirectionLabel } from "../../lib/weather.js";
 import { Spinner } from "../../ui/index.js";
-import { WALL_BODY_FONT_SIZE, WALL_LABEL_FONT_SIZE } from "../type-ramp.js";
-import { WALL_CARD_GLYPH_SIZE, WallCardGlyph, WallCardStat } from "./card-vocab.js";
-import { weatherForecastDays, weatherWidgetState } from "./weather-model.js";
+import { WallCardIcon, WallCardMessage, WallCardStateItem } from "../cards/card-anatomy.js";
+import { WALL_CARD_GLYPH_SIZE, WALL_CARD_SECONDARY_FONT_SIZE } from "../cards/metrics.js";
+import type { WallWidgetProps } from "../registry.js";
+import { WALL_LABEL_FONT_SIZE, WALL_METRIC_FONT_SIZE } from "../type-ramp.js";
+import {
+  weatherForecastDays,
+  weatherWidgetComposition,
+  weatherWidgetState,
+} from "./weather-model.js";
 
 type WeatherCondition = WeatherData["current"]["condition"];
 
@@ -61,7 +81,7 @@ function conditionIcon(
   }
 }
 
-/** A secondary condition reading (humidity, wind) in the vocabulary's body tier. */
+/** A supporting figure (humidity, wind) under the widget's stat, at the ported secondary size. */
 function WeatherDetail({ icon, children }: { icon: ReactNode; children: ReactNode }) {
   return (
     <span
@@ -70,16 +90,16 @@ function WeatherDetail({ icon, children }: { icon: ReactNode; children: ReactNod
         alignItems: "center",
         gap: "var(--hearth-space-2)",
         color: "var(--hearth-text-muted)",
-        fontSize: WALL_BODY_FONT_SIZE,
+        fontSize: WALL_CARD_SECONDARY_FONT_SIZE,
       }}
     >
-      <WallCardGlyph>{icon}</WallCardGlyph>
+      <WallCardIcon glyph={icon} />
       {children}
     </span>
   );
 }
 
-export function WeatherWidget() {
+export function WeatherWidget({ rendererHeightPx }: WallWidgetProps) {
   const { fixtureWeather, transport } = useDataStore();
   const [value, setValue] = useState<WeatherData | WeatherUnavailable | null>(
     fixtureWeather ?? null,
@@ -137,9 +157,7 @@ export function WeatherWidget() {
         >
           Weather unavailable
         </p>
-        <p style={{ margin: 0, color: "var(--hearth-text-muted)", fontSize: WALL_BODY_FONT_SIZE }}>
-          {state.message}
-        </p>
+        <WallCardMessage>{state.message}</WallCardMessage>
       </div>
     );
   }
@@ -157,18 +175,25 @@ export function WeatherWidget() {
         >
           Weather is not configured
         </p>
-        <p style={{ margin: 0, color: "var(--hearth-text-muted)", fontSize: WALL_BODY_FONT_SIZE }}>
-          {unavailableMessage(state.reason)}
-        </p>
+        <WallCardMessage>{unavailableMessage(state.reason)}</WallCardMessage>
       </div>
     );
   }
 
   const { current } = state.data;
   const forecast = weatherForecastDays(state.data);
+  // The composition the box the frame handed the renderer holds (design.md W1;
+  // specs/wall-display "Span-Aware Card Presentation"): the full composition only
+  // where it fits, the details alone where the forecast does not, and the
+  // condition with its temperature alone where neither does — so a card at the
+  // type's minimum span never clips.
+  const composition = weatherWidgetComposition(rendererHeightPx);
+  const drawsDetails = composition !== "readout";
+  const drawsForecast = composition === "full";
 
   return (
     <div
+      data-composition={composition}
       style={{
         display: "flex",
         height: "100%",
@@ -177,29 +202,33 @@ export function WeatherWidget() {
         gap: "var(--hearth-space-3)",
       }}
     >
-      <WallCardStat
+      <WallCardStateItem
         icon={conditionIcon(current.condition)}
         label={current.description}
-        color="var(--hearth-info)"
-      >
-        {Math.round(current.temperature)}°C
-      </WallCardStat>
+        reading={`${Math.round(current.temperature)}°C`}
+        readingSize={WALL_METRIC_FONT_SIZE}
+        tint="var(--hearth-info)"
+      />
 
-      <div
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-          alignItems: "center",
-          gap: "var(--hearth-space-4)",
-        }}
-      >
-        <WeatherDetail icon={<Droplet size={18} />}>{Math.round(current.humidity)}%</WeatherDetail>
-        <WeatherDetail icon={<Wind size={18} />}>
-          {current.wind.speed.toFixed(1)} m/s {windDirectionLabel(current.wind.direction)}
-        </WeatherDetail>
-      </div>
+      {drawsDetails && (
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "center",
+            gap: "var(--hearth-space-4)",
+          }}
+        >
+          <WeatherDetail icon={<Droplet size={WALL_CARD_GLYPH_SIZE} />}>
+            {Math.round(current.humidity)}%
+          </WeatherDetail>
+          <WeatherDetail icon={<Wind size={WALL_CARD_GLYPH_SIZE} />}>
+            {current.wind.speed.toFixed(1)} m/s {windDirectionLabel(current.wind.direction)}
+          </WeatherDetail>
+        </div>
+      )}
 
-      {forecast.length > 0 && (
+      {drawsForecast && forecast.length > 0 && (
         <div
           style={{
             display: "flex",
@@ -224,15 +253,16 @@ export function WeatherWidget() {
                 style={{
                   margin: 0,
                   color: "var(--hearth-text-muted)",
-                  fontSize: WALL_BODY_FONT_SIZE,
+                  fontSize: WALL_CARD_SECONDARY_FONT_SIZE,
                 }}
               >
                 {day.label}
               </p>
-              <WallCardGlyph color="var(--hearth-info)">
-                {conditionIcon(day.condition, 26)}
-              </WallCardGlyph>
-              <p style={{ margin: 0, fontSize: WALL_BODY_FONT_SIZE }}>
+              <WallCardIcon
+                glyph={conditionIcon(day.condition, WALL_CARD_GLYPH_SIZE)}
+                tint="var(--hearth-info)"
+              />
+              <p style={{ margin: 0, fontSize: WALL_CARD_SECONDARY_FONT_SIZE }}>
                 {day.high}°/{day.low}°
               </p>
             </div>

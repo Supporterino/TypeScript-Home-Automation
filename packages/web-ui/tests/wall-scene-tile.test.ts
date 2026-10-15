@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { WALL_CARD_METRICS } from "../src/app/wall/cards/metrics.js";
 import { minimumRendererBoxHeightPx, rendererBoxHeightPx } from "../src/app/wall/frame.js";
 import { ROW_UNIT_MAX, ROW_UNIT_MIN } from "../src/app/wall/grid.js";
 import { WALL_MIN_TOUCH_TARGET, WALL_WIDGET_REGISTRY } from "../src/app/wall/registry.js";
@@ -35,6 +36,8 @@ import {
 const APP_DIR = join(import.meta.dir, "..", "src/app");
 const SCENE = join(APP_DIR, "wall/widgets/SceneWidget.tsx");
 const WIDGETS = join(APP_DIR, "wall/widgets");
+/** The ported module where the wall's control treatment is declared once. */
+const ANATOMY = join(APP_DIR, "wall/cards/card-anatomy.tsx");
 
 /** The scene button's own inset, in CSS pixels per side — Hearth's `--hearth-space-3`. */
 const SCENE_INSET_PX = 12;
@@ -118,6 +121,33 @@ describe("scene button state presentation", () => {
     const source = await sceneSource();
     expect(source).toContain("var(--hearth-");
     expect(source).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
+  });
+});
+
+describe("the scene button is the wall's ported control", () => {
+  it("draws the ported control height and radius rather than a treatment of its own", async () => {
+    const source = await sceneSource();
+
+    // The tile's button is the vocabulary's labelled control (design.md W1;
+    // specs/wall-display "A control is the ported control"): the ported control
+    // height — the wall's touch target — and the ported control radius, drawn from
+    // the ported table rather than a radius the widget declares for itself, so a
+    // scene control and a card's control cannot differ.
+    expect(source).toContain("minHeight: WALL_CARD_METRICS.controlHeight");
+    expect(source).toContain("borderRadius: WALL_CARD_METRICS.controlRadius");
+    expect(source).not.toContain("--hearth-radius-md");
+    expect(WALL_CARD_METRICS.controlHeight).toBeGreaterThanOrEqual(WALL_MIN_TOUCH_TARGET);
+  });
+
+  it("labels the control through the vocabulary's primary line", async () => {
+    const source = await sceneSource();
+    const anatomy = await readSource(ANATOMY);
+
+    // The label is the same line of type a device card's name is (design.md W1, W2;
+    // specs/wall-display "Supporting text is drawn at the ported sizes"): the
+    // vocabulary's label part, which falls back to the ported primary size.
+    expect(source).toContain("<WallCardLabel>");
+    expect(anatomy).toContain("size ?? WALL_CARD_PRIMARY_FONT_SIZE");
   });
 });
 

@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { WallWidget } from "@ts-ha/shared";
 import { resolveBands } from "../src/app/wall/bands.js";
+import { wallBandChrome } from "../src/app/wall/frame.js";
 
 /**
  * The wall's zone band layer (wall-zones-and-fit D2; specs/wall-display "Wall
@@ -36,6 +37,16 @@ function functionSource(source: string, name: string): string {
   const end = source.indexOf("\n}", start);
   expect(end, `${name} is closed`).toBeGreaterThan(start);
   return source.slice(start, end);
+}
+
+/** The source of one top-level declaration, up to the next top-level one. */
+function declarationSource(source: string, name: string): string {
+  const start = source.indexOf(`const ${name}`);
+  expect(start, `${name} is defined`).toBeGreaterThanOrEqual(0);
+  const ends = ["\nconst ", "\nexport function ", "\nfunction "]
+    .map((marker) => source.indexOf(marker, start + 1))
+    .filter((index) => index !== -1);
+  return source.slice(start, ends.length === 0 ? undefined : Math.min(...ends));
 }
 
 function widget(id: string, x: number, y: number, w: number, h: number, zone?: string): WallWidget {
@@ -81,6 +92,21 @@ describe("the band layer", () => {
     expect(widgetFrame).toContain("borderRadius: chrome.radius");
   });
 
+  it("draws the band at the ported card surface — its radius and its padding", async () => {
+    const grid = await gridSource();
+    const style = functionSource(grid, "bandStyle");
+    const chrome = wallBandChrome();
+
+    // A band and the card standing on it are the same surface: the band maps the
+    // chrome's own radius and padding, and neither is a literal or Hearth's own
+    // radius/spacing scale (design.md W3; specs/wall-display "Wall Zones").
+    expect(style).toContain("padding: chrome.padding");
+    expect(style).not.toContain("--hearth-space-4");
+    expect(style).not.toContain("--hearth-radius-md");
+    expect(chrome.radius).toBe("var(--hearth-card-radius)");
+    expect(chrome.padding).toBe("var(--hearth-card-padding)");
+  });
+
   it("draws the band behind the widget cells and out of the touch path", async () => {
     const source = await gridSource();
 
@@ -91,11 +117,22 @@ describe("the band layer", () => {
     expect(source).toMatch(/zIndex: 1/);
   });
 
-  it("captions a zone on the wall's own label tier", async () => {
+  it("captions a zone on the wall's own label tier, with the ported treatment", async () => {
     const source = await gridSource();
+    const caption = declarationSource(source, "BAND_CAPTION_STYLE");
 
+    // The caption is the wall's chrome, and a container label rather than a
+    // readout: it keeps the wall's label tier and its own quiet colour and adopts
+    // the ported family/weight/tracking — never a card role's semantics and never
+    // the retired vocabulary's uppercase treatment (design.md W4; specs/wall-
+    // display "Wall Zones").
+    expect(caption).toContain("...wallChromeTextStyle()");
+    expect(caption).toContain("fontSize: WALL_LABEL_FONT_SIZE");
+    expect(caption).toContain("--hearth-text-muted");
+    expect(caption).not.toContain("uppercase");
+    expect(caption).not.toContain("textTransform");
+    expect(caption).not.toContain("fontWeight");
     expect(source).toContain("WALL_LABEL_FONT_SIZE");
-    expect(source).toContain("--hearth-text-muted");
   });
 });
 
@@ -113,6 +150,24 @@ describe("the unfittable-composition explanation", () => {
     expect(source).toContain("WallCardMessage");
     expect(source).toContain("wallsPath(basePath)");
     expect(source).toContain("Open the wall editor");
+  });
+
+  it("draws the explanation's route and heading with the ported chrome treatment", async () => {
+    const source = await gridSource();
+    const heading = declarationSource(source, "TOO_LARGE_HEADING_STYLE");
+
+    // The panel's own explanation is the wall's chrome: its route is the same
+    // ported route affordance the wall's links and the back link draw, and its
+    // heading keeps the wall's title tier with the ported family/weight/tracking
+    // (design.md W4; specs/wall-display "Panel Fit"). No link the panel declares
+    // for itself, and no Lumen `text-info` treatment.
+    expect(source).toContain("<WallCardRoute to={wallsPath(basePath)}");
+    expect(source).toContain("WallCardRoute");
+    expect(source).not.toContain("TOO_LARGE_ROUTE_STYLE");
+    expect(source).not.toContain("<Link to={wallsPath(basePath)}");
+    expect(heading).toContain("...wallChromeTextStyle()");
+    expect(heading).toContain("fontSize: WALL_TITLE_FONT_SIZE");
+    expect(heading).not.toContain("hearth-weight-bold");
   });
 
   it("contains the explanation instead of scrolling the composition", async () => {

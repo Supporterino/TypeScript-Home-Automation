@@ -24,6 +24,7 @@ import {
 } from "../src/app/wall/harness/rebuild-loop.js";
 import { WALL_WIDGET_REGISTRY } from "../src/app/wall/registry.js";
 import { WALL_TYPE_RAMP } from "../src/app/wall/type-ramp.js";
+import { temperatureWidgetState } from "../src/app/wall/widgets/temperature-model.js";
 
 /**
  * The wall harness's shell and stage (tasks 3.1, 3.2, 4.1, 4.2, 4.3; design.md
@@ -147,6 +148,33 @@ describe("the harness draft", () => {
     expect(portrait.map((widget) => `${widget.id}:${widget.x},${widget.y}`)).not.toEqual(
       DEFAULT_DRAFT.widgets.map((widget) => `${widget.id}:${widget.x},${widget.y}`),
     );
+  });
+
+  it("binds a temperature widget to each sensor, so a walk reaches both reading cases", () => {
+    // The temperature widget presents its sensor's humidity where the sensor
+    // declares one and only its temperature where it does not (design.md W5; task
+    // 5.3): a walk of the stage reaches both, because a widget is bound to the hall
+    // sensor and another to the attic sensor, and neither is the paged grid's tile.
+    const devices = new Map(
+      WALL_HARNESS_FIXTURES.devices.map((device) => [device.qualifiedId, device]),
+    );
+
+    for (const layout of [DEFAULT_DRAFT.widgets, DEFAULT_DRAFT.orientations?.portrait ?? []]) {
+      const readings = layout
+        .filter((widget) => widget.type === "temperature")
+        .map((widget) => {
+          const qualifiedId =
+            typeof widget.config.qualifiedId === "string" ? widget.config.qualifiedId : "";
+          return temperatureWidgetState(devices.get(qualifiedId) ?? null, qualifiedId);
+        });
+
+      expect(
+        readings.some((state) => state.status === "reading" && state.humidity !== undefined),
+      ).toBe(true);
+      expect(
+        readings.some((state) => state.status === "reading" && state.humidity === undefined),
+      ).toBe(true);
+    }
   });
 });
 

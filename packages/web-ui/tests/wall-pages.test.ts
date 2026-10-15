@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import { WALL_CARD_METRICS } from "../src/app/wall/cards/metrics.js";
 import {
   ROW_UNIT_MAX,
   ROW_UNIT_MIN,
@@ -9,6 +10,7 @@ import {
 import {
   resolvePagedTiles,
   resolvePages,
+  WALL_FRAME_INSET_PX,
   WALL_FRAME_RESERVED_PX,
   WALL_PAGE_RESERVED_PX,
   WALL_TILE_CELL_COLUMNS,
@@ -16,11 +18,29 @@ import {
   WALL_TILE_GAP_PX,
   WALL_TILE_ROW_HEIGHT_CAP,
 } from "../src/app/wall/pages.js";
-import { WALL_MIN_CONTROL_GAP, WALL_WIDGET_REGISTRY } from "../src/app/wall/registry.js";
+import {
+  WALL_MIN_CONTROL_GAP,
+  WALL_MIN_TOUCH_TARGET,
+  WALL_WIDGET_REGISTRY,
+} from "../src/app/wall/registry.js";
 
 // Pure pagination — no DOM (wall-zones-and-fit D12; specs/wall-display "Device
 // Grid Widget", "Panel Fit"). The device grid pages a selection its span cannot
 // present instead of overflowing or scrolling, so the wall never scrolls.
+
+describe("the frame inset follows the ported card padding", () => {
+  it("derives the inset and both reservations from the ported card's own padding", () => {
+    // One number, read from the card table rather than restated: the frame's inset
+    // *is* the ported card surface's padding, and the two reservations follow from
+    // it — never from Hearth's own spacing scale (design.md W3; specs/wall-display
+    // "A widget's surface is a card's surface", "Panel Fit").
+    expect(WALL_FRAME_INSET_PX).toBe(WALL_CARD_METRICS.padding);
+    expect(WALL_FRAME_RESERVED_PX).toBe(2 * WALL_CARD_METRICS.padding);
+    expect(WALL_PAGE_RESERVED_PX).toBe(
+      WALL_FRAME_RESERVED_PX + WALL_MIN_TOUCH_TARGET + WALL_MIN_CONTROL_GAP,
+    );
+  });
+});
 
 describe("resolvePages", () => {
   it("presents a selection that fits its span as one page", () => {

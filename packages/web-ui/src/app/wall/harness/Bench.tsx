@@ -57,7 +57,9 @@ export function Bench({
         className={drawsSurface ? "flex flex-col overflow-hidden border" : "flex flex-col"}
         style={{
           minHeight: 0,
-          padding: drawsSurface ? "var(--hearth-space-4)" : undefined,
+          // The frame's own inset, so the bench's surface is the surface the wall
+          // draws: the ported card padding (design.md W3).
+          padding: drawsSurface ? "var(--hearth-card-padding)" : undefined,
           background: drawsSurface ? (chrome.background ?? undefined) : undefined,
           borderColor: drawsSurface ? (chrome.borderColor ?? undefined) : undefined,
           borderRadius: drawsSurface ? (chrome.radius ?? undefined) : undefined,

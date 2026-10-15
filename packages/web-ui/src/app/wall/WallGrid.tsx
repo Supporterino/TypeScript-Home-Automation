@@ -8,17 +8,20 @@
  * whose renderer throws is contained by a per-widget {@link ErrorBoundary}, so
  * one broken widget never takes down the profile.
  *
- * Zones (wall-zones-and-fit D2): the widgets sharing a `zone` label render
- * inside one band — a tinted Hearth field at the band's bounding box, carrying
- * the zone's caption, drawn *behind* the widget cells so a member keeps its own
- * surface and no surface is nested in another.
+ * Zones (wall-zones-and-fit D2; design.md W3): the widgets sharing a `zone` label
+ * render inside one band — a tinted Hearth field at the ported card surface (its
+ * radius and its padding), carrying the zone's caption, drawn *behind* the widget
+ * cells so a member keeps its own surface and no surface is nested in another.
  *
  * Panel fit (wall-zones-and-fit D5; specs/wall-display "Panel Fit"): the wall
  * never scrolls. The pure {@link wallGridMetrics} verdict decides the render —
  * a composition that cannot fit the panel at the wall's floors renders a
  * contained explanation with a route to the editor instead of a scroll or a
  * clipped composition, and a widget whose own content cannot fit its span pages
- * rather than overflowing (the device grid).
+ * rather than overflowing (the device grid). The explanation, its heading and the
+ * band's caption are the *wall's own chrome*, so they adopt the ported
+ * family/weight/tracking and the ported route affordance while keeping the wall's
+ * title/label tiers (design.md W4).
  *
  * Re-skinned onto Hearth (design.md D6): the root is the wall's Hearth scope
  * (`data-wall-chunk`), on which Hearth's own stylesheet paints the true-black
@@ -31,9 +34,10 @@ import type { WallProfileConfig } from "@ts-ha/shared";
 import { type CSSProperties, useEffect, useRef, useState } from "react";
 import { ErrorBoundary } from "../components/ErrorBoundary.js";
 import { wallsPath } from "../lib/router.js";
-import { Link, useRouter } from "../lib/router-context.js";
+import { useRouter } from "../lib/router-context.js";
 import { resolveBands, type WallBand } from "./bands.js";
-import { wallBandChrome } from "./frame.js";
+import { WallCardMessage, WallCardRoute } from "./cards/card-anatomy.js";
+import { wallBandChrome, wallChromeTextStyle } from "./frame.js";
 import {
   gridPlacementStyle,
   resolveLayout,
@@ -52,7 +56,6 @@ import { WALL_CHUNK_MARKER } from "./registry.js";
 import { WALL_LABEL_FONT_SIZE, WALL_TITLE_FONT_SIZE } from "./type-ramp.js";
 import { useOrientation } from "./use-orientation.js";
 import { WidgetFrame } from "./WidgetFrame.js";
-import { WallCardMessage } from "./widgets/card-vocab.js";
 
 if (typeof document !== "undefined") {
   const link = document.createElement("link");
@@ -72,9 +75,11 @@ function panelHeight(): number {
  * touch so a tap between members passes through to the grid.
  *
  * {@link wallBandChrome} describes the band's own field with token names —
- * `background` and `radius` — and `radius` is not a CSS property, so a spread
- * would drop it and the band would render with square corners. Each consumer maps
- * the chrome, exactly as `WidgetFrame` maps the frame's.
+ * `background`, `radius` and `padding` — and `radius` is not a CSS property, so a
+ * spread would drop it and the band would render with square corners. Each
+ * consumer maps the chrome, exactly as `WidgetFrame` maps the frame's. The band
+ * draws the ported card surface — its radius and its padding — so a band and the
+ * card standing on it are the same surface (design.md W3).
  */
 function bandStyle(band: WallBand): CSSProperties {
   const chrome = wallBandChrome();
@@ -82,31 +87,35 @@ function bandStyle(band: WallBand): CSSProperties {
     ...gridPlacementStyle(band),
     background: chrome.background,
     borderRadius: chrome.radius,
+    padding: chrome.padding,
     zIndex: 0,
     pointerEvents: "none",
     display: "flex",
     alignItems: "flex-start",
-    padding: "var(--hearth-space-4)",
     overflow: "hidden",
     minWidth: 0,
     minHeight: 0,
   };
 }
 
-/** The band's caption: the wall's label tier, uppercase, quiet — a container label, not a readout. */
+/**
+ * The band's caption: the wall's label tier, drawn with the ported
+ * family/weight/tracking — the wall's own chrome, so it keeps its own tier and its
+ * own quiet colour rather than a card's role (design.md W4; specs/wall-display
+ * "Wall Zones" — "a container label, not a readout").
+ */
 const BAND_CAPTION_STYLE: CSSProperties = {
+  ...wallChromeTextStyle(),
   color: "var(--hearth-text-muted)",
   fontSize: WALL_LABEL_FONT_SIZE,
-  fontWeight: "var(--hearth-weight-semibold)",
-  letterSpacing: "0.04em",
-  textTransform: "uppercase",
 };
 
 /**
  * The contained explanation an authored composition that cannot fit the panel
- * renders instead of a clipped or scrolling grid (design.md D5; specs/wall-display
- * "Panel Fit"). It is the wall's own message form plus a route to the editor,
- * so the state is actionable rather than silent, and it never scrolls.
+ * renders instead of a clipped or scrolling grid (design.md D5, W4;
+ * specs/wall-display "Panel Fit"). It is the wall's own message form plus the
+ * wall's own route affordance to the editor, so the state is actionable rather
+ * than silent, and it never scrolls.
  */
 const TOO_LARGE_STYLE: CSSProperties = {
   display: "flex",
@@ -122,19 +131,16 @@ const TOO_LARGE_STYLE: CSSProperties = {
   textAlign: "center",
 };
 
+/**
+ * The explanation's own heading: the wall's chrome on the wall's title tier, drawn
+ * with the ported family/weight/tracking (design.md W4) — a container label, never
+ * a card role.
+ */
 const TOO_LARGE_HEADING_STYLE: CSSProperties = {
+  ...wallChromeTextStyle(),
   margin: 0,
   color: "var(--hearth-text)",
-  fontFamily: "var(--hearth-font-display)",
   fontSize: WALL_TITLE_FONT_SIZE,
-  fontWeight: "var(--hearth-weight-bold)",
-};
-
-const TOO_LARGE_ROUTE_STYLE: CSSProperties = {
-  color: "var(--hearth-info)",
-  fontSize: WALL_LABEL_FONT_SIZE,
-  fontWeight: "var(--hearth-weight-semibold)",
-  textUnderlineOffset: "4px",
 };
 
 export function WallGrid({ config }: { config: WallProfileConfig }) {
@@ -173,9 +179,11 @@ export function WallGrid({ config }: { config: WallProfileConfig }) {
           This wall's composition cannot fit the panel at the wall's minimum touch target and body
           size. Remove or resize a widget in the wall editor.
         </WallCardMessage>
-        <Link to={wallsPath(basePath)} style={TOO_LARGE_ROUTE_STYLE}>
-          Open the wall editor
-        </Link>
+        {/* The explanation's route to the editor is the wall's own route
+            affordance — the ported control treatment — so it is not a link the
+            panel declares for itself (design.md W4; specs/wall-display "Panel
+            Fit"). */}
+        <WallCardRoute to={wallsPath(basePath)} label="Open the wall editor" />
       </div>
     );
   }
