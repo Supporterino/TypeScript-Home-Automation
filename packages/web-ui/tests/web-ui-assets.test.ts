@@ -288,6 +288,41 @@ describe("wall chunk laziness", () => {
     }
   });
 
+  it("keeps the harness marker out of every shipped asset, while the harness still renders it", async () => {
+    // The render harness is a development-only entrypoint: it is not an
+    // entrypoint of the shipped build and nothing in the app reaches it (the
+    // companion guard in `wall-harness-guard.test.ts` walks the module graph),
+    // so neither the harness nor anything it renders may appear in an emitted
+    // asset (design.md D9; specs/web-ui "Build Process" — "A development-only
+    // module does not reach the shipped build", "adds no first-paint
+    // dependency").
+    const decoded = ASSETS.map((asset) => ({
+      asset,
+      text: Buffer.from(asset.rawBase64, "base64").toString("utf8"),
+    }));
+
+    // Imported inside the test: this is the one asset assertion that needs the
+    // harness's own sources, so a tree without them fails this test alone rather
+    // than the whole file.
+    const { WALL_HARNESS_MARKER } = await import("../src/app/wall/harness/marker.js");
+    expect(WALL_HARNESS_MARKER).toBe("ts-ha-wall-harness");
+    for (const { asset, text } of decoded) {
+      expect(text, asset.fileName).not.toContain(WALL_HARNESS_MARKER);
+    }
+
+    // …and the assertion above is only meaningful while the harness really
+    // carries the marker: it is rendered onto each harness document's root, the
+    // same way `WALL_CHUNK_MARKER` is rendered onto the wall grid's. Renaming or
+    // dropping the constant would otherwise leave this test passing over a
+    // marker nothing uses.
+    const { readFile } = await import("node:fs/promises");
+    const harnessDir = join(import.meta.dir, "..", "src/app/wall/harness");
+    for (const name of ["HarnessPanel.tsx", "stage.tsx"]) {
+      const source = await readFile(join(harnessDir, name), "utf8");
+      expect(source, name).toContain("data-harness={WALL_HARNESS_MARKER}");
+    }
+  });
+
   it("keeps the wall validation schema, and zod, out of first paint", () => {
     // design.md D6/D24 and proposal.md require the wall-profile schema to be
     // contained to the wall's lazy chunk. The editor and registry reach it via

@@ -2,7 +2,10 @@
  * The wall weather widget (design.md D11; specs/wall-display "Widget Catalog",
  * "An unconfigured widget is contained"). Reads `GET /api/weather`; when the
  * service is unconfigured it reports that inside its own area and never throws,
- * so the rest of the profile keeps rendering.
+ * so the rest of the profile keeps rendering. A caller-supplied fixture reading
+ * from the data layer is preferred over that fetch (design.md D5; specs/web-ui
+ * "A widget that sources its own reading prefers the fixture"), so a
+ * fixture-backed render reaches this composition with no engine.
  *
  * Composed on the shared Hearth card vocabulary (design.md D11): the condition
  * glyph leads, the condition description is the title, and the temperature is
@@ -23,7 +26,7 @@ import {
 } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { fetchWeather } from "../../api.js";
-import { useDataStore } from "../../lib/data-store.js";
+import { sourcesOwnReading, useDataStore } from "../../lib/data-store.js";
 import { unavailableMessage, windDirectionLabel } from "../../lib/weather.js";
 import { Spinner } from "../../ui/index.js";
 import { WALL_BODY_FONT_SIZE, WALL_LABEL_FONT_SIZE } from "../type-ramp.js";
@@ -77,18 +80,24 @@ function WeatherDetail({ icon, children }: { icon: ReactNode; children: ReactNod
 }
 
 export function WeatherWidget() {
-  const { transport } = useDataStore();
-  const [value, setValue] = useState<WeatherData | WeatherUnavailable | null>(null);
+  const { fixtureWeather, transport } = useDataStore();
+  const [value, setValue] = useState<WeatherData | WeatherUnavailable | null>(
+    fixtureWeather ?? null,
+  );
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
+    // A supplied fixture reading is the widget's data, so every path that would
+    // fetch — the mount load and the reconnect refetch below — issues no request
+    // for it (design.md D5). Without one the widget is byte-for-byte unchanged.
+    if (!sourcesOwnReading(fixtureWeather)) return;
     try {
       setValue(await fetchWeather());
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load weather data");
     }
-  }, []);
+  }, [fixtureWeather]);
 
   useEffect(() => {
     void load();

@@ -2,7 +2,11 @@
  * The wall energy widget (design.md D11; specs/wall-display "Widget Catalog";
  * specs/energy-monitoring). Reads `GET /api/energy` and refetches, debounced,
  * on every device event that can change the aggregated totals, so the totals
- * update live without a manual refresh.
+ * update live without a manual refresh. A caller-supplied fixture reading from
+ * the data layer is preferred over that fetch (design.md D5; specs/web-ui "A
+ * widget that sources its own reading prefers the fixture"), so a
+ * fixture-backed render reaches this composition with no engine and no device
+ * event can re-trigger a request.
  *
  * Composed on the shared Hearth card vocabulary (design.md D11): a metric per
  * reading (instantaneous power and accumulated consumption), each with its own
@@ -12,7 +16,7 @@ import type { EnergyData } from "@ts-ha/shared";
 import { Database, Zap } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { fetchEnergy } from "../../api.js";
-import { useDataStore } from "../../lib/data-store.js";
+import { sourcesOwnReading, useDataStore } from "../../lib/data-store.js";
 import { isEnergyRelevantEvent } from "../../lib/energy.js";
 import { Spinner } from "../../ui/index.js";
 import { WALL_BODY_FONT_SIZE } from "../type-ramp.js";
@@ -41,18 +45,23 @@ function Metric({
 }
 
 export function EnergyWidget() {
-  const { subscribe, transport } = useDataStore();
-  const [data, setData] = useState<EnergyData | null>(null);
+  const { fixtureEnergy, subscribe, transport } = useDataStore();
+  const [data, setData] = useState<EnergyData | null>(fixtureEnergy ?? null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
+    // A supplied fixture reading is the widget's data, so every path that would
+    // fetch — the mount load, the reconnect refetch, and the debounced
+    // device-event refetch, all of which call this — issues no request for it
+    // (design.md D5). Without one the widget is byte-for-byte unchanged.
+    if (!sourcesOwnReading(fixtureEnergy)) return;
     try {
       setData(await fetchEnergy());
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load energy data");
     }
-  }, []);
+  }, [fixtureEnergy]);
 
   useEffect(() => {
     void load();

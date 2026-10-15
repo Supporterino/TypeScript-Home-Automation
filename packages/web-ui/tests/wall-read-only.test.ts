@@ -10,22 +10,33 @@ import { join } from "node:path";
  * may import the `wall/editor/**` chunk or the profile-mutation API
  * (`createWall`/`updateWall`/`deleteWall`). The editor module is separately
  * asserted to be the mutation site, so the guard is not vacuous.
+ *
+ * `wall/harness/**` is excluded alongside the editor. It is a development-only
+ * surface in its own documents (`add-wall-harness` D1, D2), it is unreachable
+ * from the application entrypoint — the harness guard asserts that — and its
+ * control panel deliberately drives the editor's own pure mutations (D2, task
+ * 5.1) rather than a second copy of the clamping and refusal rules. None of that
+ * reaches a wall a user is watching: the invariant here is about the render
+ * path, which this walk still covers in full.
  */
 const APP_DIR = join(import.meta.dir, "..", "src/app");
 const WALL_DIR = join(APP_DIR, "wall");
 const EDITOR_DIR = join(WALL_DIR, "editor");
 const WALL_VIEW = join(APP_DIR, "views/WallView.tsx");
 
+/** Directories excluded from the render-path walk: the editor chunk, and the dev-only harness. */
+const EXCLUDED_DIRS = ["editor", "harness"] as const;
+
 const MUTATION_API = ["createWall", "updateWall", "deleteWall"] as const;
 
-/** Every `.ts`/`.tsx` under `dir`, skipping the editor chunk (already excluded from the render path). */
+/** Every `.ts`/`.tsx` under `dir`, skipping the excluded directories. */
 async function collectRenderFiles(dir: string): Promise<string[]> {
   const entries = await readdir(dir, { withFileTypes: true });
   const files: string[] = [];
   for (const entry of entries) {
     const path = join(dir, entry.name);
     if (entry.isDirectory()) {
-      if (entry.name === "editor") continue;
+      if (EXCLUDED_DIRS.some((name) => name === entry.name)) continue;
       files.push(...(await collectRenderFiles(path)));
     } else if (entry.name.endsWith(".ts") || entry.name.endsWith(".tsx")) {
       files.push(path);

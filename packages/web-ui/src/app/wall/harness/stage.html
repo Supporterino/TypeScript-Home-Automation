@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Wall harness — stage</title>
+    <style>
+      /* The panel is this document's whole viewport: no document chrome may
+         change the geometry the wall measures (design.md D3). The wall itself
+         paints the canvas from its own Hearth tokens. */
+      html,
+      body,
+      #stage-root {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="stage-root"></div>
+    <script type="module" src="./stage.tsx"></script>
+  </body>
+</html>

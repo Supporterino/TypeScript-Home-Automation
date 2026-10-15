@@ -18,6 +18,17 @@
  * as two flat maps and derives each room's member list from them and the
  * live device map, exactly like `RoomManager.listRooms()` does server-side.
  *
+ * The store can also be seeded from a caller-supplied fixture set instead of
+ * the API (design.md D5): with `fixtures` present the initial values come from
+ * them, and neither a snapshot is fetched nor a stream opened. The fixture set
+ * carries the two ambient readings too — weather and energy — which the two
+ * wall widgets would otherwise fetch for themselves, so a fixture-backed
+ * render reaches their real composition with no engine. The seed, the sourcing
+ * decision, and that widget-side decision are pure functions in this file, so
+ * a `bun test` with no DOM reaches all three; nothing but the call site can
+ * select fixture data — no environment variable, query parameter, or
+ * configuration key.
+ *
  * Deliberately thin on logic: event application here is a handful of map
  * mutations per category, with everything genuinely decision-worthy (tile
  * ranking, revert deadlines, coalescing, reserved-key filtering, log
@@ -25,6 +36,8 @@
  * into the pure modules alongside this file (design.md D23). This file itself
  * is accepted as manually verified.
  */
+
+import type { EnergyData, WeatherData, WeatherUnavailable } from "@ts-ha/shared";
 import {
   createContext,
   type ReactNode,
@@ -107,6 +120,107 @@ interface OverrideTimer {
 /** How often the fallback poll re-snapshots while the stream is degraded. */
 const FALLBACK_POLL_MS = 5000;
 
+/**
+ * The data a caller may supply in place of the engine (design.md D5).
+ *
+ * Declared here, web-ui-internal: it is a client-side injection seam, not a
+ * wire contract, so it is neither a `@ts-ha/shared` contract nor part of the
+ * package's exported surface. It covers exactly what the wall's widgets read
+ * from the store and nothing more — `devices` (device, temperature,
+ * device-grid), `state` (favorites reads its key), `rooms` (room),
+ * `automations` (scene), and `transport` (weather, energy) — plus the two
+ * ambient readings the weather and energy widgets source themselves rather
+ * than read from the store, which they prefer over their own fetch. It is
+ * typed against the same contracts the store and those widgets already
+ * consume, so a change to one of them is a compile error here rather than
+ * silent fixture drift.
+ *
+ * `rooms` is the store's own exposed shape, {@link RoomWithMembers}, so a room
+ * widget renders its members: the provider splits it into the definition and
+ * assignment maps the store keeps, exactly as it splits the snapshot's room
+ * list.
+ */
+export interface DataStoreFixtures {
+  devices: DeviceDescriptor[];
+  state: StateMap;
+  rooms: RoomWithMembers[];
+  automations: Automation[];
+  transport: TransportState;
+  /**
+   * A supplied weather reading, in the exact shape `fetchWeather()` resolves
+   * to — conditions, or the unconfigured marker — so a widget can present the
+   * unconfigured case from a fixture too (design.md D5).
+   */
+  weather?: WeatherData | WeatherUnavailable;
+  /** A supplied energy reading, in the exact shape `fetchEnergy()` resolves to (design.md D5). */
+  energy?: EnergyData;
+}
+
+/** The store's initial values and the fixture-supplied ambient readings (design.md D5). */
+interface DataStoreSeed {
+  automations: Automation[];
+  devicesByQualifiedId: Map<string, DeviceDescriptor>;
+  energy: EnergyData | undefined;
+  roomAssignments: Map<string, string>;
+  roomDefs: Map<string, Room>;
+  state: StateMap;
+  transport: TransportState;
+  weather: WeatherData | WeatherUnavailable | undefined;
+}
+
+/**
+ * The store's initial values: the caller's fixture set when one is supplied,
+ * and otherwise the same empty defaults — and the same `connecting` transport
+ * — the API path has always started from (design.md D5).
+ *
+ * A fixture room is split into a definition plus one assignment per member,
+ * mirroring the snapshot path, so the room widget derives the same membership
+ * from either source. The two ambient readings are absent unless the fixture
+ * set carries them, so a widget sources its own until a caller supplies one.
+ */
+export function seedDataStore(fixtures: DataStoreFixtures | undefined): DataStoreSeed {
+  const devices = fixtures?.devices ?? [];
+  const rooms = fixtures?.rooms ?? [];
+  return {
+    automations: fixtures?.automations ?? [],
+    devicesByQualifiedId: new Map(devices.map((device) => [device.qualifiedId, device])),
+    energy: fixtures?.energy,
+    roomAssignments: new Map(
+      rooms.flatMap((room) => room.members.map((member) => [member.qualifiedId, room.id] as const)),
+    ),
+    roomDefs: new Map(rooms.map((room) => [room.id, { id: room.id, name: room.name }])),
+    state: fixtures?.state ?? {},
+    transport: fixtures?.transport ?? "connecting",
+    weather: fixtures?.weather,
+  };
+}
+
+/**
+ * Whether the store sources its data from the API and the event stream
+ * (design.md D5; specs/web-ui "Data Sources"). The caller-supplied fixture set
+ * is its only input: no environment variable, query parameter, or
+ * configuration key reaches it, so a deployed dashboard cannot select fixture
+ * data — only a call site can.
+ */
+export function sourcesFromApi(fixtures: DataStoreFixtures | undefined): boolean {
+  return fixtures === undefined;
+}
+
+/**
+ * Whether a component must source a reading itself (design.md D5; specs/web-ui
+ * "Data Sources" — "A widget that sources its own reading prefers the
+ * fixture"). The two wall widgets that fetch their own ambient reading consult
+ * this with the reading the store carries from the fixture set: with one
+ * supplied, the widget renders it and issues no request for it; with none, it
+ * sources the reading exactly as it does today.
+ *
+ * The only input is the reading, so no environment variable, query parameter,
+ * or configuration key can make a widget prefer a fixture.
+ */
+export function sourcesOwnReading<T>(reading: T | undefined): boolean {
+  return reading === undefined;
+}
+
 interface DataStoreValue {
   status: StatusData | null;
   automations: Automation[];
@@ -118,6 +232,19 @@ interface DataStoreValue {
   logs: LogEntry[];
   homekit: HomekitStatus | null;
   transport: TransportState;
+  /**
+   * The caller-supplied weather reading, or `undefined` when the fixture set
+   * carries none (design.md D5). Read-only: `WeatherWidget` prefers it over the
+   * reading it fetches for itself, so a fixture-backed render issues no request
+   * for it, and with none supplied the widget is unchanged.
+   */
+  fixtureWeather: WeatherData | WeatherUnavailable | undefined;
+  /**
+   * The caller-supplied energy reading, or `undefined` when the fixture set
+   * carries none (design.md D5) — the mirror of {@link fixtureWeather} for
+   * `EnergyWidget`.
+   */
+  fixtureEnergy: EnergyData | undefined;
   /** The user's favorites, derived from the ordinary state key (design.md D9). */
   favorites: string[];
   /** Whether `qualifiedId` is currently favorited. */
@@ -181,12 +308,24 @@ interface DataStoreValue {
 
 const DataStoreContext = createContext<DataStoreValue | null>(null);
 
-export function DataStoreProvider({ children }: { children: ReactNode }) {
+export function DataStoreProvider({
+  children,
+  fixtures,
+}: {
+  children: ReactNode;
+  fixtures?: DataStoreFixtures;
+}) {
+  // The store's initial values, resolved once: a fixture set is a mount-time
+  // input, and re-seeding a live store is not a use case (design.md D5).
+  const seedRef = useRef<DataStoreSeed | null>(null);
+  if (!seedRef.current) seedRef.current = seedDataStore(fixtures);
+  const seed = seedRef.current;
+
   const [status, setStatus] = useState<StatusData | null>(null);
-  const [automations, setAutomations] = useState<Automation[]>([]);
-  const [state, setState] = useState<StateMap>({});
+  const [automations, setAutomations] = useState<Automation[]>(seed.automations);
+  const [state, setState] = useState<StateMap>(seed.state);
   const [devicesByQualifiedId, setDevicesByQualifiedId] = useState<Map<string, DeviceDescriptor>>(
-    () => new Map(),
+    seed.devicesByQualifiedId,
   );
   // A live mirror of the device map for the stream handler: the handler is
   // created once and cannot read the state variable directly without closing
@@ -195,11 +334,11 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
   // Ids with an in-flight recovery fetch, so a burst of deltas for one unknown
   // device fires a single refetch rather than one per event (design.md D7).
   const recoveringDeviceIdsRef = useRef<Set<string>>(new Set());
-  const [roomDefs, setRoomDefs] = useState<Map<string, Room>>(() => new Map());
-  const [roomAssignments, setRoomAssignments] = useState<Map<string, string>>(() => new Map());
+  const [roomDefs, setRoomDefs] = useState<Map<string, Room>>(seed.roomDefs);
+  const [roomAssignments, setRoomAssignments] = useState<Map<string, string>>(seed.roomAssignments);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [homekit, setHomekit] = useState<HomekitStatus | null>(null);
-  const [transport, setTransport] = useState<TransportState>("connecting");
+  const [transport, setTransport] = useState<TransportState>(seed.transport);
 
   const commandCoalescerRef = useRef<DeviceCommandCoalescer | null>(null);
   if (!commandCoalescerRef.current) {
@@ -440,8 +579,13 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
   );
 
   // Initial snapshot, then open the stream. Re-runs (via the effect below)
-  // are not needed after this — reconnection triggers its own refresh.
+  // are not needed after this — reconnection triggers its own refresh. With a
+  // caller-supplied fixture set there is nothing to source at all: the seeded
+  // store is the whole world, so no snapshot is fetched and no stream is
+  // opened (design.md D5).
   useEffect(() => {
+    if (!sourcesFromApi(fixtures)) return;
+
     let cancelled = false;
     let fallbackTimer: ReturnType<typeof setInterval> | null = null;
     let hadOpenedBefore = false;
@@ -601,9 +745,10 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
       esRef?.close();
     };
     // Intentionally runs once: reconnection and the fallback poll are
-    // handled inside the effect itself, not by re-running it.
+    // handled inside the effect itself, not by re-running it. `fixtures` is a
+    // mount-time input, so listing it changes nothing for a stable caller.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [refresh]);
+  }, [refresh, fixtures]);
 
   const devices = useMemo(() => [...devicesByQualifiedId.values()], [devicesByQualifiedId]);
 
@@ -641,6 +786,8 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
       logs,
       homekit,
       transport,
+      fixtureWeather: seed.weather,
+      fixtureEnergy: seed.energy,
       favorites,
       isFavorite,
       toggleFavorite,
@@ -664,6 +811,7 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
       logs,
       homekit,
       transport,
+      seed,
       favorites,
       isFavorite,
       toggleFavorite,

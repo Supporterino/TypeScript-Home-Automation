@@ -25,6 +25,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "build:web-ui": "bun run scripts/generate-icon.ts && bun run scripts/build-web-ui.ts",
+    "harness": "bun --conditions=development run scripts/harness.ts",
     "prebuild": "bun run build:web-ui",
     "typecheck": "tsc --noEmit && tsc --noEmit -p src/app/tsconfig.json",
     "pretypecheck": "bun run build:web-ui",
