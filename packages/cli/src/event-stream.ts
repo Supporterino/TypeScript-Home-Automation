@@ -16,10 +16,10 @@ const DEFAULT_RECONNECT_BASE_MS = 1_000;
 const DEFAULT_RECONNECT_MAX_MS = 30_000;
 
 /** Marker code carried by the plain `Error` for a stream `401`. */
-export const STREAM_AUTH_CODE = "unauthorized";
+const STREAM_AUTH_CODE = "unauthorized";
 
 /** Build the distinguishable 401 error (plain `Error`, no subclass — AGENTS.md). */
-export function streamAuthError(message = "Event stream authentication failed (HTTP 401)"): Error {
+function streamAuthError(message = "Event stream authentication failed (HTTP 401)"): Error {
   return Object.assign(new Error(message), { name: "StreamAuthError", code: STREAM_AUTH_CODE });
 }
 

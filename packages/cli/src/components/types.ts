@@ -17,7 +17,7 @@ import type {
   WeatherUnavailable,
 } from "@ts-ha/shared";
 
-export interface ReadinessData {
+interface ReadinessData {
   status: string;
   checks: { mqtt: boolean; engine: boolean };
   startedAt: number | null;

@@ -136,7 +136,7 @@ export function formatDevice(device: DeviceDescriptor): string {
 /**
  * Format one flattened capability as a single descriptor line.
  */
-export function formatCapability(capability: Capability): string {
+function formatCapability(capability: Capability): string {
   const access = `${capability.access.readable ? "r" : "-"}${capability.access.writable ? "w" : "-"}`;
   const property = capability.property ?? capability.kind;
 

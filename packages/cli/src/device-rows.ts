@@ -29,7 +29,7 @@ export function flattenCapabilities(capabilities: Capability[]): Capability[] {
 }
 
 /** Project one device descriptor into the catalog summary row. */
-export function projectDeviceRow(device: DeviceDescriptor): DeviceRow {
+function projectDeviceRow(device: DeviceDescriptor): DeviceRow {
   return {
     qualifiedId: device.qualifiedId,
     displayName: device.displayName,

@@ -9,7 +9,7 @@
 import type { RoomCommandResult, RoomWithMembers } from "@ts-ha/shared";
 import { parseCommandValue } from "./command-value.js";
 
-export interface RoomMemberRow {
+interface RoomMemberRow {
   qualifiedId: string;
   displayName: string;
   available: boolean;

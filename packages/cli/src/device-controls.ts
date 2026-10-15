@@ -19,7 +19,7 @@ import { composeBooleanCapabilityValue, readBooleanCapabilityValue } from "@ts-h
 import { flattenCapabilities } from "./device-rows.js";
 
 /** The terminal control a capability projects to. */
-export type DeviceControlKind = "toggle" | "adjuster" | "cycler" | "editor" | "readout";
+type DeviceControlKind = "toggle" | "adjuster" | "cycler" | "editor" | "readout";
 
 export interface DeviceControl {
   /** The device state key this control reads and writes. */
