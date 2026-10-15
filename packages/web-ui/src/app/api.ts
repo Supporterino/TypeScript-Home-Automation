@@ -30,7 +30,7 @@ export function initApi(basePath: string, token: string) {
   _token = token;
 }
 
-export async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
+async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
   const res = await apiFetchResponse(path, options);
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as { error?: string };
@@ -73,10 +73,6 @@ export function fetchStatus(): Promise<StatusData> {
 export async function fetchAutomations(): Promise<Automation[]> {
   const res = await apiFetch<{ automations: Automation[]; count: number }>("/api/automations");
   return res.automations;
-}
-
-export function fetchAutomation(name: string): Promise<Automation> {
-  return apiFetch<Automation>(`/api/automations/${encodeURIComponent(name)}`);
 }
 
 export function setAutomationEnabled(name: string, enabled: boolean): Promise<Automation> {
@@ -201,13 +197,6 @@ export async function fetchRooms(): Promise<RoomWithMembers[]> {
   return res.rooms;
 }
 
-export async function fetchUnassignedDevices(): Promise<DeviceDescriptor[]> {
-  const res = await apiFetch<{ devices: DeviceDescriptor[]; count: number }>(
-    "/api/rooms/unassigned",
-  );
-  return res.devices;
-}
-
 export function createRoom(name: string): Promise<{ id: string; name: string }> {
   return apiFetch("/api/rooms", { method: "POST", body: JSON.stringify({ name }) });
 }
@@ -244,10 +233,6 @@ export function sendRoomCommand(
 export async function fetchWalls(): Promise<WallProfile[]> {
   const res = await apiFetch<{ walls: WallProfile[]; count: number }>("/api/walls");
   return res.walls;
-}
-
-export function fetchWall(name: string): Promise<WallProfile> {
-  return apiFetch<WallProfile>(`/api/walls/${encodeURIComponent(name)}`);
 }
 
 /**
