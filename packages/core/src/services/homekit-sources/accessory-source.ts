@@ -1,4 +1,4 @@
-import type { CreatedAccessory } from "../homekit-accessory-factory.js";
+import type { CreatedAccessory } from "../homekit-descriptor-factory.js";
 
 /**
  * A source-agnostic supplier of HomeKit accessories.

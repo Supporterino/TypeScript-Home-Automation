@@ -68,17 +68,25 @@ export interface CreatedAccessory {
 // UUID seeding — frozen per source (task 6.15)
 // ---------------------------------------------------------------------------
 
-function uuidSeedFor(descriptor: DeviceDescriptor): string {
+/**
+ * The seed string fed into `uuid.generate()` for an accessory, frozen per
+ * source (task 6.15). Exported so the pairing-critical characterisation test
+ * can assert the seed directly without importing `hap-nodejs`.
+ */
+export function uuidSeedFor(
+  descriptor: Pick<DeviceDescriptor, "source" | "id" | "qualifiedId">,
+): string {
   switch (descriptor.source) {
-    // Matches the frozen `zigbeeAccessoryUuidSeed(device)`, which is exactly
-    // `device.ieee_address` — the Zigbee device source's stable identity,
-    // carried unchanged as `descriptor.id` (see zigbee-source.ts).
+    // Zigbee: the IEEE address is the device's stable identity, carried
+    // unchanged as `descriptor.id` (see zigbee-source.ts), and is the frozen
+    // seed for a paired Zigbee accessory.
     case "zigbee":
       return descriptor.id;
-    // Matches the frozen `shellyAccessoryUuidSeed(device)`.
+    // Shelly: `shelly:<registered name>`, the frozen seed for a paired Shelly
+    // accessory.
     case "shelly":
       return `shelly:${descriptor.id}`;
-    // Matches the frozen `stateToggleUuidSeed(stateKey)`.
+    // State toggle: `state:<state key>`, the frozen seed for a paired toggle.
     case "state":
       return `state:${descriptor.id}`;
     default:
