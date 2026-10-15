@@ -62,6 +62,13 @@ the bound device already carries.
   unit. A sensor that declares no humidity renders exactly as today. No new config
   field, no editor change, no profile-version change: the config shape is
   unchanged and `@ts-ha/shared` is untouched.
+- **The weather widget composes for the box it is given** (design.md W7). Leading
+  with the ported 36 px icon affordance makes its stacked ambient layout taller
+  than its 3 × 3 minimum-span cell, so rather than clip against the frame the
+  widget resolves which of its parts to draw from the box the frame hands it — as
+  the scene tile already does: the condition and temperature always draw, the
+  humidity/wind detail row draws while the box holds it, and the forecast draws
+  only when the box holds both. The widget's declared minimum span is unchanged.
 - **Keep the record in agreement.** The design-system page
   (`design-system/ts-ha/pages/wall.md`) and the web-UI documentation
   (`docs/http/web-ui.md`) are updated for the single vocabulary, the re-derived

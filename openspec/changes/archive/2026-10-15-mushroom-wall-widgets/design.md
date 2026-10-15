@@ -201,6 +201,37 @@ there is no persisted-data migration — a version-2 profile written yesterday
 loads and renders identically in shape. The only published package that changes is
 `@ts-ha/web-ui` (its wall bundle), so exactly one changeset is added.
 
+### W7 — The weather widget composes for the box it is given
+
+The ported anatomy draws every supporting figure's glyph on the 36 px circular icon
+affordance, so the weather widget's stacked ambient layout (condition + temperature,
+then the humidity/wind detail row, then the forecast) no longer fits its **3 × 3**
+minimum-span cell — 182 px at the floors — once it leads with the ported affordance
+instead of a bare 18–26 px glyph. The frame is `overflow: hidden`, so the old
+composition would clip rather than page.
+
+Rather than clip, or lift the weather widget's minimum span (which would ripple into
+`span.ts`'s floors, the editor's reported floors, the registry assertions and the
+harness draft), the widget resolves which of its parts to draw from the renderer box
+the frame hands it — the pattern the scene tile already uses. The leading condition
+affordance and the temperature reading (what is read across a room) always draw; the
+humidity/wind detail row draws while the box holds it; the forecast draws only when
+the box holds both. The thresholds are the compositions' own budgets derived from
+`WALL_CARD_METRICS` and `WALL_TYPE_RAMP`, not literals.
+
+*Consequence to state plainly.* A weather widget at its default 3 × 3 span presents
+its current condition, temperature, humidity and wind; the forecast appears from the
+span that holds it (5 rows at the floors, where the row unit is at its 50 px
+minimum; 4 only at the row unit's 56 px ceiling). A 3 × 3 cell could not show the
+forecast un-clipped once the supporting figures took the ported icon size, so the
+composition makes the widget's real capacity explicit rather than silently
+truncating the forecast against the frame's edge. The widget's declared minimum span
+is unchanged (W6: no schema, no profile change).
+
+*Alternatives.* Raising the widget's minimum span was rejected for the ripple above;
+keeping the forecast and letting the frame clip was rejected because the wall's
+"Panel Fit" guarantee forbids a promised widget clipping its own content.
+
 ## Risks / Trade-offs
 
 - **Two guarantees move** (the 18 px body floor becomes 12 px and the label tier

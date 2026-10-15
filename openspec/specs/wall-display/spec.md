@@ -150,11 +150,15 @@ panel.
 The wall MUST apply a type scale sized for the card system it ports. The wall's
 type ramp MUST be owned by the wall, MUST declare a tier for a grouped readout
 distinct from the hero and metric tiers, and MUST declare its own minimum body
-size; no wall body text may render below that floor. The floor MUST be at least
-12 px — the ported card's secondary text size — and the ramp's readout tiers MUST
-remain above the dashboard's body scale. A readout's value MUST NOT be rendered
-separately from its unit, and a name too long for its card MUST be shortened
-rather than truncated to a prefix that several cards share.
+size; no wall body text may render below that floor. The floor MUST be the ported
+card system's secondary text size, and the wall MUST NOT declare a size below it.
+The ramp's readout tiers MUST remain above the dashboard's body scale, so a
+readout's value keeps the wall's own distance scale rather than being drawn at the
+ported card's text sizes; a widget's supporting text — its label, its captions and
+its secondary figures — MUST be drawn at the ported primary and secondary sizes. A
+readout's value MUST NOT be rendered separately from its unit, and a name too long
+for its card MUST be shortened rather than truncated to a prefix that several
+cards share.
 
 A widget's title MUST be shown only when the profile explicitly configures one;
 otherwise the widget's own content provides its labelling.
@@ -182,8 +186,19 @@ The wall MUST maintain a minimum gutter between widgets and from the panel edge.
 #### Scenario: The ramp defines the body floor
 
 - **WHEN** the wall's type ramp is read
-- **THEN** it declares a minimum body size of at least 12 px for wall text, and no
-  wall body text renders below it
+- **THEN** it declares a minimum body size equal to the ported card system's
+  secondary text size, and no wall body text renders below it
+
+#### Scenario: A readout's value is not shrunk to the card's type sizes
+
+- **WHEN** a widget presents a readout
+- **THEN** its value is drawn on the wall's own readout tier, above the ported
+  card's primary and secondary text sizes
+
+#### Scenario: Supporting text is drawn at the ported sizes
+
+- **WHEN** a widget presents a label, a caption, or a secondary figure
+- **THEN** it is drawn at the ported card system's primary or secondary size
 
 #### Scenario: The row unit holds the smallest card
 
@@ -271,7 +286,9 @@ configurable:
 - instantaneous energy and consumption
 - a room's devices as touch-operable tiles, including a room-wide command
 - the user's favorited devices as tiles
-- a temperature reading from a configured sensor device
+- a single configured device as its own control
+- a temperature reading from a configured sensor device, together with that
+  sensor's humidity reading where it declares one
 - a status and presence summary
 - one or more scene buttons that trigger an automation
 - a link that opens another named wall profile
@@ -285,6 +302,13 @@ card it presents rather than a single card serving every device. A widget MUST N
 be offered for a device class the bound device's capabilities cannot drive; a
 widget whose bound device cannot drive its class MUST report that inside its own
 area.
+
+A readout widget MUST present the readings its configured device declares, and
+MUST present a reading the device does not declare as absent rather than as an
+empty line or a placeholder: a temperature widget bound to a sensor that declares
+a humidity reading presents both, and one bound to a sensor that declares only a
+temperature presents only the temperature. Presenting a reading the bound device
+already declares MUST NOT require a second device or a per-profile setting.
 
 A widget whose backing feature is unconfigured — for example weather when no
 weather service is registered — MUST report the feature as unconfigured within
@@ -315,6 +339,20 @@ its own area, and MUST NOT prevent the rest of the profile from rendering.
   device
 - **THEN** the device's temperature reading is presented on the widget
 
+#### Scenario: A temperature widget shows its sensor's humidity
+
+- **WHEN** a temperature widget's bound sensor declares both a temperature
+  reading and a humidity reading
+- **THEN** both readings are presented on the widget, the humidity as its
+  secondary reading, each value with its own unit
+
+#### Scenario: A sensor without humidity shows only its temperature
+
+- **WHEN** a temperature widget's bound sensor declares a temperature reading and
+  no humidity reading
+- **THEN** only the temperature is presented, and no empty line or placeholder
+  stands where a humidity reading would be
+
 #### Scenario: An unknown temperature device is contained
 
 - **WHEN** a temperature widget's configured device is not, or is no longer,
@@ -344,9 +382,11 @@ its own area, and MUST NOT prevent the rest of the profile from rendering.
 
 The wall is operated by touch. Every interactive control a wall widget presents
 MUST meet a minimum touch target of at least 42 CSS pixels — the control height of
-the card system the wall ports — and adjacent controls MUST be separated by enough
-space that they are not easily confused. Every control MUST be operable without a
-hover interaction.
+the card system the wall ports — and MUST be drawn with that system's own control
+treatment, its control height and corner radius, so a wall control and a card's
+control cannot differ. Adjacent controls MUST be spaced by at least the ported
+card system's control spacing, so they are not easily confused. Every control MUST
+be operable without a hover interaction.
 
 State MUST NOT be conveyed by color alone, and any device control shown on a
 wall MUST behave as it does elsewhere in the product: reflected immediately,
@@ -358,11 +398,17 @@ command fails.
 - **WHEN** a wall widget presents an interactive control
 - **THEN** its touch target is at least 42 CSS pixels
 
+#### Scenario: A control is the ported control
+
+- **WHEN** a wall widget presents an interactive control
+- **THEN** its height and corner radius are the ported card system's control
+  height and radius, rather than a treatment the widget declares for itself
+
 #### Scenario: Adjacent controls are separated
 
 - **WHEN** a wall widget presents two or more adjacent controls
-- **THEN** they are separated by enough space that a touch intended for one does
-  not plausibly activate its neighbour
+- **THEN** they are separated by at least the ported card system's control
+  spacing, so a touch intended for one does not plausibly activate its neighbour
 
 #### Scenario: No interaction requires hover
 
@@ -871,10 +917,26 @@ depending on a successful connection.
 
 The wall MUST present its own visual language rather than inheriting the
 dashboard's design system, and MUST define its own colour, typography, spacing,
-radius, elevation, and motion tokens rather than aliasing another system's. A
-device card MAY draw the token table of the card system the wall ports, provided
-those values are declared once for the wall as the wall's own tokens, with the
-system they are ported from recorded, rather than restated per card.
+radius, elevation, and motion tokens rather than aliasing another system's.
+
+Every wall widget MUST be composed from the wall's single card vocabulary — the
+card system the wall ports, its anatomy and its token table — rather than from a
+vocabulary of its own. That vocabulary MUST present:
+
+- a leading circular icon affordance, a glyph on a tinted shape of the ported
+  icon size, wherever a widget leads with a glyph;
+- a primary line over a secondary line at the ported primary and secondary type,
+  rather than a per-widget treatment;
+- the ported card surface — its radius and its padding — wherever a widget draws
+  a surface, so a widget's surface and a device card's are the same surface; and
+- the ported control treatment for every control it presents.
+
+A readout MAY render its value on the wall's own readout tiers, provided those
+tiers stay above the ported type sizes. The wall MUST NOT carry a second card
+vocabulary: no widget MAY declare its own icon, surface, control, or supporting
+type treatment, and a value drawn from the ported table MUST be declared once as a
+wall token with the system it is ported from recorded rather than restated per
+widget.
 
 The wall MUST be dark-first: a true-black authoritative scheme that avoids
 full-white surfaces, suited to an always-on, low-light panel, with a light scheme
@@ -893,6 +955,24 @@ channel conveying any state.
 - **THEN** they are declared for the wall rather than aliasing the dashboard's
   design-system tokens
 
+#### Scenario: Every widget is composed from the ported anatomy
+
+- **WHEN** a wall renders a clock, a weather readout, an energy readout, a status
+  summary, a temperature readout, a scene control and a link affordance
+- **THEN** each presents the ported leading icon affordance and the ported primary
+  and secondary type, rather than a treatment of its own
+
+#### Scenario: The wall carries one card vocabulary
+
+- **WHEN** the wall's widgets are read
+- **THEN** every one draws its icon shape, its surface and its controls from the
+  ported table, and no widget draws a second treatment for any of them
+
+#### Scenario: A widget's surface is a card's surface
+
+- **WHEN** a control widget and a device card are rendered on one panel
+- **THEN** their surfaces share the ported card radius and padding
+
 #### Scenario: Both wall schemes are usable
 
 - **WHEN** the wall is rendered in either its dark or its light scheme
@@ -907,9 +987,9 @@ channel conveying any state.
 
 #### Scenario: A ported token table is declared once
 
-- **WHEN** a device card draws a value from the ported card system
+- **WHEN** a widget draws a value from the ported card system
 - **THEN** that value is declared once as a wall token with the ported system
-  recorded, rather than written into each card
+  recorded, rather than written into each widget
 
 #### Scenario: A device colour is an accent, not a surface
 
