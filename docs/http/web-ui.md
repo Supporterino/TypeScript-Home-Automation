@@ -254,48 +254,58 @@ validation), so a malformed composition is rejected rather than persisted
 
 The wall is drawn in **Hearth**, the wall's own visual language, whose stylesheet
 is loaded only with the wall and never by the dashboard (see
-[Asset delivery](#asset-delivery)). Its eleven widget types are: a clock/date
+[Asset delivery](#asset-delivery)). Its **eighteen** widget types are: a clock/date
 readout (client clock — no server data); current weather and, when the registered
 service provides it, a forecast; instantaneous and cumulative energy; a
 temperature reading from a configured sensor; a status/presence summary; a room's
-devices with an all-on/all-off room command; the user's favorites; a single
-configured device; one or more scene buttons that trigger an existing automation
-through the same manual-trigger path the admin interface uses; a **link** that
-opens another named wall profile; and a **device grid** over an explicitly
-selected set of devices (design.md D8). Each type has a fixed **grammar**:
-**ambient** readouts (clock, weather, energy, temperature, status) render
-chrome-less with large type directly on the background, while **control** widgets
-(room, favorites, device, scene, link, devices) render as surfaces whose whole
-card is the touch target. A widget whose backing feature is unconfigured — for
-example weather with no weather service registered — reports that inside its own
-area and never prevents the rest of the profile from rendering.
+devices with an all-on/all-off room command; the user's favorites; one or more
+scene buttons that trigger an existing automation through the same manual-trigger
+path the admin interface uses; a **link** that opens another named wall profile; a
+**device grid** over an explicitly selected set of devices; and **one typed device
+widget per device class** — `light`, `cover`, `fan`, `climate`, `lock`, `number`,
+`select`, and the `entity` fallback (design.md D8). Each type has a fixed
+**grammar**: **ambient** readouts (clock, weather, energy, temperature, status)
+render chrome-less with large type directly on the background, while **control**
+widgets (room, favorites, scene, link, devices, and every device widget) render as
+surfaces whose whole card is the touch target. A widget whose backing feature is
+unconfigured — for example weather with no weather service registered — reports that
+inside its own area and never prevents the rest of the profile from rendering.
 
-Device controls reuse the standard device tile in a **wall kiosk mode** — a size
-token that enlarges controls to the touch-target minimum, plus a presentation
-switch that omits the favorite, hide/unhide, and open-detail affordances and, for
-a toggle primary, makes the whole card the actuation target (a value-setting
-primary keeps its embedded control, since a bare tile activation cannot express
-the value). This is **not** a second device presentation: the capability ranking,
-optimistic override, and non-color state encoding stay single-source, so a wall
-control reflects, reconciles, and reverts exactly as it does elsewhere. (This is
-a wall-only revisit of `add-wall-display` design D7; the dashboard tile keeps its
-explicit open-detail affordance.)
+A device widget is **typed**: its own type determines the card it presents, so the
+wall renders one card per device class rather than one generic card for every
+device. Each type is bound to a single device and carries the card's `layout`
+(`default`, `vertical`, or `horizontal`) and a `collapsible_controls` flag that
+hides the card's actions row while the device is inactive. Every device widget is
+composed from the ported card anatomy — a tinted circular icon affordance, the
+device's name over its state or primary reading, and, where the device has controls,
+one actions row carrying the active control and the affordances for the others —
+and every control actuates through the shared optimistic channel
+(`reflect → reconcile → revert`), so a wall control reflects, reconciles, and
+reverts exactly as it does elsewhere. A widget bound to a device whose capabilities
+cannot drive its class reports that inside its own area instead of presenting an
+inert card, which is also how a device class the device sources cannot yet express
+behaves. See [Wall device cards](#wall-device-cards) below.
 
 ### Composition and panel fit
 
 A wall is composed to be read from across a room. Card heights follow each
 widget's declared span through a bounded row unit that reserves the panel padding
 and inter-row gutters
-(`clamp(56px, (availableHeight − chrome) / occupiedRows, 80px)`) rather than
+(`clamp(50px, (availableHeight − chrome) / occupiedRows, 56px)`) rather than
 stretching to fill the panel, so a small control is never inflated; `chrome`
 reserves the panel padding and the inter-row gaps, and the unit is bounded at
-**56 px** (`ROW_UNIT_MIN`, re-derived from the compact light card) and **80 px**
-(`ROW_UNIT_MAX`). Cards are separated from each other, and inset from the panel
-edge, by a single gutter of `clamp(16px, 2vmin, 24px)`. A widget title header is
-shown only when the profile explicitly configures one; otherwise the widget's own
-content labels it. The wall's density, row-unit bounds, gutter, and type ramp are
-recorded as a design-system page override
-(`design-system/ts-ha/pages/wall.md`).
+**50 px** (`ROW_UNIT_MIN`, derived from the smallest card the ported card system
+produces) and **56 px** (`ROW_UNIT_MAX`, the density ceiling just above it). Cards
+are separated from each other, and inset from the panel edge, by a single gutter of
+`clamp(16px, 2vmin, 24px)`. The row unit is only the vertical axis: a typed device
+widget's minimum (and default) span is **3 × 2**, its column count derived the same
+way the row unit is — the fewest columns whose cell is at least the widest bounded
+control row a card draws at its minimum span (the cover's Open/Stop/Close transport),
+so `3 · 50 + 2 · 16 = 182` clears that row's 174 px — and a card at that span never
+clips a control horizontally on either panel. A widget title header is shown only
+when the profile explicitly configures one; otherwise the widget's own content labels
+it. The wall's density, row-unit bounds, gutter, and type ramp are recorded as a
+design-system page override (`design-system/ts-ha/pages/wall.md`).
 
 Fitting is a **resolved outcome**, not a guess. A profile that occupies fewer rows
 than fill the panel keeps its natural height and is **centered**; a profile that
@@ -304,10 +314,14 @@ this panel"** explanation with a route to the editor, rather than degrading to a
 scroll. `overflowY: hidden` is set in every outcome: the wall **never scrolls**
 (design.md D5/D10). A widget whose *own* content cannot fit the span it was
 placed at does not scroll either — it **pages** its content and shows a page
-affordance. The device grid is the archetype, and the favorites and room tile
-grids resolve their tile area through the same pure pagination rule, so the
-wall's only overflow responses are an explanation (the authored composition) or a
-page (a widget's content).
+affordance. The device grid, the favorites grid, and a room's tiles all page
+through the same pure pagination rule, so the wall's only overflow responses are
+an explanation (the authored composition) or a page (a widget's content). A paged
+tile row is bounded against inflation as well
+as against clipping: a row is drawn at the height the plan resolved — at least the
+tile's own cell and at most **1.25×** it — and the widget centres the space its
+tiles do not use rather than stretching a tile into it, so a tile renders at a
+predictable size on every panel.
 
 ### Zones
 
@@ -337,9 +351,9 @@ The wall's type ramp is sized for viewing at distance and was reduced roughly
 | Tier | Size | Use |
 |---|---|---|
 | Hero | `clamp(36px, 5vmin, 76px)` | the clock time |
-| Metric | `clamp(26px, 3.6vmin, 54px)` | weather, energy, status; a roomy device readout |
+| Metric | `clamp(26px, 3.6vmin, 54px)` | weather, energy, status values; a roomy readout |
 | Band | `clamp(20px, 2.4vmin, 32px)` | a grouped readout (the climate band, or a readout on a small card) |
-| Title | `clamp(18px, 1.8vmin, 22px)` | device names, card titles |
+| Title | `clamp(18px, 1.8vmin, 22px)` | widget titles |
 | Label | 18 px | metric labels, uppercase card labels |
 | Body (floor) | 18 px | any other wall text |
 | Chip | 16 px | compact status chips (deliberate exception) |
@@ -350,41 +364,83 @@ and the metric at 39 px — both above the dashboard's 34 px ceiling. The
 readout renders on it at a small or default span and grows to the metric tier
 only on a genuinely roomy card, so a group of readouts does not compete with a
 card's hero. No wall body text renders below the 18 px body floor; the compact
-status chip is the one deliberate exception. A readout renders its value and unit
+status chip is the one deliberate exception. A **device card** draws neither ramp
+tier: it carries the ported card system's own type — **14 px/500** primary over
+**12 px/400** secondary, with a 42 px control height — which is the size floor
+those requirements now name for card text. A readout renders its value and unit
 as one non-breaking unit, and a name too long for its card is **shortened** — the
 distinguishing trailing words — rather than truncated to a prefix several cards
 share, with the full name kept in the card's `title`/`aria-label` (design.md D6).
 
 ### Wall device cards
 
-A wall device card selects its presentation from the device's ranked
-capabilities. The wall `light` card is a distinct wall-only design that presents
-**every control the device declares** — on/off, brightness, and colour
-temperature and colour only when declared — at the type's minimum span; only the
-*form* adapts:
+A wall device card is **typed**: the widget's own type selects the card, and one
+card per device class is offered rather than one card serving any device. The
+catalogue is keyed by the device's **capability profile**, not a Home Assistant
+domain (the capability vocabulary is open and each source labels its own kinds):
+`light`, `cover`, `fan`, `climate`, `lock`, `number`, `select`, and `entity` — the
+typed fallback that presents any device's name and state, so a switch, a read-only
+sensor, and a device of no class all have an answer. The cards are ported from
+[Lovelace Mushroom](https://github.com/piitaya/lovelace-mushroom) (Apache-2.0) and
+re-implemented in React; the attribution is recorded in
+[`THIRD_PARTY_NOTICES.md`](https://github.com/Supporterino/TypeScript-Home-Automation/blob/main/THIRD_PARTY_NOTICES.md).
 
-- **Compact form** (a card at its minimum span, the case the row-unit floor is
-  derived from): a 56 px on/off icon pill, the device's short name, its brightness
-  level (or `Off`), and the observation glyph on the first row, then a second row
-  of full-height **segments** — one per declared value control — where a segment
-  stands in for the full-width slider and spectrum bar a larger card draws. Each
-  segment is a range input and the whole segment is the touch target.
-- **Regular and roomy forms**: the same controls with room to breathe — the icon
-  pill, the name and readout, a full-width brightness bar, and, for each declared
-  colour capability, a spectrum bar above its slider.
+Every card is composed from the ported anatomy: a circular icon affordance (36 px,
+with a 24 px glyph) drawn on a tinted shape of the device's own colour — which is
+the on/off control where the device has one — the device's name over its state or
+primary reading, and one actions row carrying the active control as a slider with
+the device's other controls beside it as touch-sized affordances. Each control is
+bounded horizontally — an icon control is the ported 42 px control height wide, and
+an enumerated control draws one touch-sized option per permitted value, each label
+bounded to that same width with an ellipsis — so an actions row is bounded by its
+control count rather than by its labels, and a card at its minimum span never clips
+a control. An enumerated control whose permitted values do not fit the row at that
+42 px target — a select card's values, a thermostat's mode, a fan's presets — draws
+a single dropdown affordance carrying them all instead, so no option shrinks below
+the target and every value stays reachable. The metrics are the ported ones, declared
+once as Hearth tokens: **42 px** control height (the
+wall's touch target) and slider height, **12 px** control radius, control spacing,
+card radius, and slider track radius, **10 px** card padding, **14 px/500** primary
+over **12 px/400** secondary type, and a **10 px** slider bar thumb. The slider
+keeps a native range input and redraws only its chrome, so the control stays
+keyboard- and touch-operable at the ported height.
 
-In both forms the bar's off state turns the light on when activated, and actions
-go through the same optimistic channels; a failed command reverts and surfaces
-inline. This is a wall-only departure from the one-dominant-action rule; the
-dashboard tile keeps its single dominant action.
+- **Light** — the icon affordance is the on/off control (state carried by the
+  glyph's fill as well as its colour); the name sits over the brightness reading or
+  `Off`; and the actions row carries the active control as the slider — brightness,
+  colour temperature, or colour, whichever the device declares — with the other
+  declared controls beside it. Operating a control while the light is off turns it
+  on first.
+- **Cover** — discrete, touch-friendly transport rather than a bare position
+  slider: the position (when the device has one) is the primary reading, and the
+  actions row carries Open, Stop, and Close, offering Stop **only** when a writable
+  property can express it.
+- **Fan** — the icon affordance is the on/off control, the name sits over the
+  percentage reading, and the actions row carries the percentage as a slider with
+  the presets beside it.
+- **Climate** — the name sits over the temperature reading, and the actions row
+  carries the setpoint as a slider with the thermostat's mode beside it.
+- **Lock** — the name sits over its locked/unlocked reading, and the actions row
+  carries Lock and Unlock, the one matching the reported state marked active.
+- **Number** and **Select** — the bounded numeric control (a slider) and the
+  enumerated control as the sole action: one touch-sized option per permitted value
+  where they fit its row at the 42 px target, or a single dropdown affordance
+  carrying every value where they do not. A control the device cannot express is not
+  presented at all.
+- **Entity** — the typed fallback: the icon affordance and the name over the state.
+  Where the device's primary action is a pure toggle the whole card is the actuation
+  target; where the device has no actuatable property the reading becomes the card's
+  dominant content, with no control and no navigation affordance.
 
-A cover presents discrete **Open / Close / Stop** transport at the wall's minimum
-touch target rather than a bare position slider, offering Stop only when a
-writable property can express it. On the wall a device card presents no favorite
-toggle, no hide/unhide toggle, and no explicit open-detail affordance, and the
-observation is demoted to a glyph-only non-textual indicator (its label and polled
-age stay in `title`/`aria-label`). A device card inside a widget frame — including
-each tile of a device grid — draws one surface, never a surface inside another.
+Each card resolves its composition from the box it is given, so a taller box
+composes a richer form rather than inflating the smaller one, and a card's
+`layout` and `collapsible_controls` options are honoured without reflowing the card
+into a different one. On the wall a device card still presents no favorite toggle,
+no hide/unhide toggle, and no explicit open-detail affordance, and the observation
+is demoted to a glyph-only non-textual indicator (its label and polled age stay in
+`title`/`aria-label`). A device card inside a widget frame — including each tile of
+a device grid, which renders the card of **its own** device class — draws one
+surface, never a surface inside another.
 
 ### Cross-wall navigation
 
@@ -405,24 +461,36 @@ than a second composition model.
 
 A `devices` widget (`{ qualifiedIds, title? }`) renders the device set the author
 selected **explicitly** (never an enumeration of the whole inventory) as a uniform
-grid of the shared wall device card at its minimum span, so ranking, optimistic
-override, and state encoding stay single-source (design.md D12). Its minimum span
-is 4 × 4 — two tile columns by two tile rows — so it cannot be placed too small to
-present a page. It **pages rather than scrolls**: one page is drawn at a time with
-a `‹ n / m ›` page affordance, drawn only while the selection pages, and a
-selection that fits is one page. An empty selection explains itself inside the
-widget's own area, and the editor reports how many pages a selection implies so an
-author sees a large selection's cost before saving.
+grid of the typed wall device cards at their minimum span — a **3 × 2** cell, the
+tile the packing counts — each tile presenting the card of **its own** device class
+— so ranking, optimistic override, and state encoding stay single-source
+(design.md D12). Its minimum span is **6 × 4** — two three-column tile columns by two
+tile rows — so it cannot be placed too small to present a page. A span presents
+`floor(columns / 3)` tiles across, so a twelve-column span presents **four** across,
+an eight- or six-column span **two**, and a four-column span **one**.
+It **pages rather than scrolls**: one page is drawn at a time with a `‹ n / m ›`
+page affordance, drawn only while the selection pages, and a selection that fits is
+one page. Each tile row is drawn at the height the plan resolved — at least the
+tile's own cell, at most 1.25× it — and the widget centres the space its tiles do
+not use rather than inflating a tile into it. An empty selection explains itself
+inside the widget's own area, and the editor reports how many pages a selection
+implies so an author sees a large selection's cost before saving.
 
 ### Editing
 
 The wall itself is **read-only**: it presents no control for adding, removing, or
 editing a widget. Profiles are created and configured at `/walls`, an ENGINE
 navigation entry with its own reloadable URL. The editor configures a widget's
-zone, a link's target profile, and a device grid's selected devices, and presents
-the draft at the wall's target panel aspect ratio (1920 × 1080) with a fit verdict
-and a device grid's page count — refusing to save a draft the resolver reports as
-unfittable. When a profile is saved or deleted, the `wall` realtime event reaches
+zone, a link's target profile, a device grid's selected devices, and a typed device
+widget's bound device (offering only the devices whose capabilities can drive that
+widget's class) together with the card's layout and inactive-controls setting, and
+presents the draft at the wall's target panel aspect ratio (1920 × 1080) with a fit
+verdict and a device grid's page count — refusing to save a draft the resolver
+reports as unfittable. The editor reads and writes the current profile version
+(**2**); a profile stored at version 1 is migrated on load — a widget that named one
+device becomes that device's typed widget at the same placement, and a widget that
+named a set of devices keeps its selection — so no saved wall is lost. When a
+profile is saved or deleted, the `wall` realtime event reaches
 every open wall displaying it, which re-renders without a reload; a profile
 deleted while open — or one that never existed — is replaced with an explanatory
 state and a route back to the editor rather than a blank panel (design.md D9).
@@ -617,6 +685,17 @@ energy/weather views, Prism and its grammars — is lazily loaded behind
 > [Configuration](../configuration.md#breaking-changes-for-upgrading-operators)
 > for that migration note. It does not affect the rebuilt web UI itself,
 > which was already written against the unified endpoints.
+
+> **The wall's device cards and its profile shape changed.** The wall now renders
+> one typed card per device class at the ported card system's own metrics — a 42 px
+> control height, 14 px/500 primary over 12 px/400 secondary type, and a 36 px icon
+> with a 24 px glyph — instead of the generic card at the wall's former 56 px
+> touch target and 18 px device-card floor, so an existing wall renders smaller text
+> and smaller drag targets. The wall profile contract went to version **2**
+> (per-class device widget types, each with its own config); a stored version-1
+> profile is migrated on load rather than rejected, but a version-2 profile cannot be
+> loaded by an older build — see
+> [Wall device cards](#wall-device-cards) above.
 
 ---
 

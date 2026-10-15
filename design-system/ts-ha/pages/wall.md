@@ -68,6 +68,7 @@ value in **both** schemes.
 | `--hearth-danger` | `#f0716f` | `#b3261e` | unreachable / failed |
 | `--hearth-info` | `#74b6ff` | `#1f5fbf` | informational |
 | `--hearth-accent` | `#f0a35e` | `#b45309` | interactive accent |
+| `--hearth-accent-faint` | `rgba(240,163,94,0.2)` | `rgba(180,83,9,0.2)` | the accent at 20 % alpha — a device card's slider field when the device reports no colour |
 | `--hearth-accent-fg` | `#1b1103` | `#fff8ef` | text on accent |
 | `--hearth-focus` | `#ffca8a` | `#8a4a08` | keyboard focus ring |
 | `--hearth-scrim` | `rgba(0,0,0,0.72)` | `rgba(12,10,8,0.5)` | overlay scrim |
@@ -80,6 +81,11 @@ scheme also declares its own `color-scheme`.
 `--hearth-band` is the wall's **one container field**: a surface slightly lifted
 from the canvas and held below a member tile's surface, so a zone can group its
 members without nesting one surface inside another (see "Zones").
+
+`--hearth-accent-faint` is the interactive accent at 20 % alpha. It is the field a
+device card's slider draws when the device reports no colour of its own, so the
+control is never left colourless and the device's colour is never asked to be a
+surface (see "Wall device cards").
 
 **State encoding is never colour alone.** On a true-black panel the shape/fill of a
 glyph or a label always accompanies the colour — an on/off affordance changes the
@@ -101,9 +107,9 @@ roughly **25–30 % smaller** on the panel.
 | Tier | Size | Use |
 |---|---|---|
 | Hero | `clamp(36px, 5vmin, 76px)` | the clock time |
-| Metric | `clamp(26px, 3.6vmin, 54px)` | weather, energy, status; a roomy device readout |
+| Metric | `clamp(26px, 3.6vmin, 54px)` | weather, energy, status values; a roomy readout |
 | Band | `clamp(20px, 2.4vmin, 32px)` | a grouped readout (the climate band, or a readout on a small card) |
-| Title | `clamp(18px, 1.8vmin, 22px)` | device names, card titles |
+| Title | `clamp(18px, 1.8vmin, 22px)` | widget titles |
 | Label | 18 px | metric labels, uppercase card labels, band captions |
 | Body (floor) | **18 px** | any other wall text |
 | Chip | 16 px | compact status chips (deliberate exception) |
@@ -120,6 +126,13 @@ so a group of readouts does not compete with a card's hero.
 `--text-base`): no wall body text may render below it. The compact status-chip
 exception is the one deliberate case beneath the floor.
 
+A **device card** draws neither tier: it carries the ported card type from the
+table under "Wall device cards" — 14 px/500 primary over 12 px/400 secondary —
+which is the ported card system's own scale. The ported secondary size (12 px) is
+the floor the spec names for it, below the ramp's 18 px body floor; every other
+piece of wall text (widget titles and labels, ambient readouts, page controls,
+contained explanations) still renders at or above the 18 px floor.
+
 Weights are 500 / 600 / 700 and leading is 1.05 (tight) / 1.2 (snug) / 1.45 (body).
 
 ## Spacing, radius, elevation, motion
@@ -128,7 +141,9 @@ Weights are 500 / 600 / 700 and leading is 1.05 (tight) / 1.2 (snug) / 1.45 (bod
   (`--hearth-space-1` … `--hearth-space-7`).
 - Radius: `--hearth-radius-sm` 10 px, `-md` 16 px, `-lg` 24 px, `-pill` 999 px.
   A zone band and a control card both draw `-md`; the band is the one other
-  consumer of it.
+  consumer of it. A **device card** draws its own ported radii instead —
+  `--hearth-card-radius` and `--hearth-card-control-radius`, both **12 px** (see
+  "Wall device cards").
 - Elevation: `--hearth-e0` none — a resting card is flat on the panel's black,
   separated by the hairline; `--hearth-e1` `0 1px 2px rgba(0,0,0,0.6)` — a raised
   control; `--hearth-e2` `0 18px 44px rgba(0,0,0,0.7)` — a pressed tile or
@@ -144,18 +159,34 @@ Weights are 500 / 600 / 700 and leading is 1.05 (tight) / 1.2 (snug) / 1.45 (bod
 ## Kiosk touch targets and separation
 
 The wall is operated by touch from a distance, so every interactive control meets a
-**kiosk-class minimum of 56 CSS pixels** — `WALL_MIN_TOUCH_TARGET` in
-`wall/registry.ts` — and the wall tile's embedded controls are sized to the same
-target (`wallTileMetrics("wall").control` in `wall/scale.ts`). A page control, a
-link, and a device grid's tiles are all built on that same target, so navigation
-and paging are as operable as a device's own control.
+**minimum of 42 CSS pixels** — `WALL_MIN_TOUCH_TARGET` in `wall/registry.ts` — which
+is the ported card system's own **control height** (the `--hearth-card-control-height`
+token, and `WALL_CARD_METRICS.controlHeight`). The wall's own affordances are sized
+to the same target (`wallTileMetrics("wall").control` in `wall/scale.ts`), so a page
+control, a link, a scene tile, and a device grid's tiles are all as operable as a
+device card's own control. The icon affordance of a card is the one control whose
+*visible* shape is smaller than the target (the ported 36 px circle); the control's
+own box is the full 42 px, so the touch target is met without enlarging the glyph.
 
 Adjacent controls keep at least an **8 px** separation — `WALL_MIN_CONTROL_GAP` in
 `wall/registry.ts`, matching `--hearth-space-2` — so a touch intended for one
-cannot plausibly activate its neighbour. Rows of controls may space further (the
-light card's regular stack uses 12 px, its compact control row uses 8 px), but never
-less. Every control is operable without a hover interaction; no affordance depends
-on a pointer.
+cannot plausibly activate its neighbour. A device card's actions row spaces its
+controls by the ported **12 px** control spacing
+(`--hearth-card-control-spacing`), which is a floor the card draws with, not a
+ceiling: the wall's own rows may space further but never less. Each control is also
+bounded horizontally — an icon control is exactly the ported **42 px** control
+height wide, and an enumerated control draws one touch-sized option per permitted
+value, each label bounded to that same width with an ellipsis (`WallCardOption` in
+`wall/cards/card-anatomy.tsx`) — so a row of options is bounded exactly as a row of
+icon controls and a card's actions row is bounded by its control count rather than by
+its labels. A select card's values, a thermostat's mode, and a fan's presets are all
+this one control: where its permitted values do not fit its row at that **42 px**
+target, it draws a single dropdown affordance carrying them all
+(`WallCardDropdown`) instead, so no option ever shrinks below the target and every
+value stays reachable. That bound is what makes the widest control row a finite
+width, and so what a typed device widget's minimum *column* span is derived from (see
+"Grid rhythm and panel fit"). Every control is operable without a hover interaction;
+no affordance depends on a pointer.
 
 ## Grid rhythm and panel fit
 
@@ -163,21 +194,40 @@ The grid is the wall's one placement layer: a fixed 12 columns, with each widget
 each zone band) drawn at the cell box its configuration declares.
 
 - **Row unit** — one grid row is
-  `clamp(56px, (availableHeight − chrome) / occupiedRows, 80px)`, never `1fr`,
+  `clamp(50px, (availableHeight − chrome) / occupiedRows, 56px)`, never `1fr`,
   where `chrome = 2·g + (occupiedRows − 1)·g` with `g` the gutter's 24 px upper
   bound (reserving padding and inter-row gutters, so a profile that fits is not
-  pushed past the panel by its own chrome). `ROW_UNIT_MIN` = **56 px**,
-  `ROW_UNIT_MAX` = **80 px**. A card's height tracks its declared `h` span times
+  pushed past the panel by its own chrome). `ROW_UNIT_MIN` = **50 px**,
+  `ROW_UNIT_MAX` = **56 px**. A card's height tracks its declared `h` span times
   this unit, so a small widget is never inflated to fill the panel, and an empty
   profile resolves to the ceiling.
 - **The floor is derived, not chosen** — it is the row unit at which a minimum-span
-  `device` cell (2 rows) holds the compact wall light card with nothing to spare:
-  the card needs 2 touch-target rows plus a one-control-gap surface inset per side
-  (**128 px**), so `2 · ROW_UNIT_MIN + 16 = 128` ⇒ **56**. Moving the compact card
-  moves the floor with it; `wall-grid.test.ts` asserts the derivation against the
-  wall's real touch target, control gap, and device minimum span. Because the
-  reduced scale lowers this floor, the `tooLarge` outcome becomes rarer with it
-  rather than more common.
+  device cell (2 rows) holds the smallest card the ported card system produces with
+  nothing to spare. That card's own budget is **116 px**: its 10 px inset, its 42 px
+  icon row, and its 42 px control row plus the ported 12 px control spacing
+  (`WALL_CARD_COMPACT_HEIGHT_PX` in `wall/cards/card-composition.ts`, read by
+  `wall/grid.ts` rather than restated), so
+  `2 · ROW_UNIT_MIN + 16 = 116` ⇒ **50**. Moving the ported card moves the floor with
+  it; `wall-grid.test.ts` asserts the derivation against the card's real compact
+  height, the gutter floor, and the typed device widget's minimum span. The ported
+  card is smaller than the scale it replaced, so the floor drops with it and an
+  authored composition that fit the panel before is still able to fit.
+- **The width floor is derived the same way** — a typed device widget's minimum
+  (and default) *column* span is the fewest columns whose cell, at the wall's
+  floors, is at least the widest control row a card draws at its minimum span: the
+  cover's three-control Open/Stop/Close transport, the widest bounded row the ported
+  anatomy produces, **174 px** wide (`WALL_CARD_CONTROL_ROW_MIN_WIDTH_PX` in
+  `wall/cards/card-composition.ts`). A `w`-column cell is
+  `w · unit + (w − 1) · gutter` wide, so
+  `3 · 50 + 2 · 16 = 182 ≥ 174` and `WALL_MIN_DEVICE_COLUMNS` = **3** — a card at
+  its type's minimum span never clips a control horizontally, on either panel. The
+  width axis never feeds the row derivation above, so the row unit is unchanged;
+  `wall-grid.test.ts` asserts the derivation against the card's real row width and
+  the typed device widget's minimum span.
+- **The ceiling is a density choice, not a derivation** — it sits just above the
+  floor (**56 px**) so a two-row device cell is not inflated to a block far taller
+  than the 116 px card it holds. `wall-grid.test.ts` asserts it stays above the
+  floor and near it.
 - **Composition** — a profile occupying fewer rows than the panel keeps its natural
   height and is **centered** (`alignContent: center`); each card keeps its
   span-derived height rather than stretching. The row unit is measured live from the
@@ -208,10 +258,10 @@ height, the panel's usable height, and an explicit verdict:
 `wallGridStyle` sets `overflowY: hidden` (and `overflowX: hidden`) in **every**
 outcome; the former `auto` branch is gone, because a wall panel that scrolls is
 broken by definition. A widget whose *own* content cannot fit the span it was placed
-at does not overflow either: it **pages** its content and shows a page affordance
-(the device grid is the one such widget). So there is no scroll anywhere on the
-wall — overflow becomes an explanation (the authored composition) or a page (the
-widget's content).
+at does not overflow either: it **pages** its content and shows a page affordance —
+the device grid, a room's tiles, and the favorites grid all page through the one
+shared rule. So there is no scroll anywhere on the wall — overflow becomes an
+explanation (the authored composition) or a page (the widget's content).
 
 The editor resolves the same verdict from the same pure module, at the panel's own
 height, and **refuses to save a draft it reports as `tooLarge`**. A draft the editor
@@ -256,9 +306,9 @@ The tier is derived from the widget **type's own registry spans** — the `min`,
 the composition tier and the legal spans cannot drift:
 
 - **`compact`** — the placement's area is no larger than the midpoint between the
-  type's `min` and `defaults` areas. A type whose default *is* its minimum (`device`,
-  `scene`) therefore always receives the compact composition at its smallest legal
-  card.
+  type's `min` and `defaults` areas. A type whose default *is* its minimum (every
+  typed device widget, and `scene`) therefore always receives the compact
+  composition at its smallest legal card.
 - **`roomy`** — the area is at or above the midpoint between `defaults` and `max`.
 - **`regular`** — everything between, which includes the type's default placement.
 
@@ -297,8 +347,9 @@ A contained explanation (`WallCardMessage`) fills a widget's own area for an
 unconfigured, empty, or unavailable state; a pressable control uses `WallButton`,
 and a route affordance (the link widget) draws the same pill through
 `wallAffordanceStyle()` — so a control and a route cannot drift apart visually. Both
-are at least 56 px in **both** directions, which matters for an icon-only
-affordance.
+are at least 42 px in **both** directions, which matters for an icon-only
+affordance. A **device card** does not draw this vocabulary: it is composed from the
+ported card anatomy under "Wall device cards", which supersedes it for devices.
 
 ### Widget grammar
 
@@ -308,12 +359,14 @@ frame draws a surface:
 - **Ambient** — `clock`, `weather`, `energy`, `temperature`, `status`. Rendered
   **chrome-less** with the vocabulary's stat form — a leading glyph, a label, and
   the value on the ramp, directly on the panel. They are read, not touched.
-- **Control** — `room`, `favorites`, `device`, `scene`, `link`, `devices`. Rendered
-  as a Hearth surface tile (`--hearth-surface`, `--hearth-hairline`,
-  `--hearth-radius-md`) with a head (glyph + title), a metric, and the affordance
-  slot. The `device` widget's frame is chrome-less so its single device card owns
-  the surface; the `devices` widget's frame draws the surface and its tiles draw
-  none, so a grid of tiles is still a single surface.
+- **Control** — `room`, `favorites`, `scene`, `link`, `devices`, and the eight
+  typed device widgets (`light`, `cover`, `fan`, `climate`, `lock`, `number`,
+  `select`, `entity`). Rendered as a Hearth surface tile (`--hearth-surface`,
+  `--hearth-hairline`, `--hearth-radius-md`) with a head (glyph + title), a metric,
+  and the affordance slot. A **typed device widget's** frame is chrome-less, so its
+  card owns the surface and draws on the ported metrics; the `devices` widget's
+  frame draws the surface and its tiles draw none, so a grid of tiles is still a
+  single surface.
 
 ### Widget catalog and spans
 
@@ -323,17 +376,33 @@ same three spans.
 
 | Type | Grammar | Min (w × h) | Default | Max |
 |---|---|---|---|---|
-| `clock` | ambient | 3 × 2 | 6 × 3 | 8 × 4 |
+| `clock` | ambient | 2 × 2 | 4 × 2 | 8 × 4 |
 | `weather` | ambient | 3 × 3 | 3 × 3 | 8 × 8 |
 | `energy` | ambient | 3 × 3 | 4 × 4 | 8 × 8 |
 | `room` | control | 4 × 6 | 6 × 6 | 12 × 10 |
 | `favorites` | control | 3 × 5 | 6 × 6 | 12 × 8 |
-| `device` | control | 2 × 2 | 2 × 2 | 6 × 6 |
 | `temperature` | ambient | 2 × 2 | 3 × 2 | 6 × 4 |
 | `status` | ambient | 3 × 2 | 4 × 3 | 8 × 6 |
 | `scene` | control | 2 × 2 | 2 × 2 | 6 × 4 |
 | `link` | control | 2 × 2 | 3 × 2 | 6 × 4 |
-| `devices` | control | 4 × 4 | 6 × 4 | 12 × 12 |
+| `devices` | control | 6 × 4 | 6 × 4 | 12 × 12 |
+| `light` | control | 3 × 2 | 3 × 2 | 6 × 6 |
+| `cover` | control | 3 × 2 | 3 × 2 | 6 × 6 |
+| `fan` | control | 3 × 2 | 3 × 2 | 6 × 6 |
+| `climate` | control | 3 × 2 | 3 × 2 | 6 × 6 |
+| `lock` | control | 3 × 2 | 3 × 2 | 6 × 6 |
+| `number` | control | 3 × 2 | 3 × 2 | 6 × 6 |
+| `select` | control | 3 × 2 | 3 × 2 | 6 × 6 |
+| `entity` | control | 3 × 2 | 3 × 2 | 6 × 6 |
+
+The eight typed device widgets share one `{ qualifiedId, layout?, collapsible_controls? }`
+config: their `3 × 2` minimum and default is the smallest legal placement — three
+columns, the width derived from the widest bounded control row a card draws, by two
+rows, the cell the row unit is derived to hold a compact device card in with nothing
+to spare — and `6 × 6` lets a card be enlarged to the roomiest composition the wall
+draws (see "Grid rhythm and panel fit" and "Wall device cards"). The `devices`
+widget's `6 × 4` minimum is two three-column tile cells by two tile rows, so a
+device grid can never be placed too small to page.
 
 ### Redesigned widgets
 
@@ -343,20 +412,22 @@ same three spans.
   its default span, the metric tier only when the card is roomy. A device that is
   unknown, unavailable, or reports no temperature is contained inside the widget's
   own area and never prevents the rest of the profile from rendering.
-- **Readout card** — a chrome-less, non-navigable card for a device with no
-  actuatable property: a leading readout glyph, the value on the tier its span calls
-  for (muted when unreachable), and a quiet uppercase label. No control surface
-  competes with the reading.
-- **Scene tile** — a leading scene glyph in a 56 px tile at its minimum span, with
-  the whole tile as the trigger affordance. At that span the glyph sits **beside**
-  the label (the default placement's anatomy); a scene card with room centres a
-  larger glyph **over** the label rather than repeating the minimum-span row. Pressed
-  and busy are paint-only states (background, elevation, and a spinner in place of
-  the glyph), so the tile does not shift while it is operated; a failed trigger is
-  surfaced on the tile itself.
+- **Read-only devices** — a device with no actuatable property renders through the
+  typed `entity` card's read-prominent composition (see "Wall device cards"): the
+  reading is the card's dominant content on the wall's own group-readout tier, the
+  name takes the quiet ported secondary line, and no control surface competes with
+  the reading. There is no separate readout card type.
+- **Scene tile** — a leading scene glyph at the wall's 42 px touch target at its
+  minimum span, with the whole tile as the trigger affordance. At that span the glyph
+  sits **beside** the label (the default placement's anatomy); a scene card with room
+  centres a larger glyph **over** the label rather than repeating the minimum-span
+  row. Pressed and busy are paint-only states (background, elevation, and a spinner
+  in place of the glyph), so the tile does not shift while it is operated; a failed
+  trigger is surfaced on the tile itself.
 - **Link** — opens another named wall profile; see below.
 - **Device grid** — an explicitly selected device set, paged; see below.
-- **Light card** — redesigned on the wall-only `light` archetype (below).
+- **Device cards** — one typed card per device class, ported from
+  `piitaya/lovelace-mushroom`; see "Wall device cards".
 
 ### Link
 
@@ -389,98 +460,218 @@ one profile.
 
 A `devices` widget (`{ qualifiedIds, title? }`) renders the device set the author
 selected **explicitly** (never an enumeration of the whole inventory) as a uniform
-grid of the shared wall device card.
+grid of the wall's typed device cards.
 
-- Each tile is the device card at its **minimum span** — 2 × 2 cells, the cell the
-  row-unit floor is derived for — so every tile carries the compact light card and
-  the same touch target as a device card anywhere else on the wall. Ranking,
-  optimistic override, and state encoding stay single-source.
+- Each tile is a device card at its **minimum span** — 3 × 2 cells, the cell the
+  row-unit floor is derived for and the cell the tile packing counts — and presents
+  the card of **its own device class**, so a grid of a bulb, a blind, and a sensor
+  draws three different cards at the same size and the same touch target as a placed
+  device widget. Ranking, optimistic override, and state encoding stay single-source.
 - The frame draws the card's surface and the tiles draw none, so the grid is a single
   surface however many tiles it holds.
-- The type's minimum span is **4 × 4** — two tile columns by two tile rows — so a
-  device grid cannot be placed too small to present a page.
+- The type's minimum span is **6 × 4** — two three-column tile columns by two tile
+  rows — so a device grid cannot be placed too small to present a page.
 - **It pages rather than scrolls.** `wall/pages.ts` resolves how many tiles fit along
-  each axis at the panel's row unit, keeping an 8 px gap between tiles, and the grid
-  draws exactly one page, with a `‹ n / m ›` page affordance drawn only while the
-  selection pages. A selection that fits is one page; a larger one is
+  each axis at the panel's row unit — a span presents `floor(columns / 3)` tiles
+  across, so a twelve-column span presents **four** across, an eight- or six-column
+  span **two**, and a four-column span **one** — keeping an 8 px gap between tiles,
+  and the grid draws exactly one page, with a `‹ n / m ›` page affordance drawn only
+  while the selection pages. A selection that fits is one page; a larger one is
   `ceil(count / tilesPerPage)` pages. A row unit below the wall's floor (a panel not
   yet measured) reads as the floor, so the plan degrades to the smallest cell the
   wall ever draws rather than dividing by an unknown unit.
+- **A tile row is bounded against inflation.** Each row is drawn at the height the
+  plan resolved — never taller than **1.25 ×** the tile's own cell
+  (`WALL_TILE_ROW_HEIGHT_CAP`), and never shorter than it — and the widget centres
+  the space its tiles do not use rather than stretching a tile into it. The bound
+  changes no page count: the pitch still packs the tiles as it always did.
 - A paging grid reserves its own chrome from the span's height before packing tiles —
-  the frame's 16 px inset above and below, one 56 px page-control row, and the 8 px
-  gap separating it from the tiles, **96 px** in all — so a promised page always fits
+  the frame's 16 px inset above and below, one 42 px page-control row, and the 8 px
+  gap separating it from the tiles, **82 px** in all — so a promised page always fits
   the card. Empty space is never reserved for a control that is not drawn.
-- Page controls meet the wall's minimum touch target, and a tile actuates exactly as
-  a wall device card does elsewhere. A selection edit that removes pages moves an
-  open wall back onto a real page rather than a blank one.
+- Page controls meet the wall's 42 px minimum touch target, and a tile actuates
+  exactly as a wall device card does elsewhere. A selection edit that removes pages
+  moves an open wall back onto a real page rather than a blank one.
 - An empty selection explains itself inside the widget's own area.
 - The editor reports how many pages a selection implies, so an author sees a very
   large selection's cost before saving.
 
 ## Wall device cards
 
-A device card selects its presentation from the device's ranked capabilities. The
-wall reuses the shared device tile (`components/DeviceTile.tsx`) in its
-`size="wall"` mode: capability ranking, the optimistic
-`reflect → reconcile → revert` channel, and non-colour state encoding remain
-single-source, and the dashboard's rendering is untouched.
+A wall device card is **typed**: one widget type and one card module per device
+class, rather than one generic card serving every device. The cards are ported from
+`piitaya/lovelace-mushroom` (Apache-2.0) into this repository's GPL-3.0 Hearth
+language — the anatomy and the token values are ported, no Mushroom source is
+vendored, and the attribution is recorded below. Mushroom's cards are `LitElement`
+classes bound to Home Assistant's frontend (they read a `hass` object and render
+`ha-*`/`hui-*` elements), so they cannot be imported; what ports exactly is the card
+tree and its metrics.
 
-### Light card (wall-only)
+The wall/dashboard divergence is deliberate: the dashboard keeps the shared
+`components/DeviceTile.tsx` and its archetype ranking untouched, and the wall no
+longer uses it at all.
 
-The wall `light` archetype is a distinct design, not the dashboard tile with larger
-type. It presents **every control the device declares** at every span — on/off,
-brightness, and colour-temperature and colour **only** when declared — and only the
-*form* adapts to the span. There are two forms:
+### The catalogue
 
-**Compact form** — used when a wall light card sits at its minimum span, the case
-the row-unit floor is derived from. It is exactly two touch-target rows:
+One card per device class, resolved from the device's **capability profile** —
+never a Home Assistant domain, because the capability vocabulary is open and each
+source labels its own kinds (`wall/cards/device-class.ts`). The wall widget and the
+Mushroom card it ports:
 
-- a 56 px pill whose icon (filled when on, outline when off) is the on/off control,
-  marked `aria-pressed` and disabled while unreachable; state is carried by
-  shape/fill and the on/off token, never hue alone;
-- beside it the device's **short name** on the title tier, its brightness level as a
-  percentage (normalised against the capability's own range) or `Off` on the
-  readout tier, and the observation glyph;
-- a second row of full-height **segments**, one per declared value control: brightness
-  on a raised-surface track, colour-temperature as an info → accent spectrum, colour
-  as a full spectrum. Each segment is a range input and the whole segment is the
-  touch target, so the control keeps the wall's minimum size inside a minimum-span
-  card.
+| Mushroom card | Wall widget | Driven by | Status |
+|---|---|---|---|
+| light | `light` | `kind: "light"`, or a writable brightness / colour temperature / colour channel | in scope |
+| cover | `cover` | `kind: "cover"`, a writable position, or a writable transport action | in scope |
+| fan | `fan` | `kind: "fan"` (percentage, presets) | in scope |
+| climate | `climate` | `kind: "climate"`, or a writable setpoint property | in scope |
+| lock | `lock` | `kind: "lock"` | in scope |
+| number | `number` | a writable numeric with a declared range | in scope |
+| select | `select` | a writable enum with permitted values | in scope |
+| entity | `entity` | any device: name + state, whole-card actuation where the primary action is a toggle | in scope (fallback) |
+| switch | `entity` | `kind: "switch"` / `"outlet"` | in scope via `entity` |
+| media player | — | no capability kind today | pending |
+| vacuum | — | no capability kind today | pending |
+| person | — | no capability kind today | pending |
+| alarm control panel | — | no capability kind today | pending |
+| update | — | no capability kind today | pending |
+| humidifier | — | no capability kind today | pending |
 
-The compact card's inset is one control gap (8 px) per side, so its composition is
-exactly the 128 px the row-unit floor was derived from — it never overflows and never
-drops a declared control.
+`entity` is the handled fallback, so "no generic card" does not mean "no answer for
+an unclassified device". A widget bound to a device its class cannot drive reports
+that inside its own area rather than rendering an inert card — which is also how the
+six pending classes behave until the device sources can express them.
 
-**Regular and roomy forms** — the same controls with room to breathe: a 56 px icon
-pill; the short name on the title tier with the brightness readout beside it; a
-full-width brightness bar in the accent colour when the light is on and the off
-token when it is not; and, for each declared colour capability, a spectrum bar above
-a slider that drives it.
+Every typed device widget shares one config:
+`{ qualifiedId, layout?, collapsible_controls? }`. `layout` is `default` /
+`vertical` / `horizontal`, and `collapsible_controls` hides a card's actions row
+while the device is inactive — Mushroom's two options that mean something on a wall.
+Mushroom's `tap_action` / `hold_action` / `double_tap_action` are **not** ported (the
+wall has no more-info surface and never hovers), and neither are `primary_info` /
+`secondary_info` / `icon_type`: a card always draws its device's name and state.
 
-In both forms the bar's off state turns the light on when activated, and sets the
-level, through the optimistic channels. A failed command reverts and surfaces inline
-on the card. A control the device cannot express is never rendered inert, so two
-lights of the same type can show different controls.
+### The anatomy
 
-This card carries a value control *and* an on/off affordance together — a
-deliberate, wall-only departure from the one-dominant-action rule; the dashboard
-tile keeps its single dominant action.
+Every typed card is the same tree, in this order — the leading icon affordance, the
+name over the state or primary reading, and one actions row:
 
-### Cover transport
+```
+card surface                       radius 12 px, padding 10 px
++--------------------------------------------------------------+
+| ( icon )   name                                               |  state item:
+|  36x36     state / reading                                    |  row, gap 10 px
+|  circle                                                       |
++--------------------------------------------------------------+
+| [ ==== active control ==== ] [btn] [btn]                      |  actions row:
++--------------------------------------------------------------+  gap 12 px,
+                                                                   padding 12 px (top 0)
+```
 
-A cover — a device that positions, or that declares a writable transport action —
-presents discrete **Open / Close / Stop** (up / down / stop) transport on the wall
-rather than a bare position slider, so it is operable as a touch-friendly action:
+### The ported metrics
 
-- Open and Close command the device's declared transport action when it declares
-  one, and fall back to the position extremes otherwise.
-- Stop is presented **only** when a writable property can express it; a cover that
-  cannot stop omits Stop rather than rendering it inert.
-- Each control is a 56 px pressable button with no hover dependency; a failed
-  command reverts and surfaces inline. The position readout appears only when the
-  primary capability is a numeric position.
+The values are ported verbatim from Mushroom's `src/utils/theme.ts` and its
+`src/shared/{state-item,shape-icon,slider,card}.ts`, and declared once as Hearth's
+own `--hearth-card-*` tokens in `wall/hearth.css`. `wall/cards/metrics.ts`
+(`WALL_CARD_METRICS`, `WALL_CARD_GLYPH_SIZE`) mirrors them, and
+`tests/wall-tokens.test.ts` asserts the two agree, so a card cannot drift from this
+table.
 
-Transport is wall-only; the dashboard keeps its existing cover presentation.
+| Token | Value | Ported from |
+|---|---|---|
+| `--hearth-card-icon-size` | 36 px | `--icon-size` |
+| glyph | 24 px (`--hearth-card-icon-symbol` `0.667em` of 36 px) | `--icon-symbol-size` |
+| `--hearth-card-icon-shape` | `50%` (circle) | `--icon-border-radius` |
+| `--hearth-card-primary-size` | 14 px | `--card-primary-font-size` |
+| `--hearth-card-primary-weight` | 500 | `--card-primary-font-weight` |
+| `--hearth-card-primary-leading` | 20 px | `--card-primary-line-height` |
+| `--hearth-card-primary-tracking` | 0.1 px | `--card-primary-letter-spacing` |
+| `--hearth-card-secondary-size` | 12 px | `--card-secondary-font-size` |
+| `--hearth-card-secondary-weight` | 400 | `--card-secondary-font-weight` |
+| `--hearth-card-secondary-leading` | 16 px | `--card-secondary-line-height` |
+| `--hearth-card-secondary-tracking` | 0.4 px | `--card-secondary-letter-spacing` |
+| `--hearth-card-control-height` | 42 px (the wall's touch target) | `--control-height` |
+| `--hearth-card-control-radius` | 12 px | `--control-border-radius` |
+| `--hearth-card-control-spacing` | 12 px (the actions row's gap and padding) | `--control-spacing` |
+| `--hearth-card-padding` | 10 px (the surface's inset) | `--spacing` |
+| `--hearth-card-radius` | 12 px (the surface's radius) | the HA card radius |
+| `--hearth-card-slider-height` | 42 px | the slider container's `--control-height` |
+| `--hearth-card-slider-radius` | 12 px | the slider track's `--control-border-radius` |
+| `--hearth-card-slider-thumb` | 10 px (the bar thumb's width) | the slider track indicator's width |
+| `--hearth-card-slider-thumb-radius` | 3 px | the slider track indicator's radius |
+| `--hearth-card-slider-thumb-color` | `var(--hearth-text)` | the wall's own foreground |
+
+The values replace the wall's former invented device-card scale: a 56 px kiosk touch
+target, an 18 px device-card body floor, a 16 px card radius, and a 26 px glyph. A
+card's type and its controls are now the ported ones — which is the deliberate
+trade-off recorded in the change, and the checks for it are the harness and the
+`wall-display` requirements that were modified with it.
+
+**The slider chrome.** The wall keeps a native `<input type="range">` for touch and
+keyboard operation and redraws only its chrome (`[data-wall-chunk] .hearth-card-slider`
+in `hearth.css`), so the ported 42 px height is the control's touch target without a
+bespoke pointer implementation: a transparent track at the 12 px radius, and a 10 px
+bar thumb at a 3 px radius filled with the wall's foreground. The card paints the
+value's fill behind the input, over the control's own colour at 20 % alpha — or
+`--hearth-accent-faint` when the device reports no colour.
+
+### Device colour
+
+A card carries the device's own colour on the affordances that set it, never as a
+surface, and uses Mushroom's contrast improvement (`wall/cards/color.ts`): a colour
+whose saturation is below **0.4** is raised to it, and one below **0.1** has its
+value pushed to **225**. The improved colour is the glyph colour over a **25 %**-alpha
+fill of itself and the slider's colour over a **20 %**-alpha field. A device that
+reports no colour falls back to the wall's own accent (`--hearth-accent`, and
+`--hearth-accent-faint` for the slider field).
+
+### The cards
+
+- **Light** — the icon affordance is the on/off control (the glyph states on/off by
+  its fill as well as its colour, and the shape carries the light's contrast-improved
+  colour); the name sits over the brightness reading or `Off`; and the actions row
+  carries the active control as the slider — brightness, colour temperature, or
+  colour, whichever the device declares — with the other declared controls beside it
+  as touch-sized icon buttons. A control the device does not declare is never
+  rendered, so two lights of the same model can show different controls. Turning a
+  control while the light is off turns it on first.
+- **Cover** — discrete, touch-friendly transport rather than a bare position slider:
+  the position (when the device has one) is the primary reading, and the actions row
+  carries Open, Stop, and Close as touch-sized icon controls, with Stop drawn **only**
+  when a writable property can express it. Open/Close command the declared transport
+  action and fall back to the position extremes otherwise.
+- **Fan** — the icon affordance is the on/off control, the name sits over the
+  percentage reading, and the actions row carries the percentage as a slider with the
+  presets beside it as the shared enumerated control — touch-sized options where they
+  fit its row, or a single dropdown affordance where they do not. Dragging the
+  percentage while the fan is off commands it on first.
+- **Climate** — the name sits over the temperature reading, and the actions row
+  carries the setpoint as a slider with the thermostat's mode beside it as the shared
+  enumerated control — touch-sized options where they fit its row, or a single
+  dropdown affordance where they do not. A thermostat that only reports presents the
+  reading and no inert control.
+- **Lock** — the name sits over its locked/unlocked reading, and the actions row
+  carries Lock and Unlock as touch-sized options, the one matching the reported state
+  marked active, each commanding the property's own authored value. A lock is never
+  "inactive", so its controls are always drawn.
+- **Number** — a bounded numeric control as the sole action, the slider being the
+  value's actuation target (a bare card activation cannot express the value to set).
+  A writable numeric with no declared range is not presented at all.
+- **Select** — the enumerated control as the sole action: one touch-sized option per
+  permitted value where they fit its row at the 42 px target, or a single dropdown
+  affordance carrying every value where they do not. An enum with no permitted values
+  presents no control.
+- **Entity** — the typed fallback: the icon affordance and the name over the state.
+  Where the primary action is a pure toggle the whole card is the actuation target;
+  where the device has no actuatable property the reading becomes the card's dominant
+  content, with no control and no navigation affordance.
+
+Each card composes its *form* — `compact`, `regular`, or `full` — from the box its
+widget actually gives it (`wall/cards/card-composition.ts`), so a taller box composes
+a richer form rather than inflating the smaller one, and a `horizontal` layout is
+composed only where the box is wide enough for it. A card whose controls are hidden
+keeps the composition of its non-control content rather than reflowing into a
+different card. Every control actuates through the shared optimistic channel
+(`reflect → reconcile → revert`), reverting and surfacing the failure inline on the
+affordance that issued it.
 
 ### Suppressed affordances
 
@@ -490,6 +681,19 @@ non-textual indicator (the label and polled age stay in `title`/`aria-label`). A
 pure toggle's whole card is its actuation target; a card with an embedded value
 control is actuated through that control. A device card inside a widget frame draws
 one surface, never a surface inside another — including each tile of a device grid.
+
+### Attribution — the ported card system
+
+The card anatomy, the token values, the device-colour contrast improvement, and the
+per-card options above are ported from
+[`piitaya/lovelace-mushroom`](https://github.com/piitaya/lovelace-mushroom), which is
+licensed **Apache-2.0**. This repository is **GPL-3.0**, which is the permitted
+direction for that reuse. Nothing is vendored: Mushroom's `LitElement` classes,
+`hass` interactions, and `ha-*` elements cannot be imported, so the cards are
+re-implemented in React against this codebase's own data model, and the ported
+values are re-declared as Hearth tokens with the Mushroom source recorded per line in
+`wall/hearth.css`. The repository-level notice lives in
+[`THIRD_PARTY_NOTICES.md`](../../../THIRD_PARTY_NOTICES.md).
 
 ## On-demand stylesheet
 
@@ -512,21 +716,39 @@ Hearth ships as its own content-hashed stylesheet, loaded only with the wall:
 
 ## Breaking appearance change
 
-The wall **no longer scrolls**. A composition that cannot fit its panel at the
-wall's minimum touch target and body size renders an explanation with a route to the
-editor instead of a clipped or scrollable grid, and a device grid pages rather than
-overflowing. Profiles that fit are unaffected; a profile authored for a taller panel
-now reports itself rather than degrading silently.
+Three changes are breaking by design:
+
+- **The wall's device cards are the ported card system's.** The wall's invented
+  device-card scale — a 56 px touch target, an 18 px device-card body floor, a 16 px
+  card radius, a 26 px glyph — is replaced by Mushroom's own metrics: a **42 px**
+  control height, **14 px/500** primary over **12 px/400** secondary type, a 36 px
+  circular icon with a 24 px glyph, a 10 px card inset, and 12 px control spacing
+  and radii. The row unit, the paging density, and the editor's span floors are
+  re-derived from the smaller card (`ROW_UNIT_MIN` **50 px**, `ROW_UNIT_MAX`
+  **56 px**), and a tile row is now bounded at 1.25× its cell. A wall therefore reads
+  at the ported card's density rather than the previous, larger one; the harness at
+  1920 × 1080 is the check on distance legibility.
+- **The wall profile contract is version 2.** `WALL_WIDGET_TYPES` is per device
+  class, each type carrying its own config, and `WALL_PROFILE_VERSION` is **2**. A
+  stored version-1 profile is **migrated rather than rejected**: a widget that named
+  one device becomes that device's typed widget at the same placement and zone, and
+  a widget that named a set of devices keeps its selection, so no authored wall is
+  lost. Writing a version-2 profile is what the editor does; a profile that cannot be
+  migrated is reported without preventing the wall's other profiles from loading.
+- **The wall no longer scrolls.** A composition that cannot fit its panel at the
+  wall's floors renders an explanation with a route to the editor instead of a
+  clipped or scrollable grid, and a paging widget pages rather than overflowing.
+  Profiles that fit are unaffected; a profile authored for a taller panel now
+  reports itself rather than degrading silently.
 
 ## Unchanged
 
 - Named profiles, the author-placed 12-column grid, orientation overrides, scene
   triggers, live profile updates, the configuration editor, per-widget error
   isolation, and always-on/reconnect behaviour.
-- The wall profile contract's version: `zone` and the `link`/`devices` catalog
-  entries are **additive**, so `WALL_PROFILE_VERSION` stays `1` and an existing
-  profile keeps loading. A profile carrying a zone renders it; a profile that uses
-  the new widget types needs a build that knows them.
-- The shared device tile's behaviour — capability ranking, optimistic
-  reflect/reconcile/revert, and non-colour state encoding — and the dashboard's
-  Lumen rendering, including the dashboard's own light tile.
+- The dashboard's rendering: the shared device tile, its capability ranking, its
+  optimistic reflect/reconcile/revert, and its non-colour state encoding are
+  untouched, and the dashboard's own light tile is unchanged. The wall and the
+  dashboard render a device differently **on purpose**.
+- The non-device wall widgets' vocabulary, tokens, zones, and the on-demand
+  stylesheet.

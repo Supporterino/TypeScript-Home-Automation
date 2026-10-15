@@ -127,3 +127,7 @@ See [Web UI → Wall displays](https://Supporterino.github.io/TypeScript-Home-Au
 ## License
 
 [GPL-3.0](LICENSE)
+
+Third-party attributions — including the wall's device-card design, ported from
+[Lovelace Mushroom](https://github.com/piitaya/lovelace-mushroom) (Apache-2.0) —
+are recorded in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
