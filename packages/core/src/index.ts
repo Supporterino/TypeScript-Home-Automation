@@ -151,7 +151,7 @@ export {
 export { type Config, loadConfig } from "./config.js";
 // Unified device sources (design.md D2; task 6.13d) — DeviceSource is
 // exported for inspection and testing; the source set itself is fixed at
-// four and is not a ServiceRegistry registration point.
+// five and is not a ServiceRegistry registration point.
 export { AggregateDeviceSource, type DeviceSourceStatus } from "./device-sources/aggregate.js";
 export {
   type CommandValidationResult,
