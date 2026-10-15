@@ -89,7 +89,8 @@ surface (see "Wall device cards").
 
 **State encoding is never colour alone.** On a true-black panel the shape/fill of a
 glyph or a label always accompanies the colour — an on/off affordance changes the
-icon's fill as well as its token, and the compact status chips stay.
+icon's fill as well as its token, and a compact status figure keeps its own
+treatment on the ported secondary size.
 
 No per-room hue: a room card and its members use the same Hearth surface, hairline,
 and text tokens as every other card. A zone band is the one additional surface a
@@ -102,7 +103,9 @@ The ramp is wall-owned; its numeric bounds live in `wall/type-ramp.ts`
 consumer cannot drift apart (`tests/wall-type-ramp.test.ts` asserts the two agree).
 The whole component scale is set from the reduced table below — the hero, metric,
 title, and label tiers and their `vmin` coefficients were lowered so a card renders
-roughly **25–30 % smaller** on the panel.
+roughly **25–30 % smaller** on the panel — and its two smallest tiers are the ported
+card system's own text sizes, so a widget's supporting text and a device card's are
+the same type.
 
 | Tier | Size | Use |
 |---|---|---|
@@ -110,28 +113,29 @@ roughly **25–30 % smaller** on the panel.
 | Metric | `clamp(26px, 3.6vmin, 54px)` | weather, energy, status values; a roomy readout |
 | Band | `clamp(20px, 2.4vmin, 32px)` | a grouped readout (the climate band, or a readout on a small card) |
 | Title | `clamp(18px, 1.8vmin, 22px)` | widget titles |
-| Label | 18 px | metric labels, uppercase card labels, band captions |
-| Body (floor) | **18 px** | any other wall text |
-| Chip | 16 px | compact status chips (deliberate exception) |
+| Label | 14 px | a widget's label and every caption — the ported primary size (`--hearth-card-primary-size`) |
+| Body (floor) | **12 px** | any other wall text — the ported secondary size (`--hearth-card-secondary-size`) |
+| Chip | **retired** | the compact status-chip exception is gone: the floor is the ported secondary size, so there is nothing left below it to except |
 
 On the wall's 1920 × 1080 panel `vmin` is 10.8 px, so a `clamp` token resolves at
 its `vmin` term unless a bound caps it: the hero renders at **54 px**, the metric at
 **39 px**, the band at **26 px**, and the title at **19 px**. The hero and metric
 stay above the dashboard's 34 px ceiling; the **band** tier deliberately does not,
-sitting between the label tier and the metric tier and above the 18 px body floor,
+sitting between the label tier and the metric tier and above the 12 px body floor,
 so a group of readouts does not compete with a card's hero.
 
 **The ramp owns its body floor.** The wall's minimum body size is `bodyMin`
-(**18 px**, above the spec's 16 px minimum and above the dashboard's 16 px
-`--text-base`): no wall body text may render below it. The compact status-chip
-exception is the one deliberate case beneath the floor.
+(**12 px**) and it is the ported card system's own secondary size, declared once as
+`--hearth-card-secondary-size`: no wall body text may render below it, and the ramp
+declares no tier beneath it. The label tier is the ported primary size (**14 px**),
+and the readout tiers above them are unchanged, so a readout's value keeps the
+wall's distance scale while everything supporting it is drawn at the ported sizes.
 
 A **device card** draws neither tier: it carries the ported card type from the
 table under "Wall device cards" — 14 px/500 primary over 12 px/400 secondary —
-which is the ported card system's own scale. The ported secondary size (12 px) is
-the floor the spec names for it, below the ramp's 18 px body floor; every other
-piece of wall text (widget titles and labels, ambient readouts, page controls,
-contained explanations) still renders at or above the 18 px floor.
+which is now the same scale the ramp's label and body tiers state. Every piece of
+wall text (widget titles and labels, ambient readouts, page controls, contained
+explanations) renders at or above the 12 px floor.
 
 Weights are 500 / 600 / 700 and leading is 1.05 (tight) / 1.2 (snug) / 1.45 (body).
 
@@ -139,11 +143,12 @@ Weights are 500 / 600 / 700 and leading is 1.05 (tight) / 1.2 (snug) / 1.45 (bod
 
 - Spacing rhythm (4-based): 4 / 8 / 12 / 16 / 24 / 32 / 48 px
   (`--hearth-space-1` … `--hearth-space-7`).
-- Radius: `--hearth-radius-sm` 10 px, `-md` 16 px, `-lg` 24 px, `-pill` 999 px.
-  A zone band and a control card both draw `-md`; the band is the one other
-  consumer of it. A **device card** draws its own ported radii instead —
-  `--hearth-card-radius` and `--hearth-card-control-radius`, both **12 px** (see
-  "Wall device cards").
+- Radius: `--hearth-radius-sm` 10 px, `-md` 16 px, `-lg` 24 px, `-pill` 999 px —
+  the wall's own scale. A widget's surface, a zone band and a **device card** draw
+  the ported card radii instead: `--hearth-card-radius` and
+  `--hearth-card-control-radius`, both **12 px** (see "Wall device cards"), so a
+  control widget's surface and a device card's are the same surface and a control
+  and a card's control are the same control.
 - Elevation: `--hearth-e0` none — a resting card is flat on the panel's black,
   separated by the hairline; `--hearth-e1` `0 1px 2px rgba(0,0,0,0.6)` — a raised
   control; `--hearth-e2` `0 18px 44px rgba(0,0,0,0.7)` — a pressed tile or
@@ -170,13 +175,14 @@ own box is the full 42 px, so the touch target is met without enlarging the glyp
 
 Adjacent controls keep at least an **8 px** separation — `WALL_MIN_CONTROL_GAP` in
 `wall/registry.ts`, matching `--hearth-space-2` — so a touch intended for one
-cannot plausibly activate its neighbour. A device card's actions row spaces its
-controls by the ported **12 px** control spacing
-(`--hearth-card-control-spacing`), which is a floor the card draws with, not a
-ceiling: the wall's own rows may space further but never less. Each control is also
-bounded horizontally — an icon control is exactly the ported **42 px** control
-height wide, and an enumerated control draws one touch-sized option per permitted
-value, each label bounded to that same width with an ellipsis (`WallCardOption` in
+cannot plausibly activate its neighbour. Every actions row — a device card's, a
+room's command row, a scene's control — spaces its controls by the ported **12 px**
+control spacing (`--hearth-card-control-spacing`), which is above that floor: it is
+the spacing the wall's controls are drawn with, so a widget's control and a card's
+control sit in the same rhythm. Each control is also bounded horizontally — an icon
+control is exactly the ported **42 px** control height wide, and an enumerated
+control draws one touch-sized option per permitted value, each label bounded to that
+same width with an ellipsis (`WallCardOption` in
 `wall/cards/card-anatomy.tsx`) — so a row of options is bounded exactly as a row of
 icon controls and a card's actions row is bounded by its control count rather than by
 its labels. A select card's values, a thermostat's mode, and a fan's presets are all
@@ -282,11 +288,13 @@ A zone is an **additive label** on the flat grid, not a second layout model.
   its members, in the same cell space the widgets are placed in. Grouping never
   moves a widget: each member still occupies the cells its configuration declares.
 - The band is drawn **behind** the member cells (band at the lower z-index, widgets
-  above) as a `--hearth-band`, `--hearth-radius-md` field with `--hearth-space-4`
-  padding. Members keep their own surface, so the wall gains a container level
-  without nesting one surface in another.
-- The band carries its **caption** — the zone label, uppercase, on the label tier,
-  in `--hearth-text-muted`. It is a container label, not a readout.
+  above) as a `--hearth-band` field at the ported card surface
+  (`--hearth-card-radius` **12 px**, `--hearth-card-padding` **10 px**), so a band
+  and the card standing on it are the same surface. Members keep their own surface,
+  so the wall gains a container level without nesting one surface in another.
+- The band carries its **caption** — the zone label on the label tier
+  (**14 px/500**, the ported primary treatment the wall's chrome adopts), in
+  `--hearth-text-muted`. It is a container label, not a readout.
 - The band layer is inert to touch (`pointer-events: none`), so a tap between two
   members falls through to the grid rather than activating the band.
 
@@ -332,24 +340,45 @@ Two rules ride the same tier choice:
 
 ## Widget card vocabulary
 
-Every wall widget is composed from one Hearth card vocabulary
-(`wall/widgets/card-vocab.tsx`), so the surface reads as one designed whole rather
-than a set of independent tiles. The card frame carries four slots:
+The wall carries **exactly one card vocabulary**: every widget, the widget frame,
+the zone band and the panel chrome are composed from the ported anatomy
+(`wall/cards/card-anatomy.tsx`) and its ported token table — `WALL_CARD_METRICS` in
+`wall/cards/metrics.ts`, declared once as Hearth's `--hearth-card-*` tokens in
+`hearth.css` and tabled under "Wall device cards". No widget declares its own icon,
+surface, control, or supporting type treatment, so the surface reads as one designed
+whole rather than a set of independent tiles.
 
-- a **leading glyph** (`WallCardGlyph`, 24 px) that names the card;
-- a **title or label** (`WallCardLabel`) on the label tier, uppercase and quiet;
-- a **primary metric** (`WallCardMetric`) on the ramp — hero, metric, or, through
-  `wallReadoutFontSize`, the band tier;
-- a single **action-affordance slot** (`WallCardAffordance`) on control cards,
-  spaced by the ≥ 8 px adjacent-control floor.
+The vocabulary's **state item** is a leading icon beside a label over a reading:
 
-A contained explanation (`WallCardMessage`) fills a widget's own area for an
-unconfigured, empty, or unavailable state; a pressable control uses `WallButton`,
-and a route affordance (the link widget) draws the same pill through
-`wallAffordanceStyle()` — so a control and a route cannot drift apart visually. Both
-are at least 42 px in **both** directions, which matters for an icon-only
-affordance. A **device card** does not draw this vocabulary: it is composed from the
-ported card anatomy under "Wall device cards", which supersedes it for devices.
+- a **leading circular icon** (`WallCardIcon`) — the ported 36 px tinted shape
+  (`--hearth-card-icon-size` / `--hearth-card-icon-shape`) carrying the ported 24 px
+  glyph — that names the card;
+- a **label** (`WallCardLabel`) on the label tier at the ported primary size
+  (**14 px/500**, `--hearth-card-primary-size`), quiet rather than shouted;
+- a **reading** (`WallCardReading`) — the ported secondary *size* (**12 px**,
+  `--hearth-card-secondary-size`) by default, but drawn at the **wall's own bold
+  reading weight** (`--hearth-weight-bold`, 700) and tight leading rather than the
+  ported secondary line, so a value still reads as a value — or, where the content
+  is a readout, the wall's own readout tier the caller names (hero, metric, or the
+  band tier through `wallReadoutFontSize`), because the value is the thing read
+  across a room and the value and its unit are never split;
+- an **actions row** (`WallCardActions`) on control cards, whose controls are the
+  ported `WallCardIconButton` / `WallCardOption` / `WallCardDropdown` /
+  `WallCardEnumControl` at the ported 42 px control height and 12 px control radius
+  (`--hearth-card-control-height` / `-radius`), spaced by the ported 12 px control
+  spacing — still above the wall's ≥ 8 px adjacent-control floor.
+
+`WallCardStateItem` composes the first three, so an ambient stat, a control card's
+head and a count are one anatomy. A contained explanation (`WallCardMessage`) fills
+a widget's own area for an unconfigured, empty, or unavailable state; a pressable
+control and a route affordance draw the same ported labelled control
+(`WallCardControl`, `WallCardRoute`) — the scene button, a room's command, the link
+widget and the wall view's back link — so a control and a route cannot drift apart
+visually. Both are at least 42 px in **both** directions, which matters for an
+icon-only affordance.
+
+A **device card** composes the same vocabulary: the ported card anatomy under "Wall
+device cards" is this vocabulary's device-class form, not a second one.
 
 ### Widget grammar
 
@@ -357,16 +386,18 @@ A widget type's grammar is fixed (not owner-selectable) and decides whether the
 frame draws a surface:
 
 - **Ambient** — `clock`, `weather`, `energy`, `temperature`, `status`. Rendered
-  **chrome-less** with the vocabulary's stat form — a leading glyph, a label, and
-  the value on the ramp, directly on the panel. They are read, not touched.
+  **chrome-less** with the vocabulary's state item — a leading circular icon, a
+  label, and the value on the wall's own readout tier, directly on the panel. They
+  are read, not touched.
 - **Control** — `room`, `favorites`, `scene`, `link`, `devices`, and the eight
   typed device widgets (`light`, `cover`, `fan`, `climate`, `lock`, `number`,
   `select`, `entity`). Rendered as a Hearth surface tile (`--hearth-surface`,
-  `--hearth-hairline`, `--hearth-radius-md`) with a head (glyph + title), a metric,
-  and the affordance slot. A **typed device widget's** frame is chrome-less, so its
-  card owns the surface and draws on the ported metrics; the `devices` widget's
-  frame draws the surface and its tiles draw none, so a grid of tiles is still a
-  single surface.
+  `--hearth-hairline`) at the ported card surface — `--hearth-card-radius` **12 px**
+  and `--hearth-card-padding` **10 px** — with a head (icon + title), a reading, and
+  the actions row. A **typed device widget's** frame is chrome-less, so its card
+  owns the surface and draws on the ported metrics; the `devices` widget's frame
+  draws the surface and its tiles draw none, so a grid of tiles is still a single
+  surface.
 
 ### Widget catalog and spans
 
@@ -407,11 +438,15 @@ device grid can never be placed too small to page.
 ### Redesigned widgets
 
 - **Temperature** — an ambient readout over a configured sensor device
-  (`{ qualifiedId, title? }`): a leading thermometer glyph, the short device name on
-  the label tier, and the reading on the tier its span calls for — the band tier at
-  its default span, the metric tier only when the card is roomy. A device that is
-  unknown, unavailable, or reports no temperature is contained inside the widget's
-  own area and never prevents the rest of the profile from rendering.
+  (`{ qualifiedId, title? }`): a leading circular thermometer icon, the short device
+  name on the label tier, and the reading on the tier its span calls for — the band
+  tier at its default span, the metric tier only when the card is roomy. Where the
+  sensor declares a **humidity** reading, it is presented beneath the temperature as
+  the widget's secondary reading — one value with its own unit, never split — with
+  no config field and no profile change; a sensor that declares none renders exactly
+  as it does without one. A device that is unknown, unavailable, or reports neither
+  reading is contained inside the widget's own area and never prevents the rest of
+  the profile from rendering.
 - **Read-only devices** — a device with no actuatable property renders through the
   typed `entity` card's read-prominent composition (see "Wall device cards"): the
   reading is the card's dominant content on the wall's own group-readout tier, the
@@ -436,9 +471,10 @@ view: activating it navigates to the target profile's wall address through the
 shared router, so the URL changes, the browser's own back button works, and an
 always-on panel restored at that address opens exactly that wall.
 
-- It renders a touch-sized Hearth pill — a leading forward arrow and the label, or the
-  target profile's name when no label is configured — and both its sides meet the
-  wall's minimum touch target.
+- It renders the ported labelled control (`WallCardRoute`) — a leading forward arrow
+  and the label, or the target profile's name when no label is configured — at the
+  ported control height and corner radius, and both its sides meet the wall's
+  minimum touch target.
 - Its label is set on the label tier at a compact span and the title tier otherwise,
   so a large link does not repeat its smallest composition.
 - A link whose target names no saved profile is not a separate error path: the
@@ -486,9 +522,10 @@ grid of the wall's typed device cards.
   the space its tiles do not use rather than stretching a tile into it. The bound
   changes no page count: the pitch still packs the tiles as it always did.
 - A paging grid reserves its own chrome from the span's height before packing tiles —
-  the frame's 16 px inset above and below, one 42 px page-control row, and the 8 px
-  gap separating it from the tiles, **82 px** in all — so a promised page always fits
-  the card. Empty space is never reserved for a control that is not drawn.
+  the frame's ported **10 px** inset above and below, one 42 px page-control row, and
+  the 8 px gap separating it from the tiles, **70 px** in all — so a promised page
+  always fits the card. Empty space is never reserved for a control that is not
+  drawn.
 - Page controls meet the wall's 42 px minimum touch target, and a tile actuates
   exactly as a wall device card does elsewhere. A selection edit that removes pages
   moves an open wall back onto a real page rather than a blank one.
@@ -716,7 +753,7 @@ Hearth ships as its own content-hashed stylesheet, loaded only with the wall:
 
 ## Breaking appearance change
 
-Three changes are breaking by design:
+Four changes are breaking by design:
 
 - **The wall's device cards are the ported card system's.** The wall's invented
   device-card scale — a 56 px touch target, an 18 px device-card body floor, a 16 px
@@ -728,6 +765,17 @@ Three changes are breaking by design:
   **56 px**), and a tile row is now bounded at 1.25× its cell. A wall therefore reads
   at the ported card's density rather than the previous, larger one; the harness at
   1920 × 1080 is the check on distance legibility.
+- **The wall carries one card vocabulary, and its supporting type is the ported
+  card's.** The wall's earlier vocabulary retires: every widget, the frame, the band
+  and the panel chrome draw the ported anatomy and its token table. Two guarantees
+  are given up for it — the ramp's **18 px** body floor becomes the ported secondary
+  size (**12 px**) and the label tier the ported primary size (**14 px**), and the
+  compact status-chip exception retires with `--hearth-text-chip` because nothing is
+  left below the floor to except. The frame's inset follows the ported card padding
+  (**16 → 10 px**, so the paging reservation is **70 px** instead of 82 px), which
+  re-derives the floors and page counts the editor reports. The readout tiers are
+  untouched, so what is read across a room is unchanged; the harness is the check on
+  the smaller supporting text.
 - **The wall profile contract is version 2.** `WALL_WIDGET_TYPES` is per device
   class, each type carrying its own config, and `WALL_PROFILE_VERSION` is **2**. A
   stored version-1 profile is **migrated rather than rejected**: a widget that named
@@ -750,5 +798,6 @@ Three changes are breaking by design:
   optimistic reflect/reconcile/revert, and its non-colour state encoding are
   untouched, and the dashboard's own light tile is unchanged. The wall and the
   dashboard render a device differently **on purpose**.
-- The non-device wall widgets' vocabulary, tokens, zones, and the on-demand
-  stylesheet.
+- The wall's zone model, its on-demand stylesheet, and its widget catalog — the
+  vocabulary change moves what a widget draws, not which widgets exist or how a
+  profile places them. The editor stays on Lumen.

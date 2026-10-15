@@ -257,8 +257,9 @@ is loaded only with the wall and never by the dashboard (see
 [Asset delivery](#asset-delivery)). Its **eighteen** widget types are: a clock/date
 readout (client clock — no server data); current weather and, when the registered
 service provides it, a forecast; instantaneous and cumulative energy; a
-temperature reading from a configured sensor; a status/presence summary; a room's
-devices with an all-on/all-off room command; the user's favorites; one or more
+temperature reading from a configured sensor, together with that sensor's humidity
+where it declares one; a status/presence summary; a room's devices with an
+all-on/all-off room command; the user's favorites; one or more
 scene buttons that trigger an existing automation through the same manual-trigger
 path the admin interface uses; a **link** that opens another named wall profile; a
 **device grid** over an explicitly selected set of devices; and **one typed device
@@ -270,6 +271,37 @@ widgets (room, favorites, scene, link, devices, and every device widget) render 
 surfaces whose whole card is the touch target. A widget whose backing feature is
 unconfigured — for example weather with no weather service registered — reports that
 inside its own area and never prevents the rest of the profile from rendering.
+
+A readout widget presents the readings its configured device declares, and presents
+one the device does not declare as absent rather than as an empty line or a
+placeholder. A temperature widget bound to a sensor that also declares a humidity
+reading presents both — the humidity beneath the temperature, as the widget's
+secondary reading, with its own unit — while a sensor that declares only a
+temperature presents only the temperature. Neither case needs a second device or a
+per-profile setting.
+
+The **weather** widget composes for the box the frame hands it (design.md W7).
+Leading with the ported 36 px circular icon makes its stacked layout — condition
+and temperature, then the humidity/wind detail row, then the forecast — taller than
+its 3 × 3 minimum-span cell, and the frame clips rather than pages, so the widget
+resolves which of its parts to draw from that box: the condition and temperature
+always draw, the humidity/wind detail row draws while the box holds it, and the
+forecast draws only when the box holds both. At its default (and minimum) 3 × 3 span
+it therefore presents the current condition, temperature, humidity, and wind; the
+forecast appears from the span that holds it. Its declared minimum span is unchanged.
+
+Every widget is composed from the wall's **single card vocabulary** — the ported
+card anatomy and its ported token table (see
+[Wall device cards](#wall-device-cards)). An ambient readout's leading glyph is the
+ported tinted circular icon, a label and a caption sit on the ported primary and
+secondary type, and a control widget's surface, its controls and its control
+spacing are the ported ones. The widget frame and the zone band draw the ported
+card surface — the same radius and inset as a device card — and the panel's own
+chrome (the opt-in title, the zone caption, and a contained "too large for this
+panel" with its route to the editor) draws the ported treatment rather than a
+treatment of its own, so a panel reads as one system rather than a device card
+system sitting on top of a second one. No widget declares an icon shape, a surface
+radius or padding, a control treatment, or its own supporting type size.
 
 A device widget is **typed**: its own type determines the card it presents, so the
 wall renders one card per device class rather than one generic card for every
@@ -302,7 +334,11 @@ widget's minimum (and default) span is **3 × 2**, its column count derived the 
 way the row unit is — the fewest columns whose cell is at least the widest bounded
 control row a card draws at its minimum span (the cover's Open/Stop/Close transport),
 so `3 · 50 + 2 · 16 = 182` clears that row's 174 px — and a card at that span never
-clips a control horizontally on either panel. A widget title header is shown only
+clips a control horizontally on either panel. A surfaced widget is padded by the
+ported card surface's own inset — **10 px** (`--hearth-card-padding`) — so a
+control widget's tile and a device card are the same surface, and a paging widget
+reserves that inset above and below plus its page-control row and the gap under it
+— **70 px** in all — before packing tiles. A widget title header is shown only
 when the profile explicitly configures one; otherwise the widget's own content labels
 it. The wall's density, row-unit bounds, gutter, and type ramp are recorded as a
 design-system page override (`design-system/ts-ha/pages/wall.md`).
@@ -354,23 +390,25 @@ The wall's type ramp is sized for viewing at distance and was reduced roughly
 | Metric | `clamp(26px, 3.6vmin, 54px)` | weather, energy, status values; a roomy readout |
 | Band | `clamp(20px, 2.4vmin, 32px)` | a grouped readout (the climate band, or a readout on a small card) |
 | Title | `clamp(18px, 1.8vmin, 22px)` | widget titles |
-| Label | 18 px | metric labels, uppercase card labels |
-| Body (floor) | 18 px | any other wall text |
-| Chip | 16 px | compact status chips (deliberate exception) |
+| Label | 14 px | a widget's label and every caption — the ported primary size |
+| Body (floor) | 12 px | any other wall text — the ported secondary size |
+| Chip | **retired** | the compact status-chip exception is gone with its `--hearth-text-chip` token: the floor is the ported secondary size, so there is nothing left below it to except |
 
 On the wall's 1920 × 1080 panel `vmin` is 10.8 px, so the hero renders at 54 px
 and the metric at 39 px — both above the dashboard's 34 px ceiling. The
 **band-readout** tier sits between the label tier and the metric tier: a grouped
 readout renders on it at a small or default span and grows to the metric tier
 only on a genuinely roomy card, so a group of readouts does not compete with a
-card's hero. No wall body text renders below the 18 px body floor; the compact
-status chip is the one deliberate exception. A **device card** draws neither ramp
-tier: it carries the ported card system's own type — **14 px/500** primary over
-**12 px/400** secondary, with a 42 px control height — which is the size floor
-those requirements now name for card text. A readout renders its value and unit
-as one non-breaking unit, and a name too long for its card is **shortened** — the
-distinguishing trailing words — rather than truncated to a prefix several cards
-share, with the full name kept in the card's `title`/`aria-label` (design.md D6).
+card's hero. The ramp owns its floor: no wall body text renders below the 12 px
+body floor, the ramp declares no tier beneath it, and the label tier is the ported
+primary size, so a widget's supporting text and a device card's are the same type.
+A **device card** draws neither ramp tier: it carries the ported card system's own
+type — **14 px/500** primary over **12 px/400** secondary, with a 42 px control
+height — which is now the same scale the ramp's label and body tiers state. A
+readout renders its value and unit as one non-breaking unit, and a name too long
+for its card is **shortened** — the distinguishing trailing words — rather than
+truncated to a prefix several cards share, with the full name kept in the card's
+`title`/`aria-label` (design.md D6).
 
 ### Wall device cards
 
@@ -447,10 +485,12 @@ surface, never a surface inside another.
 A `link` widget (`{ target, label? }`) is a route, not a widget with its own view:
 activating it navigates to the target profile's address through the shared router,
 so the URL changes, the browser's own back button works, and an always-on panel
-restored at that address opens exactly that wall (design.md D11). It renders a
-touch-sized pill carrying the configured label or the target profile's name. A
-wall **opened from a link** presents an on-screen **Back** affordance at the foot
-of the panel, so the hierarchy is walkable by touch as well as by the browser; a
+restored at that address opens exactly that wall (design.md D11). It renders the
+ported labelled control — the same treatment a room's command row and the wall's
+own Back and editor affordances draw — at the ported control height and corner
+radius, carrying the configured label or the target profile's name. A wall
+**opened from a link** presents an on-screen **Back** affordance at the foot of the
+panel, so the hierarchy is walkable by touch as well as by the browser; a
 wall reached by a deep link offers none, because there is nowhere in-app to return
 to. A link whose target names no saved profile is not a separate error path — the
 target wall presents its own unknown-profile explanation, which itself offers the
@@ -696,6 +736,19 @@ energy/weather views, Prism and its grammars — is lazily loaded behind
 > profile is migrated on load rather than rejected, but a version-2 profile cannot be
 > loaded by an older build — see
 > [Wall device cards](#wall-device-cards) above.
+
+> **The wall carries one card vocabulary, and its supporting text is the ported
+> card's.** The wall's earlier widget vocabulary and its pill affordances are gone:
+> every widget, the widget frame, the zone band and the panel's own explanations are
+> now composed from the ported card anatomy and its token table. Two guarantees move
+> with it — the ramp's body floor becomes the ported secondary size (**12 px**) and
+> its label tier the ported primary size (**14 px**), and the compact status-chip
+> exception and its `--hearth-text-chip` token retire, since nothing is left below
+> the floor to except. The frame's inset follows the ported card padding
+> (**16 → 10 px**), which re-derives the paging reservation (**70 px**), the floors
+> and the page counts the editor reports. The readout tiers are untouched, so what is
+> read across a room is unchanged; see
+> [Span-aware cards and the type ramp](#span-aware-cards-and-the-type-ramp) above.
 
 ---
 
