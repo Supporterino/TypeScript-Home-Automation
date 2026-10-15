@@ -20,6 +20,20 @@ import { appPath, collectAppModules, isInside, listAppModules } from "./import-g
  */
 const HARNESS_DIR = join(import.meta.dirname, "..", "src/app/wall/harness");
 
+/**
+ * App modules the shipped graph deliberately no longer reaches beyond the
+ * harness. `lib/card-archetype.ts` is intentionally retained: the change's
+ * proposal (Non-Goals) states "the shared device tile, `lib/card-archetype.ts`
+ * and the dashboard's device views keep their current presentation and ranking",
+ * so only the wall's *use* of it is retired (task 5.2) — the module and its own
+ * unit tests stay in the tree. No app module imports it now (the wall selects a
+ * card through `wall/cards/device-class.ts`, and the shared tile ranks through
+ * `lib/capability-ranking.ts`), which is why it has no consumer. Naming it here
+ * keeps the walker's completeness check honest: a *new* edge to it, or any other
+ * unreached module, still fails.
+ */
+const RETIRED_APP_MODULES: ReadonlySet<string> = new Set(["lib/card-archetype.ts"]);
+
 describe("wall harness guard", () => {
   it("walks the app's module graph from the entrypoint (guard is not vacuous)", async () => {
     const graph = await collectAppModules();
@@ -50,12 +64,18 @@ describe("wall harness guard", () => {
     const reached = new Set(graph.files);
     const unreached = (await listAppModules()).filter((file) => !reached.has(file));
 
-    // The only modules the entrypoint cannot reach are the harness itself and
-    // the ambient declaration files. Anything else unreached would mean this
-    // walker had missed an edge — and the guard's silence would mean nothing —
-    // so the assertion makes the walker's completeness part of the guard.
+    // The only modules the entrypoint cannot reach are the harness itself, the
+    // ambient declaration files, and the retired wall archetype module named
+    // above. Anything else unreached would mean this walker had missed an edge —
+    // and the guard's silence would mean nothing — so the assertion makes the
+    // walker's completeness part of the guard.
     const offenders = unreached
-      .filter((file) => !isInside(HARNESS_DIR, file) && !file.endsWith(".d.ts"))
+      .filter(
+        (file) =>
+          !isInside(HARNESS_DIR, file) &&
+          !file.endsWith(".d.ts") &&
+          !RETIRED_APP_MODULES.has(appPath(file)),
+      )
       .map(appPath);
     expect(offenders).toEqual([]);
   });

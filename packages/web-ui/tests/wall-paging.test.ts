@@ -2,6 +2,12 @@ import { describe, expect, it } from "bun:test";
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
+  resolveCardFormForBox,
+  resolveDeviceCardComposition,
+  WALL_CARD_FULL_HEIGHT_PX,
+  WALL_CARD_REGULAR_HEIGHT_PX,
+} from "../src/app/wall/cards/card-composition.js";
+import {
   ROW_UNIT_MAX,
   ROW_UNIT_MIN,
   WALL_COMPACT_CARD_HEIGHT_PX,
@@ -15,7 +21,8 @@ import {
   WALL_FRAME_RESERVED_PX,
   WALL_FRAME_TITLE_ROWS,
   WALL_PAGE_RESERVED_PX,
-  WALL_TILE_CELL_SPAN,
+  WALL_TILE_CELL_COLUMNS,
+  WALL_TILE_CELL_ROWS,
   WALL_TILE_GAP_PX,
 } from "../src/app/wall/pages.js";
 import { WALL_WIDGET_REGISTRY } from "../src/app/wall/registry.js";
@@ -250,33 +257,117 @@ describe("the favorites grid", () => {
   it("keeps its tiles and its empty case", async () => {
     const widget = await source(FAVORITES);
 
-    expect(widget).toContain("WallDeviceTile");
+    expect(widget).toContain("WallDeviceCard");
     expect(widget).toContain("contained={contained}");
     expect(widget).toContain("WallCardMessage");
     expect(widget).toContain("favoriteDevices(favorites, devicesByQualifiedId)");
   });
+});
 
-  it("gives each tile the tile's own tier and form, not the widget's", async () => {
-    const widget = await source(FAVORITES);
+describe("the paged tiles compose for the box the grid hands them", () => {
+  it("hands each host's card the box the grid drew its tile in", async () => {
+    for (const path of [ROOM, FAVORITES, DEVICES]) {
+      const widget = await source(path);
 
-    // A paged tile is the device card at the wall's minimum-span tile cell, so it
-    // must compose the tier and form that cell resolves; forwarding the enclosing
-    // widget's tier would draw a larger form inside a minimum-span tile and clip
-    // it (the same ones the device grid gives its tiles).
-    expect(widget).toContain('tier="compact"');
-    expect(widget).toContain('cardForm="compact"');
-    expect(widget).not.toContain("tier={tier}");
-    expect(widget).not.toContain("cardForm={cardForm}");
+      // A paged tile is handed the tile's own cell — the page plan's row height
+      // and the tile's cell width at the resolved row unit — so the same device
+      // composes for the box it is actually drawn in rather than for the widget
+      // around it (design.md D2, D9; specs/wall-display "Paged Tile Sizing").
+      expect(widget, path).toContain("WallDeviceCard");
+      expect(widget, path).toContain("wallTileCardBox(rowUnit, box.heightPx)");
+      expect(widget, path).not.toContain("tier={tier}");
+      expect(widget, path).not.toContain("cardForm={cardForm}");
+    }
+  });
+
+  it("composes the ported compact card for a paged tile at any legal row unit", () => {
+    // The plan bounds a tile row at 1.25× the tile's own cell, and the tile's cell
+    // at the floors is exactly the ported card's compact budget — so a paged tile
+    // composes the compact card, never a richer form the row cannot hold.
+    const short = resolvePages({
+      span: WALL_WIDGET_REGISTRY.devices.min,
+      count: 1,
+      rowUnit: ROW_UNIT_MIN,
+      gutterPx: WALL_GUTTER_MIN_PX,
+      reservedPx: WALL_FRAME_RESERVED_PX,
+    });
+    expect(short.rowHeightPx).toBeGreaterThanOrEqual(WALL_COMPACT_CARD_HEIGHT_PX);
+    expect(resolveCardFormForBox(short.rowHeightPx)).toBe("compact");
+
+    const tall = resolvePages({
+      span: WALL_WIDGET_REGISTRY.room.min,
+      count: 4,
+      rowUnit: ROW_UNIT_MAX,
+      gutterPx: WALL_GUTTER_MIN_PX,
+      reservedPx: WALL_FRAME_RESERVED_PX + 3 * ROW_UNIT_MAX,
+    });
+    expect(tall.rowHeightPx).toBeGreaterThanOrEqual(WALL_COMPACT_CARD_HEIGHT_PX);
+    expect(tall.rowHeightPx).toBeLessThan(WALL_CARD_REGULAR_HEIGHT_PX);
+    expect(resolveCardFormForBox(tall.rowHeightPx)).toBe("compact");
+  });
+
+  it("composes a lighter form in a short host-tile box than the same card in a tall box", () => {
+    // The SAME card, given the box a paging host hands its tile — the plan's row
+    // height, bounded at 1.25× the tile's own cell — and the box a placed widget
+    // hands its renderer at a taller span. The host-tile box is bounded by the
+    // 1.25× cap, so a tile always composes the card's smallest form; a placed box
+    // admits a richer one, so the box a card is handed — not the widget around it
+    // — is what decides its composition (design.md D9; specs/wall-display "Paged
+    // Tile Sizing", "Span-Aware Card Presentation"). This is the box comparison,
+    // never an assertion that a host tile composes a richer form: it cannot.
+    const widthPx = WALL_TILE_CELL_COLUMNS * ROW_UNIT_MIN;
+    const hostTilePx = resolvePages({
+      span: WALL_WIDGET_REGISTRY.devices.min,
+      count: 1,
+      rowUnit: ROW_UNIT_MIN,
+      gutterPx: WALL_GUTTER_MIN_PX,
+      reservedPx: WALL_FRAME_RESERVED_PX,
+    }).rowHeightPx;
+
+    const hostTile = resolveDeviceCardComposition({
+      box: { widthPx, heightPx: hostTilePx },
+      hasControls: true,
+      active: true,
+    });
+    const placed = resolveDeviceCardComposition({
+      box: { widthPx, heightPx: WALL_CARD_FULL_HEIGHT_PX },
+      hasControls: true,
+      active: true,
+    });
+
+    // A lighter form on the host tile — the smallest composition, holding the
+    // active control alone — and the card's full content in the taller box.
+    expect(hostTile.form).toBe("compact");
+    expect(hostTile.siblings).toBe(false);
+    expect(placed.form).toBe("full");
+    expect(placed.siblings).toBe(true);
+    expect(hostTile.form).not.toBe(placed.form);
+    // The host-tile box is still at least the ported compact card's budget, so
+    // the lighter form is one the card fits rather than one it overflows.
+    expect(hostTilePx).toBeGreaterThanOrEqual(WALL_COMPACT_CARD_HEIGHT_PX);
   });
 });
 
-describe("the room grid", () => {
-  it("gives each tile the tile's own tier and form, not the widget's", async () => {
-    const widget = await source(ROOM);
+describe("the bounded row leaves the page count alone", () => {
+  it("still reports five pages for the harness's five-device room card", () => {
+    // The bound acts on the resolved row height alone: the pitch the rows are
+    // packed by — and so the rows packed, the tiles a page holds, and the page
+    // count — is unchanged by the bound itself (design.md D4; specs/wall-display
+    // "Paged Tile Sizing"). The harness stage renders a 1920×1080 panel: the row
+    // unit's ceiling, a 21.6 px gutter, and the room card's three header rows.
+    const paged = resolvePagedTiles({
+      items: Array.from({ length: 5 }, (_, index) => `device.${index}`),
+      span: { w: 4, h: 6 },
+      rowUnit: ROW_UNIT_MAX,
+      gutterPx: 21.6,
+      page: 0,
+      reservedRows: 3,
+    });
 
-    expect(widget).toContain('tier="compact"');
-    expect(widget).toContain('cardForm="compact"');
-    expect(widget).not.toContain("tier={tier}");
+    expect(paged.pageCount).toBe(5);
+    expect(paged.tilesAcross).toBe(1);
+    expect(paged.tilesPerPage).toBe(1);
+    expect(paged.rows).toBe(1);
   });
 });
 
@@ -300,8 +391,8 @@ describe("the room grid", () => {
     expect(widget).toContain("All on");
     expect(widget).toContain("All off");
     // Each tile is still the shared wall device card, unavailable members included.
-    expect(widget).toContain("WallDeviceTile");
-    expect(widget).toContain("unavailable");
+    expect(widget).toContain("WallDeviceCard");
+    expect(widget).toContain("WallDeviceUnavailable");
     expect(widget).toContain("contained={contained}");
     expect(widget).toContain("roomTiles(room.members)");
   });
@@ -332,15 +423,15 @@ describe("the room grid", () => {
 describe("the wall's paging chrome", () => {
   it("gives every paged tile the minimum-span tile's tier and form", () => {
     // The page plan models every tile as the device card at its minimum span
-    // (`WALL_TILE_CELL_SPAN` cells per axis), so that cell's tier and form are
-    // what a paged tile must compose — derived, not assumed, from the registry
-    // and the cell height.
-    const cell = { w: WALL_TILE_CELL_SPAN, h: WALL_TILE_CELL_SPAN };
-    const descriptor = WALL_WIDGET_REGISTRY.device;
+    // (`WALL_TILE_CELL_COLUMNS` columns by `WALL_TILE_CELL_ROWS` rows), so that
+    // cell's tier and form are what a paged tile must compose — derived, not
+    // assumed, from the registry and the cell height.
+    const cell = { w: WALL_TILE_CELL_COLUMNS, h: WALL_TILE_CELL_ROWS };
+    const descriptor = WALL_WIDGET_REGISTRY.light;
 
     expect(resolveSpanTier(cell, descriptor)).toBe("compact");
     for (const rowUnit of [ROW_UNIT_MIN, ROW_UNIT_MAX]) {
-      // The tile's box is its cell: the `device` frame is chrome-less.
+      // The tile's box is its cell: a typed device widget's frame is chrome-less.
       expect(resolveCardFormForHeight(cardHeightPx({ rows: cell.h, rowUnit }))).toBe("compact");
     }
   });
@@ -388,7 +479,7 @@ describe("the paged types' minimum spans", () => {
     const withoutAny = resolvePages(input);
     expect(withFrame.tilesDown).toBeLessThan(withoutAny.tilesDown);
     // Both still promise a row at least a tile's cell tall.
-    const tileCellPx = WALL_TILE_CELL_SPAN * ROW_UNIT_MIN + WALL_GUTTER_MIN_PX;
+    const tileCellPx = WALL_TILE_CELL_ROWS * ROW_UNIT_MIN + WALL_GUTTER_MIN_PX;
     expect(withFrame.rowHeightPx).toBeGreaterThanOrEqual(tileCellPx);
   });
 
@@ -405,7 +496,7 @@ describe("the paged types' minimum spans", () => {
       ["room", 3],
     ] as const) {
       const { min } = WALL_WIDGET_REGISTRY[type];
-      const cellPx = WALL_TILE_CELL_SPAN * ROW_UNIT_MIN + WALL_GUTTER_MIN_PX;
+      const cellPx = WALL_TILE_CELL_ROWS * ROW_UNIT_MIN + WALL_GUTTER_MIN_PX;
       expect(cellPx, `${type} tile cell holds the compact card`).toBeGreaterThanOrEqual(
         WALL_COMPACT_CARD_HEIGHT_PX,
       );

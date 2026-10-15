@@ -11,6 +11,8 @@ import type { WallWidget, WallWidgetType } from "@ts-ha/shared";
 import { WALL_WIDGET_CONFIG_SCHEMAS } from "@ts-ha/shared/wall-schema";
 import type { ComponentType } from "react";
 import type { ZodTypeAny } from "zod";
+import { WALL_DEVICE_CLASS_LABELS, type WallDeviceClass } from "./cards/device-class.js";
+import { WALL_MIN_DEVICE_COLUMNS, WALL_MIN_DEVICE_ROWS } from "./grid.js";
 import type { WallCardForm, WallWidgetTier } from "./span.js";
 import { ClockWidget } from "./widgets/ClockWidget.js";
 import { DeviceGridWidget } from "./widgets/DeviceGridWidget.js";
@@ -31,11 +33,10 @@ import { WeatherWidget } from "./widgets/WeatherWidget.js";
 export interface WallWidgetProps {
   widget: WallWidget;
   /**
-   * Whether the frame draws the card's surface, so a widget's nested device
-   * tiles must render with no surface of their own and a card stays a single
-   * surface (design.md D2; specs/wall-display "A card is a single surface").
-   * The `device` widget's frame is chrome-less, so it passes `false` and its
-   * tile owns the surface.
+   * Whether the frame draws the widget's own surface, so a nested device card
+   * draws none of its own and a card stays a single surface (design.md D2;
+   * specs/wall-display "A card is a single surface"). Every typed device widget's
+   * frame is chrome-less, so it passes `false` and its card owns the surface.
    */
   contained?: boolean;
   /**
@@ -115,12 +116,43 @@ export interface WallWidgetDescriptor {
 }
 
 /**
- * The minimum interactive-control size, in CSS pixels, a wall widget must meet
- * (design.md D4; specs/wall-display "Touch Operation"). The kiosk-class target —
- * larger than the desktop standard because a wall is operated by touch from a
- * distance.
+ * One typed device widget's descriptor (design.md D1, D3; specs/wall-display
+ * "Widget Catalog"). Each device class the capability model can drive gets its
+ * own type, sharing the one typed device config (`WallTypedDeviceWidgetConfig`) and
+ * the one renderer, so the difference between them is *which card* the type names
+ * — the renderer resolves its class from the widget's own type.
+ *
+ * The spans start from the ported card's own size. The minimum width is *derived*
+ * from the widest control row a card draws (`wall/grid.ts`'s
+ * `WALL_MIN_DEVICE_COLUMNS`), so a card at the type's minimum span never clips a
+ * control horizontally on either panel; the minimum height is the cell the wall's
+ * row unit is derived to hold a compact device card in with nothing to spare
+ * (`WALL_MIN_DEVICE_ROWS`). They are both the default — the smallest legal
+ * placement — and `6×6` is the maximum, so a device card can be enlarged to the
+ * roomiest composition the wall draws. A minimum that *is* the default makes the
+ * smallest legal placement `compact` (`resolveSpanTier`), which is the
+ * composition the ported card's budget fits.
  */
-export const WALL_MIN_TOUCH_TARGET = 56;
+function typedDeviceDescriptor(type: WallDeviceClass): WallWidgetDescriptor {
+  return {
+    type,
+    label: WALL_DEVICE_CLASS_LABELS[type],
+    grammar: "control",
+    defaults: { w: WALL_MIN_DEVICE_COLUMNS, h: WALL_MIN_DEVICE_ROWS },
+    min: { w: WALL_MIN_DEVICE_COLUMNS, h: WALL_MIN_DEVICE_ROWS },
+    max: { w: 6, h: 6 },
+    configSchema: WALL_WIDGET_CONFIG_SCHEMAS[type],
+    renderer: DeviceWidget,
+  };
+}
+
+/**
+ * The minimum interactive-control size, in CSS pixels, a wall widget must meet
+ * (design.md D2, D4; specs/wall-display "Touch Operation"). It is the ported card
+ * system's own control height — the value the ported device cards draw their
+ * controls at — so the wall's floor and the cards it ports cannot disagree.
+ */
+export const WALL_MIN_TOUCH_TARGET = 42;
 
 /**
  * The minimum space, in CSS pixels, the wall keeps between two adjacent
@@ -152,8 +184,8 @@ export const WALL_WIDGET_REGISTRY: Readonly<Record<WallWidgetType, WallWidgetDes
       type: "clock",
       label: "Clock",
       grammar: "ambient",
-      defaults: { w: 6, h: 3 },
-      min: { w: 3, h: 2 },
+      defaults: { w: 4, h: 2 },
+      min: { w: 2, h: 2 },
       max: { w: 8, h: 4 },
       configSchema: WALL_WIDGET_CONFIG_SCHEMAS.clock,
       renderer: ClockWidget,
@@ -212,16 +244,14 @@ export const WALL_WIDGET_REGISTRY: Readonly<Record<WallWidgetType, WallWidgetDes
       configSchema: WALL_WIDGET_CONFIG_SCHEMAS.favorites,
       renderer: FavoritesWidget,
     },
-    device: {
-      type: "device",
-      label: "Device",
-      grammar: "control",
-      defaults: { w: 2, h: 2 },
-      min: { w: 2, h: 2 },
-      max: { w: 6, h: 6 },
-      configSchema: WALL_WIDGET_CONFIG_SCHEMAS.device,
-      renderer: DeviceWidget,
-    },
+    light: typedDeviceDescriptor("light"),
+    cover: typedDeviceDescriptor("cover"),
+    fan: typedDeviceDescriptor("fan"),
+    climate: typedDeviceDescriptor("climate"),
+    lock: typedDeviceDescriptor("lock"),
+    number: typedDeviceDescriptor("number"),
+    select: typedDeviceDescriptor("select"),
+    entity: typedDeviceDescriptor("entity"),
     temperature: {
       type: "temperature",
       label: "Temperature",
@@ -271,10 +301,13 @@ export const WALL_WIDGET_REGISTRY: Readonly<Record<WallWidgetType, WallWidgetDes
        * Two tile columns by two tile rows — the smallest span that holds a
        * page's first row of device tiles at the wall's floors, so a device grid
        * can never be placed too small to page (wall-zones-and-fit D12;
-       * specs/wall-display "Device Grid Widget"). `wall-device-grid.test.ts`
-       * asserts it against `WALL_TILE_CELL_SPAN`.
+       * specs/wall-display "Device Grid Widget"). A tile is a typed device
+       * widget's minimum span (`WALL_MIN_DEVICE_COLUMNS` columns wide), so two
+       * tile columns are `2 · WALL_MIN_DEVICE_COLUMNS`; the row count is
+       * `WALL_MIN_DEVICE_ROWS` tiles plus the page chrome.
+       * `wall-device-grid.test.ts` asserts it against the tile cell.
        */
-      min: { w: 4, h: 4 },
+      min: { w: 2 * WALL_MIN_DEVICE_COLUMNS, h: 4 },
       max: { w: 12, h: 12 },
       configSchema: WALL_WIDGET_CONFIG_SCHEMAS.devices,
       renderer: DeviceGridWidget,

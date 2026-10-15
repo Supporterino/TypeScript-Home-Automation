@@ -18,17 +18,15 @@
  * holds more content than its span can present pages its content instead
  * (the device grid — see `wall/pages.ts`).
  *
- * ## The re-derived row unit (wall-zones-and-fit D4, D10)
+ * ## The re-derived row unit (design.md D2, D5)
  *
- * {@link ROW_UNIT_MIN} is derived from the compact wall light card rather than
- * chosen: a minimum-span `device` cell is {@link WALL_MIN_DEVICE_ROWS} rows, and
- * the compact card (specs/wall-display "A light card fits its minimum span") is
- * {@link WALL_COMPACT_CARD_HEIGHT_PX} px of content and surface padding. The
- * floor is the row unit at which such a cell holds that card with nothing to
- * spare — see the derivation below — and, with {@link ROW_UNIT_MAX} reduced to
- * the same D10 scale, it is what makes a wall card render ~25–30 % smaller on
- * the panel without crossing the wall's 56 px touch target or its 18 px body
- * floor.
+ * {@link ROW_UNIT_MIN} is derived from the smallest card the ported card system
+ * produces rather than chosen: a minimum-span device cell is
+ * {@link WALL_MIN_DEVICE_ROWS} rows, and the ported compact card's own budget is
+ * {@link WALL_COMPACT_CARD_HEIGHT_PX}, read from the card module. The floor is the
+ * row unit at which such a cell holds that card with nothing to spare — see the
+ * derivation below — and it is what makes a minimum-span device card fit its cell
+ * exactly while the whole wall renders at the ported card's own density.
  */
 import {
   WALL_GRID_COLUMNS,
@@ -36,6 +34,10 @@ import {
   type WallProfileConfig,
   type WallWidget,
 } from "@ts-ha/shared";
+import {
+  WALL_CARD_COMPACT_HEIGHT_PX,
+  WALL_CARD_CONTROL_ROW_MIN_WIDTH_PX,
+} from "./cards/card-composition.js";
 
 /**
  * The wall's single gutter and panel padding token (design.md D1). Used for
@@ -51,64 +53,98 @@ export const WALL_GUTTER_MIN_PX = 16;
 export const WALL_GUTTER_MAX_PX = 24;
 
 /**
- * The row unit's ceiling, in CSS pixels (wall-zones-and-fit D10). Lowered from
- * 112 px to the reduced component scale, so a short composition renders as a
- * dense, glanceable set of cards rather than a handful of very large blocks.
+ * The row unit's ceiling, in CSS pixels (design.md D5; specs/wall-display "Wall
+ * Glanceability"). Re-chosen for the ported card's density: the floor is derived
+ * (a two-row device cell holds the smallest ported card with nothing to spare),
+ * and the ceiling sits just above it so a two-row device cell is not inflated to
+ * a block far taller than the card it holds — the "52–56" density design.md D5
+ * leaves to the harness, settled at its top. It changes no requirement and no
+ * task; `wall-grid.test.ts` asserts it stays above the floor and near it.
  */
-export const ROW_UNIT_MAX = 80;
+export const ROW_UNIT_MAX = 56;
 
 /**
  * The wall's minimum touch target, in CSS pixels — the floor every compact
- * control row meets. Declared locally because this module must stay free of the
- * widget registry (which reaches React and the renderers); `wall-grid.test.ts`
- * asserts it agrees with `WALL_MIN_TOUCH_TARGET`, so the two cannot drift.
+ * control row meets, and therefore also a floor on the row unit (a row can never
+ * be shorter than a control). It mirrors `WALL_MIN_TOUCH_TARGET` (the wall's own
+ * declaration site) and the ported card's control height (design.md D2);
+ * `wall-grid.test.ts` asserts the row unit holds it.
  */
-const WALL_TOUCH_TARGET_PX = 56;
+const WALL_TOUCH_TARGET_PX = 42;
 
 /**
- * The wall's minimum space between two adjacent interactive controls, in CSS
- * pixels. Declared locally for the same reason as {@link WALL_TOUCH_TARGET_PX}
- * and asserted against `WALL_MIN_CONTROL_GAP` by `wall-grid.test.ts`.
- */
-const WALL_CONTROL_GAP_PX = 8;
-
-/** The compact light card's stacked control rows: the on/off affordance and the compact value-control row. */
-const WALL_COMPACT_CARD_ROWS = 2;
-
-/**
- * The minimum rows a `device` cell occupies — the wall device card's minimum
- * span (`WALL_WIDGET_REGISTRY.device.min`), asserted by `wall-grid.test.ts`.
+ * The minimum rows a typed device cell occupies — every typed device widget's
+ * minimum span height (`WALL_WIDGET_REGISTRY.light.min.h`), asserted by
+ * `wall-grid.test.ts`. The row unit is derived from it, so it is unchanged by
+ * the width axis below.
  */
 export const WALL_MIN_DEVICE_ROWS = 2;
 
 /**
- * The height, in CSS pixels, the compact wall light card needs at the wall's
- * floors (wall-zones-and-fit D4; specs/wall-display "A light card fits its
- * minimum span"): {@link WALL_COMPACT_CARD_ROWS} touch-target rows plus the
- * card's surface padding of one control gap top and bottom.
+ * The height, in CSS pixels, the smallest card the ported card system produces
+ * needs at the wall's floors (design.md D2, D5; specs/wall-display "Wall
+ * Glanceability" — "The row unit holds the smallest card"). It is the ported
+ * card's *own* compact budget — its state item plus one control row — read from
+ * the card module rather than restated, so the row unit is derived from the real
+ * card and cannot drift from it. (design.md D5 quotes Mushroom's small light card
+ * as ~110 px with the visible 36 px icon; the ported card's state row is the
+ * 42 px icon affordance, so its declared budget is the value read here.)
  */
-export const WALL_COMPACT_CARD_HEIGHT_PX =
-  WALL_COMPACT_CARD_ROWS * WALL_TOUCH_TARGET_PX + 2 * WALL_CONTROL_GAP_PX;
+export const WALL_COMPACT_CARD_HEIGHT_PX = WALL_CARD_COMPACT_HEIGHT_PX;
 
 /**
- * The row unit's floor, in CSS pixels (wall-zones-and-fit D4, D10). Derived, not
- * chosen — a {@link WALL_MIN_DEVICE_ROWS}-row cell is
+ * The row unit's floor, in CSS pixels (design.md D2, D5). Derived, not chosen — a
+ * {@link WALL_MIN_DEVICE_ROWS}-row cell is
  * `WALL_MIN_DEVICE_ROWS · ROW_UNIT_MIN + one gutter` tall (the gutter is the
  * inter-row gap the grid reserves), and it must hold
- * {@link WALL_COMPACT_CARD_HEIGHT_PX}:
+ * {@link WALL_COMPACT_CARD_HEIGHT_PX} with nothing to spare:
  *
  * ```
- *  2 · ROW_UNIT_MIN + WALL_GUTTER_MIN_PX  ≥  WALL_COMPACT_CARD_HEIGHT_PX
- *  ⇒ 2 · ROW_UNIT_MIN + 16                ≥  128
- *  ⇒ ROW_UNIT_MIN                          =  56
+ *  2 · ROW_UNIT_MIN + WALL_GUTTER_MIN_PX  =  WALL_COMPACT_CARD_HEIGHT_PX
+ *  ⇒ 2 · ROW_UNIT_MIN + 16                =  116   (the ported card's budget)
+ *  ⇒ ROW_UNIT_MIN                          =  50
  * ```
  *
  * The gutter floor (16 px) is the worst case, so a panel whose clamp resolves
  * above it has room to spare. The derivation is asserted in `wall-grid.test.ts`
- * against the wall's real touch target, control gap, and device minimum span.
+ * against the ported card's real compact height, the gutter floor, and the typed
+ * device widget's minimum span.
  */
-export const ROW_UNIT_MIN =
-  (WALL_COMPACT_CARD_HEIGHT_PX - WALL_GUTTER_MIN_PX) / WALL_MIN_DEVICE_ROWS;
+export const ROW_UNIT_MIN = Math.max(
+  (WALL_COMPACT_CARD_HEIGHT_PX - WALL_GUTTER_MIN_PX) / WALL_MIN_DEVICE_ROWS,
+  WALL_TOUCH_TARGET_PX,
+);
+
+/**
+ * The minimum columns a typed device widget occupies — derived, like the row
+ * unit, from the widest card the ported card system produces: the fewest columns
+ * whose cell, at the wall's floors, is at least the widest control row a card
+ * draws at its minimum span ({@link WALL_CARD_CONTROL_ROW_MIN_WIDTH_PX} — the
+ * cover's Open/Stop/Close transport, the widest bounded row the ported anatomy
+ * produces). A `columns`-wide cell is `columns · unit + (columns − 1) · gutter`
+ * wide at `unit` — the row geometry of `span.ts`'s `cardHeightPx` transposed —
+ * and a wall column is never narrower than a row is tall, so the floor uses the
+ * row unit's floor and the gutter's floor:
+ *
+ * ```
+ *  WALL_MIN_DEVICE_COLUMNS · ROW_UNIT_MIN + (WALL_MIN_DEVICE_COLUMNS − 1) · WALL_GUTTER_MIN_PX
+ *    ≥ WALL_CARD_CONTROL_ROW_MIN_WIDTH_PX
+ *  ⇒ 3 · 50 + 2 · 16 = 182 ≥ 174
+ * ```
+ *
+ * so a card at its type's minimum span never clips a control horizontally, on
+ * either panel (specs/wall-display "A light card fits its minimum span", "A
+ * card's content fits its span"). The width axis is never an input to the row
+ * derivation above, so the row unit is unchanged; `wall-grid.test.ts` asserts the
+ * derivation against the card's real row width and the typed device widget's
+ * minimum span.
+ */
+export const WALL_MIN_DEVICE_COLUMNS = Math.max(
+  1,
+  Math.ceil(
+    (WALL_CARD_CONTROL_ROW_MIN_WIDTH_PX + WALL_GUTTER_MIN_PX) / (ROW_UNIT_MIN + WALL_GUTTER_MIN_PX),
+  ),
+);
 
 /**
  * Sub-pixel tolerance for the fit comparison, in CSS pixels. `contentHeight`

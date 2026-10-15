@@ -445,3 +445,41 @@ export function writableColorCapability(capabilities: Capability[]): FlatCapabil
     find(flat, (c) => c.property === "color" && c.valueType === "numeric" && c.access.writable)
   );
 }
+
+/**
+ * The writable brightness control a wall light card drives, or `undefined` when
+ * the device declares none. A brightness the device only reports would let the
+ * wall qualify an on/off primary with a brightness readout, but no slider could
+ * be driven — so its absence keeps such a device a plain on/off entity rather
+ * than a broken light. Declared here, with the other writable-control lookups,
+ * so the capability vocabulary owns every "can this device be driven" question
+ * (`@ts-ha/shared`'s `Capability.kind` is open and source-derived, so the answer
+ * is always read from the flattened schema).
+ */
+export function writableBrightnessCapability(
+  capabilities: Capability[],
+): FlatCapability | undefined {
+  return find(
+    flattenCapabilities(capabilities),
+    (c) => c.property === "brightness" && c.valueType === "numeric" && c.access.writable,
+  );
+}
+
+/**
+ * Formats a brightness value as a percentage of its declared range for a light
+ * card's persistent readout. A raw `0–254` Zigbee brightness and a `0–100`
+ * Nanoleaf one both read as a percentage, so the value is normalised against its
+ * own range rather than assumed to already be one. A missing or non-numeric
+ * value renders an em dash rather than a stale number.
+ */
+export function formatBrightnessPercent(
+  value: unknown,
+  range?: { min?: number; max?: number },
+): string {
+  if (typeof value !== "number" || Number.isNaN(value)) return "—";
+  const min = range?.min ?? 0;
+  const max = range?.max ?? 100;
+  if (max <= min) return `${Math.round(value)}%`;
+  const percent = Math.round(((value - min) / (max - min)) * 100);
+  return `${Math.min(100, Math.max(0, percent))}%`;
+}

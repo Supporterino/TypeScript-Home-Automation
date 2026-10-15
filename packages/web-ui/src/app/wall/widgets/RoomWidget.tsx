@@ -1,8 +1,8 @@
 /**
  * The wall room widget (design.md D11, D13; wall-zones-and-fit D5;
  * specs/wall-display "Widget Catalog", "A room widget commands the room", "Panel
- * Fit"). Shows a configured room's devices as touch-sized tiles plus room-wide
- * all-on/all-off controls.
+ * Fit"). Shows a configured room's devices as their own class's ported card, plus
+ * room-wide all-on/all-off controls.
  *
  * The batch command reuses the same flow as `RoomView`: capable members are
  * grouped by the on/off property family they declare, every actuatable member
@@ -14,7 +14,7 @@
  * Composed on the shared Hearth card vocabulary (design.md D11): a leading room
  * glyph and the room name as the title, the member count as the metric, and the
  * room-wide all-on/all-off controls as the card's action-affordance slot. A
- * control widget: the frame draws the surface, so each contained tile draws
+ * control widget: the frame draws the surface, so each contained card draws
  * none of its own (specs/wall-display "A card is a single surface").
  *
  * A room larger than the card can show pages its tiles through the wall's shared
@@ -45,9 +45,9 @@ import {
   WallCardMetric,
   wallControlGapPx,
 } from "./card-vocab.js";
+import { WallDeviceCard, WallDeviceUnavailable, wallTileCardBox } from "./DeviceWidget.js";
 import { PagedTileGrid } from "./PagedTileGrid.js";
 import { actuatableRoomMembers, roomTiles } from "./room-model.js";
-import { WallDeviceTile } from "./WallDeviceTile.js";
 
 /**
  * The grid rows the card's own chrome — the room glyph with its name, the member
@@ -184,25 +184,20 @@ export function RoomWidget({ widget, contained, rowUnit }: WallWidgetProps) {
         <PagedTileGrid
           items={tiles}
           keyOf={(tile) => tile.qualifiedId}
-          renderTile={(tile) =>
+          renderTile={(tile, box) =>
             tile.device ? (
-              // A paged tile is the device card at the wall's minimum-span tile
-              // cell, so it composes the tier and form that cell resolves — the
-              // same ones the device grid gives its tiles (wall-zones-and-fit D4).
-              <WallDeviceTile
+              // A paged tile composes for the box the grid drew it in: the page
+              // plan's row height, which is the tile's own cell bounded against
+              // inflation (design.md D2, D9; specs/wall-display "Paged Tile
+              // Sizing"). Its composition is resolved from that box, so the same
+              // device composes differently in a short room card and a tall one.
+              <WallDeviceCard
                 device={tile.device}
                 contained={contained}
-                tier="compact"
-                cardForm="compact"
+                box={wallTileCardBox(rowUnit, box.heightPx)}
               />
             ) : (
-              <WallDeviceTile
-                unavailable
-                qualifiedId={tile.qualifiedId}
-                contained={contained}
-                tier="compact"
-                cardForm="compact"
-              />
+              <WallDeviceUnavailable qualifiedId={tile.qualifiedId} contained={contained} />
             )
           }
           span={widget}

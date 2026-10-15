@@ -1,13 +1,14 @@
 /**
  * The wall harness's fixture roster (design.md D5, D6; task 2.1).
  *
- * One device per card archetype, so every composition a wall card has is
+ * One device per wall device class, so every typed card the wall renders is
  * reachable without an engine: a full light (on/off plus brightness, colour
- * temperature, and colour), a plain switch, a cover with position and stop, a
- * read-only sensor, and a value device — plus a selection large enough that the
- * device grid must page, one scene automation, one room with members, and the
- * weather and energy readings those two widgets would otherwise fetch.
- * {@link MISSING_DEVICE_ID} is deliberately not a device in the map, so
+ * temperature, and colour), a plain switch (the entity class), a cover with
+ * position and stop, a read-only sensor (the entity class), a fan, a bounded
+ * number, an enumerated select, a climate, and a lock — plus a selection large
+ * enough that the device grid must page, one scene automation, one room with
+ * members, and the weather and energy readings those two widgets would otherwise
+ * fetch. {@link MISSING_DEVICE_ID} is deliberately not a device in the map, so
  * `DeviceWidget`'s "is not available" path renders.
  *
  * The set is typed as the store's own `DataStoreFixtures`, and every device as
@@ -31,10 +32,10 @@ import {
   flattenCapabilities,
   pickOnOffCapability,
 } from "../../lib/capability-ranking.js";
-import type { CardArchetype } from "../../lib/card-archetype.js";
 import type { DataStoreFixtures } from "../../lib/data-store.js";
 import { FAVORITES_STATE_KEY } from "../../lib/favorites.js";
 import type { Automation, DeviceDescriptor, RoomWithMembers, StateMap } from "../../types.js";
+import type { WallDeviceClass } from "../cards/device-class.js";
 import type { HarnessFixtureControls } from "./messages.js";
 
 /** The device source every fixture device reports; the qualified ids read as synthetic on sight. */
@@ -52,9 +53,9 @@ const READ_ONLY = { readable: true, writable: false };
 
 /**
  * The full light: on/off plus the three controls a wall light card can drive, so
- * the card resolves to the `light` archetype and composes its whole form. Its
- * on/off declares the string encoding Zigbee2MQTT reports, so the declared-value
- * path is exercised rather than a real boolean.
+ * the device resolves to the `light` class and its card composes its whole form.
+ * Its on/off declares the string encoding Zigbee2MQTT reports, so the
+ * declared-value path is exercised rather than a real boolean.
  */
 function lightCapabilities(): Capability[] {
   return [
@@ -98,7 +99,7 @@ function lightCapabilities(): Capability[] {
   ];
 }
 
-/** A plain switch: a writable boolean on/off and nothing else, so its card is the whole-card toggle. */
+/** A plain switch: a writable boolean on/off and nothing else, so its card is the entity card's whole-card toggle. */
 function switchCapabilities(): Capability[] {
   return [{ kind: "switch", property: "on", access: READ_WRITE, valueType: "boolean" }];
 }
@@ -131,7 +132,7 @@ function coverCapabilities(): Capability[] {
   ];
 }
 
-/** A read-only sensor: a readable temperature and nothing actuatable, so its card is a chrome-less readout. */
+/** A read-only sensor: a readable temperature and nothing actuatable, so its entity card is a read-only reading. */
 function sensorCapabilities(): Capability[] {
   return [
     {
@@ -145,9 +146,8 @@ function sensorCapabilities(): Capability[] {
 }
 
 /**
- * A value device: an actuatable value the wall has no specialised card for — a
- * fan's declared mode — so its card keeps the shared default composition and the
- * generic value control.
+ * A fan: a declared preset enum beneath a `fan` container, so its card is the
+ * fan card (the presets the card presents as its speed steps).
  */
 function valueCapabilities(): Capability[] {
   return [
@@ -162,6 +162,103 @@ function valueCapabilities(): Capability[] {
           access: READ_WRITE,
           valueType: "enum",
           permittedValues: ["low", "medium", "high"],
+        },
+      ],
+    },
+  ];
+}
+
+/**
+ * A bounded numeric control with no specialised on/off card: a writable numeric
+ * with a declared range, so its card is the number card.
+ */
+function numberCapabilities(): Capability[] {
+  return [
+    {
+      kind: "number",
+      property: "value",
+      access: READ_WRITE,
+      valueType: "numeric",
+      range: { min: 0, max: 100 },
+      unit: "%",
+    },
+  ];
+}
+
+/**
+ * An enumerated control with no specialised card: a writable enum with permitted
+ * values, so its card is the select card.
+ */
+function selectCapabilities(): Capability[] {
+  return [
+    {
+      kind: "select",
+      property: "option",
+      access: READ_WRITE,
+      valueType: "enum",
+      permittedValues: ["auto", "manual", "off"],
+    },
+  ];
+}
+
+/**
+ * A thermostat: a writable setpoint and mode beneath a climate container with a
+ * measured temperature, so its card is the climate card. Its mode declares six
+ * permitted values — more than fit one actions row at the wall's touch target —
+ * so the harness reaches the enumerated control's single-affordance fallback as
+ * well as its segmented form.
+ */
+function climateCapabilities(): Capability[] {
+  return [
+    {
+      kind: "climate",
+      access: READ_WRITE,
+      valueType: "composite",
+      features: [
+        {
+          kind: "climate",
+          property: "current_heating_setpoint",
+          access: READ_WRITE,
+          valueType: "numeric",
+          range: { min: 5, max: 35 },
+          unit: "°C",
+        },
+        {
+          kind: "climate",
+          property: "system_mode",
+          access: READ_WRITE,
+          valueType: "enum",
+          permittedValues: ["off", "heat", "cool", "auto", "dry", "fan_only"],
+        },
+        {
+          kind: "climate",
+          property: "local_temperature",
+          access: READ_ONLY,
+          valueType: "numeric",
+          unit: "°C",
+        },
+      ],
+    },
+  ];
+}
+
+/**
+ * A lock: a writable `state` enum naming its own lock and unlock values, so its
+ * card is the lock card.
+ */
+function lockCapabilities(): Capability[] {
+  return [
+    {
+      kind: "lock",
+      access: READ_WRITE,
+      valueType: "composite",
+      features: [
+        {
+          kind: "lock",
+          property: "state",
+          access: READ_WRITE,
+          valueType: "enum",
+          permittedValues: ["LOCK", "UNLOCK"],
         },
       ],
     },
@@ -222,6 +319,34 @@ const VALUE = fixtureDevice({
   capabilities: valueCapabilities(),
 });
 
+const NUMBER = fixtureDevice({
+  id: "number-valve",
+  displayName: "Radiator valve",
+  state: { value: 40 },
+  capabilities: numberCapabilities(),
+});
+
+const SELECT = fixtureDevice({
+  id: "select-mode",
+  displayName: "Heating mode",
+  state: { option: "auto" },
+  capabilities: selectCapabilities(),
+});
+
+const CLIMATE = fixtureDevice({
+  id: "climate-hall",
+  displayName: "Hall thermostat",
+  state: { current_heating_setpoint: 21, system_mode: "heat", local_temperature: 20.5 },
+  capabilities: climateCapabilities(),
+});
+
+const LOCK = fixtureDevice({
+  id: "lock-front",
+  displayName: "Front door",
+  state: { state: "LOCK" },
+  capabilities: lockCapabilities(),
+});
+
 /**
  * How many extra devices the paging selection carries. The device grid draws at
  * most 30 tiles on any legal placement — 6 across by 5 rows at the widget's
@@ -250,8 +375,8 @@ const METERING_PLUG = fixtureDevice({
 });
 
 /**
- * Every fixture device: one per card archetype first, so the grid's own first
- * page shows every composition, then the metering plug and the paging roster.
+ * Every fixture device: one per wall device class first, so the grid's own first
+ * page shows every typed card, then the metering plug and the paging roster.
  */
 const DEVICES: DeviceDescriptor[] = [
   LIGHT,
@@ -259,28 +384,40 @@ const DEVICES: DeviceDescriptor[] = [
   COVER,
   SENSOR,
   VALUE,
+  NUMBER,
+  SELECT,
+  CLIMATE,
+  LOCK,
   METERING_PLUG,
   ...PAGING_DEVICES,
 ];
 
-/** The device the panel points a `device` widget at to reach each card archetype (task 5.2). */
-export const ARCHETYPE_DEVICE_IDS: Readonly<Record<CardArchetype, string>> = {
+/**
+ * The device the panel points a typed device widget at to reach each wall device
+ * class (task 5.2). One device per class, each resolving to exactly that class,
+ * so a placed widget of any class and a paged tile of any device both render a
+ * real typed card.
+ */
+export const DEVICE_CLASS_DEVICE_IDS: Readonly<Record<WallDeviceClass, string>> = {
   light: LIGHT.qualifiedId,
-  toggle: SWITCH.qualifiedId,
   cover: COVER.qualifiedId,
-  readout: SENSOR.qualifiedId,
-  default: VALUE.qualifiedId,
+  fan: VALUE.qualifiedId,
+  climate: CLIMATE.qualifiedId,
+  lock: LOCK.qualifiedId,
+  number: NUMBER.qualifiedId,
+  select: SELECT.qualifiedId,
+  entity: SENSOR.qualifiedId,
 };
 
 /** The `devices` widget's selection: the whole roster, which always exceeds one page (task 5.2). */
 export const DEVICE_GRID_SELECTION: readonly string[] = DEVICES.map((device) => device.qualifiedId);
 
 /**
- * The room the panel points a `room` widget at. Its members are all five
- * archetype devices, so the panel's device selector and state controls are
- * observable in the stage for every key it offers: the room card renders each
- * member's own device card, and its command row groups the on/off and positioning
- * members.
+ * The room the panel points a `room` widget at. Its members span several wall
+ * device classes — a light, an on/off entity, a cover, a read-only entity, and a
+ * fan — so the panel's device selector and state controls are observable in the
+ * stage for every key it offers: the room card renders each member's own typed
+ * card, and its command row groups the on/off and positioning members.
  */
 const ROOM: RoomWithMembers = {
   id: "fixture:living-room",
@@ -470,11 +607,11 @@ function withControlState(
  *
  * The room's members are derived from the resulting device map the same way the
  * store derives them from a snapshot, so turning the selected device's presence
- * off shows an unavailable member in the room card as well as routing a
- * `device` widget pointed at it to its contained explanation.
+ * off shows an unavailable member in the room card as well as routing a typed
+ * device widget pointed at it to its contained explanation.
  */
 export function fixtureSetFor(controls: HarnessFixtureControls): DataStoreFixtures {
-  const selected = ARCHETYPE_DEVICE_IDS[controls.device];
+  const selected = DEVICE_CLASS_DEVICE_IDS[controls.device];
   const devices = DEVICES.filter(
     (device) => controls.devicePresent || device.qualifiedId !== selected,
   ).map((device) =>

@@ -15,7 +15,7 @@
  */
 import type { WallProfileConfig, WallWidget } from "@ts-ha/shared";
 import { wallProfileConfigSchema, wallWidgetSchema } from "@ts-ha/shared/wall-schema";
-import type { CardArchetype } from "../../lib/card-archetype.js";
+import { WALL_DEVICE_CLASSES, type WallDeviceClass } from "../cards/device-class.js";
 import type { WallCardForm, WallWidgetTier } from "../span.js";
 
 /** The panel the stage is laid out for (design.md D3, D4). */
@@ -45,17 +45,13 @@ export const HARNESS_PANEL_SIZES: Readonly<
 };
 
 /**
- * The fixture devices the panel can select, by card archetype — the roster
- * `fixtures.ts` builds one device per archetype for (design D6). Typed as the
- * archetype union so a value the roster does not carry is a compile error.
+ * The fixture devices the panel can select, by device class — the roster
+ * `fixtures.ts` builds one device per wall device class for (design D6). Typed
+ * as the device-class union so a value the roster does not carry is a compile
+ * error, and keyed by the wall's own classes (not a card archetype) so the
+ * harness reaches each typed card the wall renders.
  */
-export const HARNESS_DEVICE_KEYS: readonly CardArchetype[] = [
-  "light",
-  "toggle",
-  "cover",
-  "readout",
-  "default",
-];
+export const HARNESS_DEVICE_KEYS: readonly WallDeviceClass[] = WALL_DEVICE_CLASSES;
 
 /**
  * The fixture controls the panel exposes (task 5.2). Every field is a plain
@@ -64,8 +60,8 @@ export const HARNESS_DEVICE_KEYS: readonly CardArchetype[] = [
  * `fixtureSetFor()`, so no fixture object crosses the boundary.
  */
 export interface HarnessFixtureControls {
-  /** Which archetype device the controls below apply to. */
-  device: CardArchetype;
+  /** Which device-class device the controls below apply to. */
+  device: WallDeviceClass;
   /** Whether that device is in the store's map at all; `false` is the missing-device path. */
   devicePresent: boolean;
   /** Whether the selected device reports its on/off as on, where it declares one. */
@@ -170,7 +166,7 @@ function parseMember<T extends string>(value: unknown, allowed: readonly T[]): T
 function parseFixtureControls(value: unknown): HarnessFixtureControls | null {
   if (typeof value !== "object" || value === null) return null;
   const candidate = value as Record<string, unknown>;
-  const device = candidate.device as CardArchetype;
+  const device = candidate.device as WallDeviceClass;
   if (!HARNESS_DEVICE_KEYS.includes(device)) return null;
   for (const flag of ["devicePresent", "on", "weather", "energy"] as const) {
     if (typeof candidate[flag] !== "boolean") return null;

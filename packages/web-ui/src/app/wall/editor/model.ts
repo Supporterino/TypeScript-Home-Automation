@@ -13,6 +13,7 @@
  * Loaded only inside the lazy `wall` chunk (the editor is its only consumer).
  */
 import {
+  type DeviceDescriptor,
   WALL_GRID_COLUMNS,
   WALL_GRID_MAX_ROWS,
   WALL_PROFILE_VERSION,
@@ -22,6 +23,7 @@ import {
   type WallWidgetType,
 } from "@ts-ha/shared";
 import { wallProfileSchema } from "@ts-ha/shared/wall-schema";
+import { deviceCanDriveClass, type WallDeviceClass } from "../cards/device-class.js";
 import { widgetTitle } from "../frame.js";
 import {
   getWidgetDescriptor,
@@ -248,6 +250,22 @@ export function toggleDeviceSelection(
     ? selected.filter((candidate) => candidate !== device)
     : [...selected, device];
   return updateWidgetConfig(config, id, { qualifiedIds: next });
+}
+
+/**
+ * The devices the editor offers a typed device widget of `deviceClass` (design.md
+ * D3, D6; specs/wall-display "A device its class cannot drive is not offered").
+ * The rule is the wall's own device-class resolver — the same one a widget
+ * explains a mis-bound device with at runtime (`DeviceWidget`'s
+ * `deviceCanDriveClass`) — so the editor can never offer a device whose
+ * capabilities cannot drive the class, and the offer and the explanation cannot
+ * drift. `entity` is the typed fallback, so every device drives it.
+ */
+export function offeredDevices(
+  deviceClass: WallDeviceClass,
+  devices: Iterable<DeviceDescriptor>,
+): DeviceDescriptor[] {
+  return [...devices].filter((device) => deviceCanDriveClass(device.capabilities, deviceClass));
 }
 
 /**

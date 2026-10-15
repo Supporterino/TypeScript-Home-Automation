@@ -14,14 +14,39 @@
  * `useOrientation()` gives inside the stage is observable (D4; task 4.2).
  */
 import type { WallProfileConfig, WallWidget } from "@ts-ha/shared";
-import { resolveLayout } from "../grid.js";
+import type { WallDeviceClass } from "../cards/device-class.js";
+import { resolveLayout, WALL_MIN_DEVICE_COLUMNS, WALL_MIN_DEVICE_ROWS } from "../grid.js";
 import {
-  ARCHETYPE_DEVICE_IDS,
+  DEVICE_CLASS_DEVICE_IDS,
   DEVICE_GRID_SELECTION,
   HARNESS_ROOM_ID,
   HARNESS_SCENE_NAME,
 } from "./fixtures.js";
 import type { HarnessPanel } from "./messages.js";
+
+/**
+ * A typed device widget for one device class the fixture roster backs, at the
+ * type's minimum span ({@link WALL_MIN_DEVICE_COLUMNS}×{@link WALL_MIN_DEVICE_ROWS})
+ * — the cell every typed card's composition is derived for, so the draft places
+ * the class rather than only reaching it through a tile or a paged device grid. A
+ * harness walk therefore reaches every typed card directly;
+ * `tests/wall-harness-walk.test.ts` asserts the coverage and that each card fits
+ * its minimum-span box on both panels.
+ */
+function deviceClassWidget(
+  deviceClass: WallDeviceClass,
+  placement: { readonly x: number; readonly y: number },
+): WallWidget {
+  return {
+    id: `device-${deviceClass}`,
+    type: deviceClass,
+    config: { qualifiedId: DEVICE_CLASS_DEVICE_IDS[deviceClass] },
+    x: placement.x,
+    y: placement.y,
+    w: WALL_MIN_DEVICE_COLUMNS,
+    h: WALL_MIN_DEVICE_ROWS,
+  };
+}
 
 /**
  * The landscape composition: a home band across the top (the clock hero, the
@@ -45,32 +70,22 @@ const LANDSCAPE: readonly WallWidget[] = [
     zone: "Living Room",
   },
   {
-    id: "temperature-hall",
-    type: "temperature",
-    config: { qualifiedId: ARCHETYPE_DEVICE_IDS.readout },
+    id: "device-light",
+    type: "light",
+    config: { qualifiedId: DEVICE_CLASS_DEVICE_IDS.light },
     x: 4,
     y: 3,
-    w: 2,
-    h: 2,
-    zone: "Living Room",
-  },
-  {
-    id: "device-light",
-    type: "device",
-    config: { qualifiedId: ARCHETYPE_DEVICE_IDS.light },
-    x: 6,
-    y: 3,
-    w: 2,
-    h: 2,
+    w: WALL_MIN_DEVICE_COLUMNS,
+    h: WALL_MIN_DEVICE_ROWS,
   },
   {
     id: "device-cover",
-    type: "device",
-    config: { qualifiedId: ARCHETYPE_DEVICE_IDS.cover },
-    x: 8,
+    type: "cover",
+    config: { qualifiedId: DEVICE_CLASS_DEVICE_IDS.cover },
+    x: 7,
     y: 3,
-    w: 2,
-    h: 2,
+    w: WALL_MIN_DEVICE_COLUMNS,
+    h: WALL_MIN_DEVICE_ROWS,
   },
   {
     id: "scene-evening",
@@ -81,16 +96,32 @@ const LANDSCAPE: readonly WallWidget[] = [
     w: 2,
     h: 2,
   },
+  deviceClassWidget("fan", { x: 4, y: 5 }),
+  deviceClassWidget("climate", { x: 7, y: 5 }),
+  {
+    id: "temperature-hall",
+    type: "temperature",
+    config: { qualifiedId: DEVICE_CLASS_DEVICE_IDS.entity },
+    x: 10,
+    y: 5,
+    w: 2,
+    h: 2,
+    zone: "Living Room",
+  },
+  deviceClassWidget("lock", { x: 4, y: 7 }),
+  deviceClassWidget("number", { x: 7, y: 7 }),
   {
     id: "device-grid",
     type: "devices",
     config: { qualifiedIds: [...DEVICE_GRID_SELECTION] },
-    x: 4,
-    y: 5,
-    w: 4,
+    x: 0,
+    y: 9,
+    w: 6,
     h: 4,
   },
-  { id: "favorites", type: "favorites", config: {}, x: 8, y: 5, w: 4, h: 5 },
+  { id: "favorites", type: "favorites", config: {}, x: 6, y: 9, w: 3, h: 5 },
+  deviceClassWidget("select", { x: 9, y: 9 }),
+  deviceClassWidget("entity", { x: 9, y: 11 }),
 ];
 
 /**
@@ -118,7 +149,7 @@ const PORTRAIT: readonly WallWidget[] = [
   {
     id: "temperature-hall",
     type: "temperature",
-    config: { qualifiedId: ARCHETYPE_DEVICE_IDS.readout },
+    config: { qualifiedId: DEVICE_CLASS_DEVICE_IDS.entity },
     x: 0,
     y: 8,
     w: 3,
@@ -127,11 +158,27 @@ const PORTRAIT: readonly WallWidget[] = [
   },
   {
     id: "device-light",
-    type: "device",
-    config: { qualifiedId: ARCHETYPE_DEVICE_IDS.light },
+    type: "light",
+    config: { qualifiedId: DEVICE_CLASS_DEVICE_IDS.light },
     x: 3,
     y: 8,
-    w: 3,
+    w: WALL_MIN_DEVICE_COLUMNS,
+    h: WALL_MIN_DEVICE_ROWS,
+  },
+  deviceClassWidget("cover", { x: 0, y: 10 }),
+  deviceClassWidget("fan", { x: 3, y: 10 }),
+  deviceClassWidget("climate", { x: 6, y: 10 }),
+  deviceClassWidget("lock", { x: 9, y: 10 }),
+  deviceClassWidget("number", { x: 0, y: 12 }),
+  deviceClassWidget("select", { x: 3, y: 12 }),
+  deviceClassWidget("entity", { x: 6, y: 12 }),
+  {
+    id: "scene-evening",
+    type: "scene",
+    config: { automation: HARNESS_SCENE_NAME },
+    x: 10,
+    y: 12,
+    w: 2,
     h: 2,
   },
   {
@@ -139,29 +186,11 @@ const PORTRAIT: readonly WallWidget[] = [
     type: "devices",
     config: { qualifiedIds: [...DEVICE_GRID_SELECTION] },
     x: 0,
-    y: 10,
+    y: 14,
     w: 8,
     h: 5,
   },
-  { id: "favorites", type: "favorites", config: {}, x: 8, y: 10, w: 4, h: 5 },
-  {
-    id: "device-cover",
-    type: "device",
-    config: { qualifiedId: ARCHETYPE_DEVICE_IDS.cover },
-    x: 8,
-    y: 15,
-    w: 2,
-    h: 2,
-  },
-  {
-    id: "scene-evening",
-    type: "scene",
-    config: { automation: HARNESS_SCENE_NAME },
-    x: 10,
-    y: 15,
-    w: 2,
-    h: 2,
-  },
+  { id: "favorites", type: "favorites", config: {}, x: 8, y: 14, w: 4, h: 5 },
 ];
 
 /** The draft the stage opens with; the panel edits a copy of it (group 5). */

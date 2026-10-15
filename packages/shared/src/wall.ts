@@ -12,6 +12,12 @@
  * schema that validates these types lives in `wall-schema.ts` and is exposed
  * under the `@ts-ha/shared/wall-schema` subpath, keeping `zod` out of the root
  * barrel — and therefore out of the first-paint bundle.
+ *
+ * Version 2 replaces the single generic `device` widget with one widget type per
+ * device class the capability model can drive, each sharing one typed device
+ * config (design.md D3, D6, D8; specs/wall-display "Widget Catalog"). The
+ * version-1 widget and profile shapes are exported alongside it so a stored
+ * profile can be migrated rather than rejected.
  */
 
 /** Fixed column count of the wall grid (design.md D4). */
@@ -25,8 +31,20 @@ export const WALL_GRID_COLUMNS = 12;
  */
 export const WALL_GRID_MAX_ROWS = 24;
 
-/** The profile shape version, carried so the config can evolve (design.md D10). */
-export const WALL_PROFILE_VERSION = 1;
+/**
+ * The profile shape version, carried so the config can evolve (design.md D8).
+ * Version 2 replaced the single generic `device` widget with one widget type per
+ * device class; a stored version-1 profile is migrated on load rather than
+ * rejected (specs/wall-display "Wall Profile Version and Migration").
+ */
+export const WALL_PROFILE_VERSION = 2;
+
+/**
+ * The version-1 profile shape's version, retained so the migration can read a
+ * stored version-1 profile (design.md D8; specs/wall-display "Wall Profile
+ * Version and Migration").
+ */
+export const WALL_V1_PROFILE_VERSION = 1;
 
 /**
  * Maximum length of a widget's optional zone label (wall-zones-and-fit D1;
@@ -36,19 +54,31 @@ export const WALL_PROFILE_VERSION = 1;
  */
 export const WALL_ZONE_MAX_LENGTH = 40;
 
-/** The widget types a profile may place (specs/wall-display "Widget Catalog"). */
+/**
+ * The widget types a profile may place (design.md D3; specs/wall-display
+ * "Widget Catalog"). The single generic `device` widget retires in favour of one
+ * type per device class the capability model can drive; `entity` is the typed
+ * fallback for a device of no class.
+ */
 export const WALL_WIDGET_TYPES = [
   "clock",
   "weather",
   "energy",
   "room",
   "favorites",
-  "device",
   "temperature",
   "status",
   "scene",
   "link",
   "devices",
+  "light",
+  "cover",
+  "fan",
+  "climate",
+  "lock",
+  "number",
+  "select",
+  "entity",
 ] as const;
 
 /** A supported widget type. */
@@ -77,10 +107,35 @@ export interface WallRoomWidgetConfig {
   readonly title?: string;
 }
 
-/** Config for the single-device widget: the device to control, with an optional title. */
+/**
+ * Config for the version-1 single-device widget: the device to control, with an
+ * optional title (design.md D8). Retained so a stored version-1 profile can be
+ * read and migrated; version 2 replaces it with
+ * {@link WallTypedDeviceWidgetConfig}.
+ */
 export interface WallDeviceWidgetConfig {
   readonly qualifiedId: string;
   readonly title?: string;
+}
+
+/** The layouts a typed device card may compose (design.md D6). */
+export const WALL_DEVICE_LAYOUTS = ["default", "vertical", "horizontal"] as const;
+
+/** A typed device card's layout. */
+export type WallDeviceLayout = (typeof WALL_DEVICE_LAYOUTS)[number];
+
+/**
+ * Config for a typed device widget — the config every device widget type shares
+ * (design.md D6, D8; specs/wall-display "Widget Catalog", "Wall Device
+ * Presentation"): the single device it binds, the card's layout, and whether the
+ * card hides its controls while the device is inactive. Declared once so each of
+ * the `light`, `cover`, `fan`, `climate`, `lock`, `number`, `select`, and
+ * `entity` types carries the same shape.
+ */
+export interface WallTypedDeviceWidgetConfig {
+  readonly qualifiedId: string;
+  readonly layout?: WallDeviceLayout;
+  readonly collapsible_controls?: boolean;
 }
 
 /** Config for the temperature widget: the sensor device to read, with an optional title. */
@@ -172,4 +227,51 @@ export interface WallProfile {
   readonly name: string;
   readonly version: number;
   readonly config: WallProfileConfig;
+}
+
+/**
+ * The widget types a version-1 profile could place (design.md D8;
+ * specs/wall-display "Wall Profile Version and Migration"). Version 1 carried a
+ * single generic `device` widget that version 2 replaced with one widget type
+ * per device class; the union is exported so the migration can read a stored
+ * version-1 profile.
+ */
+export const WALL_V1_WIDGET_TYPES = [
+  "clock",
+  "weather",
+  "energy",
+  "room",
+  "favorites",
+  "device",
+  "temperature",
+  "status",
+  "scene",
+  "link",
+  "devices",
+] as const;
+
+/** A widget type a version-1 profile could place. */
+export type WallV1WidgetType = (typeof WALL_V1_WIDGET_TYPES)[number];
+
+/** One configured widget in a version-1 profile. */
+export interface WallV1Widget extends Omit<WallWidget, "type"> {
+  readonly type: WallV1WidgetType;
+}
+
+/** A version-1 profile's widget composition. */
+export interface WallV1ProfileConfig {
+  readonly widgets: readonly WallV1Widget[];
+  readonly orientations?: Partial<Record<WallOrientation, readonly WallV1Widget[]>>;
+}
+
+/**
+ * A stored version-1 wall profile, read by the migration (design.md D8;
+ * specs/wall-display "Wall Profile Version and Migration"). It mirrors
+ * {@link WallProfile} with the version-1 widget shape, so a profile saved before
+ * version 2 parses and can be migrated rather than rejected.
+ */
+export interface WallV1Profile {
+  readonly name: string;
+  readonly version: number;
+  readonly config: WallV1ProfileConfig;
 }

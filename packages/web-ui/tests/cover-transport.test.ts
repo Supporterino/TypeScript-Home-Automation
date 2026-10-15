@@ -1,6 +1,4 @@
 import { describe, expect, it } from "bun:test";
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
 import type { Capability } from "@ts-ha/shared";
 import {
   coverStopCommand,
@@ -8,23 +6,17 @@ import {
   coverTransportTargets,
   rankDeviceTile,
 } from "../src/app/lib/capability-ranking.js";
-import { archetypeWholeCardActuation, cardArchetype } from "../src/app/lib/card-archetype.js";
-import { WALL_MIN_CONTROL_GAP, WALL_MIN_TOUCH_TARGET } from "../src/app/wall/registry.js";
-import { wallTileMetrics } from "../src/app/wall/scale.js";
+import { cardArchetype } from "../src/app/lib/card-archetype.js";
+import { WALL_MIN_CONTROL_GAP } from "../src/app/wall/registry.js";
 
 /**
- * Structural + pure assertions for the cover transport controls (task 2.8;
- * design.md D15; specs/wall-display "Cover Transport Controls"). There is no
- * DOM harness here, so the control set, the optimistic wiring, the touch target,
- * the adjacent-control separation, and the no-hover requirement are asserted
- * against the module sources — the same style as `wall-light-card.test.ts` —
- * while the pure decisions (which archetype, which values Open/Close command,
- * whether a stop command exists) are covered directly.
+ * The cover transport decisions (design.md D15; specs/wall-display "Cover
+ * Transport Controls"). The control set, the optimistic wiring, and the drawing
+ * now live in the wall's own `CoverCard` (`wall-card-cover.test.ts` covers the
+ * card); what stays here is the pure detection and value resolution the card
+ * drives — which device is a cover, which values Open/Close command, and whether
+ * a stop command exists.
  */
-const APP_DIR = join(import.meta.dir, "..", "src/app");
-const COVER_TRANSPORT = join(APP_DIR, "components/CoverTransport.tsx");
-const TILE = join(APP_DIR, "components/DeviceTile.tsx");
-
 const rw = { readable: true, writable: true };
 const ro = { readable: true, writable: false };
 
@@ -87,15 +79,6 @@ function transportLabels(capabilities: Capability[]): string[] {
   return ["Open", "Close", ...(coverStopCommand(capabilities) ? ["Stop"] : [])];
 }
 
-/** Removes block and line comments so prose is not mistaken for code. */
-function stripComments(content: string): string {
-  return content.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
-}
-
-async function source(path: string): Promise<string> {
-  return stripComments(await readFile(path, "utf8"));
-}
-
 describe("cover detection — position or a declared transport action (design D15)", () => {
   it("recognises a cover whose primary action is a position", () => {
     const capabilities = zigbeeCover();
@@ -151,7 +134,7 @@ describe("cover transport values (design D15)", () => {
   });
 
   it("falls back to the position extremes when no transport action is declared", () => {
-    // A `FlatCapability` is what the tile already resolved for the cover; the
+    // A `FlatCapability` is what the card already resolved for the cover; the
     // helper only reads its declared range.
     expect(
       coverTransportTargets(null, {
@@ -182,99 +165,7 @@ describe("cover transport control set (design D15)", () => {
     expect(transportLabels(openCloseOnlyCover())).toEqual(["Open", "Close"]);
   });
 
-  it("renders Open and Close unconditionally and gates Stop behind the pure command", async () => {
-    const src = await source(COVER_TRANSPORT);
-    expect(src).toContain('label="Open cover"');
-    expect(src).toContain('label="Close cover"');
-    expect(src).toContain('label="Stop cover"');
-    // Stop is guarded by the detector result, so it is omitted rather than rendered inert.
-    expect(src).toMatch(/\{stop && \(/);
-  });
-
-  it("commands the declared transport value for Open and Close, the extreme when falling back", async () => {
-    const src = await source(COVER_TRANSPORT);
-    // The tile resolves the declared transport and passes it in; the control
-    // commands it through the tile-owned channel, falling back to the tile's
-    // position channel when none is declared.
-    expect(src).toContain("coverTransportTargets(transport, position)");
-    expect(src).toContain("channel.setValue(targets.open)");
-    expect(src).toContain("channel.setValue(targets.close)");
-    expect(src).toContain("onClick={() => stopChannel.setValue(stop.value)}");
-  });
-});
-
-describe("cover transport optimistic wiring (design D15)", () => {
-  it("lets the tile own a single transport channel shared across Open, Close, and Stop", async () => {
-    const tile = await source(TILE);
-    // The tile resolves the declared transport and owns one optimistic channel
-    // for it, so no two hooks contend on one property (design D15).
-    expect(tile).toContain("const transportControl = useOptimisticDeviceProperty(");
-    expect(tile).toContain('transportAction?.property ?? ""');
-    expect(tile).toContain("setValue: transportControl.setValue");
-    expect(tile).toContain("transport={transportAction}");
-    expect(tile).toContain("transportChannel={{");
-    // The control no longer owns a channel of its own.
-    const src = await source(COVER_TRANSPORT);
-    expect(src).toContain("transportChannel");
-    expect(src).not.toContain("useOptimisticDeviceProperty(");
-  });
-
-  it("falls back to the tile's primary position channel when no transport is declared", async () => {
-    const src = await source(COVER_TRANSPORT);
-    expect(src).toContain("setValue: onChange");
-    const tile = await source(TILE);
-    expect(tile).toContain("<CoverTransport");
-    expect(tile).toContain("onChange={actionControl.setValue}");
-    expect(tile).toContain("error={actionControl.error}");
-  });
-
-  it("routes Stop through the shared transport channel when it targets the same property", async () => {
-    const tile = await source(TILE);
-    expect(tile).toContain("const stopControl = useOptimisticDeviceProperty(");
-    expect(tile).toContain("stopCommand.property === transportAction?.property");
-    expect(tile).toContain("setValue: stopControl.setValue");
-    expect(tile).toContain("stopChannel={");
-    const src = await source(COVER_TRANSPORT);
-    expect(src).toContain("onClick={() => stopChannel.setValue(stop.value)}");
-  });
-
-  it("surfaces a failed transport command inline with a danger treatment", async () => {
-    const src = await source(COVER_TRANSPORT);
-    expect(src).toContain('role="alert"');
-    expect(src).toContain("var(--hearth-danger)");
-    expect(src).toContain("stopChannel.error");
-  });
-});
-
-describe("cover transport touch target, separation, and no-hover operation (design D4, D15)", () => {
-  it("sizes each control from the wall token's control metric, at the kiosk-class target", async () => {
-    const tile = await source(TILE);
-    expect(tile).toContain("control={metrics?.control ?? 32}");
-    const src = await source(COVER_TRANSPORT);
-    expect(src).toContain("width: control");
-    expect(src).toContain("height: control");
-    expect(wallTileMetrics("wall").control).toBeGreaterThanOrEqual(WALL_MIN_TOUCH_TARGET);
-  });
-
-  it("separates the adjacent controls by at least the wall's ≥8px floor", async () => {
-    const src = await source(COVER_TRANSPORT);
-    // Hearth's space-2 (8px) is the transport row's gap, matching the floor.
-    expect(src).toContain("var(--hearth-space-2)");
+  it("keeps at least the wall's ≥8px separation floor between adjacent controls", () => {
     expect(WALL_MIN_CONTROL_GAP).toBeGreaterThanOrEqual(8);
-  });
-
-  it("activates on press with no hover-only affordance", async () => {
-    const src = await source(COVER_TRANSPORT);
-    expect(src).toContain("onClick=");
-    expect(src).not.toMatch(/onMouseEnter|onMouseOver|onPointerEnter|onPointerOver/);
-  });
-
-  it("keeps the cover on its embedded transport rather than whole-card actuation", () => {
-    expect(archetypeWholeCardActuation("cover")).toBe(false);
-  });
-
-  it("stays a wall-only presentation (the cover archetype is chosen only on the wall)", async () => {
-    const tile = await source(TILE);
-    expect(tile).toContain('wall ? cardArchetype(ranking, device.capabilities) : "default"');
   });
 });

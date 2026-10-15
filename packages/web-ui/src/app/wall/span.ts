@@ -1,11 +1,11 @@
 /**
- * Wall widget span tiers and card forms (wall-zones-and-fit D3, D4;
- * specs/wall-display "Span-Aware Card Presentation"). A card composes its content
- * for the span it was placed at, in both directions: it never overflows its cells
- * and a large span never repeats the composition a small span renders.
+ * Wall widget span tiers and card forms (design.md D2, D3; specs/wall-display
+ * "Span-Aware Card Presentation"). A card composes its content for the span it
+ * was placed at, in both directions: it never overflows its cells and a large
+ * span never repeats the composition a small span renders.
  *
- * Two pure composition decisions live here, on two different measures, because
- * they answer two different questions:
+ * Two pure decisions live here, on two different measures, because they answer
+ * two different questions:
  *
  * - {@link resolveSpanTier} answers *how much room the widget has* on the
  *   registry's own measure — the area of the placement between the type's
@@ -13,10 +13,7 @@
  *   tier, a link's label size).
  * - {@link resolveCardFormForHeight} answers *what actually fits the renderer's
  *   own box*: a card whose full form is taller than the box it was given must
- *   compose its compact form, whatever its area tier says. The area tier alone
- *   cannot answer this — for the `device` type `min` and `defaults` are both 2×2,
- *   so every placement above the minimum is `regular` while a three-row cell is
- *   far too short for the light card's full stack.
+ *   compose its compact form, whatever its area tier says.
  *
  * {@link composesMinimumSpan} is the guard the two are derived against: a
  * placement the editor would never author — below its type's minimum on either
@@ -27,8 +24,8 @@
  * A render-time measure-and-shrink was rejected (design.md D3), which keeps both
  * decisions pure: no DOM, no `ResizeObserver`, reachable by `bun test`.
  */
+import { WALL_CARD_FULL_HEIGHT_PX } from "./cards/card-composition.js";
 import { ROW_UNIT_MIN, WALL_GUTTER_MIN_PX } from "./grid.js";
-import { WALL_FRAME_INSET_PX } from "./pages.js";
 import type { WallWidgetSpan } from "./registry.js";
 import { WALL_TYPE_RAMP } from "./type-ramp.js";
 
@@ -36,73 +33,21 @@ import { WALL_TYPE_RAMP } from "./type-ramp.js";
 export type WallWidgetTier = "compact" | "regular" | "roomy";
 
 /**
- * The form a wall card composes at the placement it was given (wall-zones-and-fit
- * D3, D4; specs/wall-display "Span-Aware Card Presentation"): `compact` when the
- * card's full form does not fit the cell's height, `full` when it does.
+ * The form a wall card composes at the placement it was given (design.md D3;
+ * specs/wall-display "Span-Aware Card Presentation"): `compact` when the card's
+ * full form does not fit the cell's height, `full` when it does.
  */
 export type WallCardForm = "compact" | "full";
 
 /**
- * The wall's interactive control side, in CSS pixels — the compact card's
- * touch-target rows and the full form's full-width sliders. Declared locally
- * (this module stays free of the widget registry, whose import cycle would make a
- * module-scope read a temporal-dead-zone error) and asserted against
- * `WALL_MIN_TOUCH_TARGET` by `wall-span.test.ts`.
+ * The height, in CSS pixels, at which a card composes its full form instead of
+ * its compact one (design.md D2, D5). It is the ported card's own budget for its
+ * full content — its state item and two control rows — read from the card module
+ * rather than restated, so the form boundary and the cards the wall ports cannot
+ * drift. The smallest card the ported system produces
+ * (`wall/grid.ts`'s `WALL_COMPACT_CARD_HEIGHT_PX`) is the budget below it.
  */
-const WALL_CONTROL_PX = 56;
-
-/** The wall card stack's gap, in CSS pixels — Hearth's `--hearth-space-3`. */
-const WALL_STACK_GAP_PX = 12;
-
-/** The gap inside a card's control block, in CSS pixels — Hearth's `--hearth-space-1`. */
-const WALL_BLOCK_GAP_PX = 4;
-
-/** A colour control's spectrum bar, in CSS pixels. */
-const WALL_SPECTRUM_BAR_PX = 6;
-
-/** The card's observation footer row, in CSS pixels. */
-const WALL_FOOTER_PX = 20;
-
-/**
- * The card header row's height, in CSS pixels: its side is the taller of the
- * on/off affordance and the name-and-reading column beside it. The column is
- * bounded by the ramp's own maxima, so the budget never under-states a rendered
- * header (the tiers resolve at or below their maxima).
- */
-const WALL_HEADER_PX = Math.max(
-  WALL_CONTROL_PX,
-  WALL_TYPE_RAMP.titleMax + WALL_BLOCK_GAP_PX + WALL_TYPE_RAMP.bandMax,
-);
-
-/**
- * The height, in CSS pixels, the wall light card's full form needs to present
- * every control a device can declare (wall-zones-and-fit D3, D4; specs/wall-display
- * "A light card fits its minimum span"): its own inset, the header row, one
- * full-width slider per declared value control (brightness, colour temperature,
- * colour), a spectrum bar above each colour slider, the stack gaps between those
- * rows, and the observation footer:
- *
- * ```
- *  2 · WALL_FRAME_INSET_PX        (32)  the card's own inset
- *  header                         (58)  the on/off affordance and the name column
- *  3 · WALL_CONTROL_PX           (168)  brightness, colour temperature, colour
- *  2 · (bar + block gap)          (20)  a colour control's spectrum bar
- *  4 · WALL_STACK_GAP_PX          (48)  the gaps between those rows
- *  WALL_FOOTER_PX                 (20)  the observation row
- *  = 346 px
- * ```
- *
- * A cell at least this tall takes the full form; anything shorter — every
- * placement where the full stack would be clipped — takes the compact form
- * instead. Asserted by `wall-span.test.ts`.
- */
-export const WALL_FULL_CARD_HEIGHT_PX =
-  2 * WALL_FRAME_INSET_PX +
-  WALL_HEADER_PX +
-  3 * WALL_CONTROL_PX +
-  2 * (WALL_SPECTRUM_BAR_PX + WALL_BLOCK_GAP_PX) +
-  4 * WALL_STACK_GAP_PX +
-  WALL_FOOTER_PX;
+export const WALL_FULL_CARD_HEIGHT_PX = WALL_CARD_FULL_HEIGHT_PX;
 
 /**
  * The frame's opt-in title block, in CSS pixels: the largest title the wall draws
@@ -119,8 +64,8 @@ export const WALL_TITLE_BLOCK_PX = Math.ceil(WALL_TYPE_RAMP.titleMax * 1.5) + 8;
  *
  * A title is drawn above the renderer inside the *same* cell, so the title block
  * is height the cell no longer has for the renderer. Every type's registry
- * minimum span is derived for an *untitled* card — the row unit from the compact
- * light card (D4), the paging types' minimum spans from their own chrome — so a
+ * minimum span is derived for an *untitled* card — the row unit from the ported
+ * compact card (D5), the paging types' minimum spans from their own chrome — so a
  * titled card's floor is the type's minimum span plus these rows. The render-side
  * twin is {@link composesMinimumSpan}, whose box test is the same rule in pixels;
  * `wall-span.test.ts` asserts the two agree at every row unit, so the editor's row
@@ -140,10 +85,10 @@ export function cardHeightPx(input: { rows: number; rowUnit: number; gutterPx?: 
 }
 
 /**
- * The form a card composes into a box `heightPx` tall (wall-zones-and-fit D3, D4;
- * specs/wall-display "Span-Aware Card Presentation"): the full form only where it
- * fits, the compact form otherwise — whose budget (`WALL_COMPACT_CARD_HEIGHT_PX`
- * in `wall/grid.ts`) the wall's own minimum span guarantees. A card can therefore
+ * The form a card composes into a box `heightPx` tall (design.md D3; specs/wall-
+ * display "Span-Aware Card Presentation"): the full form only where it fits, the
+ * compact form otherwise — whose budget (`WALL_COMPACT_CARD_HEIGHT_PX` in
+ * `wall/grid.ts`) the wall's own minimum span guarantees. A card can therefore
  * never overflow or clip the box it was given.
  *
  * The height is the *renderer's own box*, not the whole cell: the frame spends
@@ -156,7 +101,7 @@ export function resolveCardFormForHeight(heightPx: number): WallCardForm {
 
 /**
  * Whether a widget's placement can render the card its type's minimum span
- * guarantees (wall-zones-and-fit D3, D4, D5; specs/wall-display "Span-Aware Card
+ * guarantees (design.md D3, D5; specs/wall-display "Span-Aware Card
  * Presentation", "Panel Fit"). Two axes decide it:
  *
  * - the placement must meet the type's minimum *width*, because a cell one column
@@ -208,9 +153,9 @@ function spanArea(span: WallWidgetSpan): number {
  *
  * - `compact` — no larger than the descriptor's minimum, or as near it as the
  *   midpoint between the minimum and the default. This covers a type whose
- *   default *is* its minimum (the `device` and `scene` types), so its smallest
- *   legal card always gets the compact composition the minimum span was
- *   derived for (design.md D4).
+ *   default *is* its minimum (every typed device widget, the scene type), so its
+ *   smallest legal card always gets the compact composition the minimum span was
+ *   derived for (design.md D2, D5).
  * - `roomy` — at or above the midpoint between the default and the maximum, so
  *   a card near its largest legal span expands rather than repeating `regular`.
  * - `regular` — everything between, which includes the descriptor's default

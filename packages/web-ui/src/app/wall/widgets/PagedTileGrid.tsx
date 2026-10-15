@@ -8,14 +8,34 @@
  * all resolve through, so they page by one rule.
  *
  * The tiles themselves are supplied by the caller, so each widget keeps its own
- * single-sourced card (the shared wall device tile), its own ordering, and its own
- * empty and absent cases.
+ * single-sourced card (`WallDeviceCard`, the tile's own device class), its own
+ * ordering, and its own empty and absent cases.
+ *
+ * A tile row is drawn at the height the plan resolved — the tile's own cell
+ * bounded against inflation ({@link WallPagePlan.rowHeightPx}; design.md D4;
+ * specs/wall-display "Paged Tile Sizing") — rather than stretched to the widget's
+ * leftover height, so the rows the wall draws are the rows the plan resolved and
+ * the widget centres the space it does not need. Each tile is handed that box
+ * through `renderTile` (design.md D7), so the caller resolves the card's
+ * composition from the box the tile is actually drawn in.
  */
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { resolvePagedTiles } from "../pages.js";
 import type { WallWidgetSpan } from "../registry.js";
 import { WallButton, WallCardAffordance, WallCardLabel, wallControlGapPx } from "./card-vocab.js";
+
+/**
+ * The box a paged tile is drawn into (design.md D4, D7; specs/wall-display
+ * "Paged Tile Sizing"): the height the page plan resolved for the tile's row,
+ * handed to the caller through {@link PagedTileGrid}'s `renderTile` so the tile
+ * composes for the box it is drawn in — in every widget that pages — rather than
+ * for the widget that surrounds it.
+ */
+export interface WallTileBox {
+  /** The tile row's resolved height, in CSS pixels — the plan's `rowHeightPx`. */
+  readonly heightPx: number;
+}
 
 export function PagedTileGrid<T>({
   items,
@@ -31,8 +51,12 @@ export function PagedTileGrid<T>({
   items: readonly T[];
   /** A stable key for a tile — the identifier a wall device card is addressed by. */
   keyOf: (item: T) => string;
-  /** The tile itself; the caller owns the card and its `contained`/tier wiring. */
-  renderTile: (item: T) => ReactNode;
+  /**
+   * The tile itself; the caller owns the card and resolves its composition from
+   * the box it is handed (design.md D7). The box is the height the plan drew the
+   * tile's row at, so the caller's card composes for the box it is drawn in.
+   */
+  renderTile: (item: T, box: WallTileBox) => ReactNode;
   span: WallWidgetSpan;
   rowUnit: number;
   /**
@@ -61,6 +85,8 @@ export function PagedTileGrid<T>({
     titled,
   });
 
+  const tileBox: WallTileBox = { heightPx: page.rowHeightPx };
+
   return (
     <div
       style={{
@@ -71,15 +97,19 @@ export function PagedTileGrid<T>({
         gap: `${wallControlGapPx()}px`,
       }}
     >
-      {/* One page's tiles, on a uniform grid sized to the plan: the rows share
-          the card's remaining height, and the area is clipped rather than
-          scrollable (specs/wall-display "Panel Fit"). */}
+      {/* One page's tiles, on a uniform grid sized to the plan: each row is drawn
+          at the height the plan resolved for the tile's own cell, and the block is
+          centred in the space the widget's leftover height provides rather than
+          stretched into it (specs/wall-display "Paged Tile Sizing"). The area is
+          clipped rather than scrollable, so the wall never scrolls (specs/
+          wall-display "Panel Fit"). */}
       <div
         style={{
           display: "grid",
           gridTemplateColumns: `repeat(${page.tilesAcross}, minmax(0, 1fr))`,
-          gridTemplateRows: `repeat(${page.rows}, minmax(0, 1fr))`,
+          gridTemplateRows: `repeat(${page.rows}, ${page.rowHeightPx}px)`,
           gap: `${wallControlGapPx()}px`,
+          alignContent: "center",
           flex: 1,
           minHeight: 0,
           overflow: "hidden",
@@ -90,7 +120,7 @@ export function PagedTileGrid<T>({
             key={keyOf(item)}
             style={{ display: "grid", minWidth: 0, minHeight: 0, overflow: "hidden" }}
           >
-            {renderTile(item)}
+            {renderTile(item, tileBox)}
           </div>
         ))}
       </div>

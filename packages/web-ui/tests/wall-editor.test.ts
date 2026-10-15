@@ -2,6 +2,8 @@ import { describe, expect, it, mock } from "bun:test";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
+  type Capability,
+  type DeviceDescriptor,
   WALL_GRID_COLUMNS,
   WALL_GRID_MAX_ROWS,
   WALL_WIDGET_TYPES,
@@ -14,6 +16,7 @@ import {
   addWidget,
   draftFitError,
   emptyWallConfig,
+  offeredDevices,
   removeWidget,
   setLinkTarget,
   submitProfileDraft,
@@ -23,8 +26,11 @@ import {
   updateWidgetZone,
   validateProfileDraft,
 } from "../src/app/wall/editor/model.js";
+import { resolveDraftPreview } from "../src/app/wall/editor/preview.js";
+import { ROW_UNIT_MAX, ROW_UNIT_MIN } from "../src/app/wall/grid.js";
+import { resolvePagedTiles } from "../src/app/wall/pages.js";
 import { getWidgetDescriptor, WALL_WIDGET_REGISTRY } from "../src/app/wall/registry.js";
-import { WALL_TITLE_ROWS } from "../src/app/wall/span.js";
+import { WALL_TITLE_BLOCK_PX, WALL_TITLE_ROWS } from "../src/app/wall/span.js";
 
 const EDITOR_DIR = join(import.meta.dir, "..", "src/app/wall/editor");
 const EDITOR = join(EDITOR_DIR, "WallEditor.tsx");
@@ -62,14 +68,21 @@ function widgetAt(config: WallProfileConfig, index: number): WallWidget {
 }
 
 /**
- * The minimum type-specific config a widget needs to validate. A room, device,
- * temperature, scene, link, or device-grid widget cannot be meaningful without a
- * selection, so the profile validator rejects it until one is made — the editor
- * surfaces exactly that.
+ * The minimum type-specific config a widget needs to validate. A room, typed
+ * device, temperature, scene, link, or device-grid widget cannot be meaningful
+ * without a selection, so the profile validator rejects it until one is made —
+ * the editor surfaces exactly that.
  */
 const REQUIRED_CONFIG: Partial<Record<WallWidgetType, Record<string, unknown>>> = {
   room: { roomId: "kitchen" },
-  device: { qualifiedId: "zigbee:0xabc123" },
+  light: { qualifiedId: "zigbee:0xabc123" },
+  cover: { qualifiedId: "zigbee:0xabc123" },
+  fan: { qualifiedId: "zigbee:0xabc123" },
+  climate: { qualifiedId: "zigbee:0xabc123" },
+  lock: { qualifiedId: "zigbee:0xabc123" },
+  number: { qualifiedId: "zigbee:0xabc123" },
+  select: { qualifiedId: "zigbee:0xabc123" },
+  entity: { qualifiedId: "zigbee:0xabc123" },
   temperature: { qualifiedId: "zigbee:0xabc123" },
   scene: { automation: "good-night", label: "Good night" },
   link: { target: "Kitchen" },
@@ -155,7 +168,7 @@ describe("updateWidgetPlacement", () => {
   });
 
   it("clamps x to the grid bound and y to at least zero", () => {
-    let config = single("device");
+    let config = single("light");
     const id = widgetAt(config, 0).id;
     config = updateWidgetConfig(config, id, { qualifiedId: "zigbee:0xabc123" });
     const updated = updateWidgetPlacement(config, id, { x: 11, y: -4, w: 6, h: 3 });
@@ -272,8 +285,8 @@ describe("validateProfileDraft", () => {
     // A configured title is drawn above the renderer inside the same cell, so the
     // placement control cannot leave a titled card below the box its type's
     // minimum span needs — the same title block the render guard subtracts.
-    const descriptor = WALL_WIDGET_REGISTRY.device;
-    const config = withRequiredConfig(single("device"));
+    const descriptor = WALL_WIDGET_REGISTRY.light;
+    const config = withRequiredConfig(single("light"));
     const id = widgetAt(config, 0).id;
     const titled = updateWidgetConfig(config, id, { title: "Hallway" });
 
@@ -323,8 +336,8 @@ describe("validateProfileDraft", () => {
     // clamp, so the validator is what refuses to save it — the wall would have to
     // explain the card instead of rendering it (specs/wall-display "A widget
     // cannot be under-sized").
-    const descriptor = WALL_WIDGET_REGISTRY.device;
-    const config = withRequiredConfig(single("device"));
+    const descriptor = WALL_WIDGET_REGISTRY.light;
+    const config = withRequiredConfig(single("light"));
     const id = widgetAt(config, 0).id;
     const titled = updateWidgetConfig(config, id, { title: "Hallway" });
 
@@ -636,5 +649,245 @@ describe("the draft preview and its save gate (task 6.2)", () => {
       expect(source).not.toContain("<WallGrid");
       expect(source).not.toContain("WidgetFrame");
     }
+  });
+});
+
+describe("the typed device widget configuration (task 7.1)", () => {
+  const MODEL = join(EDITOR_DIR, "model.ts");
+
+  /** A Zigbee/Nanoleaf light: an on/off switch plus a writable brightness. */
+  const LIGHT_CAPS: Capability[] = [
+    {
+      kind: "switch",
+      property: "on",
+      access: { readable: true, writable: true },
+      valueType: "boolean",
+      valueOn: true,
+      valueOff: false,
+    },
+    {
+      kind: "numeric",
+      property: "brightness",
+      access: { readable: true, writable: true },
+      valueType: "numeric",
+      range: { min: 0, max: 100 },
+    },
+  ];
+
+  /** A cover: a writable position. */
+  const COVER_CAPS: Capability[] = [
+    {
+      kind: "numeric",
+      property: "position",
+      access: { readable: true, writable: true },
+      valueType: "numeric",
+      range: { min: 0, max: 100 },
+    },
+  ];
+
+  /** A Shelly switch: on/off only — the fallback entity class. */
+  const SWITCH_CAPS: Capability[] = [
+    {
+      kind: "switch",
+      property: "on",
+      access: { readable: true, writable: true },
+      valueType: "boolean",
+      valueOn: true,
+      valueOff: false,
+    },
+  ];
+
+  /** A read-only temperature sensor — an entity with no driveable class. */
+  const SENSOR_CAPS: Capability[] = [
+    {
+      kind: "numeric",
+      property: "temperature",
+      access: { readable: true, writable: false },
+      valueType: "numeric",
+      unit: "°C",
+    },
+  ];
+
+  function descriptor(qualifiedId: string, capabilities: Capability[]): DeviceDescriptor {
+    return {
+      source: "zigbee",
+      id: qualifiedId,
+      qualifiedId,
+      displayName: qualifiedId,
+      state: {},
+      capabilities,
+      reachable: true,
+      observation: { mode: "push", observedAt: 0 },
+      hidden: false,
+    };
+  }
+
+  it("offers only the devices whose capabilities can drive the widget's class", () => {
+    // The wall's own resolver decides the offer (design.md D3, D6; specs/
+    // wall-display "A device its class cannot drive is not offered"), so a
+    // `light` widget offers the lamp and never the blind or the sensor.
+    const devices = [
+      descriptor("zigbee:lamp", LIGHT_CAPS),
+      descriptor("shelly:blind", COVER_CAPS),
+      descriptor("zigbee:sensor", SENSOR_CAPS),
+      descriptor("shelly:switch", SWITCH_CAPS),
+    ];
+
+    expect(offeredDevices("light", devices).map((device) => device.qualifiedId)).toEqual([
+      "zigbee:lamp",
+    ]);
+    expect(offeredDevices("cover", devices).map((device) => device.qualifiedId)).toEqual([
+      "shelly:blind",
+    ]);
+    // `entity` is the typed fallback, so every device can drive it.
+    expect(offeredDevices("entity", devices)).toHaveLength(devices.length);
+  });
+
+  it("single-sources the offer rule with the wall's own device-class resolver", async () => {
+    const model = await readSource(MODEL);
+    const fields = await readSource(FIELDS);
+
+    // The rule lives once, over the wall's resolver, and the form consumes it —
+    // so the offered set and the runtime explanation cannot drift.
+    expect(model).toContain("deviceCanDriveClass(device.capabilities, deviceClass)");
+    expect(fields).toContain("offeredDevices(");
+    expect(fields).toContain("devicesByQualifiedId.values()");
+  });
+
+  it("binds the device the user selected and persists it", () => {
+    let config = single("light");
+    const id = widgetAt(config, 0).id;
+    config = updateWidgetConfig(config, id, { qualifiedId: "zigbee:lamp" });
+
+    const result = validateProfileDraft("profile", config);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.profile.config.widgets[0]?.config.qualifiedId).toBe("zigbee:lamp");
+    }
+  });
+
+  it("round-trips the card's layout and inactive-controls setting through save validation", () => {
+    let config = withRequiredConfig(single("light"));
+    const id = widgetAt(config, 0).id;
+    config = updateWidgetConfig(config, id, { layout: "vertical", collapsible_controls: true });
+
+    const result = validateProfileDraft("profile", config);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.profile.config.widgets[0]?.config.layout).toBe("vertical");
+      expect(result.profile.config.widgets[0]?.config.collapsible_controls).toBe(true);
+    }
+  });
+
+  it("rejects a layout the shared contract does not define", () => {
+    let config = withRequiredConfig(single("light"));
+    const id = widgetAt(config, 0).id;
+    config = updateWidgetConfig(config, id, { layout: "diagonal" });
+
+    // The editor validates with the shared per-type schema, so a value outside
+    // `WALL_DEVICE_LAYOUTS` is refused rather than persisted.
+    expect(validateProfileDraft("profile", config).ok).toBe(false);
+  });
+
+  it("renders the device picker, the layout picker, and the inactive-controls switch", async () => {
+    const fields = await readSource(FIELDS);
+
+    // Every layout the shared contract defines is offered, built from its list.
+    expect(fields).toContain("WALL_DEVICE_LAYOUTS");
+    expect(fields).toContain("LAYOUT_OPTIONS");
+    // Both options patch the widget's own config.
+    expect(fields).toContain("layout: value");
+    expect(fields).toContain("collapsible_controls: value");
+    expect(fields).toContain("<SwitchField");
+    expect(fields).toContain("<Switch");
+  });
+});
+
+describe("the re-derived editor floors and fit report (task 7.2)", () => {
+  it("derives its height floor from the ported card's row unit, not the retired scale", async () => {
+    // The editor's height floor is `WALL_TITLE_ROWS` — the title block measured in
+    // the wall's shortest row, `ROW_UNIT_MIN`, which is itself derived from the
+    // ported card's own compact budget (design.md D2, D5). The retired 56 px scale
+    // is gone; a titled card is floored one row above its type's minimum by the
+    // clamp, and the form's own height field is bounded by the same value.
+    expect(ROW_UNIT_MIN).toBe(50);
+    expect(ROW_UNIT_MAX).toBe(56);
+    expect(WALL_TITLE_ROWS).toBe(Math.ceil(WALL_TITLE_BLOCK_PX / ROW_UNIT_MIN));
+
+    const descriptor = WALL_WIDGET_REGISTRY.light;
+    const config = withRequiredConfig(single("light"));
+    const id = widgetAt(config, 0).id;
+    const titled = updateWidgetConfig(config, id, { title: "Hallway" });
+    const resized = updateWidgetPlacement(titled, id, {
+      x: 0,
+      y: 0,
+      w: descriptor.min.w,
+      h: descriptor.min.h,
+    });
+
+    expect(widgetAt(resized, 0).h).toBe(descriptor.min.h + WALL_TITLE_ROWS);
+
+    const editor = await readSource(EDITOR);
+    const model = await readSource(join(EDITOR_DIR, "model.ts"));
+    expect(editor).toContain("WALL_TITLE_ROWS");
+    expect(model).toContain("WALL_TITLE_ROWS");
+  });
+
+  it("resolves its fit report at the ported card's row unit bounds", () => {
+    const preview = resolveDraftPreview(single("clock"));
+
+    expect(preview.rowUnit).toBeGreaterThanOrEqual(ROW_UNIT_MIN);
+    expect(preview.rowUnit).toBeLessThanOrEqual(ROW_UNIT_MAX);
+  });
+
+  it("refuses to save a draft that cannot fit the panel at the re-derived floors", async () => {
+    const config: WallProfileConfig = {
+      widgets: [
+        {
+          id: "tall",
+          type: "clock",
+          config: {},
+          x: 0,
+          y: 0,
+          w: WALL_GRID_COLUMNS,
+          h: WALL_GRID_MAX_ROWS,
+        },
+      ],
+    };
+
+    expect(draftFitError(config)).not.toBeNull();
+
+    const persist = mock(async () => {});
+    const result = await submitProfileDraft("kitchen", config, persist);
+    expect(result.ok).toBe(false);
+    expect(persist).not.toHaveBeenCalled();
+  });
+
+  it("reports the page count the wall's own pagination resolves", () => {
+    const selected = Array.from({ length: 20 }, (_, index) => `light.${index}`);
+    const grid: WallWidget = {
+      id: "grid",
+      type: "devices",
+      config: { qualifiedIds: selected },
+      x: 0,
+      y: 0,
+      w: 6,
+      h: 4,
+    };
+
+    const preview = resolveDraftPreview({ widgets: [grid] });
+    // The page count comes from `wall/pages.ts`'s own layer at the panel's row
+    // unit, so the editor's report is exactly the page the wall draws.
+    const wallPlan = resolvePagedTiles({
+      items: selected,
+      span: grid,
+      rowUnit: preview.rowUnit,
+      page: 0,
+    });
+
+    expect(wallPlan.pageCount).toBeGreaterThan(1);
+    expect(preview.grids).toEqual([
+      { widgetId: "grid", devices: selected.length, pages: wallPlan.pageCount },
+    ]);
   });
 });

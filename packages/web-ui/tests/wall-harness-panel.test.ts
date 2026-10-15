@@ -165,7 +165,7 @@ describe("the panel's draft mutations", () => {
     const placed = shownWidgets(clamped, "landscape").find(
       (widget) => widget.id === "device-light",
     );
-    const minimum = getWidgetDescriptor("device").min;
+    const minimum = getWidgetDescriptor("light").min;
 
     expect(placed?.w).toBe(minimum.w);
     expect(placed?.h).toBe(minimum.h);
@@ -183,7 +183,7 @@ describe("the panel's draft mutations", () => {
     );
     const base = shownWidgets(edited, "landscape").find((widget) => widget.id === "device-light");
 
-    expect(override?.w).toBe(getWidgetDescriptor("device").min.w);
+    expect(override?.w).toBe(getWidgetDescriptor("light").min.w);
     expect(base?.w).toBe(draftWidget("landscape", "device-light").w);
   });
 

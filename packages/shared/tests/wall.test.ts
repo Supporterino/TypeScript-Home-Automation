@@ -1,13 +1,17 @@
 import { describe, expect, it } from "bun:test";
 import {
+  WALL_DEVICE_LAYOUTS,
   WALL_GRID_COLUMNS,
   WALL_GRID_MAX_ROWS,
   WALL_PROFILE_VERSION,
+  WALL_V1_PROFILE_VERSION,
   WALL_WIDGET_TYPES,
   WALL_ZONE_MAX_LENGTH,
   type WallProfile,
+  type WallTypedDeviceWidgetConfig,
+  type WallV1Profile,
 } from "../src/index.js";
-import { wallProfileSchema, wallWidgetSchema } from "../src/wall-schema.js";
+import { wallProfileSchema, wallV1ProfileSchema, wallWidgetSchema } from "../src/wall-schema.js";
 
 function validProfile(): WallProfile {
   return {
@@ -31,6 +35,11 @@ describe("wall grid constants", () => {
     expect(WALL_GRID_MAX_ROWS).toBeGreaterThan(0);
   });
 
+  it("writes the current profile version and retains the version-1 shape", () => {
+    expect(WALL_PROFILE_VERSION).toBe(2);
+    expect(WALL_V1_PROFILE_VERSION).toBe(1);
+  });
+
   it("covers the widget catalog the spec requires", () => {
     expect([...WALL_WIDGET_TYPES]).toEqual([
       "clock",
@@ -38,13 +47,41 @@ describe("wall grid constants", () => {
       "energy",
       "room",
       "favorites",
-      "device",
       "temperature",
       "status",
       "scene",
       "link",
       "devices",
+      "light",
+      "cover",
+      "fan",
+      "climate",
+      "lock",
+      "number",
+      "select",
+      "entity",
     ]);
+  });
+
+  it("offers one widget type per device class rather than one for any device", () => {
+    expect([...WALL_WIDGET_TYPES]).not.toContain("device");
+    const deviceClasses = [
+      "light",
+      "cover",
+      "fan",
+      "climate",
+      "lock",
+      "number",
+      "select",
+      "entity",
+    ];
+    for (const deviceClass of deviceClasses) {
+      expect([...WALL_WIDGET_TYPES]).toContain(deviceClass);
+    }
+  });
+
+  it("offers the typed device card's layouts", () => {
+    expect([...WALL_DEVICE_LAYOUTS]).toEqual(["default", "vertical", "horizontal"]);
   });
 });
 
@@ -122,7 +159,7 @@ describe("wall zone label", () => {
   it("accepts a widget carrying a zone label", () => {
     const result = wallWidgetSchema.safeParse({
       id: "lamp",
-      type: "device",
+      type: "light",
       config: { qualifiedId: "light.lamp" },
       x: 0,
       y: 0,
@@ -137,7 +174,7 @@ describe("wall zone label", () => {
   it("trims surrounding whitespace from a zone label", () => {
     const result = wallWidgetSchema.safeParse({
       id: "lamp",
-      type: "device",
+      type: "light",
       config: { qualifiedId: "light.lamp" },
       x: 0,
       y: 0,
@@ -318,6 +355,92 @@ describe("wall link and device-grid configs", () => {
   });
 });
 
+describe("wall typed device widget configs", () => {
+  const DEVICE_WIDGET_TYPES = [
+    "light",
+    "cover",
+    "fan",
+    "climate",
+    "lock",
+    "number",
+    "select",
+    "entity",
+  ] as const;
+
+  it("accepts each device class with its bound device", () => {
+    for (const type of DEVICE_WIDGET_TYPES) {
+      const result = wallWidgetSchema.safeParse({
+        id: type,
+        type,
+        config: { qualifiedId: "light.lamp" },
+        x: 0,
+        y: 0,
+        w: 2,
+        h: 2,
+      });
+      expect(result.success).toBe(true);
+    }
+  });
+
+  it("accepts a card layout and an inactive-controls setting", () => {
+    const config: WallTypedDeviceWidgetConfig = {
+      qualifiedId: "light.lamp",
+      layout: "horizontal",
+      collapsible_controls: true,
+    };
+    const result = wallWidgetSchema.safeParse({
+      id: "light",
+      type: "light",
+      config,
+      x: 0,
+      y: 0,
+      w: 2,
+      h: 2,
+    });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.config).toMatchObject(config);
+  });
+
+  it("rejects a typed device widget with no bound device", () => {
+    const result = wallWidgetSchema.safeParse({
+      id: "light",
+      type: "light",
+      config: {},
+      x: 0,
+      y: 0,
+      w: 2,
+      h: 2,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects an unknown card layout", () => {
+    const result = wallWidgetSchema.safeParse({
+      id: "light",
+      type: "light",
+      config: { qualifiedId: "light.lamp", layout: "diagonal" },
+      x: 0,
+      y: 0,
+      w: 2,
+      h: 2,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a non-boolean inactive-controls setting", () => {
+    const result = wallWidgetSchema.safeParse({
+      id: "light",
+      type: "light",
+      config: { qualifiedId: "light.lamp", collapsible_controls: "yes" },
+      x: 0,
+      y: 0,
+      w: 2,
+      h: 2,
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
 describe("wallProfileSchema", () => {
   it("accepts a well-formed profile", () => {
     const result = wallProfileSchema.safeParse(validProfile());
@@ -357,6 +480,26 @@ describe("wallProfileSchema", () => {
     const result = wallProfileSchema.safeParse({
       ...validProfile(),
       config: { widgets: [{ id: "x", type: "hologram", x: 0, y: 0, w: 1, h: 1 }] },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects the retired generic device widget", () => {
+    const result = wallProfileSchema.safeParse({
+      ...validProfile(),
+      config: {
+        widgets: [
+          {
+            id: "lamp",
+            type: "device",
+            config: { qualifiedId: "light.lamp" },
+            x: 0,
+            y: 0,
+            w: 2,
+            h: 2,
+          },
+        ],
+      },
     });
     expect(result.success).toBe(false);
   });
@@ -487,5 +630,72 @@ describe("wallProfileSchema", () => {
       },
     });
     expect(result.success).toBe(false);
+  });
+});
+
+describe("wallV1ProfileSchema", () => {
+  function v1Profile(): WallV1Profile {
+    return {
+      name: "Kitchen",
+      version: WALL_V1_PROFILE_VERSION,
+      config: {
+        widgets: [
+          {
+            id: "lamp",
+            type: "device",
+            config: { qualifiedId: "light.lamp" },
+            x: 0,
+            y: 0,
+            w: 2,
+            h: 2,
+          },
+          {
+            id: "lights",
+            type: "devices",
+            config: { qualifiedIds: ["light.a", "light.b"] },
+            x: 2,
+            y: 0,
+            w: 4,
+            h: 2,
+          },
+        ],
+      },
+    };
+  }
+
+  it("accepts a stored version-1 profile carrying the retired device widget", () => {
+    const result = wallV1ProfileSchema.safeParse(v1Profile());
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.version).toBe(WALL_V1_PROFILE_VERSION);
+      expect(result.data.config.widgets.map((widget) => widget.type)).toEqual([
+        "device",
+        "devices",
+      ]);
+    }
+  });
+
+  it("accepts a version-1 profile written before zones existed", () => {
+    const result = wallV1ProfileSchema.safeParse(v1Profile());
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.config.widgets.every((widget) => widget.zone === undefined)).toBe(true);
+    }
+  });
+
+  it("rejects a version-1 profile whose device widget has no bound device", () => {
+    const result = wallV1ProfileSchema.safeParse({
+      ...v1Profile(),
+      config: { widgets: [{ id: "lamp", type: "device", config: {}, x: 0, y: 0, w: 2, h: 2 }] },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a version-2 profile on the version-1 read path", () => {
+    expect(wallV1ProfileSchema.safeParse(validProfile()).success).toBe(false);
+  });
+
+  it("rejects a version-1 profile on the version-2 write path", () => {
+    expect(wallProfileSchema.safeParse(v1Profile()).success).toBe(false);
   });
 });

@@ -1,35 +1,24 @@
 /**
- * Wall tile scaling (design.md D7; wall-zones-and-fit D3, D4, D6;
- * specs/wall-display "Touch Operation", "Span-Aware Card Presentation", "Wall
- * Glanceability").
+ * Wall tile scaling (design.md D2, D7; specs/wall-display "Touch Operation",
+ * "Span-Aware Card Presentation", "Wall Glanceability").
  *
- * A wall presents exactly the device tile every other collection uses — there
- * is no second device presentation — only larger, so its interactive controls
- * meet the wall's minimum touch target. This module owns the pure size-token →
- * metrics mapping, keeping the interactive-control dimension a single,
- * testable value rather than a literal scattered across the tile.
+ * The wall's own non-device controls (its page controls, a room's batch command,
+ * a scene and a link affordance) are drawn at the wall's minimum touch target,
+ * which is the ported card system's own control height. This module owns the pure
+ * size-token → metrics mapping, keeping the interactive-control dimension a
+ * single, testable value rather than a literal scattered across the wall.
  *
- * Deliberately dependency-free: the shared {@link DeviceTile} imports this on
- * first paint, so it must never reach the lazy wall registry or widgets. Its
- * only imports are {@link ./type-ramp.js} (pure constants) and, for the span
- * tier, a type.
+ * Deliberately dependency-free: the wall's card vocabulary imports this, so it
+ * must never reach the widget registry or the renderers. The device tile this
+ * module once scaled has retired to the ported cards under `wall/cards/`
+ * (design.md D1, D10), so only the wall's own affordance size and the readout
+ * tier remain in use.
  */
 import type { WallWidgetTier } from "./span.js";
-import { WALL_BAND_FONT_SIZE, WALL_BODY_FONT_SIZE, WALL_METRIC_FONT_SIZE } from "./type-ramp.js";
+import { WALL_BAND_FONT_SIZE, WALL_METRIC_FONT_SIZE } from "./type-ramp.js";
 
 /** A wall tile's size token. The default preserves the tile's ordinary rendering exactly. */
 export type WallTileSize = "default" | "wall";
-
-/**
- * A compact wall card's surface inset, in CSS pixels, per side — the wall's
- * minimum control gap, Hearth's smallest spacing step (`p-2`). A compact card is
- * budgeted at this inset (wall-zones-and-fit D4): two touch-target rows plus this
- * padding are exactly the compact card height the wall's row-unit floor is
- * derived from, so a compact light card fits its minimum span. Declared locally
- * because this module must stay free of the widget registry; `wall-scale.test.ts`
- * asserts it against `WALL_MIN_CONTROL_GAP`.
- */
-export const WALL_COMPACT_CARD_INSET_PX = 8;
 
 export interface WallTileMetrics {
   /** Minimum interactive-control side, in CSS pixels. */
@@ -41,105 +30,20 @@ export interface WallTileMetrics {
 }
 
 /**
- * Interactive-control metrics for a size token. The `wall` token enlarges the
- * control to meet {@link WALL_MIN_TOUCH_TARGET} (the kiosk-class 56 px target,
- * design.md D4); the default reproduces the tile's existing desktop scale.
+ * Interactive-control metrics for a size token. The `wall` token is the ported
+ * card system's own control height (design.md D2); the default reproduces the
+ * tile's existing desktop scale.
  */
 export function wallTileMetrics(size: WallTileSize = "default"): WallTileMetrics {
   if (size === "wall") {
-    return { control: 56, controlSize: "lg", padding: "md" };
+    return { control: 42, controlSize: "lg", padding: "md" };
   }
   return { control: 32, controlSize: "sm", padding: "sm" };
 }
 
 /**
- * Which affordances a device tile presents, keyed by size token (design.md D4,
- * D7; specs/wall-display "Wall Device Presentation"; specs/web-ui "Device Tile
- * Presentation"). Only affordance visibility and the tap target differ between
- * the presentations — the capability ranking, optimistic override, state
- * encoding, and actuation semantics are the single shared implementation in
- * {@link DeviceTile}, never forked per presentation.
- */
-export interface DeviceTilePresentation {
-  /** The favorite star toggle — a device-management affordance. */
-  favorite: boolean;
-  /** The hide/unhide toggle — a device-management affordance. */
-  visibility: boolean;
-  /** The explicit "Details" affordance that opens the device detail view. */
-  detail: boolean;
-  /** Whether a read-only tile navigates to detail when the whole card is activated. */
-  readOnlyNavigation: boolean;
-  /** Whether the whole card is the actuation target for an actuatable device. */
-  wholeCardActuation: boolean;
-}
-
-/**
- * The tile presentation for a size token. The dashboard token presents the
- * favorite toggle, the hide/unhide toggle, and the explicit detail affordance,
- * and a read-only tile navigates on whole-card activation. The wall token is a
- * kiosk presentation: no management or detail affordances, no read-only
- * navigation, and the whole card actuates an operable device (design.md D4).
- */
-export function deviceTilePresentation(size: WallTileSize = "default"): DeviceTilePresentation {
-  if (size === "wall") {
-    return {
-      favorite: false,
-      visibility: false,
-      detail: false,
-      readOnlyNavigation: false,
-      wholeCardActuation: true,
-    };
-  }
-  return {
-    favorite: true,
-    visibility: true,
-    detail: true,
-    readOnlyNavigation: true,
-    wholeCardActuation: false,
-  };
-}
-
-/**
- * A device tile's text sizes, keyed by size token (design-system/ts-ha/pages/
- * wall.md "Type ramp"). The wall token meets the distance-readable Hearth body
- * floor; the dashboard token reproduces the tile's existing sizes exactly.
- */
-export interface DeviceTileText {
-  /** The on/off and observation chip label size. */
-  chip: string;
-  /** Secondary/body text size (readouts, empty-state copy). */
-  body: string;
-}
-
-/**
- * Resolves the tile's text sizes. The dashboard token returns the existing
- * sizes unchanged (`xs` chip, `sm` body); the wall token returns the Hearth
- * ramp's own body floor, so no wall tile text falls below it.
- */
-export function deviceTileText(size: WallTileSize = "default"): DeviceTileText {
-  if (size === "wall") {
-    return { chip: WALL_BODY_FONT_SIZE, body: WALL_BODY_FONT_SIZE };
-  }
-  return { chip: "xs", body: "sm" };
-}
-
-/**
- * Whether a device tile renders its observation as a visible label (with the
- * polled age), keyed by size token. The wall demotes the observation to a
- * non-textual indicator — glyph only, label retained as `title`/`aria-label`
- * (design.md D5; specs/wall-display "Observation is a quiet indicator"). The
- * dashboard keeps the visible label, including a polled device's age, as the
- * unmodified web-ui capability requires (specs/web-ui "A tile MUST indicate ...
- * the age of the observation when polled"). Unlike {@link deviceTilePresentation}
- * this only changes the label's visibility, never the state encoding.
- */
-export function deviceTileObservationText(size: WallTileSize = "default"): boolean {
-  return size !== "wall";
-}
-
-/**
  * The tier a wall readout presents its value on, chosen by the span the readout
- * was placed at (wall-zones-and-fit D3, D6; specs/wall-display "Span-Aware Card
+ * was placed at (design.md D3, D6; specs/wall-display "Span-Aware Card
  * Presentation", "Wall Glanceability"). A readout at or near its type's minimum
  * span — the grouped readouts of a climate band, or the same readout on a small
  * card — renders on the band tier, below the metric tier, so a group of readouts

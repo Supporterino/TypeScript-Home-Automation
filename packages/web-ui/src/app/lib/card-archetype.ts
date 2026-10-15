@@ -15,27 +15,20 @@
 import type { Capability } from "@ts-ha/shared";
 import {
   coverTransportAction,
-  type FlatCapability,
-  flattenCapabilities,
+  formatBrightnessPercent,
   type TileRanking,
+  writableBrightnessCapability,
 } from "./capability-ranking.js";
+
+/**
+ * The brightness percentage formatter and the writable-brightness lookup live in
+ * the wall's capability vocabulary (`capability-ranking.ts`) now; this module
+ * re-exports them so its existing importers keep working unchanged.
+ */
+export { formatBrightnessPercent, writableBrightnessCapability };
 
 /** The card shape the wall draws for a device, chosen from its ranked capabilities (design.md D1). */
 export type CardArchetype = "light" | "toggle" | "cover" | "readout" | "default";
-
-/**
- * The writable brightness control a `light` card drives, if the device declares
- * one. A brightness the device only reports would let the ranking qualify an
- * on/off primary with a brightness readout, but no slider could be driven — so
- * its absence keeps such a device a plain `toggle` rather than a broken light.
- */
-export function writableBrightnessCapability(
-  capabilities: Capability[],
-): FlatCapability | undefined {
-  return flattenCapabilities(capabilities).find(
-    (c) => c.property === "brightness" && c.valueType === "numeric" && c.access.writable,
-  );
-}
 
 /**
  * Selects the wall card archetype for a device from its {@link rankDeviceTile}
@@ -83,23 +76,4 @@ export function cardDrawsNoSurface(
   contained: boolean,
 ): boolean {
   return contained || (wall && archetype === "readout");
-}
-
-/**
- * Formats a brightness value as a percentage of its declared range for the
- * light card's persistent readout (design.md D3). A raw `0–254` Zigbee
- * brightness and a `0–100` Nanoleaf one both read as a percentage, so the value
- * is normalised against its own range rather than assumed to already be one. A
- * missing or non-numeric value renders an em dash rather than a stale number.
- */
-export function formatBrightnessPercent(
-  value: unknown,
-  range?: { min?: number; max?: number },
-): string {
-  if (typeof value !== "number" || Number.isNaN(value)) return "—";
-  const min = range?.min ?? 0;
-  const max = range?.max ?? 100;
-  if (max <= min) return `${Math.round(value)}%`;
-  const percent = Math.round(((value - min) / (max - min)) * 100);
-  return `${Math.min(100, Math.max(0, percent))}%`;
 }

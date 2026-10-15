@@ -5,7 +5,11 @@ import { minimumRendererBoxHeightPx, rendererBoxHeightPx } from "../src/app/wall
 import { ROW_UNIT_MAX, ROW_UNIT_MIN } from "../src/app/wall/grid.js";
 import { WALL_MIN_TOUCH_TARGET, WALL_WIDGET_REGISTRY } from "../src/app/wall/registry.js";
 import { wallTileMetrics } from "../src/app/wall/scale.js";
-import { cardHeightPx, composesMinimumSpan } from "../src/app/wall/span.js";
+import {
+  cardHeightPx,
+  composesMinimumSpan,
+  WALL_FULL_CARD_HEIGHT_PX,
+} from "../src/app/wall/span.js";
 import { WALL_TYPE_RAMP } from "../src/app/wall/type-ramp.js";
 import {
   SCENE_LARGE_GLYPH_PX,
@@ -148,9 +152,9 @@ describe("scene tile composes for its space (wall-zones-and-fit D3, D4, 4.2)", (
     expect(SCENE_STACKED_HEIGHT_PX).toBeGreaterThan(SCENE_ROW_HEIGHT_PX);
     expect(SCENE_ROW_HEIGHT_PX).toBeGreaterThan(wallTileMetrics("wall").control);
     expect(SCENE_LARGE_GLYPH_PX).toBeGreaterThanOrEqual(WALL_MIN_TOUCH_TARGET);
-    // Far below the light card's full stack, which the scene used to be measured
+    // Far below the ported card's full stack, which the scene is never measured
     // against: that budget is what kept this tile on the row at every legal span.
-    expect(SCENE_STACKED_HEIGHT_PX).toBeLessThan(WALL_MIN_TOUCH_TARGET * 3);
+    expect(SCENE_STACKED_HEIGHT_PX).toBeLessThan(WALL_FULL_CARD_HEIGHT_PX);
   });
 
   it("resolves each composition at its own budget's threshold", () => {
@@ -197,20 +201,20 @@ describe("scene tile composes for its space (wall-zones-and-fit D3, D4, 4.2)", (
   });
 
   it("keeps the type's minimum span off the stacked composition", () => {
-    // At the top of the row-unit range a minimum-span cell's box already affords
-    // the stacked budget, so a box-only rule would draw the type's *minimum*
-    // composition identically to every larger span — which the "a card at a larger
-    // span MUST NOT repeat the composition it renders at a smaller span"
-    // requirement forbids. The scene's own minimum span is the second gate.
-    const boxAtTopOfRange = rendererBoxHeightPx({
-      cellHeightPx: cardHeightPx({ rows: SCENE_MIN_SPAN.h, rowUnit: ROW_UNIT_MAX }),
+    // The scene's own minimum span is the second gate: even where the box affords
+    // the stacked budget, the minimum-span card composes the row, so a box-only
+    // rule could not draw the type's *minimum* composition identically to every
+    // larger span — which the "a card at a larger span MUST NOT repeat the
+    // composition it renders at a smaller span" requirement forbids.
+    const largeBox = rendererBoxHeightPx({
+      cellHeightPx: cardHeightPx({ rows: SCENE_MIN_SPAN.h + 2, rowUnit: ROW_UNIT_MAX }),
       framed: true,
       titled: false,
     });
-    expect(boxAtTopOfRange).toBeGreaterThanOrEqual(SCENE_STACKED_HEIGHT_PX);
+    expect(largeBox).toBeGreaterThanOrEqual(SCENE_STACKED_HEIGHT_PX);
 
     expect(
-      sceneTileLayout({ rendererHeightPx: boxAtTopOfRange, placement: SCENE_MIN_SPAN }),
+      sceneTileLayout({ rendererHeightPx: largeBox, placement: SCENE_MIN_SPAN }),
       "the minimum span keeps the row even where the box affords the stack",
     ).toBe("row");
     for (const placement of [
@@ -218,7 +222,7 @@ describe("scene tile composes for its space (wall-zones-and-fit D3, D4, 4.2)", (
       { w: SCENE_MIN_SPAN.w, h: SCENE_MIN_SPAN.h + 1 },
     ]) {
       expect(
-        sceneTileLayout({ rendererHeightPx: boxAtTopOfRange, placement }),
+        sceneTileLayout({ rendererHeightPx: largeBox, placement }),
         `${placement.w}×${placement.h} takes the stack`,
       ).toBe("column");
     }
@@ -280,11 +284,11 @@ describe("scene tile composes for its space (wall-zones-and-fit D3, D4, 4.2)", (
       }
     }
 
-    // The crux: at the top of the unit range a minimum-span cell already affords
-    // the stacked budget, so the scene's *own minimum span* is what keeps the
-    // minimum card's composition distinct from a larger card's.
+    // The crux: on a box that affords the stacked budget the scene's *own minimum
+    // span* is what keeps the minimum card's composition distinct from a larger
+    // card's.
     const topBox = rendererBoxHeightPx({
-      cellHeightPx: cardHeightPx({ rows: 2, rowUnit: ROW_UNIT_MAX }),
+      cellHeightPx: cardHeightPx({ rows: 4, rowUnit: ROW_UNIT_MAX }),
       framed: true,
       titled: false,
     });
@@ -375,9 +379,6 @@ describe("scene tile composes for its space (wall-zones-and-fit D3, D4, 4.2)", (
     const TYPE_SCALE_ONLY: Record<string, readonly string[]> = {
       "TemperatureWidget.tsx": ["wallReadoutFontSize(tier)"],
       "LinkWidget.tsx": ["linkLabelFontSize(tier)"],
-      // Passes the tier — and the height-resolved form — to the shared device tile.
-      "DeviceWidget.tsx": ["tier={tier}"],
-      "WallDeviceTile.tsx": ["wallTier={props.tier}"],
     };
     // Reading the tier: destructuring it from props, typing it, or comparing it.
     // A tile's `tier="compact"` prop value is not a read.

@@ -72,7 +72,7 @@ describe("wallBandChrome", () => {
 describe("widgetTitle", () => {
   it("returns null when no title is configured, so no header is rendered", () => {
     expect(widgetTitle(widget("clock"))).toBeNull();
-    expect(widgetTitle(widget("device", { qualifiedId: "zigbee:0xabc" }))).toBeNull();
+    expect(widgetTitle(widget("light", { qualifiedId: "zigbee:0xabc" }))).toBeNull();
   });
 
   it("returns the configured title when one is set", () => {
@@ -168,9 +168,9 @@ describe("the span tier the frame hands its renderer", () => {
 });
 
 describe("the minimum box a card's guard compares against", () => {
-  const DEVICE = WALL_WIDGET_REGISTRY.device;
+  const DEVICE = WALL_WIDGET_REGISTRY.light;
 
-  /** The `device` frame is chrome-less, so its renderer's box is the whole cell. */
+  /** A typed device widget's frame is chrome-less, so its renderer's box is the whole cell. */
   function deviceBox(rows: number, rowUnit: number, titled: boolean): number {
     return rendererBoxHeightPx({
       cellHeightPx: cardHeightPx({ rows, rowUnit }),
@@ -200,7 +200,7 @@ describe("the minimum box a card's guard compares against", () => {
 
   it("still renders an untitled card at the type's minimum span", () => {
     // The confirmation the minimum spans are derived against: a two-row device
-    // cell at the floors is 128 px, exactly the compact card's budget, and the
+    // cell at the floors is the ported compact card's own budget, and the
     // untitled card passes the guard.
     for (const rowUnit of [ROW_UNIT_MIN, ROW_UNIT_MAX]) {
       const box = deviceBox(DEVICE.min.h, rowUnit, false);

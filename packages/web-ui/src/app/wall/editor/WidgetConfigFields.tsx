@@ -2,18 +2,20 @@
  * The per-type config form a wall widget exposes in the editor (design.md D13;
  * wall-zones-and-fit D1, D11, D12; specs/wall-display "Wall Configuration
  * Editor"). Every wall widget carries a zone label (the band it groups into) and
- * its own configuration: a room widget picks a room, a device or temperature
- * widget picks a device, a scene widget picks an automation and a label, a link
- * picks the wall profile it opens, a device grid selects the devices it shows,
- * and the rest take an optional title. The values written here are validated by
- * the type's descriptor schema in `model.ts` before a save, so a blank required
- * field surfaces inline rather than reaching the server.
+ * its own configuration: a room widget picks a room, a typed device widget binds
+ * one device its class can drive and carries that card's layout and
+ * inactive-controls setting, the temperature widget picks a device, a scene widget
+ * picks an automation and a label, a link picks the wall profile it opens, a device
+ * grid selects the devices it shows, and the rest take an optional title. The
+ * values written here are validated by the type's descriptor schema in `model.ts`
+ * before a save, so a blank required field surfaces inline rather than reaching the
+ * server.
  *
  * Rebuilt on the Lumen primitive layer (`ui/*`); the `ui/` layer carries no
  * input primitive, so the text fields use the shared input treatment, and the
  * device grid's selection reuses the Lumen toggle group.
  */
-import { WALL_ZONE_MAX_LENGTH, type WallWidget } from "@ts-ha/shared";
+import { WALL_DEVICE_LAYOUTS, WALL_ZONE_MAX_LENGTH, type WallWidget } from "@ts-ha/shared";
 import { useDataStore } from "../../lib/data-store.js";
 import { humanizeDeviceName } from "../../lib/humanize-name.js";
 import type { DeviceDescriptor } from "../../types.js";
@@ -24,10 +26,12 @@ import {
   SelectTrigger,
   SelectValue,
   Stack,
+  Switch,
   ToggleGroup,
   ToggleGroupItem,
 } from "../../ui/index.js";
 import { deviceGridIds } from "../widgets/device-grid-model.js";
+import { offeredDevices } from "./model.js";
 
 export interface WidgetConfigFieldsProps {
   widget: WallWidget;
@@ -134,10 +138,8 @@ function ZoneField({ zone, onChange }: { zone: string; onChange: (zone: string) 
 }
 
 /** The devices a picker offers, humanised and alphabetised so a long list stays scannable. */
-function deviceOptions(
-  devicesByQualifiedId: ReadonlyMap<string, DeviceDescriptor>,
-): SelectOption[] {
-  return [...devicesByQualifiedId.values()]
+function deviceOptions(devices: Iterable<DeviceDescriptor>): SelectOption[] {
+  return [...devices]
     .sort((a, b) =>
       humanizeDeviceName(a.displayName).localeCompare(humanizeDeviceName(b.displayName)),
     )
@@ -145,6 +147,38 @@ function deviceOptions(
       value: device.qualifiedId,
       label: humanizeDeviceName(device.displayName),
     }));
+}
+
+/**
+ * The card layouts a typed device widget offers (design.md D6; specs/wall-display
+ * "A typed device widget is configured"). Built from the shared contract's own
+ * list, so the three options the editor shows are exactly the three the schema
+ * accepts.
+ */
+const LAYOUT_OPTIONS: SelectOption[] = WALL_DEVICE_LAYOUTS.map((layout) => ({
+  value: layout,
+  label: `${layout.charAt(0).toUpperCase()}${layout.slice(1)}`,
+}));
+
+/**
+ * A labelled on/off field for a widget option (design.md D6) — the card's
+ * inactive-controls setting. The switch carries the accessible name.
+ */
+function SwitchField({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <span className="text-xs font-medium text-muted">{label}</span>
+      <Switch aria-label={label} checked={checked} onCheckedChange={onChange} />
+    </div>
+  );
 }
 
 /**
@@ -201,6 +235,12 @@ export function WidgetConfigFields({
   const text = (key: string): string =>
     typeof widget.config[key] === "string" ? (widget.config[key] as string) : "";
   const zone = typeof widget.zone === "string" ? widget.zone : "";
+  // A typed device card's options (design.md D6): its layout, defaulting to the
+  // card's own natural composition, and whether it hides its controls while the
+  // device is inactive.
+  const layout =
+    typeof widget.config.layout === "string" ? (widget.config.layout as string) : "default";
+  const collapsibleControls = widget.config.collapsible_controls === true;
 
   /** The fields the widget's own type contributes, below the shared zone field. */
   function typeFields() {
@@ -223,16 +263,53 @@ export function WidgetConfigFields({
           </>
         );
 
-      case "device":
-      case "temperature": {
-        const sensor = widget.type === "temperature";
+      case "light":
+      case "cover":
+      case "fan":
+      case "climate":
+      case "lock":
+      case "number":
+      case "select":
+      case "entity":
+        // A typed device widget binds one device, and only the devices whose
+        // capabilities can drive the widget's class are offered (design.md D3,
+        // D6; specs/wall-display "A device its class cannot drive is not
+        // offered", "A typed device widget is configured"). The offer rule is the
+        // wall's own resolver, so it is single-sourced with the explanation a
+        // widget draws for a mis-bound device. The card's layout and its
+        // inactive-controls setting ride in the same config.
         return (
           <>
             <SelectField
-              label={sensor ? "Sensor device" : "Device"}
-              placeholder={sensor ? "Choose a sensor" : "Choose a device"}
+              label="Device"
+              placeholder="Choose a device"
               value={text("qualifiedId")}
-              options={deviceOptions(devicesByQualifiedId)}
+              options={deviceOptions(offeredDevices(widget.type, devicesByQualifiedId.values()))}
+              onChange={(value) => onChange({ qualifiedId: value })}
+            />
+            <SelectField
+              label="Layout"
+              placeholder="Default"
+              value={layout}
+              options={LAYOUT_OPTIONS}
+              onChange={(value) => onChange({ layout: value })}
+            />
+            <SwitchField
+              label="Hide controls while inactive"
+              checked={collapsibleControls}
+              onChange={(value) => onChange({ collapsible_controls: value })}
+            />
+          </>
+        );
+
+      case "temperature":
+        return (
+          <>
+            <SelectField
+              label="Sensor device"
+              placeholder="Choose a sensor"
+              value={text("qualifiedId")}
+              options={deviceOptions(devicesByQualifiedId.values())}
               onChange={(value) => onChange({ qualifiedId: value })}
             />
             <TextField
@@ -242,7 +319,6 @@ export function WidgetConfigFields({
             />
           </>
         );
-      }
 
       case "scene":
         return (
@@ -287,7 +363,7 @@ export function WidgetConfigFields({
           <>
             <DeviceSelectionField
               selected={deviceGridIds(widget.config)}
-              options={deviceOptions(devicesByQualifiedId)}
+              options={deviceOptions(devicesByQualifiedId.values())}
               onChange={(next) => onChange({ qualifiedIds: next })}
             />
             <TextField

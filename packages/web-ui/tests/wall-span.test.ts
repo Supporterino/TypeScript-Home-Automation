@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import { WALL_CARD_FULL_HEIGHT_PX } from "../src/app/wall/cards/card-composition.js";
 import { rendererBoxHeightPx } from "../src/app/wall/frame.js";
 import {
   ROW_UNIT_MAX,
@@ -6,7 +7,6 @@ import {
   WALL_COMPACT_CARD_HEIGHT_PX,
   WALL_GUTTER_MIN_PX,
 } from "../src/app/wall/grid.js";
-import { WALL_FRAME_INSET_PX } from "../src/app/wall/pages.js";
 import {
   WALL_MIN_CONTROL_GAP,
   WALL_MIN_TOUCH_TARGET,
@@ -24,19 +24,18 @@ import {
   type WallCardForm,
   type WallSpanDescriptor,
 } from "../src/app/wall/span.js";
-import { WALL_TYPE_RAMP } from "../src/app/wall/type-ramp.js";
 
 /**
- * The form a `device` card composes in a cell of `rows` rows. The `device`
- * type's frame is chrome-less, so its tile's box *is* the cell: the render path
- * resolves the form from the renderer's box (`frame.ts`'s `rendererBoxHeightPx`),
- * which for this type is the cell height.
+ * The form a card composes in a cell of `rows` rows. A typed device widget's
+ * frame is chrome-less, so its card's box *is* the cell: the render path resolves
+ * the form from the renderer's box (`frame.ts`'s `rendererBoxHeightPx`), which for
+ * that type is the cell height.
  */
 function formForCell(input: { rows: number; rowUnit: number; gutterPx?: number }): WallCardForm {
   return resolveCardFormForHeight(cardHeightPx(input));
 }
 
-// Pure tier selection — no DOM (wall-zones-and-fit D3; specs/wall-display
+// Pure tier selection — no DOM (design.md D2, D3; specs/wall-display
 // "Span-Aware Card Presentation"). A card composes itself for its declared span,
 // so the tier is derived from the type's own registry spans.
 
@@ -72,9 +71,9 @@ describe("resolveSpanTier", () => {
     expect(resolveSpanTier({ w: 5, h: 5 }, CLOCK)).toBe("roomy");
   });
 
-  it("resolves compact when the type's default is its minimum", () => {
-    // The `device` type's default span *is* its minimum, so its smallest card
-    // must still compose compact rather than repeating the regular form.
+  it("resolves compact when a type's default is its minimum", () => {
+    // Every typed device widget's default span *is* its minimum, so its smallest
+    // card must still compose compact rather than repeating the regular form.
     const descriptor: WallSpanDescriptor = {
       min: { w: 2, h: 2 },
       defaults: { w: 2, h: 2 },
@@ -115,22 +114,30 @@ describe("resolveSpanTier", () => {
 });
 
 describe("WALL_FULL_CARD_HEIGHT_PX", () => {
-  it("is the card inset plus the full stack the light card can draw", () => {
-    // The budget is derived from the parts the full form draws: the card's own
-    // inset, the header row, a slider per value control with a spectrum bar above
-    // each colour slider, the stack gaps, and the observation footer.
-    const header = Math.max(
-      WALL_MIN_TOUCH_TARGET,
-      WALL_TYPE_RAMP.titleMax + 4 + WALL_TYPE_RAMP.bandMax,
-    );
-    expect(header).toBeGreaterThanOrEqual(WALL_MIN_TOUCH_TARGET);
-    expect(WALL_FULL_CARD_HEIGHT_PX).toBe(
-      2 * WALL_FRAME_INSET_PX +
-        header +
-        3 * WALL_MIN_TOUCH_TARGET + // brightness, colour temperature, colour
-        2 * (6 + 4) + // a colour control's spectrum bar and its block gap
-        4 * 12 + // the gaps between those rows
-        20, // the observation footer
+  it("is the ported card's own full-content budget, read from the card module", () => {
+    // The compact card is its state item and one control row; the full form adds a
+    // second control row. Both budgets are the cards' own, so the wall's form
+    // boundary and the cards it ports cannot drift (design.md D2, D5).
+    expect(WALL_FULL_CARD_HEIGHT_PX).toBe(WALL_CARD_FULL_HEIGHT_PX);
+    expect(WALL_FULL_CARD_HEIGHT_PX).toBeGreaterThan(WALL_COMPACT_CARD_HEIGHT_PX);
+    expect(Number.isInteger(WALL_FULL_CARD_HEIGHT_PX)).toBe(true);
+  });
+});
+
+describe("resolveCardFormForHeight", () => {
+  it("takes the full form at its threshold and the compact form below", () => {
+    // The ported card's full-content budget is the boundary; everything shorter —
+    // including the compact budget a minimum-span cell guarantees — composes
+    // compact, so a card never overflows the box it was given.
+    expect(resolveCardFormForHeight(WALL_FULL_CARD_HEIGHT_PX)).toBe("full");
+    expect(resolveCardFormForHeight(WALL_FULL_CARD_HEIGHT_PX - 1)).toBe("compact");
+    expect(resolveCardFormForHeight(WALL_COMPACT_CARD_HEIGHT_PX)).toBe("compact");
+    expect(resolveCardFormForHeight(0)).toBe("compact");
+  });
+
+  it("composes a richer form for a taller box rather than repeating a smaller one", () => {
+    expect(resolveCardFormForHeight(WALL_COMPACT_CARD_HEIGHT_PX)).not.toBe(
+      resolveCardFormForHeight(WALL_FULL_CARD_HEIGHT_PX),
     );
   });
 });
@@ -161,7 +168,7 @@ describe("resolveCardFormForHeight over the cell geometry", () => {
     expect(2 * ROW_UNIT_MIN + WALL_GUTTER_MIN_PX).toBeGreaterThanOrEqual(
       WALL_COMPACT_CARD_HEIGHT_PX,
     );
-    expect(WALL_WIDGET_REGISTRY.device.min.h).toBe(2);
+    expect(WALL_WIDGET_REGISTRY.light.min.h).toBe(2);
   });
 
   it("reads a row unit below the wall's floor as the floor", () => {
@@ -173,12 +180,12 @@ describe("resolveCardFormForHeight over the cell geometry", () => {
   it("assumes the gutter floor, so a shorter cell never takes the full form", () => {
     // The decision must hold for the smallest cell the layout can produce: with a
     // larger gutter assumed, a cell would look taller than it can be drawn.
-    expect(formForCell({ rows: 5, rowUnit: ROW_UNIT_MIN, gutterPx: WALL_GUTTER_MIN_PX })).toBe(
+    expect(formForCell({ rows: 3, rowUnit: ROW_UNIT_MIN, gutterPx: WALL_GUTTER_MIN_PX })).toBe(
       "compact",
     );
     expect(
       WALL_MIN_CONTROL_GAP,
-      "the control gap the compact budget's inset is built from",
+      "the control gap the wall's spacing rhythm is built from",
     ).toBeGreaterThan(0);
   });
 });
@@ -326,5 +333,14 @@ describe("WALL_TITLE_ROWS", () => {
         }
       }
     }
+  });
+});
+
+describe("the ported touch target", () => {
+  it("holds the minimum-span cell for the compact card at the gutter floor", () => {
+    expect(2 * ROW_UNIT_MIN + WALL_GUTTER_MIN_PX).toBeGreaterThanOrEqual(
+      WALL_COMPACT_CARD_HEIGHT_PX,
+    );
+    expect(WALL_MIN_TOUCH_TARGET).toBeGreaterThanOrEqual(42);
   });
 });

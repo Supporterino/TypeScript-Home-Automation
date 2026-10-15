@@ -8,17 +8,18 @@
  * scrolls (design.md D5): the page math in `wall/pages.ts` decides how many
  * devices a page presents, and the grid draws exactly that page through the
  * shared {@link PagedTileGrid} — touch page controls rather than overflow or
- * scroll. Every tile is the shared {@link WallDeviceTile}, so ranking, optimistic
- * override, state encoding, and the touch-target scale stay single-sourced; the
- * frame draws the card's surface, so the contained tiles draw none of their own.
+ * scroll. Every tile is the shared {@link WallDeviceCard} for its device's class,
+ * so ranking, optimistic override, state encoding, and the touch-target scale stay
+ * single-sourced; the frame draws the card's surface, so the contained tiles draw
+ * none of their own.
  */
 import { useDataStore } from "../../lib/data-store.js";
 import { widgetTitle } from "../frame.js";
 import type { WallWidgetProps } from "../registry.js";
 import { WallCardMessage } from "./card-vocab.js";
+import { WallDeviceCard, WallDeviceUnavailable, wallTileCardBox } from "./DeviceWidget.js";
 import { deviceGridIds } from "./device-grid-model.js";
 import { PagedTileGrid } from "./PagedTileGrid.js";
-import { WallDeviceTile } from "./WallDeviceTile.js";
 
 export function DeviceGridWidget({ widget, contained, rowUnit }: WallWidgetProps) {
   const { devicesByQualifiedId } = useDataStore();
@@ -38,21 +39,21 @@ export function DeviceGridWidget({ widget, contained, rowUnit }: WallWidgetProps
     <PagedTileGrid
       items={ids}
       keyOf={(qualifiedId) => qualifiedId}
-      // Each tile is the device card at its minimum span — the cell the page plan
-      // and the wall's row-unit floor are derived for — so its form is `compact`
-      // (wall-zones-and-fit D3, D4).
-      renderTile={(qualifiedId) => {
+      // Each tile composes for the box the grid drew it in — the page plan's row
+      // height, the tile's own cell bounded against inflation (design.md D4, D7;
+      // specs/wall-display "Paged Tile Sizing"). Its form resolves from that box,
+      // so the same device composes a richer form in a taller grid than in a
+      // shorter one.
+      renderTile={(qualifiedId, box) => {
         const device = devicesByQualifiedId.get(qualifiedId);
         return device ? (
-          <WallDeviceTile device={device} contained={contained} tier="compact" cardForm="compact" />
-        ) : (
-          <WallDeviceTile
-            unavailable
-            qualifiedId={qualifiedId}
+          <WallDeviceCard
+            device={device}
             contained={contained}
-            tier="compact"
-            cardForm="compact"
+            box={wallTileCardBox(rowUnit, box.heightPx)}
           />
+        ) : (
+          <WallDeviceUnavailable qualifiedId={qualifiedId} contained={contained} />
         );
       }}
       span={widget}

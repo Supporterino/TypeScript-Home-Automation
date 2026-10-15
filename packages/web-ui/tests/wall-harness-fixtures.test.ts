@@ -3,19 +3,26 @@ import {
   coverStopCommand,
   coverTransportAction,
   rankDeviceTile,
+  writableBrightnessCapability,
   writableColorCapability,
   writableColorTemperatureCapability,
 } from "../src/app/lib/capability-ranking.js";
-import {
-  type CardArchetype,
-  cardArchetype,
-  writableBrightnessCapability,
-} from "../src/app/lib/card-archetype.js";
 import { favoritesFromState } from "../src/app/lib/favorites.js";
 import type { DeviceDescriptor } from "../src/app/types.js";
-import { ROW_UNIT_MAX, ROW_UNIT_MIN } from "../src/app/wall/grid.js";
+import { climateCardModel } from "../src/app/wall/cards/ClimateCard.js";
 import {
-  ARCHETYPE_DEVICE_IDS,
+  placedDeviceCardBox,
+  resolveEnumControlForm,
+  WALL_CARD_COMPACT_HEIGHT_PX,
+  WALL_CARD_ENUM_SIBLING_RESERVE_PX,
+} from "../src/app/wall/cards/card-composition.js";
+import { resolveDeviceClass, WALL_DEVICE_CLASSES } from "../src/app/wall/cards/device-class.js";
+import { lockCardModel } from "../src/app/wall/cards/LockCard.js";
+import { numberCardControl } from "../src/app/wall/cards/NumberCard.js";
+import { selectCardModel } from "../src/app/wall/cards/SelectCard.js";
+import { ROW_UNIT_MAX, ROW_UNIT_MIN, WALL_MIN_DEVICE_COLUMNS } from "../src/app/wall/grid.js";
+import {
+  DEVICE_CLASS_DEVICE_IDS,
   DEVICE_GRID_SELECTION,
   MISSING_DEVICE_ID,
   WALL_HARNESS_FIXTURES,
@@ -30,11 +37,10 @@ import { weatherWidgetState } from "../src/app/wall/widgets/weather-model.js";
  * The harness roster's own contract (task 2.1; design.md D5, D6). The fixtures
  * are typed as the store's `DataStoreFixtures`, so typecheck catches a contract
  * change; what it cannot catch is a roster that still compiles while no longer
- * covering an archetype — which is exactly the "fixture drift" risk design.md
- * names. Every claim D6 makes is therefore resolved through the same pure
- * functions the wall itself uses, not by inspection.
+ * covering a wall device class — which is exactly the "fixture drift" risk
+ * design.md names. Every claim D6 makes is therefore resolved through the same
+ * pure functions the wall itself uses, not by inspection.
  */
-const ARCHETYPES: readonly CardArchetype[] = ["light", "toggle", "cover", "readout", "default"];
 
 const DEVICES_BY_ID = new Map(
   WALL_HARNESS_FIXTURES.devices.map((device) => [device.qualifiedId, device]),
@@ -46,20 +52,16 @@ function fixtureDevice(qualifiedId: string): DeviceDescriptor {
   return device;
 }
 
-function archetype(device: DeviceDescriptor): CardArchetype {
-  return cardArchetype(rankDeviceTile(device.capabilities), device.capabilities);
-}
-
 describe("the fixture roster", () => {
-  it("carries one device per card archetype, resolving to it", () => {
-    for (const expected of ARCHETYPES) {
-      const device = fixtureDevice(ARCHETYPE_DEVICE_IDS[expected]);
-      expect(archetype(device), expected).toBe(expected);
+  it("carries one device per wall device class, resolving to it", () => {
+    for (const expected of WALL_DEVICE_CLASSES) {
+      const device = fixtureDevice(DEVICE_CLASS_DEVICE_IDS[expected]);
+      expect(resolveDeviceClass(device.capabilities), expected).toBe(expected);
     }
   });
 
   it("declares every control a light card offers on the full light", () => {
-    const light = fixtureDevice(ARCHETYPE_DEVICE_IDS.light);
+    const light = fixtureDevice(DEVICE_CLASS_DEVICE_IDS.light);
 
     expect(rankDeviceTile(light.capabilities).action?.kind).toBe("on_off");
     expect(writableBrightnessCapability(light.capabilities)?.property).toBe("brightness");
@@ -68,7 +70,7 @@ describe("the fixture roster", () => {
   });
 
   it("gives the cover a position and a stop command", () => {
-    const cover = fixtureDevice(ARCHETYPE_DEVICE_IDS.cover);
+    const cover = fixtureDevice(DEVICE_CLASS_DEVICE_IDS.cover);
 
     expect(rankDeviceTile(cover.capabilities).action?.kind).toBe("position");
     expect(coverStopCommand(cover.capabilities)).toEqual({ property: "state", value: "stop" });
@@ -80,8 +82,40 @@ describe("the fixture roster", () => {
     });
   });
 
+  it("backs the number, select, climate and lock classes with a control each card drives", () => {
+    // The classes whose card has its own pure model are asserted through it, so a
+    // fixture that resolves to a class but declares nothing that class's card can
+    // drive fails here rather than reaching the harness as an inert card.
+    const number = fixtureDevice(DEVICE_CLASS_DEVICE_IDS.number);
+    expect(numberCardControl(number.capabilities)?.property).toBe("value");
+
+    const select = fixtureDevice(DEVICE_CLASS_DEVICE_IDS.select);
+    expect(selectCardModel(select.capabilities).values).toEqual(["auto", "manual", "off"]);
+
+    const climate = fixtureDevice(DEVICE_CLASS_DEVICE_IDS.climate);
+    expect(climateCardModel(climate.capabilities).setpoint?.property).toBe(
+      "current_heating_setpoint",
+    );
+    expect(climateCardModel(climate.capabilities).modeValues).toEqual([
+      "off",
+      "heat",
+      "cool",
+      "auto",
+      "dry",
+      "fan_only",
+    ]);
+
+    const lock = fixtureDevice(DEVICE_CLASS_DEVICE_IDS.lock);
+    expect(lockCardModel(lock.capabilities)).toEqual({
+      property: "state",
+      lock: "LOCK",
+      unlock: "UNLOCK",
+      stateProperty: "state",
+    });
+  });
+
   it("gives the read-only sensor a temperature the temperature widget reads", () => {
-    const sensor = fixtureDevice(ARCHETYPE_DEVICE_IDS.readout);
+    const sensor = fixtureDevice(DEVICE_CLASS_DEVICE_IDS.entity);
 
     expect(temperatureWidgetState(sensor, sensor.qualifiedId)).toEqual({
       status: "reading",
@@ -92,6 +126,24 @@ describe("the fixture roster", () => {
 
   it("leaves the deliberately absent identifier out of the device map", () => {
     expect(DEVICES_BY_ID.has(MISSING_DEVICE_ID)).toBe(false);
+  });
+
+  it("carries an enum with more values than fit one row, so the fallback is reachable", () => {
+    const climate = fixtureDevice(DEVICE_CLASS_DEVICE_IDS.climate);
+    const values = climateCardModel(climate.capabilities).modeValues;
+    expect(values.length).toBeGreaterThan(4);
+
+    // At the widget's minimum span the option row cannot fit beside the setpoint
+    // slider at the wall's touch target, so the enumerated control resolves to
+    // one affordance rather than an option squeezed below the target.
+    const box = placedDeviceCardBox({
+      columns: WALL_MIN_DEVICE_COLUMNS,
+      rowUnit: ROW_UNIT_MIN,
+      heightPx: WALL_CARD_COMPACT_HEIGHT_PX,
+    });
+    expect(
+      resolveEnumControlForm({ box, values, reservedPx: WALL_CARD_ENUM_SIBLING_RESERVE_PX }),
+    ).toBe("single");
   });
 });
 

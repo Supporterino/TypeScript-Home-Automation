@@ -1,6 +1,10 @@
 import { describe, expect, it } from "bun:test";
 import type { WallProfileConfig, WallWidget } from "@ts-ha/shared";
 import {
+  WALL_CARD_COMPACT_HEIGHT_PX,
+  WALL_CARD_CONTROL_ROW_MIN_WIDTH_PX,
+} from "../src/app/wall/cards/card-composition.js";
+import {
   gridPlacementStyle,
   occupiedRows,
   ROW_UNIT_MAX,
@@ -11,15 +15,12 @@ import {
   WALL_GUTTER,
   WALL_GUTTER_MAX_PX,
   WALL_GUTTER_MIN_PX,
+  WALL_MIN_DEVICE_COLUMNS,
   WALL_MIN_DEVICE_ROWS,
   wallGridMetrics,
   wallGridStyle,
 } from "../src/app/wall/grid.js";
-import {
-  WALL_MIN_CONTROL_GAP,
-  WALL_MIN_TOUCH_TARGET,
-  WALL_WIDGET_REGISTRY,
-} from "../src/app/wall/registry.js";
+import { WALL_MIN_TOUCH_TARGET, WALL_WIDGET_REGISTRY } from "../src/app/wall/registry.js";
 
 function widget(id: string, x: number, y: number, w: number, h: number): WallWidget {
   return { id, type: "clock", config: {}, x, y, w, h };
@@ -84,9 +85,10 @@ describe("resolveRowUnit", () => {
   });
 
   it("uses the exact fit when the natural unit falls inside the bounds", () => {
-    expect(resolveRowUnit(600, 8)).toBeCloseTo(75, 5);
-    expect(resolveRowUnit(600, 8)).toBeGreaterThan(ROW_UNIT_MIN);
-    expect(resolveRowUnit(600, 8)).toBeLessThan(ROW_UNIT_MAX);
+    // 600 px over 11 rows resolves to 54.55 px, inside the bounded range.
+    expect(resolveRowUnit(600, 11)).toBeCloseTo(54.545, 2);
+    expect(resolveRowUnit(600, 11)).toBeGreaterThan(ROW_UNIT_MIN);
+    expect(resolveRowUnit(600, 11)).toBeLessThan(ROW_UNIT_MAX);
   });
 
   it("clamps a tall profile's row unit to the minimum", () => {
@@ -94,11 +96,11 @@ describe("resolveRowUnit", () => {
   });
 
   it("reserves a supplied gutter when sizing rows", () => {
-    // Padding (2×24) and four inter-row gaps (4×24) are removed before dividing:
-    // (500 − 144) / 5 = 71.2, inside the bounds; without the reservation the
-    // same panel would clamp to the ceiling instead.
-    expect(resolveRowUnit(500, 5, 24)).toBeCloseTo(71.2, 5);
-    expect(resolveRowUnit(500, 5, 24)).toBeLessThan(resolveRowUnit(500, 5, 0));
+    // Padding (2×12) and four inter-row gaps (4×12) are removed before dividing:
+    // (350 − 72) / 5 = 55.6, inside the bounds; without the reservation the same
+    // panel would clamp to the ceiling instead.
+    expect(resolveRowUnit(350, 5, 12)).toBeCloseTo(55.6, 5);
+    expect(resolveRowUnit(350, 5, 12)).toBeLessThan(resolveRowUnit(350, 5, 0));
   });
 });
 
@@ -114,11 +116,11 @@ describe("wallGridMetrics", () => {
   });
 
   it("reports the fits outcome for a composition that fits the panel exactly", () => {
-    // 10 rows on a 1000px panel: the unit resolves to 73.6 and the content is
-    // exactly the usable height, so the composition fits with nothing to spare.
-    const metrics = wallGridMetrics(1000, [widget("a", 0, 0, 12, 10)], 24);
+    // 10 rows on an 824px panel: the unit resolves to the ceiling and the content
+    // is exactly the usable height, so the composition fits with nothing to spare.
+    const metrics = wallGridMetrics(824, [widget("a", 0, 0, 12, 10)], 24);
 
-    expect(metrics.rowUnit).toBeCloseTo(73.6, 5);
+    expect(metrics.rowUnit).toBe(ROW_UNIT_MAX);
     expect(metrics.contentHeight).toBeCloseTo(metrics.usableHeight, 5);
     expect(metrics.outcome).toBe("fits");
   });
@@ -132,30 +134,34 @@ describe("wallGridMetrics", () => {
   });
 
   it("treats a sub-pixel float-rounding hair as a fit, not an overflow", () => {
-    // 19 rows on a 1862px panel: the float division leaves contentHeight a hair
-    // above usableHeight (1814.0000000000002 > 1814); it must still fit.
-    const metrics = wallGridMetrics(1862, [widget("a", 0, 0, 12, 19)], 24);
+    // 12 rows on an 888px panel at the harness's 21.6px gutter: the float division
+    // leaves contentHeight a hair above usableHeight, and it must still fit.
+    const metrics = wallGridMetrics(888, [widget("a", 0, 0, 12, 12)], 21.6);
     expect(metrics.contentHeight).toBeGreaterThan(metrics.usableHeight);
     expect(metrics.outcome).toBe("fits");
   });
 });
 
 describe("the row unit's bounds", () => {
-  it("lowers the ceiling to the reduced component scale", () => {
-    expect(ROW_UNIT_MAX).toBe(80);
+  it("clamps the ceiling to the ported card's own density", () => {
+    // design.md D5 leaves the exact ceiling to the harness (roughly 52–56); it is
+    // settled at the top of that range and stays above the derived floor.
+    expect(ROW_UNIT_MAX).toBe(56);
+    expect(ROW_UNIT_MAX).toBeGreaterThan(ROW_UNIT_MIN);
     expect(resolveRowUnit(4096, 2)).toBe(ROW_UNIT_MAX);
   });
 
-  it("derives the floor from the compact light card at the wall's floors", () => {
-    // D4: a minimum-span device cell (2 rows) holds the compact card at the
-    // touch-target and control-gap floors — the derivation `grid.ts` documents.
-    expect(WALL_COMPACT_CARD_HEIGHT_PX).toBe(
-      WALL_MIN_DEVICE_ROWS * WALL_MIN_TOUCH_TARGET + 2 * WALL_MIN_CONTROL_GAP,
-    );
+  it("derives the floor from the ported card's own compact height", () => {
+    // The derivation `grid.ts` documents: the card's real compact budget (read
+    // from the card module) sets the floor, held at least the wall's touch target.
+    expect(WALL_COMPACT_CARD_HEIGHT_PX).toBe(WALL_CARD_COMPACT_HEIGHT_PX);
     expect(ROW_UNIT_MIN).toBe(
-      (WALL_COMPACT_CARD_HEIGHT_PX - WALL_GUTTER_MIN_PX) / WALL_MIN_DEVICE_ROWS,
+      Math.max(
+        (WALL_COMPACT_CARD_HEIGHT_PX - WALL_GUTTER_MIN_PX) / WALL_MIN_DEVICE_ROWS,
+        WALL_MIN_TOUCH_TARGET,
+      ),
     );
-    expect(ROW_UNIT_MIN).toBe(56);
+    expect(ROW_UNIT_MIN).toBe(50);
   });
 
   it("holds the minimum-span cell for the compact card at the gutter floor", () => {
@@ -170,8 +176,35 @@ describe("the row unit's bounds", () => {
   });
 
   it("takes the minimum device span from the widget registry", () => {
-    expect(WALL_MIN_DEVICE_ROWS).toBe(WALL_WIDGET_REGISTRY.device.min.h);
-    expect(WALL_MIN_DEVICE_ROWS).toBe(WALL_WIDGET_REGISTRY.device.min.w);
+    expect(WALL_MIN_DEVICE_ROWS).toBe(WALL_WIDGET_REGISTRY.light.min.h);
+    expect(WALL_MIN_DEVICE_COLUMNS).toBe(WALL_WIDGET_REGISTRY.light.min.w);
+  });
+
+  it("derives the minimum device columns from the widest card control row", () => {
+    // The derivation `grid.ts` documents: the columns whose cell at the wall's
+    // floors is at least the widest control row a card draws at its minimum span
+    // (`wall/cards/card-composition.ts`'s `WALL_CARD_CONTROL_ROW_MIN_WIDTH_PX`),
+    // so a minimum-span card never clips a control horizontally (specs/wall-display
+    // "A light card fits its minimum span").
+    expect(WALL_MIN_DEVICE_COLUMNS).toBe(
+      Math.max(
+        1,
+        Math.ceil(
+          (WALL_CARD_CONTROL_ROW_MIN_WIDTH_PX + WALL_GUTTER_MIN_PX) /
+            (ROW_UNIT_MIN + WALL_GUTTER_MIN_PX),
+        ),
+      ),
+    );
+    expect(WALL_MIN_DEVICE_COLUMNS).toBe(3);
+
+    // The derivation is tight: the minimum span holds the widest row, and one
+    // column fewer would not.
+    const cell = (columns: number): number =>
+      columns * ROW_UNIT_MIN + (columns - 1) * WALL_GUTTER_MIN_PX;
+    expect(cell(WALL_MIN_DEVICE_COLUMNS)).toBeGreaterThanOrEqual(
+      WALL_CARD_CONTROL_ROW_MIN_WIDTH_PX,
+    );
+    expect(cell(WALL_MIN_DEVICE_COLUMNS - 1)).toBeLessThan(WALL_CARD_CONTROL_ROW_MIN_WIDTH_PX);
   });
 });
 

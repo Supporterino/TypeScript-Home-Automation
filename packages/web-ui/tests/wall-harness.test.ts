@@ -454,7 +454,7 @@ describe("the harness fixture controls", () => {
   it("reports an unavailable room member when its device is absent", () => {
     const set = fixtureSetFor({
       ...DEFAULT_FIXTURE_CONTROLS,
-      device: "readout",
+      device: "entity",
       devicePresent: false,
     });
     const member = set.rooms[0]?.members.find(

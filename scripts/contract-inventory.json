@@ -176,6 +176,36 @@
       "consumers": ["core", "webUi"]
     },
     {
+      "name": "WallTypedDeviceWidgetConfig",
+      "kind": "interface",
+      "definedIn": "packages/shared/src/wall.ts",
+      "consumers": ["webUi"]
+    },
+    {
+      "name": "WallV1Profile",
+      "kind": "interface",
+      "definedIn": "packages/shared/src/wall.ts",
+      "consumers": ["core"]
+    },
+    {
+      "name": "WallV1ProfileConfig",
+      "kind": "interface",
+      "definedIn": "packages/shared/src/wall.ts",
+      "consumers": ["core"]
+    },
+    {
+      "name": "WallV1Widget",
+      "kind": "interface",
+      "definedIn": "packages/shared/src/wall.ts",
+      "consumers": ["core"]
+    },
+    {
+      "name": "WallV1WidgetType",
+      "kind": "type",
+      "definedIn": "packages/shared/src/wall.ts",
+      "consumers": ["core"]
+    },
+    {
       "name": "RequiredServiceStatus",
       "kind": "interface",
       "definedIn": "packages/shared/src/relationships.ts",

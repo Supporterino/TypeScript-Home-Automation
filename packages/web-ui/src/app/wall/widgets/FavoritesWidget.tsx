@@ -1,13 +1,12 @@
 /**
- * The wall favorites widget (design.md D11, D13; wall-zones-and-fit D5;
- * specs/wall-display "Widget Catalog", "Panel Fit"). Renders the user's
- * favorited devices as the same touch-sized device tiles used everywhere else —
- * favorites logic and the tile presentation are reused, never reimplemented.
+ * The wall favorites widget (design.md D11, D13; specs/wall-display "Widget
+ * Catalog", "Panel Fit"). Renders the user's favorited devices as the ported
+ * device card of each device's own class — favorites logic is reused, never
+ * reimplemented, and a card on the wall carries no management affordance.
  *
  * The displayed set is derived from the store's `favorites` list and live
  * device map on every render, so a favorite change streamed from another
- * client reconciles through the existing `state` handling with no local
- * action; the tile's own favorite toggle writes through the store too.
+ * client reconciles through the existing `state` handling with no local action.
  *
  * Composed on the shared Hearth card vocabulary (design.md D11): a leading star
  * glyph and the title, with the favorite count as the metric; the tiles are the
@@ -30,9 +29,9 @@ import {
   WallCardMessage,
   WallCardMetric,
 } from "./card-vocab.js";
+import { WallDeviceCard, wallTileCardBox } from "./DeviceWidget.js";
 import { favoriteDevices } from "./favorites-model.js";
 import { PagedTileGrid } from "./PagedTileGrid.js";
-import { WallDeviceTile } from "./WallDeviceTile.js";
 
 /**
  * The grid rows the card's own chrome — the star glyph with the title, then the
@@ -68,15 +67,16 @@ export function FavoritesWidget({ widget, contained, rowUnit }: WallWidgetProps)
         <PagedTileGrid
           items={devices}
           keyOf={(device) => device.qualifiedId}
-          renderTile={(device) => (
-            <WallDeviceTile
+          renderTile={(device, box) => (
+            <WallDeviceCard
               device={device}
               contained={contained}
-              // A paged tile is the device card at the wall's minimum-span tile
-              // cell, so it composes the tier and form that cell resolves — the
-              // same ones the device grid gives its tiles (wall-zones-and-fit D4).
-              tier="compact"
-              cardForm="compact"
+              // A paged tile composes for the box the grid drew it in: the page
+              // plan's row height, which is the tile's own cell bounded against
+              // inflation (design.md D2, D9; specs/wall-display "Paged Tile
+              // Sizing"). Its composition resolves from that box, so the same
+              // device composes differently in a short favorites card and a tall one.
+              box={wallTileCardBox(rowUnit, box.heightPx)}
             />
           )}
           span={widget}

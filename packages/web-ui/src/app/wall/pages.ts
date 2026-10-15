@@ -10,22 +10,29 @@
  * ## The tile model
  *
  * A wall tile is the shared wall device card at its minimum span:
- * {@link WALL_TILE_CELL_SPAN} grid columns wide and {@link WALL_TILE_CELL_SPAN}
- * grid rows tall — the cell {@link ROW_UNIT_MIN} is derived for, and the `device`
- * type's own minimum span in the widget registry. A paging widget packs such
- * tiles across its cells, and down them at the panel's resolved row unit, keeping
- * {@link WALL_TILE_GAP_PX} between adjacent tiles:
+ * {@link WALL_TILE_CELL_COLUMNS} grid columns wide and {@link WALL_TILE_CELL_ROWS}
+ * grid rows tall — the cell {@link ROW_UNIT_MIN} is derived for, and a typed
+ * device widget's own minimum span in the widget registry. A paging widget packs
+ * such tiles across its cells, and down them at the panel's resolved row unit,
+ * keeping {@link WALL_TILE_GAP_PX} between adjacent tiles:
  *
  * ```
- *  across     = max(1, floor(columns / WALL_TILE_CELL_SPAN))
- *  pitch      = WALL_TILE_CELL_SPAN · unit + WALL_TILE_GAP_PX
+ *  across     = max(1, floor(columns / WALL_TILE_CELL_COLUMNS))
+ *  pitch      = WALL_TILE_CELL_ROWS · unit + WALL_TILE_GAP_PX
  *  available  = rows · unit + (rows − 1) · gutter − reserved
  *  down       = max(1, floor((available + WALL_TILE_GAP_PX) / pitch))
  * ```
  *
+ * The pitch packs the tiles; the row each one is drawn in is then bounded against
+ * its own cell — at least `WALL_TILE_CELL_ROWS · unit + gutter` and at most
+ * {@link WALL_TILE_ROW_HEIGHT_CAP} times that — so a widget's leftover height is
+ * left as panel and centred rather than distributed into its tiles
+ * (specs/wall-display "Paged Tile Sizing"). The bound acts on the resolved height
+ * alone, so the pitch, the rows packed, and the page count are all unchanged.
+ *
  * The column count is taken from the grid's own cells, because the wall's columns
- * are equal: a tile spans {@link WALL_TILE_CELL_SPAN} of them, so a twelve-column
- * span presents six tiles across and never more than the panel's own columns can
+ * are equal: a tile spans {@link WALL_TILE_CELL_COLUMNS} of them, so a twelve-column
+ * span presents four tiles across and never more than the panel's own columns can
  * hold — a tile is never narrower than the minimum-span tile this plan models.
  * (Counting in the row unit would over-count: on a landscape panel a column is
  * wider than a row is tall, so the count would promise more tiles across than
@@ -51,15 +58,33 @@
  * ceiling would promise a row the drawn cell cannot hold, which is precisely the
  * clip the tile-row guarantee exists to prevent.
  */
-import { ROW_UNIT_MIN, WALL_GUTTER_MIN_PX } from "./grid.js";
+import {
+  ROW_UNIT_MIN,
+  WALL_GUTTER_MIN_PX,
+  WALL_MIN_DEVICE_COLUMNS,
+  WALL_MIN_DEVICE_ROWS,
+} from "./grid.js";
 import type { WallWidgetSpan } from "./registry.js";
 
 /**
- * The cells one wall tile occupies on each axis — the wall device card's minimum
- * span (`WALL_WIDGET_REGISTRY.device.min`), asserted by `wall-pages.test.ts` so
- * the page math and the registry cannot drift.
+ * The columns one wall tile occupies — a typed device widget's minimum column
+ * span (`wall/grid.ts`'s `WALL_MIN_DEVICE_COLUMNS`), asserted by
+ * `wall-pages.test.ts` so the page math and the widget registry cannot drift. It
+ * is what the tile packing divides the widget's columns by: a twelve-column span
+ * presents four minimum-width tiles across, never more than the panel's own
+ * columns can hold, so a tile is never narrower than the minimum-span tile this
+ * plan models.
  */
-export const WALL_TILE_CELL_SPAN = 2;
+export const WALL_TILE_CELL_COLUMNS = WALL_MIN_DEVICE_COLUMNS;
+
+/**
+ * The rows one wall tile occupies — a typed device widget's minimum row span
+ * (`wall/grid.ts`'s `WALL_MIN_DEVICE_ROWS`), the axis the vertical cell bound is
+ * derived from. It is what {@link tileCellPx} multiplies the row unit by, so the
+ * derived cell is exactly the compact card's budget at the floors and the row
+ * unit's own derivation is untouched.
+ */
+export const WALL_TILE_CELL_ROWS = WALL_MIN_DEVICE_ROWS;
 
 /**
  * The separation between two adjacent tiles, in CSS pixels — the wall's control
@@ -67,6 +92,17 @@ export const WALL_TILE_CELL_SPAN = 2;
  * of the widget registry and asserted against it by `wall-pages.test.ts`.
  */
 export const WALL_TILE_GAP_PX = 8;
+
+/**
+ * The most a paged tile row may be inflated beyond the tile's own cell (design.md
+ * D4; specs/wall-display "Paged Tile Sizing"). A widget's leftover height is left
+ * as panel and centred rather than distributed into its tiles, so a tile renders
+ * at a predictable size on every panel instead of at whatever height the widget's
+ * leftover happens to provide. One constant, shared by every paging widget — the
+ * device grid, a room's tiles, and the favorites grid all page through
+ * {@link resolvePages} / {@link resolvePagedTiles}.
+ */
+export const WALL_TILE_ROW_HEIGHT_CAP = 1.25;
 
 /**
  * The surfaced control frame's content inset, in CSS pixels, per side — Hearth's
@@ -82,7 +118,7 @@ export const WALL_FRAME_INSET_PX = 16;
  * cycle would make a module-scope read a temporal-dead-zone error);
  * `wall-device-grid.test.ts` asserts it against `WALL_MIN_TOUCH_TARGET`.
  */
-const WALL_TOUCH_TARGET_PX = 56;
+const WALL_TOUCH_TARGET_PX = 42;
 
 /**
  * The wall's minimum control gap, in CSS pixels — the space between the tiles and
@@ -137,9 +173,11 @@ export interface WallPagePlan {
   readonly pageCount: number;
   /**
    * The height each tile row gets, in CSS pixels. It is never shorter than the
-   * tile's own cell (`WALL_TILE_CELL_SPAN · unit + gutter`, and at the floors that
-   * cell is exactly the compact card's budget), so no promised row can clip a
-   * tile — the guarantee the minimum spans are derived against.
+   * tile's own cell (`WALL_TILE_CELL_ROWS · unit + gutter`, and at the floors that
+   * cell is exactly the compact card's budget) and never taller than
+   * {@link WALL_TILE_ROW_HEIGHT_CAP} times it, so no promised row can clip a tile
+   * and no tile is inflated to fill the widget's leftover height — the widget
+   * centres that space instead (specs/wall-display "Paged Tile Sizing").
    */
   readonly rowHeightPx: number;
 }
@@ -181,13 +219,20 @@ export function resolvePages(input: WallPagesInput): WallPagePlan {
   const available = Math.max(0, extent - (input.reservedPx ?? 0));
   const down = tilesDown(available, unit, gutterPx);
   const tilesPerPage = across * down;
+  const cellPx = tileCellPx(unit, gutterPx);
+  const rowHeightPx = (available - Math.max(0, down - 1) * WALL_TILE_GAP_PX) / down;
 
   return {
     tilesAcross: across,
     tilesDown: down,
     tilesPerPage,
     pageCount: input.count <= 0 ? 0 : Math.ceil(input.count / tilesPerPage),
-    rowHeightPx: (available - Math.max(0, down - 1) * WALL_TILE_GAP_PX) / down,
+    // The row is bounded against the tile's own cell: never inflated past
+    // `WALL_TILE_ROW_HEIGHT_CAP` × it to fill the widget, and never shorter than
+    // it, so a promised row still holds its tile ("Paged Tile Sizing"). Both
+    // bounds act on the resolved height only — the pitch above is untouched, so
+    // `tilesDown` and the page count are unchanged.
+    rowHeightPx: Math.max(cellPx, Math.min(rowHeightPx, WALL_TILE_ROW_HEIGHT_CAP * cellPx)),
   };
 }
 
@@ -206,8 +251,9 @@ export interface WallPagedTiles<T> {
   /** How many tiles one page presents. */
   readonly tilesPerPage: number;
   /**
-   * The height each tile row gets, in CSS pixels — never shorter than a tile's own
-   * cell, so a page this plan reports never clips a tile (see
+   * The height each tile row gets, in CSS pixels — bounded against the tile's own
+   * cell (at least it, at most {@link WALL_TILE_ROW_HEIGHT_CAP} times it), so a
+   * page this plan reports never clips a tile and never inflates one (see
    * {@link WallPagePlan.rowHeightPx}).
    */
   readonly rowHeightPx: number;
@@ -296,24 +342,37 @@ export function resolvePagedTiles<T>(input: WallPagedTilesInput<T>): WallPagedTi
 
 /**
  * How many minimum-span tiles fit across `columns` grid columns. The wall's
- * columns are equal, so a tile spanning {@link WALL_TILE_CELL_SPAN} of them fits
- * exactly `floor(columns / WALL_TILE_CELL_SPAN)` times — a twelve-column span
- * presents six tiles across, never more than the panel's own columns hold. At
+ * columns are equal, so a tile spanning {@link WALL_TILE_CELL_COLUMNS} of them fits
+ * exactly `floor(columns / WALL_TILE_CELL_COLUMNS)` times — a twelve-column span
+ * presents four tiles across, never more than the panel's own columns hold. At
  * least one, so a legal span always presents a page rather than an empty widget.
  */
 function tilesAcross(columns: number): number {
-  return Math.max(1, Math.floor(columns / WALL_TILE_CELL_SPAN));
+  return Math.max(1, Math.floor(columns / WALL_TILE_CELL_COLUMNS));
+}
+
+/**
+ * The tile's own cell height, in CSS pixels: its row span multiplied by the
+ * resolved row unit, plus the gutter it spans. The pitch the page math packs tiles
+ * by is this cell plus one {@link WALL_TILE_GAP_PX}, and
+ * {@link WALL_TILE_ROW_HEIGHT_CAP} is a multiple of it, so the row the plan
+ * promises, the box a tile is drawn in, and the row unit's own derivation are all
+ * the same geometry (specs/wall-display "Paged Tile Sizing"). Only the row span
+ * enters it, so the tile-packing column span does not disturb the vertical bound.
+ */
+function tileCellPx(unit: number, gutterPx: number): number {
+  return WALL_TILE_CELL_ROWS * unit + gutterPx;
 }
 
 /**
  * How many tile rows fit in `availablePx` of the widget's height at `unit`,
  * keeping one {@link WALL_TILE_GAP_PX} between adjacent tiles. The pitch is the
- * tile's own cell — `WALL_TILE_CELL_SPAN · unit + gutter`, the box the wall's row
- * unit is derived to hold a compact card in — plus that gap, so every row this
- * promises is at least a tile's cell tall and no promised row can clip a tile. At
- * least one, so a legal span always presents a page rather than an empty widget.
+ * tile's own cell — {@link tileCellPx}, the box the wall's row unit is derived to
+ * hold a compact card in — plus that gap, so every row this promises is at least a
+ * tile's cell tall and no promised row can clip a tile. At least one, so a legal
+ * span always presents a page rather than an empty widget.
  */
 function tilesDown(availablePx: number, unit: number, gutterPx: number): number {
-  const pitch = WALL_TILE_CELL_SPAN * unit + gutterPx + WALL_TILE_GAP_PX;
+  const pitch = tileCellPx(unit, gutterPx) + WALL_TILE_GAP_PX;
   return Math.max(1, Math.floor((availablePx + WALL_TILE_GAP_PX) / pitch));
 }

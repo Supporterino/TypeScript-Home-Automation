@@ -2,9 +2,15 @@ import { describe, expect, it } from "bun:test";
 import { WALL_GRID_COLUMNS, WALL_WIDGET_TYPES } from "@ts-ha/shared";
 import { WALL_WIDGET_CONFIG_SCHEMAS } from "@ts-ha/shared/wall-schema";
 import {
+  WALL_DEVICE_CLASS_LABELS,
+  WALL_DEVICE_CLASSES,
+} from "../src/app/wall/cards/device-class.js";
+import {
   ROW_UNIT_MIN,
   WALL_COMPACT_CARD_HEIGHT_PX,
   WALL_GUTTER_MIN_PX,
+  WALL_MIN_DEVICE_COLUMNS,
+  WALL_MIN_DEVICE_ROWS,
 } from "../src/app/wall/grid.js";
 import { WALL_PAGE_RESERVED_PX } from "../src/app/wall/pages.js";
 import {
@@ -13,6 +19,7 @@ import {
   WALL_MIN_TOUCH_TARGET,
   WALL_WIDGET_REGISTRY,
 } from "../src/app/wall/registry.js";
+import { wallDeviceCard } from "../src/app/wall/widgets/DeviceWidget.js";
 
 describe("WALL_WIDGET_REGISTRY", () => {
   it("covers every declared widget type with a matching descriptor", () => {
@@ -65,7 +72,19 @@ describe("WALL_WIDGET_REGISTRY", () => {
 
   it("classifies readouts as ambient and touch controls as control", () => {
     const ambient = ["clock", "weather", "energy", "temperature", "status"] as const;
-    const control = ["room", "favorites", "device", "scene"] as const;
+    const control = [
+      "room",
+      "favorites",
+      "scene",
+      "light",
+      "cover",
+      "fan",
+      "climate",
+      "lock",
+      "number",
+      "select",
+      "entity",
+    ] as const;
     for (const type of ambient) expect(WALL_WIDGET_REGISTRY[type].grammar).toBe("ambient");
     for (const type of control) expect(WALL_WIDGET_REGISTRY[type].grammar).toBe("control");
   });
@@ -82,8 +101,8 @@ describe("WALL_WIDGET_REGISTRY", () => {
     expect(getWidgetDescriptor("scene")).toBe(WALL_WIDGET_REGISTRY.scene);
   });
 
-  it("sets a kiosk-class wall touch-target minimum", () => {
-    expect(WALL_MIN_TOUCH_TARGET).toBeGreaterThanOrEqual(56);
+  it("sets the wall touch-target minimum to the ported card's control height", () => {
+    expect(WALL_MIN_TOUCH_TARGET).toBe(42);
   });
 
   it("keeps at least an 8px separation between adjacent wall controls", () => {
@@ -120,6 +139,53 @@ describe("WALL_WIDGET_REGISTRY", () => {
     // The room card draws one more chrome row than favorites (its room-wide
     // command row), so its derived minimum is taller.
     expect(WALL_WIDGET_REGISTRY.room.min.h).toBeGreaterThan(WALL_WIDGET_REGISTRY.favorites.min.h);
+  });
+});
+
+describe("the typed device catalogue", () => {
+  it("registers one widget type per device class, with its card", () => {
+    // The catalogue the change lands (design.md D1, D3; specs/wall-display "A
+    // device class has its own widget type"): one type per class the capability
+    // model can drive, each rendering its own card.
+    for (const deviceClass of WALL_DEVICE_CLASSES) {
+      const descriptor = WALL_WIDGET_REGISTRY[deviceClass];
+      expect(descriptor.type).toBe(deviceClass);
+      expect(descriptor.label).toBe(WALL_DEVICE_CLASS_LABELS[deviceClass]);
+      expect(descriptor.grammar).toBe("control");
+      expect(typeof wallDeviceCard(deviceClass)).toBe("function");
+    }
+  });
+
+  it("retires the single generic device widget type", () => {
+    expect((WALL_WIDGET_TYPES as readonly string[]).includes("device")).toBe(false);
+    expect((WALL_WIDGET_REGISTRY as Record<string, unknown>).device).toBeUndefined();
+  });
+
+  it("gives every typed device widget the ported card's derived minimum span as its default", () => {
+    for (const deviceClass of WALL_DEVICE_CLASSES) {
+      const { min, defaults, max } = WALL_WIDGET_REGISTRY[deviceClass];
+      // The width is the columns whose cell holds the widest control row a card
+      // draws (`wall/grid.ts`'s `WALL_MIN_DEVICE_COLUMNS`); the height is the rows
+      // the row unit is derived to hold a compact card in with nothing to spare.
+      // Both are the default — the smallest legal placement (design.md D2, D5).
+      expect(min).toEqual({ w: WALL_MIN_DEVICE_COLUMNS, h: WALL_MIN_DEVICE_ROWS });
+      expect(defaults).toEqual({ w: WALL_MIN_DEVICE_COLUMNS, h: WALL_MIN_DEVICE_ROWS });
+      expect(max).toEqual({ w: 6, h: 6 });
+    }
+    expect(WALL_MIN_DEVICE_COLUMNS).toBeGreaterThan(WALL_MIN_DEVICE_ROWS);
+  });
+
+  it("binds every typed device widget to the shared typed device config", () => {
+    for (const deviceClass of WALL_DEVICE_CLASSES) {
+      expect(WALL_WIDGET_REGISTRY[deviceClass].configSchema).toBe(
+        WALL_WIDGET_CONFIG_SCHEMAS[deviceClass],
+      );
+      // The config is the one typed device config, shared by every device type.
+      expect(WALL_WIDGET_CONFIG_SCHEMAS[deviceClass].safeParse({ qualifiedId: "a" }).success).toBe(
+        true,
+      );
+      expect(WALL_WIDGET_CONFIG_SCHEMAS[deviceClass].safeParse({}).success).toBe(false);
+    }
   });
 });
 

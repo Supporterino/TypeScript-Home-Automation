@@ -2,17 +2,21 @@ import { describe, expect, it } from "bun:test";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { WALL_WIDGET_CONFIG_SCHEMAS } from "@ts-ha/shared/wall-schema";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import {
   ROW_UNIT_MIN,
   WALL_COMPACT_CARD_HEIGHT_PX,
   WALL_GUTTER_MIN_PX,
 } from "../src/app/wall/grid.js";
 import {
+  resolvePagedTiles,
   resolvePages,
   WALL_FRAME_INSET_PX,
   WALL_FRAME_RESERVED_PX,
   WALL_PAGE_RESERVED_PX,
-  WALL_TILE_CELL_SPAN,
+  WALL_TILE_CELL_COLUMNS,
+  WALL_TILE_CELL_ROWS,
 } from "../src/app/wall/pages.js";
 import {
   WALL_MIN_CONTROL_GAP,
@@ -20,6 +24,7 @@ import {
   WALL_WIDGET_REGISTRY,
 } from "../src/app/wall/registry.js";
 import { deviceGridIds, resolveDeviceGridPage } from "../src/app/wall/widgets/device-grid-model.js";
+import { PagedTileGrid } from "../src/app/wall/widgets/PagedTileGrid.js";
 
 /**
  * The wall device grid (wall-zones-and-fit D12; specs/wall-display "Device Grid
@@ -156,7 +161,7 @@ describe("resolveDeviceGridPage", () => {
     // plan and the wall share the gutter floor, which is what the wall's
     // `clamp(16px, 2vmin, 24px)` resolves to wherever the plan cannot see the
     // viewport.
-    const tileCellPx = WALL_TILE_CELL_SPAN * ROW_UNIT_MIN + WALL_GUTTER_MIN_PX;
+    const tileCellPx = WALL_TILE_CELL_ROWS * ROW_UNIT_MIN + WALL_GUTTER_MIN_PX;
     expect(tileCellPx).toBeGreaterThanOrEqual(WALL_COMPACT_CARD_HEIGHT_PX);
     for (const plan of [onePage, paging]) {
       expect(plan.rowHeightPx).toBeGreaterThanOrEqual(tileCellPx);
@@ -220,10 +225,14 @@ describe("the devices descriptor", () => {
   it("holds at least a page's row of tiles at its minimum span", () => {
     // The minimum span must be at least one tile cell in each direction, and it
     // must physically hold a tile row once the page controls are accounted for.
-    expect(MIN.w).toBeGreaterThanOrEqual(WALL_TILE_CELL_SPAN);
-    expect(MIN.h).toBeGreaterThanOrEqual(WALL_TILE_CELL_SPAN);
+    expect(MIN.w).toBeGreaterThanOrEqual(WALL_TILE_CELL_COLUMNS);
+    expect(MIN.h).toBeGreaterThanOrEqual(WALL_TILE_CELL_ROWS);
+    // Two tile columns wide — the smallest span that presents a page's first row
+    // of minimum-span tiles two across, so a device grid is never placed too
+    // narrow to show the grid it pages.
+    expect(MIN.w).toBe(2 * WALL_TILE_CELL_COLUMNS);
 
-    const cell = WALL_TILE_CELL_SPAN * ROW_UNIT_MIN;
+    const cell = WALL_TILE_CELL_ROWS * ROW_UNIT_MIN;
     const flush = MIN.h * ROW_UNIT_MIN + (MIN.h - 1) * WALL_MIN_CONTROL_GAP * 3;
     expect(flush - WALL_PAGE_RESERVED_PX).toBeGreaterThanOrEqual(cell);
 
@@ -240,7 +249,7 @@ describe("the devices descriptor", () => {
     expect(WALL_PAGE_RESERVED_PX).toBe(
       2 * WALL_FRAME_INSET_PX + WALL_MIN_TOUCH_TARGET + WALL_MIN_CONTROL_GAP,
     );
-    expect(WALL_MIN_TOUCH_TARGET).toBeGreaterThanOrEqual(56);
+    expect(WALL_MIN_TOUCH_TARGET).toBeGreaterThanOrEqual(42);
   });
 
   it("mirrors the frame inset the stylesheet declares", async () => {
@@ -261,7 +270,7 @@ describe("the device grid renderer", () => {
     expect(source).toContain("deviceGridIds(widget.config)");
     expect(source).toContain("items={ids}");
     expect(source).toContain("<PagedTileGrid");
-    expect(source).toContain("WallDeviceTile");
+    expect(source).toContain("WallDeviceCard");
     // The frame draws the card's surface, so each contained tile draws none.
     expect(source).toContain("contained={contained}");
     expect(paged).toContain("resolvePagedTiles(");
@@ -298,5 +307,65 @@ describe("the device grid renderer", () => {
 
     expect(source).toContain("ids.length === 0");
     expect(source).toContain("WallCardMessage");
+  });
+});
+
+describe("the paged tile grid's drawn rows", () => {
+  /** The page's tiles; the identity a tile is keyed and rendered by. */
+  function tiles(count: number): readonly string[] {
+    return Array.from({ length: count }, (_, index) => `device.${index}`);
+  }
+
+  /**
+   * Renders one page of {@link PagedTileGrid} to static markup. The plan the grid
+   * resolves is computed here with the same inputs, so the drawn row height can be
+   * compared against `plan.rowHeightPx` rather than against a repeated literal.
+   *
+   * `PagedTileGrid` imports the card vocabulary, which imports the widget registry
+   * — a cycle the wall chunk resolves by evaluating the registry first. This
+   * module's own `WALL_WIDGET_REGISTRY` import above keeps that order, so the
+   * static render reaches a fully initialised vocabulary.
+   */
+  function renderPage(input: { span: { w: number; h: number }; rowUnit: number; count: number }): {
+    html: string;
+    plan: ReturnType<typeof resolvePagedTiles<string>>;
+  } {
+    const plan = resolvePagedTiles({
+      items: tiles(input.count),
+      span: input.span,
+      rowUnit: input.rowUnit,
+      page: 0,
+    });
+    const html = renderToStaticMarkup(
+      createElement(PagedTileGrid, {
+        items: tiles(input.count),
+        keyOf: (item: string) => item,
+        renderTile: (item: string) => createElement("span", null, item),
+        span: input.span,
+        rowUnit: input.rowUnit,
+        label: "devices",
+      }),
+    );
+    return { html, plan };
+  }
+
+  it("draws each row at the plan's resolved height for a one-row page", () => {
+    // A device grid at its minimum span on the harness panel: its one tile row is
+    // drawn at the height the plan resolved rather than stretched to fill the
+    // widget (design.md D4; specs/wall-display "Paged Tile Sizing").
+    const { html, plan } = renderPage({ span: MIN, rowUnit: ROW_UNIT_MIN, count: 2 });
+
+    expect(plan.rows).toBe(1);
+    expect(html).toContain(`grid-template-rows:repeat(${plan.rows}, ${plan.rowHeightPx}px)`);
+    // The block is centred in the leftover height, not stretched into it.
+    expect(html).toContain("align-content:center");
+  });
+
+  it("draws each row at the plan's resolved height for a several-row page", () => {
+    const { html, plan } = renderPage({ span: { w: 12, h: 12 }, rowUnit: ROW_UNIT_MIN, count: 12 });
+
+    expect(plan.rows).toBe(3);
+    expect(html).toContain(`grid-template-rows:repeat(${plan.rows}, ${plan.rowHeightPx}px)`);
+    expect(html).toContain("align-content:center");
   });
 });

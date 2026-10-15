@@ -7,6 +7,7 @@
  * Lumen to Hearth.
  */
 import type { WallWidget, WallWidgetType } from "@ts-ha/shared";
+import { isWallDeviceClass } from "./cards/device-class.js";
 import { WALL_FRAME_RESERVED_PX } from "./pages.js";
 import type { WallWidgetGrammar } from "./registry.js";
 import { cardHeightPx, WALL_TITLE_BLOCK_PX, type WallSpanDescriptor } from "./span.js";
@@ -63,15 +64,15 @@ export function wallBandChrome(): WallBandChrome {
 }
 
 /**
- * Whether the frame draws a widget's card surface. The `device` widget's frame
- * is chrome-less: its single device card owns the surface (or, for a readout
- * archetype, deliberately draws none), so the frame must not draw a second one
- * (design.md D2, D4; specs/wall-display "A card is a single surface"). Every
+ * Whether the frame draws a widget's card surface. Every typed device widget's
+ * frame is chrome-less: its single device card owns the surface (or, for a
+ * read-only card, deliberately draws none), so the frame must not draw a second
+ * one (design.md D2, D9; specs/wall-display "A card is a single surface"). Every
  * other type keeps the grammar-derived surface, so the mapping in
  * {@link wallFrameChrome} is unchanged.
  */
 export function wallFrameDrawsSurface(type: WallWidgetType, grammar: WallWidgetGrammar): boolean {
-  if (type === "device") return false;
+  if (isWallDeviceClass(type)) return false;
   return wallFrameChrome(grammar).surface;
 }
 

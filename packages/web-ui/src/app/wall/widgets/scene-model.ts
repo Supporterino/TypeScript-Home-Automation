@@ -108,18 +108,18 @@ export const SCENE_STACKED_HEIGHT_PX =
  *   so a wide-but-short cell (a 4×2 or 6×2 scene) keeps the row and cannot clip;
  * - the placement must be larger than the type's own minimum span, so the
  *   minimum-span card never *pre-empts* the composition a larger span draws. The
- *   box alone cannot decide this for the scene: at the top of the row-unit range a
- *   two-row cell already affords the stacked budget (144 px against 131 px), so a
- *   box-only rule would draw the type's *minimum* span identically to every larger
- *   span — exactly what the "a card at a larger span MUST NOT repeat the
- *   composition it renders at a smaller span" requirement forbids. (The light
- *   card needs no such clause: its full budget is taller than any minimum-span
- *   cell can ever reach, so its box rule already implies it.)
+ *   box alone cannot decide this for the scene: a cell taller than the type's
+ *   minimum span already affords the stacked budget, so a box-only rule would draw
+ *   the type's *minimum* span identically to every larger span — exactly what the
+ *   "a card at a larger span MUST NOT repeat the composition it renders at a
+ *   smaller span" requirement forbids. (A typed device card needs no such clause:
+ *   its full budget is taller than any minimum-span cell can ever reach, so its box
+ *   rule already implies it.)
  *
  * A box below even the row's budget cannot arise: the frame only lets a card
  * through whose box holds the box a minimum-span card gets
  * (`WidgetFrame`'s `composesMinimumSpan` over `frame.ts`'s
- * `minimumRendererBoxHeightPx`), and that minimum box — 96 px for this type at the
+ * `minimumRendererBoxHeightPx`), and that minimum box — 84 px for this type at the
  * wall's floors — already holds the row. `wall-scene-tile.test.ts` asserts that
  * invariant, so the tile needs no third case. Whichever composition resolves, its
  * budget fits the box.
