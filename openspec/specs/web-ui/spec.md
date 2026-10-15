@@ -218,6 +218,12 @@ package:
   requiring a full rebuild and engine restart. That workflow MUST resolve
   workspace imports to source by passing the `development` exports condition
   explicitly, since the condition is not selected by `NODE_ENV` or configuration
+- The shipped build MUST compile only the application entrypoint's transitive
+  closure. A development-only module — such as a render harness that renders
+  components against fixture data in isolation — MUST NOT be an entrypoint of
+  that build and MUST NOT be reachable from the application entrypoint, so
+  neither the module nor the data or stylesheets it imports contributes an asset
+  to the manifest or a dependency to first paint.
 
 #### Scenario: Assets are content-addressed
 
@@ -254,6 +260,18 @@ package:
 - **THEN** the compiled design-system stylesheet is emitted as a content-hashed,
   pre-compressed asset served by the asset routes, rather than through a build
   step whose output the manifest does not know about
+
+#### Scenario: A development-only module does not reach the shipped build
+
+- **WHEN** the frontend is built
+- **THEN** no emitted asset contains the development render harness or its
+  fixture data, and the harness is not reachable from the application entrypoint
+
+#### Scenario: A development-only module adds no first-paint dependency
+
+- **WHEN** the dashboard is loaded without opening the development render harness
+- **THEN** no asset fetched for first paint originates from that harness, and the
+  first-paint transferred-size budget is unchanged by its existence
 
 ### Requirement: Technology Stack
 
@@ -321,6 +339,21 @@ it.
 The dashboard MUST NOT poll all endpoints on a fixed interval while the event
 stream is healthy.
 
+The data layer MUST additionally accept a fixture set — devices, state, rooms, and
+the ambient readings (weather, energy) that the wall's widgets would otherwise
+source themselves — supplied explicitly by the calling code, so that components
+can be rendered against known data with no engine present. Fixture use MUST be
+explicit at the call site and MUST NOT be selectable at runtime: no environment
+variable, configuration key, request parameter, or other deployment-time
+condition may cause a dashboard to read fixture data in place of the API, and a
+dashboard run without caller-supplied fixtures MUST source its data exactly as it
+does today.
+
+A wall widget that sources a reading outside the data layer — the wall's weather
+and energy widgets — MUST render a caller-supplied fixture for that reading when
+one is present, and MUST source it exactly as it does today when none is supplied,
+so a fixture-backed render issues no request for it.
+
 #### Scenario: Snapshot then stream
 
 - **WHEN** the dashboard loads
@@ -359,6 +392,31 @@ stream is healthy.
   stream
 - **THEN** every field the declared capability contract requires survives
   ingestion, so the same device is controllable whichever path it arrived on
+
+#### Scenario: Components render from an explicitly supplied fixture set
+
+- **WHEN** a caller supplies a fixture set of devices, state, and rooms to the
+  data layer
+- **THEN** the components render that data without any request to the engine
+
+#### Scenario: A deployment cannot select fixture data
+
+- **WHEN** a dashboard runs without caller-supplied fixtures
+- **THEN** it reads its data exclusively from the API endpoints and the event
+  stream, and no environment variable, configuration key, or request parameter
+  can cause it to read fixture data instead
+
+#### Scenario: Supplying fixtures does not change the API path
+
+- **WHEN** no fixture set is supplied
+- **THEN** snapshot-then-stream sourcing, reconciliation, and degraded-transport
+  behaviour are unchanged
+
+#### Scenario: A widget that sources its own reading prefers the fixture
+
+- **WHEN** a caller supplies a fixture set carrying the reading a widget would
+  otherwise fetch for itself
+- **THEN** the widget renders the supplied reading and issues no request for it
 
 ### Requirement: Asset Delivery and Caching
 
