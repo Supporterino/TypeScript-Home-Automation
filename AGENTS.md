@@ -121,6 +121,7 @@ bun run format               # Format only
 bun run lint                 # Lint only
 bun run build                # Build every package in dependency order (shared → core/web-ui → cli)
 bun run --filter @ts-ha/web-ui build:web-ui   # Build only the React web UI frontend
+bun run --filter @ts-ha/web-ui harness        # Dev-only wall render harness; no engine, broker, or profile
 bun run test                 # Run every package's tests in its own directory
 bun run --filter @ts-ha/core test             # Run one package's tests
 bun test packages/core/tests/state-manager.test.ts --conditions=development  # One test file
