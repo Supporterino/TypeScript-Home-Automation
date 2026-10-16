@@ -34,6 +34,8 @@ export {
 export { EmptyState } from "./empty-state.js";
 export { Grid } from "./grid.js";
 export { IconButton } from "./icon-button.js";
+// Form field treatments (shared class strings)
+export { INPUT_CLASSES, INPUT_CLASSES_SM } from "./input-classes.js";
 export { NavItem } from "./nav-item.js";
 export { Row } from "./row.js";
 export { ScrollArea } from "./scroll-area.js";

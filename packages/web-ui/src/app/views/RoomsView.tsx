@@ -29,13 +29,10 @@ import {
   DialogTitle,
   EmptyState,
   IconButton,
+  INPUT_CLASSES,
   Row,
   Stack,
 } from "../ui/index.js";
-
-/** The shared text-input treatment (the `ui/` layer carries no input primitive). */
-const INPUT_CLASSES =
-  "touch-target h-10 w-full rounded-input border border-hairline bg-surface px-3 text-sm text-ink motion-toggle focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus";
 
 /** The member summary a room row shows, counting what the room's default listing shows. */
 function memberSummary(room: RoomWithMembers): string {

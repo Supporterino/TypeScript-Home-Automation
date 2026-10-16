@@ -29,16 +29,13 @@ import {
   DialogTitle,
   EmptyState,
   IconButton,
+  INPUT_CLASSES,
   Row,
   Spinner,
   Stack,
 } from "../ui/index.js";
 import { emptyWallConfig } from "../wall/editor/model.js";
 import { WallEditor } from "../wall/editor/WallEditor.js";
-
-/** The shared text-input treatment (the `ui/` layer carries no input primitive). */
-const INPUT_CLASSES =
-  "touch-target h-10 w-full rounded-input border border-hairline bg-surface px-3 text-sm text-ink motion-toggle focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus";
 
 export function WallsView() {
   const { basePath } = useRouter();

@@ -11,8 +11,8 @@
  * before a save, so a blank required field surfaces inline rather than reaching the
  * server.
  *
- * Rebuilt on the Lumen primitive layer (`ui/*`); the `ui/` layer carries no
- * input primitive, so the text fields use the shared input treatment, and the
+ * Rebuilt on the Lumen primitive layer (`ui/*`); the text fields use that
+ * layer's shared input treatment, and the
  * device grid's selection reuses the Lumen toggle group.
  */
 import { WALL_DEVICE_LAYOUTS, WALL_ZONE_MAX_LENGTH, type WallWidget } from "@ts-ha/shared";
@@ -20,6 +20,7 @@ import { useDataStore } from "../../lib/data-store.js";
 import { humanizeDeviceName } from "../../lib/humanize-name.js";
 import type { DeviceDescriptor } from "../../types.js";
 import {
+  INPUT_CLASSES,
   Select,
   SelectContent,
   SelectItem,
@@ -48,10 +49,6 @@ export interface WidgetConfigFieldsProps {
    */
   onLinkTarget: (target: string) => void;
 }
-
-/** The shared text-input treatment (the `ui/` layer carries no input primitive). */
-const INPUT_CLASSES =
-  "touch-target h-10 w-full rounded-input border border-hairline bg-surface px-3 text-sm text-ink motion-toggle focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus";
 
 interface SelectOption {
   value: string;

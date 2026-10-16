@@ -24,6 +24,7 @@ import {
   Button,
   cn,
   EmptyState,
+  INPUT_CLASSES_SM,
   Row,
   ScrollArea,
   Stack,
@@ -39,10 +40,6 @@ import {
   LEVEL_NAMES,
   LEVEL_OPTIONS,
 } from "../utils/logUtils.js";
-
-/** The shared text-input treatment (the `ui/` layer carries no input primitive). */
-const INPUT_CLASSES =
-  "touch-target h-8 w-full rounded-input border border-hairline bg-surface px-3 text-sm text-ink motion-toggle focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus";
 
 /** The badge tone for a pino level, doubling as the non-colour-coded severity. */
 function levelTone(level: number): BadgeTone {
@@ -103,7 +100,7 @@ export function LogsView() {
         </ToggleGroup>
         <input
           type="search"
-          className={cn(INPUT_CLASSES, "sm:max-w-[12rem]")}
+          className={cn(INPUT_CLASSES_SM, "sm:max-w-[12rem]")}
           placeholder="Filter by automation"
           aria-label="Filter by automation"
           value={filter.automation}
@@ -111,7 +108,7 @@ export function LogsView() {
         />
         <input
           type="search"
-          className={cn(INPUT_CLASSES, "sm:max-w-[14rem]")}
+          className={cn(INPUT_CLASSES_SM, "sm:max-w-[14rem]")}
           placeholder="Search text"
           aria-label="Search text"
           value={filter.text}
