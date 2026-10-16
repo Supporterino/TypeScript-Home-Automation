@@ -1,6 +1,6 @@
 {
   "name": "@ts-ha/cli",
-  "version": "0.2.7",
+  "version": "0.2.8",
   "description": "Command-line interface and terminal dashboard for TypeScript Home Automation",
   "type": "module",
   "private": false,
