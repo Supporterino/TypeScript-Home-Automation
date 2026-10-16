@@ -1,4 +1,5 @@
 ---
+"@ts-ha/shared": patch
 "@ts-ha/core": patch
 "@ts-ha/web-ui": patch
 "@ts-ha/cli": patch
@@ -21,3 +22,9 @@ asset change.
 **`@ts-ha/cli`** — module-local-only symbols lose their `export` (the CLI's
 public surface is unchanged), and `levelName` / `parseCommandValue` gain a
 single definition.
+
+**All packages** — source and test comments are shortened to a short
+description of what each declaration does, dropping internal design/task/spec
+references and long rationale. Comment-only: no code, type, or emitted value
+changes (comments are still emitted into `dist`, so the published files change
+textually but no consumer behaviour does).
