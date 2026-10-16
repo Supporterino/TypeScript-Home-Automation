@@ -1,30 +1,13 @@
 /**
  * Shelly Gen 2 device types.
- *
- * Types for the Shelly Gen 2 HTTP RPC API, covering the Switch component,
- * Cover component (roller/shutter mode), and system-level device info.
- *
- * Supported devices:
- * - Shelly Plus Plug S (SNPL-00112EU) — Switch component
- * - Shelly Plus 1PM Mini (SNSW-001P8EU) — Switch component
- * - Shelly Plus 2PM (SNSW-102P16EU) — Cover component (roller/shutter mode)
- * - Other Shelly Gen 2 devices with Switch or Cover components
- *
- * API reference: https://shelly-api-docs.shelly.cloud/gen2/
+ * @see https://shelly-api-docs.shelly.cloud/gen2/
  */
 
 // ---------------------------------------------------------------------------
 // Device modelling (HomeKit bridging)
 // ---------------------------------------------------------------------------
 
-/**
- * The HomeKit-facing type of a registered Shelly device.
- *
- * Determines which HAP service the bridge exposes for the device:
- * - `"switch"` → `Service.Switch`
- * - `"outlet"` → `Service.Outlet`
- * - `"cover"`  → `Service.WindowCovering`
- */
+/** The HomeKit-facing type of a registered Shelly device. */
 export type ShellyDeviceType = "switch" | "outlet" | "cover";
 
 // ---------------------------------------------------------------------------
@@ -78,12 +61,7 @@ export interface ShellyTemperature {
 /** Error conditions that can be reported by a switch. */
 export type ShellySwitchError = "overtemp" | "overpower" | "overvoltage" | "undervoltage";
 
-/**
- * Response from `Switch.GetStatus`.
- *
- * Contains the current state of the switch including power metering data.
- * The Plus Plug S always reports power metering fields.
- */
+/** Response from `Switch.GetStatus`. */
 export interface ShellySwitchStatus {
   /** Switch instance ID (0 for Plus Plug S). */
   id: number;
@@ -155,7 +133,6 @@ export interface ShellySwitchConfig {
 
 // ---------------------------------------------------------------------------
 // Cover component (Cover.GetStatus, Cover.Open, Cover.Close, etc.)
-// Used by Shelly Plus 2PM in roller/shutter mode.
 // ---------------------------------------------------------------------------
 
 /** Possible states of a cover/shutter. */
@@ -177,14 +154,7 @@ export type ShellyCoverError =
   | "obstruction"
   | "safety_switch";
 
-/**
- * Response from `Cover.GetStatus`.
- *
- * Contains the current state of the cover including position and power metering.
- *
- * Supported devices:
- * - Shelly Plus 2PM (SNSW-102P16EU) in roller/shutter mode
- */
+/** Response from `Cover.GetStatus`. */
 export interface ShellyCoverStatus {
   /** Cover instance ID (0 for Plus 2PM). */
   id: number;
@@ -222,12 +192,7 @@ export interface ShellyCoverStatus {
   errors?: ShellyCoverError[];
 }
 
-/**
- * Cover configuration from `Cover.GetConfig`.
- *
- * Supported devices:
- * - Shelly Plus 2PM in roller/shutter mode
- */
+/** Cover configuration from `Cover.GetConfig`. */
 export interface ShellyCoverConfig {
   /** Cover instance ID. */
   id: number;
@@ -273,19 +238,10 @@ export interface ShellyCoverConfig {
 // Component inventory (Shelly.GetComponents)
 // ---------------------------------------------------------------------------
 
-/**
- * The kind of a recognized Shelly component that maps to a logical device.
- *
- * Only `switch` and `cover` components are enumerated; an `outlet` is a
- * registration-level distinction applied to a device's switch components.
- */
+/** The kind of a recognized Shelly component that maps to a logical device. */
 export type ShellyComponentKind = "switch" | "cover";
 
-/**
- * One recognized `switch:N` / `cover:N` entry in a device's component
- * inventory, with the channel and configured name normalised out of the raw
- * `key` / `config` payload.
- */
+/** One recognized `switch:N` / `cover:N` entry in a device's component inventory. */
 export interface ShellyComponentStatus {
   /** Raw component key as reported by the device (e.g. "switch:2", "cover:0"). */
   key: string;
@@ -299,12 +255,7 @@ export interface ShellyComponentStatus {
   status?: Record<string, unknown>;
 }
 
-/**
- * The component-inventory response describing the switch/cover components a
- * device exposes. `total` counts every component the device reports
- * (including unsupported kinds such as `input:N`), so callers can page the
- * full inventory rather than trusting a single response.
- */
+/** The component-inventory response describing the switch/cover components a device exposes. */
 export interface ShellyComponentsStatus {
   /** Recognized switch/cover components on this page. */
   components: ShellyComponentStatus[];
@@ -312,20 +263,11 @@ export interface ShellyComponentsStatus {
   total: number;
   /** Offset of this page within the device's full inventory. */
   offset?: number;
-  /**
-   * Raw number of components on this page, including unrecognized kinds the
-   * inventory returned. Pagination advances by this value, not by the count of
-   * recognized components, so an inventory whose unsupported kinds sort ahead of
-   * its switch/cover components is still fully enumerated.
-   */
+  /** Raw number of components on this page; pagination advances by this value. */
   returned?: number;
 }
 
-/**
- * A discovered component's normalised descriptor, used to materialize one
- * logical device per component channel. Metering is derived from the
- * component's own cumulative energy reading, not the device's.
- */
+/** A discovered component's normalised descriptor: one logical device per component channel. */
 export interface ShellyDiscoveredComponent {
   /** Component channel. */
   channel: number;
@@ -343,7 +285,6 @@ export interface ShellyDiscoveredComponent {
 
 /**
  * A JSON-RPC 2.0 request frame published to `<topicPrefix>/rpc`.
- *
  * @see https://shelly-api-docs.shelly.cloud/gen2/General/RPCProtocol/
  */
 export interface ShellyMqttRpcRequest {
@@ -374,15 +315,7 @@ export interface ShellyMqttRpcResponse {
   error?: { code: number; message: string };
 }
 
-/**
- * A push notification frame received on `<topicPrefix>/events/rpc`
- * (e.g. `NotifyStatus`, `NotifyFullStatus`, `NotifyEvent`).
- *
- * `NotifyFullStatus` carries the full component status a Shelly publishes when
- * its MQTT connection is established; `NotifyStatus` carries subsequent
- * incremental changes. Both name their components the same way (e.g.
- * `"switch:0"`, `"cover:0"`).
- */
+/** A push notification frame received on `<topicPrefix>/events/rpc`. */
 export interface ShellyMqttNotification {
   /** The publishing device's identifier. */
   src?: string;

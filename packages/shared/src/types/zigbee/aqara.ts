@@ -13,14 +13,7 @@ import type {
 // Aqara — remotes and buttons
 // ---------------------------------------------------------------------------
 
-/**
- * Action values for Aqara Wireless Remote Switch H1 (double rocker).
- *
- * Supports single, double, triple tap and hold on left, right, or both buttons.
- *
- * Supported devices:
- * - Aqara WXKG15LM / WRS-R02 (Wireless Remote Switch H1, double rocker)
- */
+/** Action values for Aqara Wireless Remote Switch H1 (double rocker). */
 export type AqaraRemoteSwitchH1Action =
   | "single_left"
   | "single_right"
@@ -41,12 +34,7 @@ export type AqaraClickMode = "fast" | "multi";
 /** Operation mode for Aqara Wireless Remote Switch H1. */
 export type AqaraOperationMode = "command" | "event";
 
-/**
- * State payload for Aqara Wireless Remote Switch H1.
- *
- * Supported devices:
- * - Aqara WXKG15LM / WRS-R02 (Wireless Remote Switch H1, double rocker)
- */
+/** State payload for Aqara Wireless Remote Switch H1. */
 export interface AqaraRemoteSwitchH1Payload {
   action: AqaraRemoteSwitchH1Action;
   battery?: number;
@@ -56,12 +44,7 @@ export interface AqaraRemoteSwitchH1Payload {
   linkquality?: number;
 }
 
-/**
- * Set command for Aqara Wireless Remote Switch H1.
- *
- * Supported devices:
- * - Aqara WXKG15LM / WRS-R02 (Wireless Remote Switch H1, double rocker)
- */
+/** Set command for Aqara Wireless Remote Switch H1. */
 export interface AqaraRemoteSwitchH1SetCommand {
   click_mode?: AqaraClickMode;
   operation_mode?: AqaraOperationMode;
@@ -71,12 +54,7 @@ export interface AqaraRemoteSwitchH1SetCommand {
 // Aqara — sensors
 // ---------------------------------------------------------------------------
 
-/**
- * State payload for Aqara water leak sensor.
- *
- * Supported devices:
- * - Aqara SJCGQ11LM (water leak sensor)
- */
+/** State payload for Aqara water leak sensor. */
 export interface AqaraWaterLeakPayload extends WaterLeakPayload {
   /** Number of power outages recorded by the device. */
   power_outage_count?: number;
@@ -84,23 +62,10 @@ export interface AqaraWaterLeakPayload extends WaterLeakPayload {
   trigger_count?: number;
 }
 
-/**
- * State payload for Aqara temperature, humidity, and pressure sensor.
- *
- * Supported devices:
- * - Aqara WSDCGQ11LM (temperature/humidity/pressure sensor)
- */
+/** State payload for Aqara temperature, humidity, and pressure sensor. */
 export interface AqaraTemperatureHumidityPayload extends TemperatureHumidityPayload {}
 
-/**
- * State payload for Aqara mmWave presence sensor.
- *
- * Extends the generic `PresencePayload` with FP300-specific fields including PIR
- * detection, AI configuration, and zone-based detection range.
- *
- * Supported devices:
- * - Aqara PS-S04D / FP300 (mmWave + PIR presence sensor)
- */
+/** State payload for Aqara mmWave presence sensor. */
 export interface AqaraPresencePayload extends PresencePayload {
   pir_detection?: boolean;
   presence_detection_options?: "both" | "mmwave" | "pir";
@@ -114,15 +79,7 @@ export interface AqaraPresencePayload extends PresencePayload {
   power_outage_count?: number;
 }
 
-/**
- * Set command for Aqara mmWave presence sensor.
- *
- * Extends `PresenceSetCommand` with FP300-specific writable configuration and
- * write-only commands like spatial learning and device restart.
- *
- * Supported devices:
- * - Aqara PS-S04D / FP300 (mmWave + PIR presence sensor)
- */
+/** Set command for Aqara mmWave presence sensor. */
 export interface AqaraPresenceSetCommand extends PresenceSetCommand {
   presence_detection_options?: "both" | "mmwave" | "pir";
   ai_interference_source_selfidentification?: "ON" | "OFF";

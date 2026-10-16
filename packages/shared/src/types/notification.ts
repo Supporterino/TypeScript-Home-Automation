@@ -15,56 +15,16 @@ export interface NotificationOptions {
   priority?: NotificationPriority;
   /** Tags / emoji shortcodes (e.g. ["warning", "thermometer"]). */
   tags?: string[];
-  /**
-   * Named destination channel within the notification service.
-   *
-   * When provided, the service routes the notification to the channel
-   * registered under this name instead of the default channel. If the
-   * name is not found the service falls back to its default channel.
-   *
-   * The exact meaning is provider-specific:
-   * - **ntfy.sh**: maps to an ntfy topic string
-   * - **Telegram**: could map to a chat ID
-   * - **email**: could map to a recipient address
-   *
-   * Omit this field to use the service's default channel.
-   */
+  /** Named destination channel, provider-specific in meaning; omit for the default. */
   channel?: string;
 }
 
 /**
  * Abstract interface for notification services.
- *
- * Implement this interface to integrate any push notification provider
- * (ntfy.sh, Pushover, Telegram, email, etc.) into the automation engine.
- *
- * The engine accepts an optional `NotificationService` — if none is
- * provided, `this.notify` in automations will be a no-op that logs
- * a warning.
- *
- * @example
- * ```ts
- * import { createEngine, NtfyNotificationService } from "@ts-ha/core";
- *
- * const engine = createEngine({
- *   automationsDir: "...",
- *   services: {
- *     notifications: (http, logger) =>
- *       new NtfyNotificationService({
- *         topic: "my-home-alerts",
- *         http,
- *         logger,
- *       }),
- *   },
- * });
- * ```
  */
 export interface NotificationService {
   /**
-   * Send a notification.
-   *
-   * Implementations should handle errors gracefully and not throw
-   * unless the failure is unrecoverable.
+   * Sends a notification; implementations should handle errors gracefully.
    */
   send(options: NotificationOptions): Promise<void>;
 }

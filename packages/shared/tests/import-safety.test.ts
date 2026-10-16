@@ -4,12 +4,7 @@ import { join } from "node:path";
 
 const SRC_DIR = join(import.meta.dir, "..", "src");
 
-/**
- * Runtime dependencies `@ts-ha/shared` may import. `zod` is pure,
- * dependency-free, and browser-safe, and carries the wall-profile schema
- * shared by the server and the browser editor (design.md D10) — the single
- * exception to shared's otherwise dependency-free source.
- */
+/** Runtime dependencies `@ts-ha/shared` may import; `zod` is pure and browser-safe. */
 const ALLOWED_RUNTIME_IMPORTS = new Set(["zod"]);
 
 async function collectSourceFiles(dir: string): Promise<string[]> {

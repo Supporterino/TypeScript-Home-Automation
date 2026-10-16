@@ -1,7 +1,4 @@
-/**
- * User-defined room shapes (design.md D14), shared because they are delivered
- * over the wire and reference device descriptors.
- */
+/** User-defined room shapes, delivered over the wire. */
 
 import type { DeviceDescriptor } from "./device.js";
 
@@ -11,13 +8,7 @@ export interface Room {
   readonly name: string;
 }
 
-/**
- * One member of a room's membership listing.
- *
- * `available` is `false` when the device is no longer known to any device
- * source — unpaired, or its source disabled/unconfigured — in which case
- * `device` is `null` rather than stale data (design.md D14).
- */
+/** One member of a room's membership listing; `device` is `null` when unavailable. */
 export interface RoomMember {
   readonly qualifiedId: string;
   readonly available: boolean;

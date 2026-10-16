@@ -1,7 +1,4 @@
-/**
- * Automation relationship contracts (design.md D11, R12; task 8.5), delivered
- * over the wire and consumed by the web UI detail views.
- */
+/** Automation relationship contracts, consumed by the web UI detail views. */
 
 /**
  * A declared required service and whether it is currently registered.
@@ -12,10 +9,7 @@ export interface RequiredServiceStatus {
 }
 
 /**
- * An automation's relationships, split into what is declared (and therefore
- * complete, without ever having run) and what has been observed at runtime
- * (and is therefore partial, growing only with use — design.md D11, R12;
- * task 8.5).
+ * An automation's relationships, split into declared and observed.
  */
 export interface AutomationRelationships {
   declared: {
@@ -28,7 +22,7 @@ export interface AutomationRelationships {
   observed: {
     /** State keys observed being written, oldest-retained first. */
     writtenStateKeys: string[];
-    /** `true` once the retained set has ever exceeded its bound (design.md R15). */
+    /** `true` once the retained set has ever exceeded its bound. */
     truncated: boolean;
   };
 }

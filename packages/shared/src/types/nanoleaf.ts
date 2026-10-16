@@ -1,17 +1,6 @@
 /**
  * Nanoleaf local HTTP API types.
- *
- * Covers the Nanoleaf OpenAPI for Light Panels, Canvas, and Shapes.
- * Base URL: http://<host>:16021/api/v1/<auth_token>/
- *
- * Supported devices:
- * - Nanoleaf Light Panels (Aurora)
- * - Nanoleaf Canvas
- * - Nanoleaf Shapes (Hexagons, Triangles, Mini Triangles)
- * - Nanoleaf Elements
- * - Nanoleaf Lines
- *
- * API reference: https://forum.nanoleaf.me/docs
+ * @see https://forum.nanoleaf.me/docs
  */
 
 // ---------------------------------------------------------------------------
@@ -49,11 +38,7 @@ export interface NanoleafState {
   colorMode: NanoleafColorMode;
 }
 
-/**
- * State set command (PUT /state).
- * All fields optional — set only what you want to change.
- * Multiple properties can be set in a single request.
- */
+/** State set command (PUT /state); all fields optional. */
 export interface NanoleafStateSet {
   on?: { value: boolean };
   brightness?: { value: number; duration?: number } | { increment: number };
@@ -111,10 +96,8 @@ export interface NanoleafEffect {
 // ---------------------------------------------------------------------------
 
 /**
- * Shape types for panel identification.
- * 0 = triangle (Light Panels), 2 = square (Canvas),
- * 7 = hexagon (Shapes), 8 = triangle (Shapes),
- * 9 = mini triangle (Shapes), 12 = lines connector.
+ * Shape types for panel identification: 0/8 triangle, 2 square, 7 hexagon,
+ * 9 mini triangle, 12 lines connector.
  */
 export type NanoleafShapeType = 0 | 1 | 2 | 3 | 7 | 8 | 9 | 12;
 

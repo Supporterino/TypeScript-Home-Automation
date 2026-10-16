@@ -1,18 +1,4 @@
-/**
- * Zigbee2MQTT device payload types — re-exported from per-brand files.
- *
- * Organized in three layers:
- *
- * 1. **Common primitives** — shared enums, color types, state types (`common.ts`)
- * 2. **Generic payloads** — category-level types (any dimmable light, any motion
- *    sensor, any remote, etc.) that work across brands (`common.ts`)
- * 3. **Brand-specific payloads** — narrowed types for specific manufacturers/models
- *    (`philips.ts`, `ikea.ts`, `aqara.ts`)
- *
- * Use the generic types when writing automations that should work with any device
- * in a category. Use the brand-specific types when you need exact typing for a
- * particular model.
- */
+/** Zigbee2MQTT device payload types, re-exported from per-brand files. */
 
 // Aqara
 export type {
