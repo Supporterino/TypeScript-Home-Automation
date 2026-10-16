@@ -196,7 +196,7 @@ export function ClimateCard({ device, config, box, contained }: WallDeviceCardPr
       </div>
 
       {composition.controls && model.setpoint && range && (
-        <WallCardActions>
+        <WallCardActions distribution="flexible">
           <WallCardSlider
             label={model.setpoint.property}
             min={range.min ?? 5}
@@ -224,7 +224,7 @@ export function ClimateCard({ device, config, box, contained }: WallDeviceCardPr
       )}
 
       {composition.controls && !model.setpoint && model.mode && (
-        <WallCardActions>
+        <WallCardActions distribution="distributed">
           <WallCardEnumControl
             box={box ?? DEFAULT_WALL_CARD_BOX}
             label={model.mode.property}

@@ -188,7 +188,7 @@ export function CoverCard({ device, config, box, contained }: WallDeviceCardProp
       </div>
 
       {model.transportProperty !== undefined && composition.controls && (
-        <WallCardActions>
+        <WallCardActions distribution="distributed">
           <WallCardIconButton
             glyph={<ChevronUp size={WALL_CARD_GLYPH_SIZE} aria-hidden />}
             label={`Open ${label}`}

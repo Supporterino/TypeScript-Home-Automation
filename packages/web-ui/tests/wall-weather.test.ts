@@ -177,7 +177,7 @@ function weatherBoxFor(rows: number, rowUnit: number): number {
   const descriptor = WALL_WIDGET_REGISTRY.weather;
   return rendererBoxHeightPx({
     cellHeightPx: cardHeightPx({ rows, rowUnit }),
-    framed: wallFrameDrawsSurface(descriptor.type, descriptor.grammar),
+    framed: wallFrameDrawsSurface(descriptor.type, descriptor.grammar, descriptor.min),
     titled: false,
   });
 }
@@ -205,7 +205,7 @@ describe("the weather widget composes for its box", () => {
     const shortBox = minimumRendererBoxHeightPx({
       descriptor,
       rowUnit: ROW_UNIT_MIN,
-      framed: wallFrameDrawsSurface(descriptor.type, descriptor.grammar),
+      framed: wallFrameDrawsSurface(descriptor.type, descriptor.grammar, descriptor.min),
     });
     const tallBox = weatherBoxFor(descriptor.max.h, ROW_UNIT_MAX);
 
@@ -220,7 +220,7 @@ describe("the weather widget composes for its box", () => {
     const shortBox = minimumRendererBoxHeightPx({
       descriptor,
       rowUnit: ROW_UNIT_MIN,
-      framed: wallFrameDrawsSurface(descriptor.type, descriptor.grammar),
+      framed: wallFrameDrawsSurface(descriptor.type, descriptor.grammar, descriptor.min),
     });
 
     const composition = weatherWidgetComposition(shortBox);

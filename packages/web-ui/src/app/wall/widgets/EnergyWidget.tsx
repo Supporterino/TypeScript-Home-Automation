@@ -120,12 +120,16 @@ export function EnergyWidget() {
         value={display.power}
         color="var(--hearth-info)"
       />
-      <Metric
-        icon={<Database size={WALL_CARD_GLYPH_SIZE} />}
-        label="Total"
-        value={display.consumption}
-        color="var(--hearth-on)"
-      />
+      {/* The home's recent usage in place of any lifetime total, labelled with the span
+          it covers; nothing covered leaves the reading absent rather than a zero. */}
+      {display.usage.status === "covered" && (
+        <Metric
+          icon={<Database size={WALL_CARD_GLYPH_SIZE} />}
+          label={display.usage.span}
+          value={display.usage.value}
+          color="var(--hearth-on)"
+        />
+      )}
       {display.meteringCount === 0 && (
         <WallCardMessage>No metering devices report yet.</WallCardMessage>
       )}

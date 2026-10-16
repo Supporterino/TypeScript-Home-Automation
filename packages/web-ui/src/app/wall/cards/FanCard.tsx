@@ -215,7 +215,7 @@ export function FanCard({ device, config, box, contained }: WallDeviceCardProps)
       </div>
 
       {composition.controls && model.percentage && range && (
-        <WallCardActions>
+        <WallCardActions distribution="flexible">
           <WallCardSlider
             label={model.percentage.property}
             min={range.min ?? 0}
@@ -251,7 +251,7 @@ export function FanCard({ device, config, box, contained }: WallDeviceCardProps)
       )}
 
       {composition.controls && !model.percentage && model.presets && (
-        <WallCardActions>
+        <WallCardActions distribution="distributed">
           <WallCardEnumControl
             box={box ?? DEFAULT_WALL_CARD_BOX}
             label={model.presets.property}

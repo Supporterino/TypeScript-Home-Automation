@@ -128,7 +128,8 @@ describe("wall lock card source", () => {
 
   it("presents lock and unlock as the actions row's controls", async () => {
     const source = await cardSource();
-    expect(source).toContain("<WallCardActions>");
+    // Two fixed-size options spread across the card's width.
+    expect(source).toContain('<WallCardActions distribution="distributed">');
     expect(source).toContain("<WallCardOption");
     expect(source).toContain("model.lock");
     expect(source).toContain("model.unlock");

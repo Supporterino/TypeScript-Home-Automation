@@ -409,6 +409,6 @@ describe("the paged tile grid's drawn rows", () => {
 
     expect(paged).toMatch(/gap: `\$\{WALL_CONTROL_GAP_PX\}px`/);
     expect(paged).toMatch(/gap: `\$\{WALL_TILE_GAP_PX\}px`/);
-    expect(paged).toContain("<WallCardActions inset={false}>");
+    expect(paged).toContain('<WallCardActions inset={false} distribution="distributed">');
   });
 });

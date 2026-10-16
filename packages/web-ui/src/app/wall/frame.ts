@@ -6,7 +6,7 @@ import type { WallWidget, WallWidgetType } from "@ts-ha/shared";
 import { isWallDeviceClass } from "./cards/device-class.js";
 import { WALL_CARD_METRICS } from "./cards/metrics.js";
 import { WALL_FRAME_RESERVED_PX } from "./pages.js";
-import type { WallWidgetGrammar } from "./registry.js";
+import type { WallWidgetGrammar, WallWidgetSpan } from "./registry.js";
 import { cardHeightPx, WALL_TITLE_BLOCK_PX, type WallSpanDescriptor } from "./span.js";
 
 /**
@@ -85,11 +85,24 @@ export function wallChromeTextStyle(): WallChromeTextStyle {
 }
 
 /**
- * Whether the frame draws a widget's card surface. Every typed device widget is
- * chrome-less, so its single card owns the surface.
+ * The row count at which a scene tile renders chrome-less — the scene type's own
+ * one-row minimum, mirrored here so the frame's surface decision reaches into no
+ * widget model. `wall-single-surface.test.ts` pins it to `scene.min.h`.
  */
-export function wallFrameDrawsSurface(type: WallWidgetType, grammar: WallWidgetGrammar): boolean {
+const SCENE_CHROME_LESS_ROWS = 1;
+
+/**
+ * Whether the frame draws a widget's card surface at a placement. Every typed device
+ * widget is chrome-less, so its single card owns the surface; a scene placed at its
+ * one-row minimum is chrome-less too, so the whole cell is its touch target.
+ */
+export function wallFrameDrawsSurface(
+  type: WallWidgetType,
+  grammar: WallWidgetGrammar,
+  placement: WallWidgetSpan,
+): boolean {
   if (isWallDeviceClass(type)) return false;
+  if (type === "scene" && placement.h <= SCENE_CHROME_LESS_ROWS) return false;
   return wallFrameChrome(grammar).surface;
 }
 

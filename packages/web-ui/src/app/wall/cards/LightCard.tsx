@@ -247,7 +247,7 @@ export function LightCard({ device, config, box, contained }: WallDeviceCardProp
       </div>
 
       {controls.length > 0 && composition.controls && (
-        <WallCardActions>
+        <WallCardActions distribution="flexible">
           {activeControl && (
             <WallCardSlider
               label={activeControl.capability.property}

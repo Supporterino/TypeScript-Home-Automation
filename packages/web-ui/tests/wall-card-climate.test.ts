@@ -149,7 +149,8 @@ describe("wall climate card source", () => {
 
   it("presents the setpoint as a slider with the mode beside it", async () => {
     const source = await cardSource();
-    expect(source).toContain("<WallCardActions>");
+    // The setpoint slider is flexible, so the row keeps it flexible.
+    expect(source).toContain('<WallCardActions distribution="flexible">');
     expect(source).toContain("<WallCardSlider");
     expect(source).toContain("<WallCardEnumControl");
     expect(source).toContain("composition.siblings");
@@ -157,6 +158,13 @@ describe("wall climate card source", () => {
     // Beside the setpoint slider the enumerated control reserves the slider's own
     // width, so the mode is never a row of options squeezed below the touch target.
     expect(source).toContain("reservedPx={WALL_CARD_ENUM_SIBLING_RESERVE_PX}");
+  });
+
+  it("distributes the mode-only row when the thermostat declares no setpoint", async () => {
+    const source = await cardSource();
+    // The mode-only row is a row of fixed options, so it spreads across the card.
+    expect(source).toContain('<WallCardActions distribution="distributed">');
+    expect(source).toContain("composition.controls && !model.setpoint && model.mode");
   });
 
   it("presents no control for a thermostat that only reports its temperature", async () => {

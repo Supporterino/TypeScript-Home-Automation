@@ -5,10 +5,12 @@ import { sliderFraction } from "../src/app/wall/cards/card-anatomy.js";
 import {
   resolveEnumControlForm,
   WALL_CARD_CONTROL_MAX_WIDTH_PX,
+  WALL_CARD_CONTROL_ROW_MIN_WIDTH_PX,
   WALL_CARD_ENUM_SIBLING_RESERVE_PX,
   wallCardEnumRowWidthPx,
 } from "../src/app/wall/cards/card-composition.js";
 import { WALL_CARD_METRICS } from "../src/app/wall/cards/metrics.js";
+import { WALL_MIN_DEVICE_COLUMNS } from "../src/app/wall/grid.js";
 import { WALL_MIN_CONTROL_GAP, WALL_MIN_TOUCH_TARGET } from "../src/app/wall/registry.js";
 
 /**
@@ -158,6 +160,55 @@ describe("the card anatomy components", () => {
     expect(anatomy).toContain("toCssColorWithAlpha");
     expect(anatomy).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
     expect(anatomy).not.toMatch(/\brgba?\(/);
+  });
+});
+
+describe("the actions row distribution", () => {
+  it("spreads a row of fixed controls across the card rather than bunching or centring it", async () => {
+    const anatomy = await source(ANATOMY);
+    const actions = functionSource(anatomy, "WallCardActions");
+
+    // The row declares its own mode; the component never inspects its children.
+    expect(actions).toContain("distribution: WallCardActionsDistribution");
+    expect(actions).toContain('distribution === "flexible" ? "center" : "space-between"');
+    // A fixed row spreads to both edges, so it fills the card without floating centred.
+    expect(actions).toContain('"space-between"');
+  });
+
+  it("keeps a flexible control flexible and centres the fixed controls beside it", async () => {
+    const anatomy = await source(ANATOMY);
+    const actions = functionSource(anatomy, "WallCardActions");
+    const slider = functionSource(anatomy, "WallCardSlider");
+
+    // The row centres instead of stretching, and never resizes a control itself, so a
+    // fixed icon control is not grown to fill and the slider is not squeezed.
+    expect(actions).toContain('"center"');
+    expect(actions).not.toContain("flexGrow");
+    expect(actions).not.toContain("flexBasis");
+    // The flexible control keeps the grow it declares for itself.
+    expect(slider).toContain('flex: "1 1 0"');
+  });
+
+  it("leaves the ported control treatment and the derived minimum column span unchanged", async () => {
+    const anatomy = await source(ANATOMY);
+    const actions = functionSource(anatomy, "WallCardActions");
+
+    // Distribution consumes width a card already has: it adds only a main-axis
+    // alignment, so no control's height or radius is written by the row.
+    expect(actions).not.toContain("height");
+    expect(actions).not.toContain("borderRadius");
+    // The ported control height and radius stand…
+    expect(WALL_CARD_METRICS.controlHeight).toBe(42);
+    expect(WALL_CARD_METRICS.controlRadius).toBe(12);
+    // …so the widest control row (three controls at the ported height) is unmoved…
+    expect(WALL_CARD_CONTROL_ROW_MIN_WIDTH_PX).toBe(
+      3 * WALL_CARD_METRICS.controlHeight +
+        2 * WALL_CARD_METRICS.controlSpacing +
+        2 * WALL_CARD_METRICS.controlSpacing,
+    );
+    expect(WALL_CARD_CONTROL_ROW_MIN_WIDTH_PX).toBe(174);
+    // …and the minimum column span derived from it is unmoved.
+    expect(WALL_MIN_DEVICE_COLUMNS).toBe(3);
   });
 });
 

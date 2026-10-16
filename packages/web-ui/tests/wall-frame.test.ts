@@ -188,6 +188,14 @@ describe("the span tier the frame hands its renderer", () => {
     expect(widgetFrame).toContain("resolveCardFormForHeight(");
   });
 
+  it("hands the surface decision its placement, so a one-row scene is chrome-less", async () => {
+    const widgetFrame = await source("wall/WidgetFrame.tsx");
+
+    // A scene's frame is placement-aware: the one-row cell draws no surface, so the
+    // scene's own composition is what fills it.
+    expect(widgetFrame).toContain("wallFrameDrawsSurface(widget.type, descriptor.grammar, widget)");
+  });
+
   it("explains a placement below the type's minimum on either axis, or below the box its minimum needs", async () => {
     const widgetFrame = await source("wall/WidgetFrame.tsx");
 

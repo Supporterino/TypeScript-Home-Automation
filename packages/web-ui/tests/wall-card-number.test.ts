@@ -120,7 +120,8 @@ describe("wall number card source", () => {
 
   it("presents the bounded numeric as the sole action in the actions row", async () => {
     const source = await cardSource();
-    expect(source).toContain("<WallCardActions>");
+    // The sole action is the flexible slider, so the row keeps it flexible.
+    expect(source).toContain('<WallCardActions distribution="flexible">');
     expect(source).toContain("<WallCardSlider");
     // The slider is the value's actuation target: the card never actuates whole.
     expect(source).not.toContain("onActivate");

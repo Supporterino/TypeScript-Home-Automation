@@ -99,7 +99,7 @@ export function PagedTileGrid<T>({
 
       {/* The page affordance, drawn only while the content pages. */}
       {page.pageCount > 1 && (
-        <WallCardActions inset={false}>
+        <WallCardActions inset={false} distribution="distributed">
           <WallCardIconButton
             label={`Show the previous page of ${label}`}
             disabled={page.page === 0}

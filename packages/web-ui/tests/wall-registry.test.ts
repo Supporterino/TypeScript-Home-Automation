@@ -198,3 +198,16 @@ describe("temperature descriptor", () => {
     expect(configSchema.safeParse({}).success).toBe(false);
   });
 });
+
+describe("scene descriptor", () => {
+  it("offers a scene at a one-row minimum, so a slim scene is authorable", () => {
+    const descriptor = WALL_WIDGET_REGISTRY.scene;
+    expect(descriptor.type).toBe("scene");
+    expect(descriptor.grammar).toBe("control");
+    // Only the minimum changes: a scene may be authored one row tall, but a new one
+    // still lands at the two-row default.
+    expect(descriptor.min).toEqual({ w: 2, h: 1 });
+    expect(descriptor.defaults).toEqual({ w: 2, h: 2 });
+    expect(descriptor.configSchema).toBe(WALL_WIDGET_CONFIG_SCHEMAS.scene);
+  });
+});

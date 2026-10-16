@@ -1,6 +1,7 @@
 /**
- * The wall harness's fixture roster: one device per wall device class, plus a paging
- * selection, a scene, a room, and the weather and energy readings.
+ * The wall harness's fixture roster: one device per wall device class, a paging
+ * selection, a scene, a room, four same-named sensors in distinct rooms, and the
+ * weather and energy readings.
  */
 import {
   type Capability,
@@ -321,6 +322,39 @@ const TEMPERATURE_ONLY_SENSOR = fixtureDevice({
   capabilities: temperatureOnlySensorCapabilities(),
 });
 
+/**
+ * The four same-named sensors: every name ends in "Sensor" and is longer than a wall
+ * card's shortening budget, so `shortDeviceName` collapses each to the same "Sensor" —
+ * the collision the sensor's room name resolves. Each sits alone in its own room.
+ */
+const ROOM_SENSOR_SPECS = [
+  { id: "sensor-basement", room: "Basement", temperature: 17.4 },
+  { id: "sensor-workshop", room: "Workshop", temperature: 15.8 },
+  { id: "sensor-bathroom", room: "Bathroom", temperature: 22.1 },
+  { id: "sensor-corridor", room: "Corridor", temperature: 19.3 },
+] as const;
+
+/** One same-named sensor per room, paired with the room it sits in. */
+const ROOM_SENSORS: readonly {
+  readonly device: DeviceDescriptor;
+  readonly room: RoomWithMembers;
+}[] = ROOM_SENSOR_SPECS.map((spec) => {
+  const device = fixtureDevice({
+    id: spec.id,
+    displayName: `${spec.room} Sensor`,
+    state: { temperature: spec.temperature },
+    capabilities: temperatureOnlySensorCapabilities(),
+  });
+  return {
+    device,
+    room: {
+      id: `fixture:${spec.id}`,
+      name: spec.room,
+      members: [{ qualifiedId: device.qualifiedId, available: true, device }],
+    },
+  };
+});
+
 const VALUE = fixtureDevice({
   id: "fan-bedroom",
   displayName: "Bedroom fan",
@@ -381,7 +415,8 @@ const METERING_PLUG = fixtureDevice({
 
 /**
  * Every fixture device: one per wall device class first, then the metering plug, the
- * temperature-only sensor, and the paging roster.
+ * two sensors bound by a placed `temperature` widget, the four same-named sensors, and
+ * the paging roster.
  */
 const DEVICES: DeviceDescriptor[] = [
   LIGHT,
@@ -395,6 +430,7 @@ const DEVICES: DeviceDescriptor[] = [
   LOCK,
   METERING_PLUG,
   TEMPERATURE_ONLY_SENSOR,
+  ...ROOM_SENSORS.map(({ device }) => device),
   ...PAGING_DEVICES,
 ];
 
@@ -421,6 +457,16 @@ export const DEVICE_GRID_SELECTION: readonly string[] = DEVICES.map((device) => 
  */
 export const HARNESS_TEMPERATURE_ONLY_SENSOR_ID = TEMPERATURE_ONLY_SENSOR.qualifiedId;
 
+/** The four same-named sensors' qualified ids, in room order. */
+export const HARNESS_ROOM_SENSOR_IDS: readonly string[] = ROOM_SENSORS.map(
+  ({ device }) => device.qualifiedId,
+);
+
+/** The room each of {@link HARNESS_ROOM_SENSOR_IDS} sits in, in the same order. */
+export const HARNESS_ROOM_SENSOR_ROOM_NAMES: readonly string[] = ROOM_SENSORS.map(
+  ({ room }) => room.name,
+);
+
 /**
  * The room the panel points a `room` widget at, whose members span several wall device
  * classes.
@@ -437,6 +483,9 @@ const ROOM: RoomWithMembers = {
 
 /** The room id a `room` widget is pointed at. */
 export const HARNESS_ROOM_ID = ROOM.id;
+
+/** Every room the fixture set carries: the multi-class room, then one per same-named sensor. */
+const ROOMS: RoomWithMembers[] = [ROOM, ...ROOM_SENSORS.map(({ room }) => room)];
 
 /** The automation name a `scene` widget is pointed at. */
 export const HARNESS_SCENE_NAME = "evening-scene";
@@ -498,10 +547,17 @@ const WEATHER: WeatherData = {
   ],
 };
 
-/** Home totals with two contributing devices, in the shape `GET /api/energy` answers with. */
+/**
+ * Home totals with two contributing devices, in the shape `GET /api/energy` answers
+ * with. The usage covers the whole rolling window, so the wall draws it labelled with
+ * the window rather than as a partial span.
+ */
 const ENERGY: EnergyData = {
   powerWatts: 1_234,
   energyWh: 12_480,
+  usageWh: 4_180,
+  windowMinutes: 1_440,
+  coveredMinutes: 1_440,
   breakdown: [
     {
       qualifiedId: LIGHT.qualifiedId,
@@ -538,7 +594,7 @@ const STATE: StateMap = {
 export const WALL_HARNESS_FIXTURES: DataStoreFixtures = {
   devices: DEVICES,
   state: STATE,
-  rooms: [ROOM],
+  rooms: ROOMS,
   automations: AUTOMATIONS,
   transport: "live",
   weather: WEATHER,
@@ -607,7 +663,7 @@ export function fixtureSetFor(controls: HarnessFixtureControls): DataStoreFixtur
   );
 
   const byId = new Map(devices.map((device) => [device.qualifiedId, device]));
-  const rooms = [ROOM].map((room) => ({
+  const rooms = ROOMS.map((room) => ({
     ...room,
     members: room.members.map((member) => ({
       ...member,

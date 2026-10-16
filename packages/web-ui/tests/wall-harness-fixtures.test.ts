@@ -8,6 +8,7 @@ import {
   writableColorTemperatureCapability,
 } from "../src/app/lib/capability-ranking.js";
 import { favoritesFromState } from "../src/app/lib/favorites.js";
+import { shortDeviceName } from "../src/app/lib/humanize-name.js";
 import type { DeviceDescriptor } from "../src/app/types.js";
 import { climateCardModel } from "../src/app/wall/cards/ClimateCard.js";
 import {
@@ -29,6 +30,8 @@ import {
 import {
   DEVICE_CLASS_DEVICE_IDS,
   DEVICE_GRID_SELECTION,
+  HARNESS_ROOM_SENSOR_IDS,
+  HARNESS_ROOM_SENSOR_ROOM_NAMES,
   HARNESS_TEMPERATURE_ONLY_SENSOR_ID,
   MISSING_DEVICE_ID,
   WALL_HARNESS_FIXTURES,
@@ -37,7 +40,10 @@ import { resolvePages, WALL_FRAME_RESERVED_PX } from "../src/app/wall/pages.js";
 import { WALL_WIDGET_REGISTRY } from "../src/app/wall/registry.js";
 import { resolveDeviceGridPage } from "../src/app/wall/widgets/device-grid-model.js";
 import { energyDisplay } from "../src/app/wall/widgets/energy-model.js";
-import { temperatureWidgetState } from "../src/app/wall/widgets/temperature-model.js";
+import {
+  temperatureSensorLabel,
+  temperatureWidgetState,
+} from "../src/app/wall/widgets/temperature-model.js";
 import { weatherWidgetState } from "../src/app/wall/widgets/weather-model.js";
 
 /**
@@ -224,12 +230,45 @@ describe("the fixture selection and rooms", () => {
 
     expect(rooms.length).toBeGreaterThan(0);
     for (const room of rooms) {
-      expect(room.members.length).toBeGreaterThan(1);
+      // The multi-class room carries several members; each same-named sensor sits alone
+      // in its own room, so a room may carry a single member.
+      expect(room.members.length).toBeGreaterThanOrEqual(1);
       for (const member of room.members) {
         expect(member.available).toBe(true);
         expect(member.device).toBe(fixtureDevice(member.qualifiedId));
       }
     }
+  });
+
+  it("labels four same-named sensors by their own rooms, so the four read distinctly", () => {
+    const rooms = WALL_HARNESS_FIXTURES.rooms;
+    const sensors = HARNESS_ROOM_SENSOR_IDS.map((qualifiedId) => fixtureDevice(qualifiedId));
+
+    expect(sensors.length).toBe(4);
+
+    // Every sensor's own name shortens to the same word, so the name alone cannot tell
+    // them apart — which is exactly the collision the room name is there to resolve.
+    const shortened = sensors.map((sensor) => shortDeviceName(sensor.displayName));
+    expect(shortened).toEqual(["Sensor", "Sensor", "Sensor", "Sensor"]);
+
+    // Resolved through the widget's own label: each reads as the room it sits in, and
+    // the four labels are distinct.
+    const labels = sensors.map((sensor) => temperatureSensorLabel(sensor, rooms));
+    expect(labels).toEqual([...HARNESS_ROOM_SENSOR_ROOM_NAMES]);
+    expect(new Set(labels).size).toBe(sensors.length);
+  });
+
+  it("places the temperature widget's sensor in a room, so the stage labels it by that room", () => {
+    const rooms = WALL_HARNESS_FIXTURES.rooms;
+    const sensor = fixtureDevice(DEVICE_CLASS_DEVICE_IDS.entity);
+
+    // The stage's temperature widget is bound to this sensor, a member of the fixture
+    // room, so it reads as that room; the roster's other sensor is a member of none and
+    // keeps its shortened name.
+    expect(temperatureSensorLabel(sensor, rooms)).toBe("Living Room");
+    expect(temperatureSensorLabel(fixtureDevice(HARNESS_TEMPERATURE_ONLY_SENSOR_ID), rooms)).toBe(
+      "Attic sensor",
+    );
   });
 });
 
@@ -250,6 +289,19 @@ describe("the fixture readings", () => {
     for (const entry of energy.breakdown) {
       expect(DEVICES_BY_ID.has(entry.qualifiedId), entry.qualifiedId).toBe(true);
     }
+  });
+
+  it("supplies a usage over a covered window, so the stage draws a labelled reading", () => {
+    const energy = WALL_HARNESS_FIXTURES.energy;
+    if (!energy) throw new Error("the fixture set carries no energy reading");
+
+    // The stage's energy widget draws the usage in place of the lifetime total, so the
+    // fixture carries a covered window: a reading with its value and the span it covers.
+    expect(energyDisplay(energy).usage).toEqual({
+      status: "covered",
+      value: "4.18 kWh",
+      span: "last 24h",
+    });
   });
 
   it("supplies a scene automation and favorites the wall cards read", () => {

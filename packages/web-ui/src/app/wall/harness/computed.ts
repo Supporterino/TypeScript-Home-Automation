@@ -26,7 +26,7 @@ import { HARNESS_PANEL_SIZES, type HarnessBenchControls, type HarnessPanel } fro
 /** The wall's own composition values for one widget at one panel. */
 export interface HarnessWidgetValues {
   descriptor: WallWidgetDescriptor;
-  /** The wall's `contained` for this type — `wallFrameDrawsSurface(type, grammar)`. */
+  /** What the wall passes as `contained` here — `wallFrameDrawsSurface(type, grammar, widget)`. */
   framed: boolean;
   titled: boolean;
   /** The widget's cell height, in CSS pixels — `cardHeightPx({ rows: h, rowUnit })`. */
@@ -57,7 +57,7 @@ export function panelHeightPx(panel: HarnessPanel): number {
 /** Resolves every value the panel shows for one widget, through the wall's own functions. */
 export function widgetValues(widget: WallWidget, rowUnit: number): HarnessWidgetValues {
   const descriptor = getWidgetDescriptor(widget.type);
-  const framed = wallFrameDrawsSurface(widget.type, descriptor.grammar);
+  const framed = wallFrameDrawsSurface(widget.type, descriptor.grammar, widget);
   const titled = widgetTitle(widget) !== null;
   const cellHeightPx = cardHeightPx({ rows: widget.h, rowUnit });
   const rendererHeightPx = rendererBoxHeightPx({ cellHeightPx, framed, titled });
@@ -99,13 +99,13 @@ function editorAcceptsSpan(widget: WallWidget, w: number, h: number): boolean {
  */
 export function reachableRendererHeights(widget: WallWidget, rowUnit: number): readonly number[] {
   const descriptor = getWidgetDescriptor(widget.type);
-  const framed = wallFrameDrawsSurface(widget.type, descriptor.grammar);
   const titled = widgetTitle(widget) !== null;
   const heights = new Set<number>();
 
   for (let w = 1; w <= WALL_GRID_COLUMNS; w += 1) {
     for (let h = 1; h <= WALL_GRID_MAX_ROWS; h += 1) {
       if (!editorAcceptsSpan(widget, w, h)) continue;
+      const framed = wallFrameDrawsSurface(widget.type, descriptor.grammar, { w, h });
       heights.add(
         rendererBoxHeightPx({ cellHeightPx: cardHeightPx({ rows: h, rowUnit }), framed, titled }),
       );

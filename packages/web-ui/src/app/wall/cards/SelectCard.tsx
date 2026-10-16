@@ -122,7 +122,7 @@ export function SelectCard({ device, config, box, contained }: WallDeviceCardPro
       </div>
 
       {composition.controls && model.control && (
-        <WallCardActions>
+        <WallCardActions distribution="distributed">
           <WallCardEnumControl
             box={box ?? DEFAULT_WALL_CARD_BOX}
             label={model.control.property}

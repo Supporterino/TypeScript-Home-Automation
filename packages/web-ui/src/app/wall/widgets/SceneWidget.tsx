@@ -15,6 +15,7 @@ import { WALL_LABEL_FONT_SIZE } from "../type-ramp.js";
 import {
   SCENE_LARGE_GLYPH_PX,
   SCENE_LARGE_GLYPH_SIZE,
+  sceneTileInset,
   sceneTileLayout,
   sceneTriggerRequest,
 } from "./scene-model.js";
@@ -90,7 +91,7 @@ export function SceneWidget({ widget, rendererHeightPx }: WallWidgetProps) {
           justifyContent: stacked ? "center" : "flex-start",
           gap: stacked ? "var(--hearth-space-2)" : "var(--hearth-space-3)",
           borderRadius: WALL_CARD_METRICS.controlRadius,
-          padding: "var(--hearth-space-3)",
+          padding: sceneTileInset(layout),
           textAlign: stacked ? "center" : "left",
           color: "var(--hearth-text)",
           background: pressed ? "var(--hearth-surface-raised)" : "transparent",

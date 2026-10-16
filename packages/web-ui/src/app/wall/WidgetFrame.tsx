@@ -27,7 +27,7 @@ export function WidgetFrame({ widget, rowUnit }: { widget: WallWidget; rowUnit: 
   const Renderer = descriptor.renderer;
   const title = widgetTitle(widget);
   const chrome = wallFrameChrome(descriptor.grammar);
-  const drawsSurface = wallFrameDrawsSurface(widget.type, descriptor.grammar);
+  const drawsSurface = wallFrameDrawsSurface(widget.type, descriptor.grammar, widget);
   // The form is resolved from the box the renderer actually gets, not its cell.
   const tier = resolveSpanTier(widget, descriptor);
   const rendererHeightPx = rendererBoxHeightPx({

@@ -3,7 +3,8 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { type Capability, WALL_WIDGET_TYPES } from "@ts-ha/shared";
 import { WALL_WIDGET_CONFIG_SCHEMAS } from "@ts-ha/shared/wall-schema";
-import type { DeviceDescriptor } from "../src/app/types.js";
+import { shortDeviceName } from "../src/app/lib/humanize-name.js";
+import type { DeviceDescriptor, RoomWithMembers } from "../src/app/types.js";
 import {
   addWidget,
   emptyWallConfig,
@@ -16,6 +17,7 @@ import { WALL_BAND_FONT_SIZE } from "../src/app/wall/type-ramp.js";
 import {
   humidityCapability,
   temperatureCapability,
+  temperatureSensorLabel,
   temperatureWidgetState,
 } from "../src/app/wall/widgets/temperature-model.js";
 
@@ -81,6 +83,15 @@ function humiditySensor(overrides: Partial<DeviceDescriptor> = {}): DeviceDescri
     capabilities: [sensorCapability(), humiditySensorCapability()],
     ...overrides,
   });
+}
+
+/** A room whose membership is the given device ids, in the store's own room shape. */
+function room(name: string, memberIds: readonly string[]): RoomWithMembers {
+  return {
+    id: `room:${name}`,
+    name,
+    members: memberIds.map((qualifiedId) => ({ qualifiedId, available: true, device: null })),
+  };
 }
 
 function firstWidgetId(config: ReturnType<typeof emptyWallConfig>): string {
@@ -289,6 +300,37 @@ describe("the sensor's humidity reading", () => {
   });
 });
 
+describe("temperatureSensorLabel", () => {
+  it("identifies a room-assigned sensor by its room name", () => {
+    const device = sensor();
+
+    expect(temperatureSensorLabel(device, [room("Hallway", [device.qualifiedId])])).toBe("Hallway");
+  });
+
+  it("identifies an unassigned sensor by its shortened name", () => {
+    const device = sensor({ displayName: "Living room temperature sensor" });
+    // A room the device is not a member of leaves it unassigned, so the identifier is the
+    // device's own name shortened to its distinguishing trailing words.
+    const other = room("Hallway", ["zigbee:other"]);
+
+    expect(temperatureSensorLabel(device, [other])).toBe(shortDeviceName(device.displayName));
+    expect(temperatureSensorLabel(device, [other])).toBe("sensor");
+    expect(temperatureSensorLabel(device, [other])).not.toBe(device.displayName);
+    expect(temperatureSensorLabel(device, [])).toBe("sensor");
+  });
+
+  it("distinguishes same-named sensors in different rooms by their rooms", () => {
+    const kitchen = sensor({ id: "0x1", qualifiedId: "zigbee:0x1", displayName: "Sensor" });
+    const bedroom = sensor({ id: "0x2", qualifiedId: "zigbee:0x2", displayName: "Sensor" });
+    const rooms = [room("Kitchen", [kitchen.qualifiedId]), room("Bedroom", [bedroom.qualifiedId])];
+
+    // Their names alone are the same label; only the rooms tell the two apart.
+    expect(shortDeviceName(kitchen.displayName)).toBe(shortDeviceName(bedroom.displayName));
+    expect(temperatureSensorLabel(kitchen, rooms)).toBe("Kitchen");
+    expect(temperatureSensorLabel(bedroom, rooms)).toBe("Bedroom");
+  });
+});
+
 describe("TemperatureWidget renderer", () => {
   it("resolves the configured device from the store and contains an unavailable one", async () => {
     const renderer = await source(RENDERER);
@@ -354,10 +396,17 @@ describe("TemperatureWidget renderer", () => {
     expect(renderer).not.toContain("—");
   });
 
-  it("shortens a long device name and keeps the full name for the tooltip", async () => {
+  it("labels the sensor with the model's identifier and keeps the full name for the tooltip", async () => {
     const renderer = await source(RENDERER);
-    expect(renderer).toContain("shortDeviceName(label)");
-    expect(renderer).toContain("title={label}");
+
+    // The identifier — the sensor's room, else its shortened name — is resolved by the
+    // model, from the store's memoised rooms; the renderer only draws it, with the
+    // sensor's full name behind the tooltip.
+    expect(renderer).toContain("rooms } = useDataStore()");
+    expect(renderer).toContain("temperatureSensorLabel(device, rooms)");
+    expect(renderer).toContain("humanizeDeviceName(device.displayName)");
+    expect(renderer).toContain("title={fullName}");
+    expect(renderer).not.toContain("shortDeviceName");
   });
 
   it("is selectable in the editor with its own config field", async () => {

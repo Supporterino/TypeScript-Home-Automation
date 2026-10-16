@@ -189,14 +189,25 @@ export function WallCardText({
 }
 
 /**
+ * How an actions row uses the card's width: `distributed` spreads a row of
+ * fixed-size controls across it, `flexible` keeps a flexible control's own grow
+ * and centres the fixed controls beside it.
+ */
+export type WallCardActionsDistribution = "distributed" | "flexible";
+
+/**
  * The card's single actions row: the active control and the affordances for the
- * device's other controls. `inset` is the row's own padding.
+ * device's other controls. `distribution` names how the row uses the card's width;
+ * `inset` is the row's own padding.
  */
 export function WallCardActions({
   children,
+  distribution,
   inset = true,
 }: {
   children: ReactNode;
+  /** How the row uses the card's width — the row declares it rather than measuring its children. */
+  distribution: WallCardActionsDistribution;
   /** Whether the row carries its own ported control-spacing inset; a device card does, the page-control row does not. */
   inset?: boolean;
 }): ReactNode {
@@ -206,7 +217,7 @@ export function WallCardActions({
         display: "flex",
         flexDirection: "row",
         alignItems: "center",
-        justifyContent: "flex-start",
+        justifyContent: distribution === "flexible" ? "center" : "space-between",
         gap: `${WALL_CARD_METRICS.controlSpacing}px`,
         padding: inset ? `${WALL_CARD_METRICS.controlSpacing}px` : 0,
         paddingTop: 0,

@@ -141,7 +141,7 @@ export function RoomWidget({ widget, contained, rowUnit }: WallWidgetProps) {
       </div>
 
       {hasActuatable && (
-        <WallCardActions>
+        <WallCardActions distribution="distributed">
           <WallCardControl
             disabled={commandBusy}
             onClick={() => void handleRoomCommand(true)}

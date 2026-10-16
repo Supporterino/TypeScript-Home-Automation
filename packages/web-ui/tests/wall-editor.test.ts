@@ -154,6 +154,20 @@ describe("updateWidgetPlacement", () => {
     expect(widgetAt(updated, 0).h).toBe(descriptor.min.h);
   });
 
+  it("keeps a scene at one row, its newly authored minimum", () => {
+    // The editor's size rule is the descriptor's own minimum, so a one-row scene is
+    // authorable and survives validation.
+    const descriptor = getWidgetDescriptor("scene");
+    expect(descriptor.min).toEqual({ w: 2, h: 1 });
+
+    const config = withRequiredConfig(single("scene"));
+    const id = widgetAt(config, 0).id;
+    const updated = updateWidgetPlacement(config, id, { x: 0, y: 0, w: 2, h: 1 });
+
+    expect(widgetAt(updated, 0).h).toBe(1);
+    expect(validateProfileDraft("scene", updated).ok).toBe(true);
+  });
+
   it("clamps a span above the type maximum down to the maximum", () => {
     const config = single("clock");
     const id = widgetAt(config, 0).id;

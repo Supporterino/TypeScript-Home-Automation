@@ -138,7 +138,9 @@ describe("wall cover card source", () => {
 
   it("presents discrete open/stop/close transport in the actions row", async () => {
     const source = await cardSource();
-    expect(source).toContain("<WallCardActions>");
+    // The transport is a row of fixed-size controls, so it is distributed across the
+    // card's width rather than bunched at its left.
+    expect(source).toContain('<WallCardActions distribution="distributed">');
     expect(source).toContain("<WallCardIconButton");
     expect(source).toContain("<ChevronUp");
     expect(source).toContain("<ChevronDown");

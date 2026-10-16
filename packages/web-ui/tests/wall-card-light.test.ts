@@ -207,7 +207,9 @@ describe("wall light card source", () => {
 
   it("presents the active control as a slider with the other declared controls beside it", async () => {
     const source = await cardSource();
-    expect(source).toContain("<WallCardActions>");
+    // The row carries a flexible slider, so the mounted row is the flexible one: the
+    // slider keeps its grow and the trailing icon controls are not stretched.
+    expect(source).toContain('<WallCardActions distribution="flexible">');
     expect(source).toContain("<WallCardSlider");
     expect(source).toContain("<WallCardIconButton");
     // Only a declared control is rendered: the buttons are the declared controls

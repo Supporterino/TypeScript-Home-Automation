@@ -122,7 +122,7 @@ export function NumberCard({ device, config, box, contained }: WallDeviceCardPro
       </div>
 
       {composition.controls && control && range && (
-        <WallCardActions>
+        <WallCardActions distribution="flexible">
           <WallCardSlider
             label={control.property}
             min={range.min ?? 0}

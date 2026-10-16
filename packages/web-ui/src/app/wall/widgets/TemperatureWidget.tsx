@@ -5,15 +5,15 @@
 import { Thermometer } from "lucide-react";
 import { formatReadoutValue } from "../../components/CapabilityControl.js";
 import { useDataStore } from "../../lib/data-store.js";
-import { humanizeDeviceName, shortDeviceName } from "../../lib/humanize-name.js";
+import { humanizeDeviceName } from "../../lib/humanize-name.js";
 import { WallCardMessage, WallCardReading, WallCardStateItem } from "../cards/card-anatomy.js";
 import { WALL_CARD_GLYPH_SIZE } from "../cards/metrics.js";
 import type { WallWidgetProps } from "../registry.js";
 import { wallReadoutFontSize } from "../scale.js";
-import { temperatureWidgetState } from "./temperature-model.js";
+import { temperatureSensorLabel, temperatureWidgetState } from "./temperature-model.js";
 
 export function TemperatureWidget({ widget, tier }: WallWidgetProps) {
-  const { devicesByQualifiedId } = useDataStore();
+  const { devicesByQualifiedId, rooms } = useDataStore();
   const qualifiedId =
     typeof widget.config.qualifiedId === "string" ? widget.config.qualifiedId : "";
   const device = devicesByQualifiedId.get(qualifiedId) ?? null;
@@ -27,7 +27,10 @@ export function TemperatureWidget({ widget, tier }: WallWidgetProps) {
     );
   }
 
-  const label = device ? humanizeDeviceName(device.displayName) : "Temperature";
+  // The label identifies the sensor by its room where the store assigns it one, else by
+  // its shortened name; the sensor's full name stays the tooltip.
+  const fullName = device ? humanizeDeviceName(device.displayName) : "Temperature";
+  const label = device ? temperatureSensorLabel(device, rooms) : fullName;
   const humidity = state.humidity;
 
   return (
@@ -35,8 +38,7 @@ export function TemperatureWidget({ widget, tier }: WallWidgetProps) {
       <WallCardStateItem
         icon={<Thermometer size={WALL_CARD_GLYPH_SIZE} aria-hidden />}
         tint="var(--hearth-info)"
-        // The full name stays the tooltip while the card shows the shortened form.
-        label={<span title={label}>{shortDeviceName(label)}</span>}
+        label={<span title={fullName}>{label}</span>}
         reading={formatReadoutValue(state.value, state.unit)}
         readingSize={wallReadoutFontSize(tier)}
       />

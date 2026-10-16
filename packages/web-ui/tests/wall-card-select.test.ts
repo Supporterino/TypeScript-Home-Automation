@@ -110,7 +110,10 @@ describe("wall select card source", () => {
 
   it("presents the permitted values as the sole action in the actions row", async () => {
     const source = await cardSource();
-    expect(source).toContain("<WallCardActions>");
+    // The row composes the enumerated control either as fixed options or as one
+    // flexible dropdown; distributing it satisfies both — the options spread, and the
+    // lone dropdown still fills through its own grow.
+    expect(source).toContain('<WallCardActions distribution="distributed">');
     expect(source).toContain("<WallCardEnumControl");
     expect(source).toContain("values={model.values}");
     // The options are the property's actuation target: the card never actuates whole.

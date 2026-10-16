@@ -161,7 +161,10 @@ describe("a widget's controls are the ported control treatment", () => {
     // The controls repointed onto the ported treatment, and the part each one draws:
     // a room's batch commands, the page controls, and the route affordances.
     const expected: Readonly<Record<string, readonly string[]>> = {
-      "wall/widgets/RoomWidget.tsx": ["<WallCardActions>", "<WallCardControl"],
+      "wall/widgets/RoomWidget.tsx": [
+        '<WallCardActions distribution="distributed">',
+        "<WallCardControl",
+      ],
       "wall/widgets/PagedTileGrid.tsx": ["<WallCardActions", "<WallCardIconButton"],
       "wall/widgets/LinkWidget.tsx": ["<WallCardRoute"],
       "views/WallView.tsx": ["<WallCardRoute"],

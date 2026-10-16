@@ -1,10 +1,11 @@
 /**
- * Pure presentation model for the wall temperature widget: the sensor's readings,
- * or a contained explanation.
+ * Pure presentation model for the wall temperature widget: the sensor's readings and
+ * the identifier its label carries, or a contained explanation.
  */
 import type { Capability } from "@ts-ha/shared";
 import { type FlatCapability, flattenCapabilities } from "../../lib/capability-ranking.js";
-import type { DeviceDescriptor } from "../../types.js";
+import { shortDeviceName } from "../../lib/humanize-name.js";
+import type { DeviceDescriptor, RoomWithMembers } from "../../types.js";
 
 /** One resolved reading: the device's numeric value with its declared unit, drawn as one run. */
 interface TemperatureReading {
@@ -88,4 +89,19 @@ export function temperatureWidgetState(
     unit: reading.unit,
     ...(humidity === undefined ? {} : { humidity }),
   };
+}
+
+/**
+ * The identifier the widget labels its sensor with: the room the store's membership
+ * lists the device in (the scan `DeviceDetailView` makes), else the device's
+ * shortened name — so identically-named sensors read as the rooms they sit in.
+ */
+export function temperatureSensorLabel(
+  device: DeviceDescriptor,
+  rooms: readonly RoomWithMembers[],
+): string {
+  const room = rooms.find((room) =>
+    room.members.some((member) => member.qualifiedId === device.qualifiedId),
+  );
+  return room === undefined ? shortDeviceName(device.displayName) : room.name;
 }

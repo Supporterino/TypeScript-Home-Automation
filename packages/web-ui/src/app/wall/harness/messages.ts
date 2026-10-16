@@ -91,7 +91,7 @@ export interface HarnessBenchControls {
    * bench.
    */
   widget: WallWidget | null;
-  /** What the wall would pass as `contained` for this type — `wallFrameDrawsSurface`. */
+  /** What the wall would pass as `contained` for this placement — `wallFrameDrawsSurface`. */
   contained: boolean;
   tier: WallWidgetTier;
   cardForm: WallCardForm;

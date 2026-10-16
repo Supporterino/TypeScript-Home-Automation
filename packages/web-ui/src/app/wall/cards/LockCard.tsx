@@ -185,7 +185,7 @@ export function LockCard({ device, config, box, contained }: WallDeviceCardProps
       </div>
 
       {composition.controls && model.property && (
-        <WallCardActions>
+        <WallCardActions distribution="distributed">
           <WallCardOption
             label={`Lock ${label}`}
             active={locked === true}

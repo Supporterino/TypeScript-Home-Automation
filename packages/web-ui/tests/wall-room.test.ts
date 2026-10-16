@@ -170,8 +170,8 @@ describe("the room card's own chrome", () => {
     const widget = await readSource(ROOM_WIDGET);
 
     // The batch command row is the vocabulary's own actions row at the ported control spacing,
-    // carrying the vocabulary's labelled controls.
-    expect(widget).toContain("<WallCardActions>");
+    // carrying the vocabulary's labelled controls — two fixed-size controls, distributed.
+    expect(widget).toContain('<WallCardActions distribution="distributed">');
     expect(widget).toContain("<WallCardControl");
     expect(widget).toContain('label="All on"');
     expect(widget).toContain('label="All off"');

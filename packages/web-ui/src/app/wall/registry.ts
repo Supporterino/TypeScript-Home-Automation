@@ -214,7 +214,11 @@ export const WALL_WIDGET_REGISTRY: Readonly<Record<WallWidgetType, WallWidgetDes
       label: "Scene",
       grammar: "control",
       defaults: { w: 2, h: 2 },
-      min: { w: 2, h: 2 },
+      /**
+       * One row: a scene may be authored slim. At one row the wall renders it
+       * chrome-less, so the whole cell is the scene's touch target.
+       */
+      min: { w: 2, h: 1 },
       max: { w: 6, h: 4 },
       configSchema: WALL_WIDGET_CONFIG_SCHEMAS.scene,
       renderer: SceneWidget,
