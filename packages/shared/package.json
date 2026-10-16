@@ -1,6 +1,6 @@
 {
   "name": "@ts-ha/shared",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Shared domain and wire contracts for the TypeScript Home Automation workspace",
   "type": "module",
   "private": false,
