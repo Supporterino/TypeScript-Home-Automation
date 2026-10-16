@@ -100,7 +100,7 @@ function find(
  * Shared with the room command so a device is treated as actuatable on exactly
  * the same properties this ranking reads.
  */
-export const ON_OFF_PROPERTIES: ReadonlySet<string> = new Set(["on", "state"]);
+const ON_OFF_PROPERTIES: ReadonlySet<string> = new Set(["on", "state"]);
 
 /** The access direction a boolean on/off capability must declare to be selected. */
 export type OnOffAccess = "readable" | "writable";
