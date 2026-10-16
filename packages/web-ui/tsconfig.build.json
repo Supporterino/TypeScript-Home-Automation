@@ -4,11 +4,6 @@
     "noEmit": false,
     "declaration": true,
     "declarationMap": true,
-    "sourceMap": true,
-    "outDir": "./dist",
-    "rootDir": "./src",
-    "types": ["bun"]
-  },
-  "include": ["src/**/*.ts"],
-  "exclude": ["node_modules", "dist", "src/app/**"]
+    "sourceMap": true
+  }
 }
