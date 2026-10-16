@@ -1,12 +1,7 @@
 /**
- * The Zigbee `DeviceSource`, layered over the `DeviceRegistry` (design.md
- * D2, D22; task 6.3).
- *
- * A device's stable identity is its IEEE address, which does not change
- * when Zigbee2MQTT renames it — the display name and command dispatch both
- * key on the *current* friendly name, looked up by IEEE address, so a
- * rename in Zigbee2MQTT is invisible to a consumer holding the qualified
- * identifier.
+ * The Zigbee `DeviceSource`, layered over the `DeviceRegistry`. A device's stable
+ * identity is its IEEE address, so a Zigbee2MQTT rename is invisible to a consumer
+ * holding the qualified identifier.
  */
 
 import type { Capability } from "@ts-ha/shared";
@@ -104,9 +99,7 @@ export class ZigbeeDeviceSource implements DeviceSource {
     const validation = validateCommand(capabilities, properties);
     if (!validation.ok) return { status: "invalid", error: validation.error };
 
-    // The request may carry a real boolean, which validation accepts for a
-    // boolean property; translate it into the capability's declared encoding
-    // before it reaches the transport (design.md D2).
+    // Translate a real boolean into the capability's declared encoding before dispatch.
     this.mqtt.publishToDevice(
       device.friendly_name,
       translateCommandProperties(capabilities, properties),
@@ -148,12 +141,8 @@ export class ZigbeeDeviceSource implements DeviceSource {
 
   private notify(device: ZigbeeDevice): void {
     const descriptor = this.toDescriptor(device);
-    // The registry reported a device state change (or a device joined) — a
-    // real observation, recorded at the point it is delivered, never on a
-    // read (design.md D2).
-    // Recorded for durability/pruning only: `toDescriptor` seeds from the
-    // registry's independently persisted state, so the store's seed path is
-    // intentionally never consulted here (design.md D2, Risks).
+    // Recorded for durability/pruning only: `toDescriptor` seeds from the registry's
+    // independently persisted state, so the store's seed path is never consulted here.
     this.deviceStateStore?.record(descriptor.qualifiedId, descriptor.state, descriptor.observation);
     for (const listener of this.listeners) {
       try {
@@ -176,8 +165,7 @@ export class ZigbeeDeviceSource implements DeviceSource {
       capabilities,
       reachable: true,
       observation: { mode: "push", observedAt: Date.now() },
-      // Stamped by `AggregateDeviceSource` (design.md D8) — a source does
-      // not know a user's visibility preference for its own devices.
+      // Stamped by `AggregateDeviceSource`; a source does not know visibility preferences.
       hidden: false,
     };
   }

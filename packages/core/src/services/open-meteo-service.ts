@@ -52,23 +52,7 @@ interface OMCurrentResponse {
 }
 
 /**
- * Weather service implementation using Open-Meteo.
- *
- * Completely free, no API key required. Uses the Open-Meteo forecast API
- * for both current conditions and daily forecast.
- *
- * @example
- * ```ts
- * import { createEngine, OpenMeteoService } from "@ts-ha/core";
- *
- * const engine = createEngine({
- *   automationsDir: "...",
- *   weather: (http, logger) =>
- *     new OpenMeteoService({
- *       location: { latitude: 49.4, longitude: 8.7 },
- *     }, http, logger),
- * });
- * ```
+ * Weather service implementation using the free, keyless Open-Meteo forecast API.
  */
 export class OpenMeteoService implements WeatherService {
   private readonly baseUrl: string;

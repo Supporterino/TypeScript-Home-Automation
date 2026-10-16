@@ -2,48 +2,9 @@ import type { AqaraRemoteSwitchH1Action } from "@ts-ha/shared/types";
 import { Automation, type Trigger, type TriggerContext } from "../automation.js";
 
 /**
- * Abstract base class for automations driven by an Aqara Wireless Remote
- * Switch H1 (WXKG15LM / WRS-R02).
- *
- * Provides a clean handler-per-action pattern. Subclasses set `remoteName`
- * and override only the action handlers they need — unhandled actions are
- * silently ignored (no-op).
- *
- * The double rocker has 12 possible actions:
- *
- * | Action           | Gesture                 |
- * |------------------|-------------------------|
- * | `single_left`    | Single tap left button  |
- * | `double_left`    | Double tap left button  |
- * | `triple_left`    | Triple tap left button  |
- * | `hold_left`      | Hold left button        |
- * | `single_right`   | Single tap right button |
- * | `double_right`   | Double tap right button |
- * | `triple_right`   | Triple tap right button |
- * | `hold_right`     | Hold right button       |
- * | `single_both`    | Single tap both buttons |
- * | `double_both`    | Double tap both buttons |
- * | `triple_both`    | Triple tap both buttons |
- * | `hold_both`      | Hold both buttons       |
- *
- * @example
- * ```ts
- * import { AqaraH1Automation } from "@ts-ha/core";
- *
- * export default class MyRemote extends AqaraH1Automation {
- *   readonly name = "my-remote";
- *   protected readonly remoteName = "living_room_remote";
- *
- *   protected async onSingleLeft(): Promise<void> {
- *     this.mqtt.publishToDevice("lamp", { state: "TOGGLE" });
- *   }
- *
- *   protected async onHoldLeft(): Promise<void> {
- *     const shelly = this.services.get<ShellyService>("shelly");
- *     if (shelly) await shelly.toggle("plug");
- *   }
- * }
- * ```
+ * Abstract base class for automations driven by an Aqara Wireless Remote Switch H1
+ * (WXKG15LM / WRS-R02). Subclasses set `remoteName` and override only the action
+ * handlers they need; unhandled actions are a no-op.
  */
 export abstract class AqaraH1Automation extends Automation {
   /**

@@ -73,9 +73,7 @@ describe("shellyCapabilitiesFor", () => {
       expect(action).toBeDefined();
       expect(action?.kind).toBe("enum");
       expect(action?.valueType).toBe("enum");
-      // A transport is a command, not a reported value: it is writable so a
-      // source-neutral consumer can express it, and not readable so no consumer
-      // renders a readout for a value `normalize()` never produces (design.md D15).
+      // A transport is a command, not a reported value: writable, but not readable.
       expect(action?.access).toEqual({ readable: false, writable: true });
       expect(action?.permittedValues).toEqual(["open", "close", "stop"]);
     });

@@ -1,16 +1,7 @@
 /**
- * The Zigbee group `DeviceSource` — a fifth source, alongside
- * `ZigbeeDeviceSource`, exposing each Zigbee2MQTT group as an ordinary
- * device (design.md D1, D2; specs/zigbee-groups/spec.md).
- *
- * A group has no `ieee_address` and no `definition.exposes` of its own —
- * `bridge/groups` gives only `{ id, friendly_name, members }` — so this
- * source derives everything a consumer needs from the same `DeviceRegistry`
- * `ZigbeeDeviceSource` reads: member capabilities are intersected (D3) and
- * member state is aggregated (D4), rather than re-deriving from descriptors.
- *
- * Identity is the numeric bridge id (D2): `qualifiedId = "zigbee-group:<id>"`,
- * stable across a friendly-name rename in Zigbee2MQTT.
+ * The Zigbee group `DeviceSource`, exposing each Zigbee2MQTT group as an ordinary
+ * device. A group has no exposes of its own, so member capabilities are intersected
+ * and member state aggregated from the same `DeviceRegistry` `ZigbeeDeviceSource` reads.
  */
 
 import type { Capability, CapabilityAccess, CapabilityRange } from "@ts-ha/shared";
@@ -40,7 +31,7 @@ import { ZIGBEE_SOURCE_ID } from "./zigbee-source.js";
 export const ZIGBEE_GROUP_SOURCE_ID = "zigbee-group";
 
 // ---------------------------------------------------------------------------
-// Capability intersection (design.md D3; task 2.1)
+// Capability intersection
 // ---------------------------------------------------------------------------
 
 /** Intersects a numeric range across members. `"drop"` means the intersection is empty. */
@@ -82,10 +73,8 @@ function intersectPermittedValues(caps: Capability[]): (string | number)[] | und
 }
 
 /**
- * Intersects one property's capability across every member that declares
- * it. Returns `null` when the property does not survive intersection —
- * incompatible `valueType`, an empty numeric range, no shared enum value, or
- * mismatched boolean on/off encoding.
+ * Intersect one property's capability across every member that declares it; returns `null`
+ * when the property does not survive (incompatible type, empty range, no shared value).
  */
 function intersectCapability(caps: Capability[]): Capability | null {
   const first = caps[0];
@@ -160,21 +149,8 @@ function flattenWithContainer(
 }
 
 /**
- * Intersects the capabilities of every group member into the group's own
- * declared capability set (design.md D3; task 2.1). A property is offered
- * only when every member declares it, with a compatible `valueType`.
- *
- * Rebuilds the source-neutral container shape the intersected leaves came
- * from (e.g. a `kind: "light"` capability wrapping `features`), from the
- * first member's structure — not just a flat leaf list — because that
- * container `kind` is what `detectCapabilities()`
- * (`services/capability-detection.ts`) keys HomeKit exposure on. A flat list
- * of on/off + brightness properties with no `light`/`switch` wrapper would
- * match no HomeKit service and be silently skipped, even though every
- * member is an ordinary bulb.
- *
- * A pure function with no dependency on the registry or MQTT, so it is
- * testable in isolation from device discovery and state tracking.
+ * Intersect the capabilities of every group member into the group's declared set: a
+ * property is kept only when every member declares it compatibly.
  */
 export function intersectCapabilities(memberCapabilitySets: Capability[][]): Capability[] {
   if (memberCapabilitySets.length === 0) return [];
@@ -221,18 +197,13 @@ export function intersectCapabilities(memberCapabilitySets: Capability[][]): Cap
 }
 
 // ---------------------------------------------------------------------------
-// State derivation (design.md D4; task 2.2)
+// State derivation
 // ---------------------------------------------------------------------------
 
 /**
- * Derives a group's reported state from its members' tracked state
- * (design.md D4; task 2.2): a boolean property reports on when any member
- * reports on; a numeric property reports the mean across members currently
- * on (determined by any declared boolean property); a property no member
- * reports is omitted rather than defaulted.
- *
- * A pure function with no dependency on the registry, so it is testable in
- * isolation from MQTT and device discovery.
+ * Derive a group's reported state from its members': a boolean reports on when any
+ * member does; a numeric reports the mean across members currently on; anything no
+ * member reports is omitted.
  */
 export function deriveGroupState(
   capabilities: Capability[],
@@ -350,12 +321,8 @@ export class ZigbeeGroupDeviceSource implements DeviceSource {
     const validation = validateCommand(capabilities, properties);
     if (!validation.ok) return { status: "invalid", error: validation.error };
 
-    // Published once, to the group's friendly name — Zigbee2MQTT multicasts
-    // it to every member (design.md D5). No optimistic state write: the
-    // group's reported state stays derived from what members report. The
-    // request may carry a real boolean, which validation accepts for a
-    // boolean property; translate it into the capability's declared encoding
-    // before it reaches the transport (design.md D2).
+    // Published once, to the group's friendly name — Zigbee2MQTT multicasts it to
+    // every member. No optimistic state write: the reported state stays derived.
     this.mqtt.publishToDevice(
       group.friendly_name,
       translateCommandProperties(capabilities, properties),
@@ -384,10 +351,8 @@ export class ZigbeeGroupDeviceSource implements DeviceSource {
   }
 
   /**
-   * Rebuilds the IEEE → group-ids index and the per-member-friendly-name
-   * state subscriptions from the registry's current group list (design.md
-   * D4; task 2.5). Called on start and every subsequent `bridge/groups`
-   * change, since membership and friendly names can both change.
+   * Rebuild the IEEE → group-ids index and the per-member state subscriptions from
+   * the registry's current group list; called on start and on every groups change.
    */
   private rebuildIndexAndSubscriptions(): void {
     if (!this.registry) return;
@@ -421,7 +386,7 @@ export class ZigbeeGroupDeviceSource implements DeviceSource {
     }
   }
 
-  /** A member's state changed — recompute and notify only the groups containing it (task 2.5). */
+  /** A member's state changed — recompute and notify only the groups containing it. */
   private onMemberStateChange(ieeeAddress: string): void {
     const groupIds = this.ieeeToGroupIds.get(ieeeAddress);
     if (!groupIds) return;
@@ -433,12 +398,8 @@ export class ZigbeeGroupDeviceSource implements DeviceSource {
 
   private notify(group: ZigbeeGroup): void {
     const descriptor = this.toDescriptor(group);
-    // A member's state changed — a real observation of the group's derived
-    // state, recorded at the point it is delivered, never on a read
-    // (design.md D2).
-    // Recorded for durability/pruning only: `toDescriptor` derives from the
-    // registry's independently persisted member state, so the store's seed
-    // path is intentionally never consulted here (design.md D2, Risks).
+    // Recorded for durability/pruning only: `toDescriptor` derives from the registry's
+    // independently persisted member state, so the store's seed path is never consulted.
     this.deviceStateStore?.record(descriptor.qualifiedId, descriptor.state, descriptor.observation);
     for (const listener of this.listeners) {
       try {
@@ -487,8 +448,7 @@ export class ZigbeeGroupDeviceSource implements DeviceSource {
       capabilities,
       reachable: true,
       observation: { mode: "push", observedAt: Date.now() },
-      // Stamped by `AggregateDeviceSource` (design.md D8) — a source does
-      // not know a user's visibility preference for its own devices.
+      // Stamped by `AggregateDeviceSource`; a source does not know visibility preferences.
       hidden: false,
       memberQualifiedIds: members.map(({ device }) =>
         qualifyDeviceId(ZIGBEE_SOURCE_ID, device.ieee_address),

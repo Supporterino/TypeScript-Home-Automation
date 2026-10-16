@@ -1,21 +1,7 @@
 /**
- * The Shelly `DeviceSource` (design.md D1–D6; tasks 3.1–3.10).
- *
- * Preserves the transport split already established for the HomeKit-facing
- * Shelly source: an MQTT-transport device is push-backed from its
- * `NotifyStatus` and `online` (LWT) topics and excluded from polling; an
- * HTTP-transport device is refreshed on a configurable interval. Devices
- * registered after the source has started are picked up without a restart.
- *
- * A physical Shelly registration is expanded into one logical entry per
- * discovered `switch:N`/`cover:N` component. A single-component device keeps
- * the base registration's identity unchanged; a multi-component device is
- * enumerated as one entry per channel with a D4-derived identity, and its base
- * registration is not a logical device.
- *
- * Shelly publishes no capability schema, so each entry's description comes
- * from `shellyCapabilitiesFor()` — an authored, per-type description that
- * satisfies the rich descriptor requirement in full.
+ * The Shelly `DeviceSource`. Expands each physical registration into one logical
+ * entry per discovered `switch:N`/`cover:N` component, push-backed over MQTT and
+ * polled over HTTP.
  */
 
 import type {
@@ -45,7 +31,7 @@ export const SHELLY_SOURCE_ID = "shelly";
 /** Default poll interval for HTTP-transport Shelly devices, in milliseconds. */
 export const DEFAULT_SHELLY_SOURCE_POLL_MS = 10000;
 
-/** Per-channel-entry tracked runtime state, normalised to the shared property names in `shelly-capabilities.ts`. */
+/** Per-channel tracked runtime state, normalised to the shared property names. */
 interface TrackedShellyState {
   state: Record<string, unknown>;
   reachable: boolean;
@@ -54,9 +40,9 @@ interface TrackedShellyState {
   observation: DeviceObservation;
 }
 
-/** One logical Shelly device, materialized from a physical registration and a discovered component channel. */
+/** One logical Shelly device: a physical registration plus a component channel. */
 interface ShellyLogicalEntry {
-  /** Logical device id, unique within the source (design.md D4). */
+  /** Logical device id, unique within the source. */
   id: string;
   /** Name of the physical registration this entry belongs to. */
   baseName: string;
@@ -64,7 +50,7 @@ interface ShellyLogicalEntry {
   channel: number;
   /** Discovered component kind (`switch` vs `cover`). */
   kind: ShellyComponentKind;
-  /** Effective kind (cover, else the registration's switch/outlet) used for capabilities and commands. */
+  /** Effective type (cover, else the registration's switch/outlet). */
   type: ShellyDeviceType;
   /** The component's configured name, or null when it has none. */
   configuredName: string | null;
@@ -75,10 +61,9 @@ interface ShellyLogicalEntry {
   /** Human-facing name that distinguishes the channel. */
   displayName: string;
   /**
-   * Whether this entry is retained from a previous discovery because its
-   * channel is absent from the current inventory (design.md D4, task 3.9). A
-   * retained entry stays enumerated and unreachable, is never resurrected by a
-   * presence message or a poll, and is never commandable.
+   * Whether this entry is retained from a previous discovery because its channel
+   * is absent from the current inventory; retained entries are enumerated but
+   * unreachable and never commandable.
    */
   retained: boolean;
 }
@@ -102,9 +87,7 @@ interface ProvisionalEntry {
 
 /**
  * Pick the first candidate id not already used, falling back to a
- * deterministically suffixed variant of the last candidate. This keeps every
- * logical identity unique even when configured names, channel fallbacks, and
- * base registration names collide.
+ * deterministically suffixed variant of the last candidate.
  */
 function pickUniqueId(candidates: string[], used: ReadonlySet<string>): string {
   for (const candidate of candidates) {
@@ -121,13 +104,8 @@ function pickUniqueId(candidates: string[], used: ReadonlySet<string>): string {
 }
 
 /**
- * Keep only the keys a normalized state patch actually defines. `normalize()`
- * always emits the readable keys it knows about — with `undefined` for a field
- * the frame did not carry — so spreading the raw patch would overwrite a
- * seeded value with `undefined`. Filtering here lets `updateTracked` merge a
- * partial frame onto the last-known state without resurrecting an attribute the
- * transport has not reported (spec: "Incremental notifications still apply",
- * "A never-reported attribute is absent, not synthesized").
+ * Keep only the keys a normalized state patch actually defines, so merging a
+ * partial frame never overwrites a seeded value with `undefined`.
  */
 function definedState(state: Record<string, unknown>): Record<string, unknown> {
   const defined: Record<string, unknown> = {};
@@ -144,11 +122,8 @@ export class ShellyDeviceSource implements DeviceSource {
   /** Per-channel-entry state, keyed by logical device id. */
   private readonly tracked: Map<string, TrackedShellyState> = new Map();
   /**
-   * Time each logical channel last received a push notification, keyed by the
-   * logical `entryKey` (base name + kind + channel) so it survives an id
-   * re-resolution. A seed whose request was issued before this time is stale
-   * and is dropped (design.md: "A stale seeded value could be shown as
-   * current").
+   * Time each logical channel last received a push notification, keyed by
+   * `entryKey` so it survives an id re-resolution; used to drop stale seeds.
    */
   private readonly lastPushAt: Map<string, number> = new Map();
   /** One subscription per physical device, keyed by its registration name. */
@@ -166,9 +141,8 @@ export class ShellyDeviceSource implements DeviceSource {
   private onRegisteredCb: ((device: ShellyDevice) => void) | null = null;
   private pollTimer: ReturnType<typeof setInterval> | null = null;
   /**
-   * Monotonic lifecycle generation. Bumped by every `start()` and `stop()` so
-   * an in-flight discovery or a suspended `start()` from a previous lifecycle
-   * cannot install a timer or rebuild state after the source was stopped.
+   * Monotonic lifecycle generation, bumped by `start()` and `stop()` so an
+   * in-flight discovery cannot resume a stopped source.
    */
   private generation = 0;
 
@@ -188,8 +162,7 @@ export class ShellyDeviceSource implements DeviceSource {
     if (!this.shelly) return;
     const generation = ++this.generation;
 
-    // Install the late-registration hook before the initial sweep so a device
-    // registered while `start()` is in flight is not dropped.
+    // Install the late-registration hook before the initial sweep.
     this.onRegisteredCb = (device) => {
       void this.discoverDevice(device, generation).catch((err) =>
         this.logger.error({ err, device: device.name }, "Shelly late discovery failed"),
@@ -197,10 +170,7 @@ export class ShellyDeviceSource implements DeviceSource {
     };
     this.shelly.onDeviceRegistered(this.onRegisteredCb);
 
-    // Await discovery for every already-registered device so enumeration is
-    // complete and deterministic once `start()` resolves (design.md D2).
-    // Isolation is per device: an unexpected rejection from one device's
-    // discovery must not reject the whole source or block the others.
+    // Await discovery for every already-registered device so enumeration is complete.
     const devices = this.shelly.getDevices();
     await Promise.all(
       devices.map((device) =>
@@ -213,8 +183,7 @@ export class ShellyDeviceSource implements DeviceSource {
       ),
     );
 
-    // `stop()` may have run during the await; do not install a timer that would
-    // never be cleared, and do not let this lifecycle resume.
+    // `stop()` may have run during the await; do not let this lifecycle resume.
     if (generation !== this.generation) return;
 
     this.pollTimer = setInterval(() => {
@@ -262,9 +231,7 @@ export class ShellyDeviceSource implements DeviceSource {
     if (!this.shelly) return { status: "unavailable" };
     const entry = this.entries.get(deviceId);
     if (!entry) return { status: "not_found" };
-    // A retained (vanished) channel is enumerated but unreachable; it may still
-    // carry a stale service record, so reject it rather than dispatching to a
-    // component the current inventory no longer reports.
+    // A retained channel is unreachable; reject it rather than dispatching.
     if (entry.retained) return { status: "not_found" };
 
     const validation = validateCommand(shellyCapabilitiesFor(entry.type), properties);
@@ -275,9 +242,7 @@ export class ShellyDeviceSource implements DeviceSource {
         if (typeof properties.position === "number") {
           await this.shelly.coverGoToPosition(entry.id, properties.position);
         }
-        // The descriptor declares the discrete transport as a writable enum,
-        // so validation has already confined `action` to one of these values;
-        // each one maps to the matching `Cover.*` primitive (design.md D15).
+        // Validation confined `action` to the declared enum; map each to its `Cover.*` primitive.
         if (properties.action === "open") {
           await this.shelly.coverOpen(entry.id);
         } else if (properties.action === "close") {
@@ -309,10 +274,8 @@ export class ShellyDeviceSource implements DeviceSource {
   // ---------------------------------------------------------------------------
 
   /**
-   * Discover a physical device's components and materialize its logical
-   * entries. Idempotent: repeated runs reuse the in-flight promise and, once
-   * complete, merge fresh components over the existing entries without
-   * duplicating them or losing tracked state (design.md D2).
+   * Discover a physical device's components and materialize its logical entries.
+   * Idempotent: concurrent and repeated runs reuse the in-flight promise.
    */
   private discoverDevice(device: ShellyDevice, generation: number): Promise<void> {
     if (generation !== this.generation) return Promise.resolve();
@@ -353,27 +316,19 @@ export class ShellyDeviceSource implements DeviceSource {
     this.discoveredComponents.set(device.name, components);
     this.rebuildEntries();
 
-    // Seed every MQTT-transport entry's current status before discovery
-    // settles, so `start()` and late registration both enumerate complete
-    // descriptors (design.md D2, D3). HTTP-transport entries are already
-    // refreshed by `poll()`.
+    // Seed every MQTT-transport entry's current status so `start()` and late
+    // registration both enumerate complete descriptors.
     await this.seedMqttEntries(device.name, generation);
   }
 
   /**
-   * Recompute the logical entry set from the latest per-device discovery
-   * results. A single component keeps the base identity; multiple components
-   * get D4 ids; a device whose discovery yielded nothing falls back to a
-   * single channel-0 entry using its declared type. Entries whose channel is
-   * absent from a later inventory are retained and marked unreachable rather
-   * than dropped (task 3.9).
+   * Recompute the logical entry set from the latest discovery results; vanished
+   * channels are retained and marked unreachable rather than dropped.
    */
   private rebuildEntries(): void {
     const provisional: ProvisionalEntry[] = [];
 
-    // Count every configured component name across all registered devices'
-    // discovery results, so a name is only used as an identity when it is
-    // unique device-wide and source-wide (design.md D4, task 3.5).
+    // Count component names across all devices so a name is an identity only when unique.
     const nameCounts = new Map<string, number>();
     for (const components of this.discoveredComponents.values()) {
       for (const component of components) {
@@ -407,8 +362,7 @@ export class ShellyDeviceSource implements DeviceSource {
       if (!base) continue;
 
       if (components.length <= 1) {
-        // A single discovered component *is* the base registration's logical
-        // entry; no duplicate identity is materialized (design.md D1).
+        // A single component is the base registration's logical entry.
         const component = components[0];
         const kind: ShellyComponentKind =
           component?.kind ?? (base.type === "cover" ? "cover" : "switch");
@@ -461,13 +415,8 @@ export class ShellyDeviceSource implements DeviceSource {
       }
     }
 
-    // Resolve ids against every base registration name and every id already
-    // assigned, so a configured name cannot shadow a registration or another
-    // channel and every entry stays independently addressable (design.md D4).
-    // Resolve over a deterministic ordering (base name, kind, channel) so a
-    // configured name that collides with another entry's generated candidate is
-    // claimed identically across restarts, independent of discovery completion
-    // order (design.md D4).
+    // Resolve ids against every base registration name and assigned id, in a
+    // deterministic order so collisions resolve identically across restarts.
     const orderedProvisional = [...provisional].sort((a, b) => {
       const byBaseName = a.entry.baseName.localeCompare(b.entry.baseName);
       if (byBaseName !== 0) return byBaseName;
@@ -487,9 +436,8 @@ export class ShellyDeviceSource implements DeviceSource {
       usedIds.add(id);
     }
 
-    // Materialize the merged logical entry set (live provisional entries first,
-    // then retained ones below). Display names are assigned afterwards in one
-    // pass over the complete set, not here (design.md D4).
+    // Materialize the merged logical entry set; display names are assigned
+    // afterwards in one pass over the complete set.
     const merged: Map<string, ShellyLogicalEntry> = new Map();
     const mergedKeys: Map<string, string> = new Map();
     for (const provisionalEntry of provisional) {
@@ -504,12 +452,8 @@ export class ShellyDeviceSource implements DeviceSource {
       );
     }
 
-    // Retain prior entries whose channel vanished from a later inventory. A
-    // retained entry must never overwrite a live entry that reclaimed its id,
-    // nor keep a base registration name: reserve every retained id first, then
-    // re-resolve a colliding retained entry to a fresh unique id — and with it
-    // prune any stale base-named channel record — so no two logical devices
-    // share one identity (design.md D4, task 3.9).
+    // Retain prior entries whose channel vanished; reserve their ids first and
+    // re-resolve any that collide with a live entry to a fresh unique id.
     const mergeRetained: Array<{ key: string; old: ShellyLogicalEntry }> = [];
     for (const old of this.entries.values()) {
       const key = this.entryKey(old.baseName, old.kind, old.channel);
@@ -545,10 +489,8 @@ export class ShellyDeviceSource implements DeviceSource {
       retained.push(entry);
     }
 
-    // Assign human-facing labels in one deterministic pass over the complete
-    // merged set (live + retained), so no two entries — including a retained
-    // channel and the live channel that replaced it — can share a label
-    // (design.md D4; "Per-Channel Logical Identity").
+    // Assign human-facing labels in one deterministic pass over the merged set
+    // so no two entries can share a label.
     this.resolveDisplayNames(merged.values());
 
     const removedIds = new Set(this.entries.keys());
@@ -558,12 +500,8 @@ export class ShellyDeviceSource implements DeviceSource {
     for (const [key, id] of mergedKeys) this.entryKeys.set(key, id);
 
     // Materialize the service-side channel records that let a command addressed
-    // by logical id thread the right RPC channel (design.md D1). A
-    // single-component device at channel 0 keeps its base registration and
-    // needs no record; a sole component at a non-zero channel still needs one
-    // so its descriptor and commands agree. Records no longer backed by an
-    // entry are pruned, so a component rename does not leave the old id
-    // commandable forever.
+    // by logical id thread the right RPC channel; records no longer backed by an
+    // entry are pruned.
     if (this.shelly) {
       const keepByBase = new Map<string, Set<string>>();
       for (const entry of this.entries.values()) {
@@ -587,13 +525,8 @@ export class ShellyDeviceSource implements DeviceSource {
             type: entry.type,
           });
         }
-        // A single-component device whose live component sits at channel 0
-        // keeps its base registration and materializes no channel record. Drop
-        // the base id from the keep set so a record left by a previous
-        // non-zero-channel discovery is pruned; otherwise a command on the base
-        // id would still thread the removed channel (design.md D1). A sole
-        // component at a non-zero channel, and every multi-component channel,
-        // stay in the keep set.
+        // A single-component device at channel 0 needs no channel record; drop
+        // its base id from the keep set so a stale record is pruned.
         const baseEntry = this.entries.get(baseName);
         if (components.length <= 1 && baseEntry?.channel === 0) {
           keep.delete(baseName);
@@ -610,12 +543,8 @@ export class ShellyDeviceSource implements DeviceSource {
       const metered = this.componentMetered(entry);
       const existing = this.tracked.get(entry.id);
       if (!existing) {
-        // Seed metering from discovery so a metered channel's descriptor
-        // declares energy from first enumeration, before any poll or
-        // notification (design.md D7), and seed state/observation from the
-        // durable store so a restart's first enumeration reports the
-        // device's last-known value before a new observation arrives
-        // (design.md D2, D4).
+        // Seed metering from discovery and state/observation from the durable
+        // store, so first enumeration is complete before any poll or notification.
         this.tracked.set(entry.id, this.trackedFor(entry));
       } else if (metered) {
         existing.metered = true;
@@ -632,17 +561,8 @@ export class ShellyDeviceSource implements DeviceSource {
   }
 
   /**
-   * Assign every entry's human-facing label in a single deterministic pass over
-   * the merged live + retained set, so labels are globally unique and never
-   * depend on discovery completion order (design.md D4).
-   *
-   * The reserved set is seeded with every base registration name, so no
-   * configured name, `<base> <channel>` fallback, or bare base identity can
-   * shadow a registration. A configured name is shown bare only when it is
-   * unique across every entry's configured name and still unused; otherwise the
-   * entry falls back to its channel-qualified label, disambiguating further with
-   * the component kind and then a numeric suffix until the label is free. A
-   * single-component entry always keeps its base name.
+   * Assign every entry's human-facing label in a single deterministic pass so
+   * labels are globally unique and independent of discovery order.
    */
   private resolveDisplayNames(entries: Iterable<ShellyLogicalEntry>): void {
     const all = Array.from(entries);
@@ -666,11 +586,8 @@ export class ShellyDeviceSource implements DeviceSource {
     });
 
     for (const entry of ordered) {
-      // A single-component device keeps its base registration's name; because
-      // every base name is reserved, no other entry can claim it. Only a live
-      // entry may claim the bare base identity — a retained entry that once was
-      // the sole component falls through to its channel-qualified label so it
-      // cannot duplicate the live entry's label.
+      // Only a live single-component entry may claim the bare base identity; a
+      // retained one falls through to its channel-qualified label.
       if (entry.baseIdentity && !entry.retained) {
         entry.displayName = entry.baseName;
         continue;
@@ -710,18 +627,12 @@ export class ShellyDeviceSource implements DeviceSource {
     return `${baseName}_${channel}`;
   }
 
-  /**
-   * A channel fallback that includes the component kind, used when a channel
-   * number is shared by more than one kind (`switch:0` vs `cover:0`).
-   */
+  /** A channel fallback that includes the component kind (`switch:0` vs `cover:0`). */
   private kindChannelId(baseName: string, kind: ShellyComponentKind, channel: number): string {
     return `${baseName}_${kind}_${channel}`;
   }
 
-  /**
-   * Whether a channel's component reported metering at discovery, matched by
-   * its own kind + channel rather than the device-level registration.
-   */
+  /** Whether this entry's component reported metering at discovery, matched by kind + channel. */
   private componentMetered(entry: ShellyLogicalEntry): boolean {
     const components = this.discoveredComponents.get(entry.baseName);
     const component = components?.find((c) => c.kind === entry.kind && c.channel === entry.channel);
@@ -777,11 +688,8 @@ export class ShellyDeviceSource implements DeviceSource {
   }
 
   /**
-   * Apply every recognized `switch:N`/`cover:N` key present in a notification
-   * to its matching channel entry (design.md D1, D3; task 3.6). Both the full
-   * (`NotifyFullStatus`) and incremental (`NotifyStatus`) methods carry the same
-   * component keys, so each is dispatched through the identical per-component
-   * path. Unknown keys are ignored.
+   * Apply every recognized `switch:N`/`cover:N` key in a notification to its
+   * matching channel entry; unknown keys are ignored.
    */
   private handleNotifyStatus(baseName: string, payload: Record<string, unknown>): void {
     if (payload?.method !== "NotifyStatus" && payload?.method !== "NotifyFullStatus") return;
@@ -805,9 +713,7 @@ export class ShellyDeviceSource implements DeviceSource {
       if (!id) continue;
       const entry = this.entries.get(id);
       if (!entry) continue;
-      // A retained (vanished) channel must not be resurrected by a status
-      // notification for a component the current inventory no longer reports
-      // (design.md D4, task 3.9).
+      // A retained channel must not be resurrected by a status notification.
       if (entry.retained) continue;
 
       const observedAt = Date.now();
@@ -820,7 +726,7 @@ export class ShellyDeviceSource implements DeviceSource {
     }
   }
 
-  /** The `online` (LWT) payload marks every channel entry of the physical device reachable/unreachable. */
+  /** The `online` (LWT) payload marks every channel entry reachable or not. */
   private handleOnline(baseName: string, payload: unknown): void {
     if (typeof payload !== "boolean") {
       this.logger.warn(
@@ -841,26 +747,14 @@ export class ShellyDeviceSource implements DeviceSource {
   // ---------------------------------------------------------------------------
 
   /**
-   * Request and apply the current component status for every MQTT-transport
-   * entry of a device through the same RPC status query `poll()` uses, so a
-   * push-backed descriptor carries its readable properties from first
-   * enumeration (design.md D2, D3). `events/rpc` is not retained, so a
-   * connect-time full status may have been published before the source
-   * subscribed; the query closes that gap.
-   *
-   * Only MQTT-transport entries are seeded — HTTP-transport entries are
-   * refreshed by `poll()` and must not be double-seeded. Isolation is per
-   * entry: a failed or timed-out seed is logged and leaves the entry with the
-   * state it has, without rejecting the source or blocking the device's other
-   * channels.
+   * Request and apply the current status for every MQTT-transport entry of a
+   * device, so a push-backed descriptor carries its properties from first
+   * enumeration. A failed seed is logged and non-fatal.
    */
   private async seedMqttEntries(baseName: string, generation: number): Promise<void> {
     const shelly = this.shelly;
     if (!shelly) return;
-    // Mirror `addMqttSubscriptions`: only a device that actually subscribed —
-    // MQTT transport *and* a topic prefix — has a channel to query. A
-    // prefix-less MQTT registration would otherwise issue `Switch.GetStatus`
-    // over `"undefined/rpc"` and stall `start()` on the 5 s RPC timeout.
+    // Only an MQTT device with a topic prefix has a channel to query.
     const registration = this.registrations.get(baseName);
     if (registration?.transport !== "mqtt" || !registration.topicPrefix) return;
 
@@ -879,8 +773,7 @@ export class ShellyDeviceSource implements DeviceSource {
           const state = this.normalize(entry.type, raw as unknown as Record<string, unknown>);
           patch = { state, observation: { mode: "push", observedAt: Date.now() } };
         } catch (err) {
-          // A failed or timed-out seed is non-fatal: log and leave the entry
-          // with the state it already has (design.md D3).
+          // A failed or timed-out seed is non-fatal: log and keep existing state.
           this.logger.error({ err, device: entry.id }, "Shelly status seed failed — continuing");
         }
 
@@ -888,25 +781,16 @@ export class ShellyDeviceSource implements DeviceSource {
         // and never apply a seed that failed.
         if (!patch || generation !== this.generation) return;
 
-        // Re-resolve the entry by its logical key after the await: a
-        // concurrent discovery may have re-resolved this channel's id (a
-        // configured-name candidate is dropped once a duplicate name appears
-        // anywhere), and a re-registration may have retained this channel. The
-        // key encodes baseName/kind/channel, so resolving through it preserves
-        // the "never write onto a retained or unrelated entry" guarantee
-        // without losing the seed on an id re-resolution (design.md D3, D4).
+        // Re-resolve the entry by its logical key after the await, since discovery
+        // may have re-resolved its id or retained the channel.
         const key = this.entryKey(entry.baseName, entry.kind, entry.channel);
         const currentId = this.entryKeys.get(key);
         if (!currentId) return;
         const current = this.entries.get(currentId);
         if (!current || current.retained) return;
 
-        // A push notification applied after this seed's request was issued
-        // describes a state newer than the snapshot the device took before the
-        // change; drop the stale seed rather than overwrite the pushed value
-        // with it. Keyed by the logical channel so it survives an id
-        // re-resolution. `rebuildEntries()` stamps the entry's initial
-        // observation before this runs, so a silent device is never suppressed.
+        // A push applied after this seed's request was issued is newer; drop the
+        // stale seed rather than overwrite the pushed value.
         const lastPushAt = this.lastPushAt.get(key);
         if (lastPushAt !== undefined && lastPushAt > requestedAt) return;
 
@@ -920,10 +804,8 @@ export class ShellyDeviceSource implements DeviceSource {
   // ---------------------------------------------------------------------------
 
   /**
-   * One poll tick: refresh each HTTP-transport device's component channels
-   * independently (task 3.7). MQTT-transport devices are bridged via push
-   * status/presence instead. Per-channel errors are caught, logged, and marked
-   * unreachable so one channel cannot abort the tick or block the others.
+   * One poll tick: refresh each HTTP-transport device's channels independently.
+   * A per-channel error is caught, logged, and marked unreachable.
    */
   private async poll(): Promise<void> {
     if (!this.shelly) return;
@@ -934,9 +816,7 @@ export class ShellyDeviceSource implements DeviceSource {
       // request — which rebuilds the entry map — cannot mutate the iteration.
       for (const entry of Array.from(this.entries.values())) {
         if (entry.baseName !== base.name) continue;
-        // A retained channel is absent from the current inventory, so polling
-        // it would both target a vanished component and resurrect it as
-        // reachable, contradicting the retained-channel invariant.
+        // A retained channel is absent from the inventory; polling it would resurrect it.
         if (entry.retained) continue;
 
         let patch: Partial<TrackedShellyState>;
@@ -960,10 +840,8 @@ export class ShellyDeviceSource implements DeviceSource {
           patch = { reachable: false };
         }
 
-        // Re-resolve the entry after the await: a re-registration while the
-        // request was in flight may have retained this channel — and may even
-        // have re-resolved its id onto a live channel. Never write stale poll
-        // data onto a retained or unrelated entry (design.md D4, task 3.9).
+        // Re-resolve the entry after the await: a re-registration may have
+        // retained this channel or reused its id. Never write onto an unrelated entry.
         const current = this.entries.get(entry.id);
         if (
           !current ||
@@ -992,10 +870,8 @@ export class ShellyDeviceSource implements DeviceSource {
       voltage: sw.voltage,
       current: sw.current,
     };
-    // Cumulative active energy, mapped from `aenergy.total` (Wh). A device
-    // without metering omits the whole `aenergy` object; only a finite
-    // reading is surfaced, so the property's presence itself distinguishes a
-    // metering device from one that merely reports nothing (design.md D7).
+    // Cumulative active energy (Wh) from `aenergy.total`; only a finite reading
+    // is surfaced, so the property's presence marks a metering device.
     const total = sw.aenergy?.total;
     if (typeof total === "number" && Number.isFinite(total)) {
       state.energy = total;
@@ -1010,22 +886,15 @@ export class ShellyDeviceSource implements DeviceSource {
     const existing = this.trackedFor(entry);
     const updated: TrackedShellyState = {
       // Merge the patch's defined keys onto the last-known state so a partial
-      // `NotifyStatus` preserves the seeded attributes it does not carry and
-      // never resurrects an attribute the transport has not reported (spec:
-      // "Incremental notifications still apply"). A full frame — HTTP poll,
-      // `NotifyFullStatus`, or RPC seed — defines every key it reports, so the
-      // merge is equivalent to a replace for those keys.
+      // `NotifyStatus` preserves attributes it does not carry.
       state: patch.state ? { ...existing.state, ...definedState(patch.state) } : existing.state,
       reachable: patch.reachable ?? existing.reachable,
       metered: patch.metered ?? existing.metered,
       observation: patch.observation ?? existing.observation,
     };
     this.tracked.set(id, updated);
-    // Record the observation where it is made and delivered — a poll, a push
-    // notification, or an RPC seed — never on a read (`list()`/`get()`/
-    // `toDescriptor()`), which would churn observedAt and the write-behind
-    // file (design.md D2). A reachability-only patch carries no observation
-    // and records nothing.
+    // Record the observation where it is delivered, never on a read; a
+    // reachability-only patch carries no observation and records nothing.
     if (patch.observation) {
       this.deviceStateStore?.record(
         qualifyDeviceId(this.id, id),
@@ -1038,10 +907,7 @@ export class ShellyDeviceSource implements DeviceSource {
 
   /**
    * The tracked state for an entry, falling back to the durable store's
-   * last-known record when the entry has no in-memory observation yet
-   * (design.md D2, D4). A restored record's state and observation are used
-   * verbatim — observedAt stays the time it was recorded, never the read
-   * time, so a restored value reads as last-known rather than live.
+   * last-known record (used verbatim) when there is no in-memory observation.
    */
   private trackedFor(entry: ShellyLogicalEntry): TrackedShellyState {
     const tracked = this.tracked.get(entry.id);
@@ -1049,9 +915,7 @@ export class ShellyDeviceSource implements DeviceSource {
     const restored = this.deviceStateStore?.get(qualifyDeviceId(this.id, entry.id));
     return {
       state: restored?.state ?? {},
-      // Reachability is not persisted — design.md D1 scopes a record to state +
-      // observation — so a restored device seeds as reachable until its next
-      // observation reports otherwise.
+      // Reachability is not persisted, so a restored device seeds as reachable.
       reachable: true,
       metered: this.componentMetered(entry),
       observation: restored?.observation ?? this.initialObservation(entry.baseName),
@@ -1072,9 +936,7 @@ export class ShellyDeviceSource implements DeviceSource {
   private toDescriptor(entry: ShellyLogicalEntry): DeviceDescriptor {
     const tracked = this.trackedFor(entry);
     // Shelly has no metering flag, so a channel is "metered" once discovery
-    // reports it or it has actually reported a cumulative reading (design.md
-    // D7). Until then — and for channels that never report one — the energy
-    // capability is omitted, never declared with a zero.
+    // reports it or it has reported a cumulative reading; energy is omitted until then.
     const metered =
       tracked.metered ||
       (typeof tracked.state.energy === "number" && Number.isFinite(tracked.state.energy));
@@ -1087,8 +949,7 @@ export class ShellyDeviceSource implements DeviceSource {
       capabilities: shellyCapabilitiesFor(entry.type, { metered }),
       reachable: tracked.reachable,
       observation: tracked.observation,
-      // Stamped by `AggregateDeviceSource` (design.md D8) — a source does
-      // not know a user's visibility preference for its own devices.
+      // Stamped by `AggregateDeviceSource`; a source does not know visibility preferences.
       hidden: false,
     };
   }

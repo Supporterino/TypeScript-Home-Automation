@@ -430,8 +430,7 @@ describe("StateManager", () => {
       expect(isReservedStateKey("motion-light:lights_on")).toBe(false);
     });
 
-    // The guard derives from the shared contract constant, so core and the
-    // browser bundle agree on one literal (design.md D9; task 3.7).
+    // The guard derives from the shared contract constant, so core and the browser bundle agree.
     it("derives the reserved namespace from the shared INTERNAL_STATE_PREFIX", () => {
       expect(INTERNAL_STATE_PREFIX).toBe("$internal:");
       expect(isReservedStateKey(`${INTERNAL_STATE_PREFIX}rooms`)).toBe(true);

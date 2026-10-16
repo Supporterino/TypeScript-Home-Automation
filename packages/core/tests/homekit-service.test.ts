@@ -1,21 +1,7 @@
 /**
- * Tests for HomekitService acting as a source-agnostic bridge host (task 6.16).
- *
- * Focuses on the AccessorySink wiring: accessories added/removed by the
- * single `DeviceCatalogSource` are bridged/unbridged on the underlying HAP
- * bridge, keyed by qualified id — driven by a real `AggregateDeviceSource`
- * over fake `DeviceSource`s, exactly the shape `Engine.devices` exposes.
- *
- * `homekit-sources/device-catalog-source.js` is mocked wholesale with a fake
- * that never calls the (real, dynamically-imported)
- * `createAccessoryFromDescriptor` — this file tests the bridge/sink and
- * lifecycle wiring, not accessory-building correctness (covered by
- * `tests/homekit-descriptor-factory.test.ts`). This is deliberate: unlike
- * mocking `homekit-descriptor-factory.js` or `hap-nodejs` themselves — both
- * loaded by other test files too, and Bun's `mock.module` replacements are
- * process-global for the whole test run once a module is first evaluated —
- * `device-catalog-source.js` is imported by no other test file, so this mock
- * cannot leak into or be leaked into by anything else.
+ * Tests for HomekitService as a source-agnostic bridge host: accessories added/removed
+ * by the single `DeviceCatalogSource` are bridged/unbridged on the underlying HAP bridge,
+ * keyed by qualified id. `device-catalog-source.js` is mocked wholesale.
  */
 import { beforeEach, describe, expect, it, mock } from "bun:test";
 import pino from "pino";

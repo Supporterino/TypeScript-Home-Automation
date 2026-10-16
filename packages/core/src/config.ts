@@ -4,14 +4,8 @@ const TRUTHY = new Set(["true", "1", "yes", "on"]);
 const FALSY = new Set(["false", "0", "no", "off"]);
 
 /**
- * Tolerant boolean coercion for environment variables, performed inside the
- * schema so any failure is reported through the normal validation-failure path
- * (`safeParse` → formatted error → `process.exit(1)`) rather than throwing an
- * uncaught `ZodError`.
- *
- * Matching is case-insensitive and ignores surrounding whitespace. Accepts
- * `true/false/1/0/yes/no/on/off`. Missing values fall through to the provided
- * default.
+ * Tolerant boolean coercion for environment variables, performed inside the schema so a
+ * failure is reported through the normal validation path. Accepts `true/false/1/0/yes/no/on/off`.
  */
 function booleanEnv(defaultValue: boolean) {
   return z.preprocess((val) => {
@@ -26,9 +20,8 @@ function booleanEnv(defaultValue: boolean) {
 }
 
 /**
- * Optional numeric environment variable. Unset, empty, `null`, and `undefined`
- * all resolve to `undefined` so an unset weather coordinate never coerces to
- * `0`; any other value is coerced to a number and range-checked.
+ * Optional numeric environment variable; unset/empty resolves to `undefined` so a missing
+ * coordinate never coerces to `0`.
  */
 function optionalNumberEnv(min: number, max: number) {
   return z.preprocess(
@@ -37,11 +30,7 @@ function optionalNumberEnv(min: number, max: number) {
   );
 }
 
-/**
- * Hard ceiling on `weather.forecastDays`. The weather endpoint also clamps a
- * client-requested horizon to this value, so a single request can never fan
- * out unboundedly.
- */
+/** Hard ceiling on `weather.forecastDays`, also clamping a client-requested horizon. */
 export const WEATHER_MAX_FORECAST_DAYS = 7;
 
 const configSchema = z.object({
@@ -53,18 +42,16 @@ const configSchema = z.object({
     /** Password for MQTT broker authentication. */
     password: z.string().default(""),
     /**
-     * The `src` identifier used in every Shelly MQTT RPC request
-     * (`ShellyService`'s MQTT transport). Multiple application instances
-     * sharing one broker must use distinct values to avoid receiving each
-     * other's RPC responses.
+     * The `src` identifier used in every Shelly MQTT RPC request; instances sharing a
+     * broker must use distinct values.
      */
     shellyRpcSrc: z.string().default("ts-home-automation"),
   }),
   zigbee2mqttPrefix: z.string().default("zigbee2mqtt"),
   logLevel: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info"),
   state: z.object({
-    // Defaults to true: the store now holds room definitions and automation
-    // enabled flags, which must survive a restart (design.md D6, R14).
+    // Defaults to true: the store holds room definitions and automation enabled
+    // flags, which must survive a restart.
     persist: booleanEnv(true),
     filePath: z.string().default("./state.json"),
     /** Milliseconds between coalesced state saves. `0` saves on every write. */
@@ -77,9 +64,8 @@ const configSchema = z.object({
   deviceRegistry: z.object({
     /** Whether to enable automatic Zigbee2MQTT device discovery and state tracking. */
     enabled: booleanEnv(false),
-    // Defaults to true: the device list and capability schema should be
-    // readable immediately on boot, before the bridge republishes
-    // (design.md D6).
+    // Defaults to true: the device list and capability schema are readable on boot,
+    // before the bridge republishes.
     persist: booleanEnv(true),
     /** Path to the device registry persistence JSON file. */
     filePath: z.string().default("./device-registry.json"),
@@ -94,9 +80,8 @@ const configSchema = z.object({
     nanoleafPollMs: z.coerce.number().int().positive().default(10000),
   }),
   deviceState: z.object({
-    // Defaults to true: last-known state should be readable immediately on
-    // boot, matching the state store and device registry defaults
-    // (design.md D3; specs/configuration "Device State Persistence").
+    // Defaults to true: last-known state is readable on boot, matching the state
+    // store and device registry defaults.
     persist: booleanEnv(true),
     /** Path to the device state persistence JSON file. */
     filePath: z.string().default("./device-state.json"),
@@ -144,17 +129,8 @@ const configSchema = z.object({
     token: z.string().default(""),
   }),
   /**
-   * Passthrough bag for optional-service configuration.
-   *
-   * Services validate and read their own slice of this record from environment
-   * variables. The engine schema treats it as an open record so that adding a
-   * new service never requires modifying `config.ts`.
-   *
-   * @example
-   * ```ts
-   * // A custom service reads its own config:
-   * const token = (config.services["ha_token"] as string | undefined) ?? "";
-   * ```
+   * Passthrough bag for optional-service configuration; each service validates and
+   * reads its own slice, so adding a service never requires modifying `config.ts`.
    */
   services: z.record(z.string(), z.unknown()).default({}),
 });

@@ -3,21 +3,13 @@ import type { Logger } from "pino";
 
 /**
  * JSON-file persistence primitives shared by {@link StateManager} and
- * `DeviceStateStore` (design.md D6, R3).
- *
- * Both stores keep their own in-memory map and serialization, but the durable
- * write (atomic temp-file + `fsync` + `.bak`) and the load-with-backup-recovery
- * flow are identical; only the noun in their log lines differs, which the
- * `label` argument supplies ("state" / "device state").
+ * `DeviceStateStore`: an atomic temp-file + `fsync` + `.bak` write and a
+ * load-with-backup-recovery flow, parameterised by a `label` for log lines.
  */
 
 /**
- * Load and apply a JSON file, falling back to the `.bak` backup when the
- * primary file is missing-but-that-is-fine or corrupt.
- *
- * `apply` receives the parsed object and the path it was read from (primary or
- * backup) so the caller can log — or ignore — the source. Read errors and
- * parse errors are logged and swallowed; the store is left as `apply` leaves it.
+ * Load and apply a JSON file, falling back to the `.bak` backup when the primary is
+ * missing or corrupt; `apply` receives the parsed object and its source path.
  */
 export async function readJsonWithBackup(
   filePath: string,
@@ -61,12 +53,8 @@ export async function readJsonWithBackup(
 }
 
 /**
- * Durably write `contents` to `filePath` atomically.
- *
- * Writes to a temp file, `fsync`s it to disk, preserves any existing file as a
- * `.bak` backup (best-effort), then atomically renames the temp file over
- * `filePath`. An interrupted write can never leave `filePath` truncated. The
- * caller is responsible for the parent directory existing.
+ * Durably write `contents` to `filePath`: temp file, `fsync`, `.bak` backup, then an atomic
+ * rename. The caller ensures the parent directory exists.
  */
 export async function writeJsonAtomically(
   filePath: string,

@@ -46,8 +46,8 @@ interface WebhookRoute {
 }
 
 /**
- * Default location and forecast horizon the weather endpoint
- * (`GET /api/weather`) uses when a request supplies none (design.md D8).
+ * Default location and forecast horizon `GET /api/weather` uses when a request
+ * supplies none.
  */
 export interface WeatherEndpointDefaults {
   /** Configured default latitude, absent unless both coordinates are set. */
@@ -59,54 +59,8 @@ export interface WeatherEndpointDefaults {
 }
 
 /**
- * HTTP server for health probes, readiness checks, webhook triggers,
- * and the unified API.
- *
- * Public endpoints (no authentication required):
- * - `GET  /healthz`                        — Liveness probe
- * - `GET  /readyz`                         — Readiness probe
- * - `POST /webhook/<path>`                 — Webhook triggers
- *
- * Authenticated endpoints (Bearer token or session cookie):
- * - `GET  /api/status`                     — Engine and MQTT status
- * - `GET  /api/automations`                — List all automations
- * - `GET  /api/automations/:name`          — Get automation details
- * - `PUT  /api/automations/:name/enabled`  — Enable or disable an automation
- * - `GET  /api/automations/:name/source`   — Read the automation's source file
- * - `GET  /api/automations/:name/history`  — Execution history (start time, trigger, duration, outcome)
- * - `GET  /api/automations/:name/relationships` — Declared and observed relationships
- * - `POST /api/automations/:name/trigger`  — Manually trigger an automation
- * - `GET  /api/state`                      — List all state keys and values
- * - `GET  /api/state/:key`                 — Get a single state value
- * - `PUT  /api/state/:key`                 — Set a state value
- * - `DELETE /api/state/:key`               — Delete a state key
- * - `GET  /api/logs`                       — Query log buffer
- * - `GET  /api/device-catalog`             — List devices from every available source
- * - `GET  /api/device-catalog/:qualifiedId` — Get a single device by qualified id
- * - `POST /api/device-catalog/:qualifiedId/command` — Issue a validated command to a device
- * - `PUT  /api/device-catalog/:qualifiedId/room` — Assign a device to a room
- * - `DELETE /api/device-catalog/:qualifiedId/room` — Clear a device's room assignment
- * - `PUT  /api/device-catalog/:qualifiedId/hidden` — Mark a device hidden
- * - `DELETE /api/device-catalog/:qualifiedId/hidden` — Mark a device visible
- * - `GET  /api/energy`                     — Aggregated energy view (power, totals, breakdown, history)
- * - `GET  /api/weather`                    — Current weather conditions and forecast
- * - `GET  /api/rooms`                      — List rooms with membership
- * - `GET  /api/rooms/unassigned`           — Devices belonging to no room
- * - `POST /api/rooms`                      — Create a room
- * - `PUT  /api/rooms/:id`                  — Rename a room
- * - `DELETE /api/rooms/:id`                — Delete a room
- * - `POST /api/rooms/:id/command`          — Issue one command to every capable room member
- * - `GET  /api/walls`                      — List wall profiles
- * - `GET  /api/walls/:name`                — Read a wall profile
- * - `POST /api/walls`                      — Create a wall profile
- * - `PUT  /api/walls/:name`                — Update (including rename) a wall profile
- * - `DELETE /api/walls/:name`              — Delete a wall profile
- * - `GET  /api/events`                     — Realtime server-sent event stream
- *
- * `GET /api/devices` and `GET /api/devices/:friendlyName` (Zigbee-only) are
- * removed rather than repurposed (design.md R13) — see `/api/device-catalog`.
- *
- * Uses `Bun.serve()` backed by a Hono router.
+ * HTTP server for health probes, readiness checks, webhook triggers, and the
+ * unified API. Uses `Bun.serve()` backed by a Hono router.
  *
  * @internal
  */
@@ -147,78 +101,40 @@ export class HttpServer {
     this.logBuffer = logs;
   }
 
-  /**
-   * Wire the unified device catalog endpoints (`/api/device-catalog`,
-   * `/api/device-catalog/:qualifiedId`) to the engine's aggregate device
-   * accessor. Called by the engine after construction; `engine.devices` is
-   * always present, so this is called unconditionally rather than passed
-   * `null` for an unconfigured deployment (task 6.13a).
-   */
+  /** Wire the `/api/device-catalog` endpoints to the engine's aggregate device accessor. */
   setDeviceSources(sources: AggregateDeviceSource): void {
     this.deviceSources = sources;
   }
 
-  /**
-   * Wire the room endpoints (`/api/rooms`, `/api/device-catalog/:qualifiedId/room`)
-   * to the engine's room manager. Called by the engine after construction;
-   * `engine.rooms` is always present, so this is called unconditionally
-   * (task 9.6).
-   */
+  /** Wire the `/api/rooms` endpoints to the engine's room manager. */
   setRoomManager(rooms: RoomManager): void {
     this.roomManager = rooms;
   }
 
-  /**
-   * Wire the wall-profile endpoints (`/api/walls`) to the engine's
-   * {@link WallManager}. Called by the engine after construction;
-   * `engine.walls` is always present, so this is called unconditionally.
-   */
+  /** Wire the `/api/walls` endpoints to the engine's {@link WallManager}. */
   setWallManager(walls: WallManager): void {
     this.wallManager = walls;
   }
 
-  /**
-   * Wire the device visibility endpoints (`/api/device-catalog/:qualifiedId/hidden`)
-   * to the engine's `DeviceVisibility`. Called by the engine after
-   * construction; `engine.deviceVisibility` is always present, so this is
-   * called unconditionally (task 5.1).
-   */
+  /** Wire the device-visibility endpoints to the engine's `DeviceVisibility`. */
   setDeviceVisibility(visibility: DeviceVisibility): void {
     this.deviceVisibility = visibility;
   }
 
-  /**
-   * Wire the energy endpoints (`/api/energy`) to the engine's
-   * `EnergyAggregator`. Called by the engine after construction; the
-   * aggregator is always present, like `engine.devices` (design.md D6).
-   */
+  /** Wire the `/api/energy` endpoint to the engine's `EnergyAggregator`. */
   setEnergyAggregator(aggregator: EnergyAggregator): void {
     this.energyAggregator = aggregator;
   }
 
-  /**
-   * Wire the weather endpoint (`GET /api/weather`) to an optional
-   * `WeatherService` plus the configured default location and forecast
-   * horizon. Called by the engine after construction; `service` is `null`
-   * when no weather service is registered, and the endpoint then reports the
-   * feature unavailable with `404` rather than erroring (design.md D8).
-   */
+  /** Wire `GET /api/weather` to an optional `WeatherService` and configured defaults. */
   setWeatherService(service: WeatherService | null, defaults: WeatherEndpointDefaults): void {
     this.weatherService = service;
     this.weatherDefaults = defaults;
   }
 
   /**
-   * Wire the realtime event stream's `/api/events` endpoint to the engine's
-   * shared {@link EventBus}.
-   *
-   * `deliveryLogger` MUST be the stdout-only logger from `engine.ts`
-   * (design.md D32) — never `this.logger` or any of its children — since the
-   * delivery path's own logging (fan-out failures, overflow, the
-   * fell-behind signal) must not be able to feed back into the log category
-   * it delivers (task 5.0c). Connection accepted/closed logging uses
-   * `this.logger` instead, so stream activity remains visible in the log
-   * view even if delivery itself is failing.
+   * Wire the `/api/events` endpoint to the engine's shared `EventBus`.
+   * `deliveryLogger` must be the stdout-only logger from `engine.ts`, never `this.logger`.
    */
   setEventStream(bus: EventBus, deliveryLogger: Logger): void {
     this.eventStreamHub?.stop();
@@ -227,10 +143,7 @@ export class HttpServer {
       deliveryLogger,
       this.logger.child({ service: "sse" }),
     );
-    // Each connecting client receives the current device set as its initial
-    // snapshot (design.md D6). Read lazily from `this.deviceSources`, so the
-    // supplier stays correct regardless of whether `setDeviceSources` was
-    // called before or after this method.
+    // Read lazily from `this.deviceSources` so the supplier stays correct regardless of call order.
     this.eventStreamHub.setDeviceSupplier(() => this.deviceSources?.list() ?? []);
   }
 
@@ -477,11 +390,8 @@ export class HttpServer {
       return c.json({ name, source: result.source });
     });
 
-    // Execution history and relationships (design.md D11; task 8.6). Both
-    // return 404 for an unknown automation, and an automation that is known
-    // but has never run reports an empty history rather than an error —
-    // `getHistory()`/`getRelationships()` return `null` only for the former,
-    // so a single null-check distinguishes the two cases correctly.
+    // Both endpoints 404 for an unknown automation; a known automation that has
+    // never run reports an empty history (the getters return null only for "not found").
     app.get("/api/automations/:name/history", (c) => {
       if (!this.automationManager) return c.json({ error: "Not available" }, 503);
       const name = decodeURIComponent(c.req.param("name"));
@@ -664,12 +574,8 @@ export class HttpServer {
 
     // ── API: Unified device catalog ───────────────────────────────────────────
     //
-    // `GET /api/devices` and `GET /api/devices/:friendlyName` (Zigbee-only)
-    // are removed rather than repurposed (design.md R13; task 6.14): serving
-    // a source-qualified payload from the same paths would return 200 with a
-    // shape neither existing client can read, defeating the failed-fetch
-    // handling both already have. The unified, source-spanning endpoints are
-    // served from different paths below.
+    // `GET /api/devices` and `/api/devices/:friendlyName` are removed; the unified
+    // endpoints below serve the same data from different paths.
 
     app.get("/api/devices", (c) => c.json({ error: "Removed — use /api/device-catalog" }, 410));
     app.get("/api/devices/:friendlyName", (c) =>
@@ -697,12 +603,8 @@ export class HttpServer {
       return c.json(device);
     });
 
-    // Issues a command to a single device, addressed by qualified identifier
-    // (task 7.2; specs/http-server "Device Command Endpoint"). The payload is
-    // never forwarded to a transport unvalidated — validation happens inside
-    // `DeviceSource.command()`, one level below this endpoint, so every
-    // dispatch path (HomeKit, this endpoint, and any future consumer) is
-    // validated identically rather than duplicating the rule here.
+    // Issue a command to a single device. Validation happens inside
+    // `DeviceSource.command()`, so every dispatch path is validated identically.
     app.post("/api/device-catalog/:qualifiedId/command", async (c) => {
       if (!this.deviceSources) return c.json({ error: "Not available" }, 503);
 
@@ -737,9 +639,7 @@ export class HttpServer {
 
     // ── API: Rooms ──────────────────────────────────────────────────────────
     //
-    // User-defined rooms grouping devices across every device source
-    // (design.md D14; specs/device-rooms/spec.md, specs/http-server/spec.md
-    // "Room Endpoints"; task 9.6).
+    // User-defined rooms grouping devices across every device source.
 
     app.get("/api/rooms", (c) => {
       if (!this.roomManager) return c.json({ error: "Not available" }, 503);
@@ -806,11 +706,8 @@ export class HttpServer {
 
     // ── API: Walls ──────────────────────────────────────────────────────────
     //
-    // Named wall profiles for the full-bleed wall surface (design.md D2;
-    // specs/wall-display "Named Wall Profiles", specs/http-server "Wall
-    // Profile Endpoints"). A profile is addressed by its name, which is also
-    // its stable identifier; the config is validated on write inside
-    // WallManager, so an invalid composition is rejected before persisting.
+    // Named wall profiles for the full-bleed wall surface, addressed by name;
+    // the config is validated on write inside `WallManager`.
 
     app.get("/api/walls", (c) => {
       if (!this.wallManager) return c.json({ error: "Not available" }, 503);
@@ -908,13 +805,8 @@ export class HttpServer {
       return c.json({ name, deleted: true });
     });
 
-    // Issues one command to every room member whose declared capabilities
-    // permit the requested property (design.md D5; specs/http-server "Room
-    // Batch Command Endpoint"). Best-effort by construction: each capable
-    // member is dispatched through `DeviceSource.command()` — never
-    // bypassing validation — and a member's failure never aborts the batch.
-    // Members that do not support the property are reported skipped rather
-    // than failing the request.
+    // Issue one command to every room member whose capabilities permit the
+    // property. Best-effort: a member's failure never aborts the batch.
     app.post("/api/rooms/:id/command", async (c) => {
       if (!this.roomManager || !this.deviceSources) {
         return c.json({ error: "Not available" }, 503);
@@ -953,10 +845,8 @@ export class HttpServer {
       return c.json(results);
     });
 
-    // Assign/unassign a device's room, addressed by qualified identifier —
-    // alongside the device-catalog read and command endpoints above, rather
-    // than under /api/rooms, since a device belongs to at most one room and
-    // this is fundamentally a property of the device (design.md D14).
+    // Assign/unassign a device's room, addressed by qualified identifier and
+    // served under device-catalog since a device belongs to at most one room.
     app.put("/api/device-catalog/:qualifiedId/room", async (c) => {
       if (!this.roomManager) return c.json({ error: "Not available" }, 503);
       const qualifiedId = decodeURIComponent(c.req.param("qualifiedId"));
@@ -987,12 +877,8 @@ export class HttpServer {
 
     // ── API: Device visibility ─────────────────────────────────────────────
     //
-    // A device's hidden flag, addressed by qualified identifier in a single
-    // percent-encoded path segment, alongside the room endpoints above
-    // (design.md D7; specs/device-visibility, specs/http-server "Device
-    // Visibility Endpoints"; task 5.1). Idempotent in both directions, and
-    // settable for a qualified id the system does not currently know — a
-    // device can legitimately be hidden while its bridge is down.
+    // A device's hidden flag, addressed by qualified identifier. Idempotent in
+    // both directions and settable even for an unknown qualified id.
 
     app.put("/api/device-catalog/:qualifiedId/hidden", (c) => {
       if (!this.deviceVisibility) return c.json({ error: "Not available" }, 503);
@@ -1010,12 +896,8 @@ export class HttpServer {
 
     // ── API: Energy ─────────────────────────────────────────────────────────
     //
-    // The aggregated home energy view (design.md D6; specs/energy-monitoring,
-    // specs/http-server "Energy Endpoint"). Sits behind the `/api/*` auth
-    // middleware above like every other API route, and remains useful on a
-    // deployment with no metering devices: the aggregator reports zero totals
-    // and an empty breakdown rather than failing. `503` is purely defensive —
-    // the engine always wires the aggregator.
+    // The aggregated home energy view. `503` is purely defensive — the engine
+    // always wires the aggregator.
 
     app.get("/api/energy", (c) => {
       if (!this.energyAggregator) return c.json({ error: "Not available" }, 503);
@@ -1024,13 +906,8 @@ export class HttpServer {
 
     // ── API: Weather ────────────────────────────────────────────────────────
     //
-    // Current conditions and forecast from the registered weather service
-    // (design.md D8; specs/weather-services "HTTP Exposure", specs/http-server
-    // "Weather Endpoint"). The location is supplied by the client (both `lat`
-    // and `lon`) or falls back to the configured default; when neither exists
-    // the request is rejected as a client error rather than guessing. The
-    // forecast horizon is clamped to {@link WEATHER_MAX_FORECAST_DAYS}, and no
-    // location ever reaches the service as `undefined`.
+    // Current conditions and forecast; the location comes from the client or the
+    // configured default.
 
     app.get("/api/weather", async (c) => {
       if (!this.weatherService) {
@@ -1067,11 +944,8 @@ export class HttpServer {
   }
 
   /**
-   * Resolve the location for a weather request: the client-supplied
-   * coordinates when both are present and in range, otherwise the configured
-   * default when both are set, otherwise `null` (design.md D8). An incomplete
-   * or invalid pair is treated as no client location, so it falls back to the
-   * default rather than rejecting a request the default could serve.
+   * Resolve a weather request's location: the client coordinates when both are
+   * present and in range, else the configured default, else `null`.
    */
   private resolveWeatherLocation(
     latParam: string | undefined,
@@ -1112,15 +986,7 @@ export class HttpServer {
 
   /**
    * Dispatch one room batch member, mapping capability support and the
-   * source-neutral dispatch outcome to the wire outcome (design.md D5).
-   *
-   * A member whose descriptor is unavailable, or whose capabilities do not
-   * declare every requested property as writable, is never dispatched and is
-   * reported `skipped` — an unavailable member declares no capability, so it
-   * is incapable rather than failed (design.md D5; specs/http-server
-   * "Incapable members are skipped, not failed"). Anything other than an `ok`
-   * dispatch is a `failed` member; one member's failure is contained here so
-   * it cannot abort the batch.
+   * source-neutral dispatch outcome to the wire outcome.
    */
   private async dispatchRoomMember(
     qualifiedId: string,

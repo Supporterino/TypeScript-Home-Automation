@@ -13,34 +13,8 @@ import type { StateManager } from "./state/state-manager.js";
 import type { DeviceRegistry } from "./zigbee/device-registry.js";
 
 /**
- * Trigger types for automations.
- *
- * - mqtt:          Fires when a message is received on the given topic.
- *                  Use the Zigbee2MQTT friendly name as the topic suffix.
- *                  Supports MQTT wildcards (+ for single level, # for multi level).
- *                  An optional `filter` function can narrow which payloads trigger execution.
- *
- * - cron:          Fires on a cron schedule (e.g. "0 7 * * *" = daily at 7 AM).
- *
- * - state:         Fires when a state key changes value. Use this to react to state
- *                  changes made by other automations.
- *
- * - webhook:       Fires when an HTTP request is received on the configured path.
- *                  The endpoint is `POST /webhook/<path>` on the health server port.
- *                  Supports optional method restriction (default: POST only).
- *
- * - device_state:  Fires when a tracked Zigbee2MQTT device's state changes.
- *                  Requires `DEVICE_REGISTRY_ENABLED=true`. The trigger receives the
- *                  full merged device state and device metadata. An optional filter
- *                  function can narrow which state changes trigger execution.
- *
- * - device_joined: Fires when a Zigbee device joins the network (is added to the
- *                  device registry). Requires `DEVICE_REGISTRY_ENABLED=true`.
- *                  Optionally scoped to a specific friendly name.
- *
- * - device_left:   Fires when a Zigbee device leaves the network (is removed from
- *                  the device registry). Requires `DEVICE_REGISTRY_ENABLED=true`.
- *                  Optionally scoped to a specific friendly name.
+ * Trigger types for automations: `mqtt`, `cron`, `state`, `webhook`, `device_state`,
+ * `device_joined`, and `device_left` (the device_* types require `DEVICE_REGISTRY_ENABLED`).
  */
 export type Trigger =
   | {
@@ -61,11 +35,7 @@ export type Trigger =
     }
   | {
       type: "webhook";
-      /**
-       * URL path for the webhook (without leading slash).
-       * The full endpoint will be `POST /webhook/<path>`.
-       * Example: "deploy" → POST /webhook/deploy
-       */
+      /** Webhook URL path (without leading slash); the endpoint is `POST /webhook/<path>`. */
       path: string;
       /** HTTP methods to accept (default: ["POST"]). */
       methods?: ("GET" | "POST" | "PUT" | "DELETE")[];
@@ -74,37 +44,23 @@ export type Trigger =
       type: "device_state";
       /** Zigbee2MQTT friendly name of the device to watch. */
       friendlyName: string;
-      /**
-       * Optional filter — return true to trigger, false to ignore.
-       * Receives the full merged device state and the device metadata.
-       */
+      /** Optional filter — return true to trigger, false to ignore. */
       filter?: (state: Record<string, unknown>, device: ZigbeeDevice) => boolean;
     }
   | {
       type: "device_joined";
-      /**
-       * If provided, only fires when this specific device joins.
-       * Omit to fire whenever any device joins the network.
-       */
+      /** If provided, only fires when this specific device joins; omit to fire for any join. */
       friendlyName?: string;
     }
   | {
       type: "device_left";
-      /**
-       * If provided, only fires when this specific device leaves.
-       * Omit to fire whenever any device leaves the network.
-       */
+      /** If provided, only fires when this specific device leaves; omit to fire for any leave. */
       friendlyName?: string;
     };
 
 /**
- * Dependencies injected into every automation by the AutomationManager.
- *
- * Passed as a single context object to `_inject()` so that adding new
- * optional services in the future is a non-breaking extension.
- *
- * Optional services (notifications, weather, shelly, nanoleaf, and any custom
- * services) are available via `services.get<T>(key)`.
+ * Dependencies injected into every automation by the `AutomationManager`, passed as a
+ * single context object to `_inject()`.
  */
 export interface AutomationContext {
   mqtt: MqttService;
@@ -112,64 +68,15 @@ export interface AutomationContext {
   state: StateManager;
   logger: Logger;
   config: Config;
-  /**
-   * `null` when `DEVICE_REGISTRY_ENABLED` is `false` (the default).
-   * Enable via config to get automatic Zigbee2MQTT device discovery and state tracking.
-   */
+  /** `null` when `DEVICE_REGISTRY_ENABLED` is `false` (the default). */
   deviceRegistry: DeviceRegistry | null;
-  /**
-   * The shared service registry.
-   *
-   * Use this to access any optional service registered with the engine,
-   * including `shelly`, `nanoleaf`, or any custom service:
-   *
-   * ```ts
-   * const shelly = this.services.get<ShellyService>("shelly");
-   * if (shelly) await shelly.turnOn("plug");
-   * ```
-   */
+  /** The shared service registry; use it to access any optional service. */
   services: ServiceRegistry;
 }
 
 /**
- * Abstract base class for all automations.
- *
- * To create a new automation:
- * 1. Create a new automation file in your automations directory
- * 2. Export a class that extends Automation as the default export
- * 3. Implement `name`, `triggers`, and `execute`
- *
- * The base class provides access to:
- * - `this.mqtt`        - Publish messages and interact with Zigbee2MQTT devices
- * - `this.notify`      - Send push notifications (no-op if no NotificationService is configured)
- * - `this.state`       - Shared state manager (get/set/delete, persisted across restarts)
- * - `this.http`        - Make outbound HTTP requests
- * - `this.logger`      - Structured logger (child logger scoped to this automation)
- * - `this.config`      - Application configuration
- * - `this.services`    - Generic registry for any optional service (shelly, nanoleaf, custom…)
- * - `this.require`     - Non-null retrieval for services declared in `requiredServices`
- *
- * @example
- * ```ts
- * import { Automation, type Trigger, type TriggerContext } from "@ts-ha/core";
- * import type { OccupancyPayload } from "@ts-ha/shared/types";
- *
- * export default class MotionLight extends Automation {
- *   name = "motion-light";
- *
- *   triggers: Trigger[] = [
- *     {
- *       type: "mqtt",
- *       topic: "zigbee2mqtt/hallway_sensor",
- *       filter: (p) => (p as OccupancyPayload).occupancy === true,
- *     },
- *   ];
- *
- *   async execute(context: TriggerContext): Promise<void> {
- *     this.mqtt.publishToDevice("hallway_light", { state: "ON" });
- *   }
- * }
- * ```
+ * Abstract base class for all automations. Subclasses implement `name`, `triggers`, and
+ * `execute`, and may override `onStart`/`onStop`.
  */
 export abstract class Automation {
   /** Unique name identifying this automation. Used in logs and job IDs. */
@@ -179,32 +86,8 @@ export abstract class Automation {
   abstract readonly triggers: Trigger[];
 
   /**
-   * Declare services that must be present when this automation starts.
-   *
-   * The `AutomationManager` checks every key listed here at registration time
-   * (before `onStart` is called) and throws a descriptive error if any of them
-   * are missing from the registry. This gives you fail-fast startup validation
-   * instead of silent `null` surprises at the first trigger.
-   *
-   * Inside `execute()` you can then retrieve those services safely with
-   * `this.require<T>(key)`, which is a non-null assertion (no `if` guard needed).
-   *
-   * Optional services that are NOT listed here continue to use
-   * `this.services.get<T>(key)` with the usual null-check.
-   *
-   * **Important:** declare the value with `as const` so TypeScript infers
-   * a readonly string-literal tuple rather than the wider `string[]` type:
-   *
-   * @example
-   * ```ts
-   * // "as const" gives you string-literal inference ("shelly"), not just string
-   * readonly requiredServices = ["shelly"] as const;
-   *
-   * async execute(): Promise<void> {
-   *   const shelly = this.require<ShellyService>("shelly");
-   *   await shelly.turnOff("tv_plug");
-   * }
-   * ```
+   * Declare services that must be registered when this automation starts; the
+   * `AutomationManager` validates them and throws if any is missing. Use `as const`.
    */
   readonly requiredServices?: readonly string[];
 
@@ -217,8 +100,7 @@ export abstract class Automation {
   private servicesRegistry!: ServiceRegistry;
 
   /**
-   * Called by the AutomationManager to inject dependencies.
-   * Do not call this yourself.
+   * Called by the `AutomationManager` to inject dependencies; do not call this yourself.
    */
   _inject(context: AutomationContext): void {
     this.mqtt = context.mqtt;
@@ -230,78 +112,22 @@ export abstract class Automation {
     this.servicesRegistry = context.services;
   }
 
-  /**
-   * The shared service registry.
-   *
-   * Use this to access any optional service registered with the engine,
-   * including custom services not exposed as named getters.
-   *
-   * Three retrieval styles are available — choose the one that fits:
-   *
-   * **`get`** — nullable; you handle the absent case:
-   * ```ts
-   * const svc = this.services.get<MyService>("my-service");
-   * if (!svc) return;
-   * await svc.doSomething();
-   * ```
-   *
-   * **`getOrThrow`** — throws if not registered (use for required services):
-   * ```ts
-   * const svc = this.services.getOrThrow<MyService>("my-service");
-   * await svc.doSomething();
-   * ```
-   *
-   * **`use`** — callback wrapper; no-ops when absent (best for one-liners):
-   * ```ts
-   * await this.services.use<MyService>("my-service", (s) => s.doSomething());
-   * ```
-   *
-   * For services declared in `requiredServices`, prefer `this.require<T>(key)`
-   * which is validated at startup and has a non-null return type.
-   */
+  /** The shared service registry, for access to any optional service. */
   protected get services(): ServiceRegistry {
     return this.servicesRegistry;
   }
 
   /**
-   * Retrieve a service that was declared in `requiredServices`.
-   *
-   * The `AutomationManager` already verified at startup that this service is
-   * registered, so this method never returns `null` — no null-check needed.
-   *
-   * Calling `require()` for a key that is **not** listed in `requiredServices`
-   * is allowed but will throw at runtime if the service is absent, identical
-   * to `this.services.getOrThrow(key)`.
-   *
-   * @example
-   * ```ts
-   * readonly requiredServices = ["shelly"] as const;
-   *
-   * async execute(): Promise<void> {
-   *   const shelly = this.require<ShellyService>("shelly");
-   *   await shelly.turnOff("tv_plug");
-   * }
-   * ```
+   * Retrieve a service declared in `requiredServices`; the `AutomationManager` already
+   * validated it, so it never returns `null`.
    */
   protected require<T>(key: string): T {
     return this.servicesRegistry.getOrThrow<T>(key);
   }
 
   /**
-   * Send a push notification via the configured notification service.
-   *
-   * If no notification service is configured on the engine, this logs a
-   * warning and does nothing.
-   *
-   * @example
-   * ```ts
-   * await this.notify({
-   *   title: "Door opened",
-   *   message: "Front door was opened at 3 AM",
-   *   priority: "urgent",
-   *   tags: ["warning", "door"],
-   * });
-   * ```
+   * Send a push notification; logs a warning and no-ops when no notification service is
+   * configured.
    */
   protected async notify(options: NotificationOptions): Promise<void> {
     const svc = this.servicesRegistry.get<NotificationService>("notifications");
@@ -313,38 +139,19 @@ export abstract class Automation {
   }
 
   /**
-   * The Zigbee2MQTT device registry, or `null` if disabled (`DEVICE_REGISTRY_ENABLED=false`).
-   *
-   * Always null-check before use:
-   *
-   * @example
-   * ```ts
-   * const registry = this.deviceRegistry;
-   * if (!registry) return;
-   * const device = registry.getDevice("my_sensor");
-   * const state = registry.getDeviceState("my_sensor");
-   * ```
+   * The Zigbee2MQTT device registry, or `null` if disabled
+   * (`DEVICE_REGISTRY_ENABLED=false`); always null-check before use.
    */
   protected get deviceRegistry(): DeviceRegistry | null {
     return this.deviceRegistryService;
   }
 
-  /**
-   * The automation logic. Called whenever one of the defined triggers fires.
-   *
-   * @param context Information about which trigger fired and its data.
-   */
+  /** The automation logic. Called whenever one of the defined triggers fires. */
   abstract execute(context: TriggerContext): Promise<void>;
 
-  /**
-   * Optional lifecycle hook called when the automation is registered.
-   * Override this to perform setup work (e.g. initialize state).
-   */
+  /** Optional lifecycle hook called when the automation is registered. */
   async onStart(): Promise<void> {}
 
-  /**
-   * Optional lifecycle hook called when the automation is stopped.
-   * Override this to perform cleanup work (e.g. clear timers).
-   */
+  /** Optional lifecycle hook called when the automation is stopped. */
   async onStop(): Promise<void> {}
 }

@@ -1,9 +1,6 @@
 /**
- * Zigbee2MQTT `exposes` → capability vocabulary mapping.
- *
- * Source-specific transformation logic: it lives in core's zigbee layer and
- * is re-exported from the core barrel for surface stability, not in
- * `@ts-ha/shared` (design.md D5).
+ * Zigbee2MQTT `exposes` → capability vocabulary mapping. Source-specific, so it lives
+ * in core's zigbee layer (re-exported from the barrel) rather than `@ts-ha/shared`.
  */
 
 import type { Capability, CapabilityAccess, CapabilityValueType } from "@ts-ha/shared";
@@ -99,9 +96,8 @@ export function mapZ2MExpose(expose: unknown): Capability {
     };
   }
   if (typeof e.value_step === "number") capability.step = e.value_step;
-  // Only a binary expose has anything to say about on/off encoding — carry
-  // it through when the published schema declares it, and leave it absent
-  // otherwise, so the D1 default (a real boolean) applies (design.md D2, R1).
+  // Only a binary expose carries on/off encoding; leave it absent otherwise, so the
+  // default (a real boolean) applies.
   if (type === "binary") {
     if (isCapabilityBooleanValue(e.value_on)) capability.valueOn = e.value_on;
     if (isCapabilityBooleanValue(e.value_off)) capability.valueOff = e.value_off;
@@ -125,10 +121,8 @@ export function mapZ2MExpose(expose: unknown): Capability {
 }
 
 /**
- * Maps a Zigbee2MQTT `exposes` array into the capability vocabulary.
- * Returns an empty array for anything that isn't an array (including
- * `undefined`/`null`), so a device with no published schema is described as
- * having an empty schema rather than an absent one.
+ * Map a Zigbee2MQTT `exposes` array into the capability vocabulary, returning `[]` for a
+ * non-array so a device with no schema has an empty one.
  */
 export function mapZ2MExposes(exposes: unknown): Capability[] {
   if (!Array.isArray(exposes)) return [];

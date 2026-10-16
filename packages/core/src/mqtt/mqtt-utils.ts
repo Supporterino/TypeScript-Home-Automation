@@ -14,12 +14,8 @@ export function splitPattern(pattern: string): string[] {
 }
 
 /**
- * Match an MQTT topic against a pre-split wildcard pattern.
- * Faster than `topicMatches` for repeated matching because the
- * pattern is not re-split on every call.
- *
- * @param patternParts Pre-split pattern from `splitPattern()`
- * @param topic The actual topic string to match against
+ * Match an MQTT topic against a pre-split wildcard pattern, avoiding a re-split on
+ * every call.
  */
 export function topicMatchesParts(patternParts: string[], topic: string): boolean {
   const topicParts = topic.split("/");
@@ -41,14 +37,8 @@ export function topicMatchesParts(patternParts: string[], topic: string): boolea
 }
 
 /**
- * Match MQTT topic patterns with wildcards.
- *
- * - `+` matches exactly one topic level
- * - `#` matches zero or more remaining levels (must be last)
- *
- * @param pattern The subscription pattern (may contain + and #)
- * @param topic The actual topic to match against
- * @returns true if the topic matches the pattern
+ * Match MQTT topic patterns with wildcards: `+` matches one level, `#` zero or more
+ * remaining levels (must be last).
  */
 export function topicMatches(pattern: string, topic: string): boolean {
   return topicMatchesParts(pattern.split("/"), topic);

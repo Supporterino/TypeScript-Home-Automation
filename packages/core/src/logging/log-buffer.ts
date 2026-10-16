@@ -22,11 +22,8 @@ export interface LogQuery {
 }
 
 /**
- * In-memory ring buffer for storing recent log entries.
- *
- * Implements a writable stream interface compatible with pino's
- * multistream destination. Stores the last N log entries and supports
- * filtered queries by automation name and log level.
+ * In-memory ring buffer of recent log entries, implementing a pino-compatible writable
+ * stream with filtered queries.
  *
  * @internal
  */
@@ -35,7 +32,7 @@ export class LogBuffer {
   private writeIndex = 0;
   private count = 0;
   private readonly capacity: number;
-  /** Subscribers notified of each newly-stored entry (design.md D32; task 5.0). */
+  /** Subscribers notified of each newly-stored entry. */
   private readonly listeners: Set<LogBufferListener> = new Set();
 
   constructor(capacity = 1000) {
@@ -44,18 +41,8 @@ export class LogBuffer {
   }
 
   /**
-   * Write a log chunk (called by pino's stream).
-   *
-   * A single chunk may contain multiple newline-delimited JSON objects (as pino
-   * may deliver batched writes). Each non-empty line is parsed independently and
-   * stored; a single malformed line is skipped without dropping the others.
-   *
-   * Newly-stored entries are announced to subscribers (see {@link subscribe}),
-   * but never synchronously: notification is deferred to a later turn of the
-   * event loop (design.md D32, R9; task 5.0a), so `write()` — which every
-   * `logger.*` call in the engine reaches via pino's sink — always returns
-   * before any listener runs. This keeps whatever a listener does (including
-   * fanning out to network connections) off the hot, synchronous logging path.
+   * Write a pino log chunk; each newline-delimited JSON line is stored independently, and
+   * subscribers are notified asynchronously after `write()` returns.
    */
   write(chunk: string): boolean {
     const newEntries: LogEntry[] = [];
@@ -84,12 +71,8 @@ export class LogBuffer {
   }
 
   /**
-   * Subscribe to newly-stored log entries.
-   *
-   * Returns an unsubscribe function that releases the listener and retains no
-   * reference to it. A listener that throws does not prevent storage (storage
-   * already happened by the time listeners run) and does not stop the
-   * remaining listeners from being notified.
+   * Subscribe to newly-stored log entries; returns an unsubscribe function. A throwing
+   * listener does not stop the remaining listeners.
    */
   subscribe(listener: LogBufferListener): () => void {
     this.listeners.add(listener);
@@ -104,12 +87,9 @@ export class LogBuffer {
       try {
         listener(entry);
       } catch {
-        // A throwing listener must not prevent storage (already done above)
-        // or stop delivery to the other listeners. Deliberately not logged
-        // here: LogBuffer has no logger, and giving it one would risk
-        // reopening exactly the log-feeds-itself cycle design.md D32 exists
-        // to cut — that boundary belongs to the delivery path that consumes
-        // this subscription, not to the buffer itself.
+        // A throwing listener must not prevent storage or stop delivery to the others.
+        // Deliberately not logged: LogBuffer has no logger, and giving it one would risk
+        // reopening the log-feeds-itself cycle the delivery path exists to cut.
       }
     }
   }

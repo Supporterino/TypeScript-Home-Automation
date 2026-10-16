@@ -1,12 +1,7 @@
 /**
- * Home-wide energy aggregation (design.md D6, D7; specs/energy-monitoring).
- *
- * Samples the aggregate device source on a fixed interval, normalizes each
- * device's declared cumulative-energy reading to watt-hours at this boundary,
- * and retains a bounded, in-memory ring of the home's instantaneous power
- * total. The HTTP surface reads the current snapshot synchronously; nothing
- * here is persisted, because surviving a restart is explicitly out of scope
- * for this capability.
+ * Home-wide energy aggregation. Samples the aggregate device source on a fixed
+ * interval, normalizes each declared cumulative-energy reading to watt-hours, and
+ * retains a bounded in-memory ring of the home's instantaneous power total.
  */
 import type {
   Capability,
@@ -25,10 +20,8 @@ const POWER_PROPERTY = "power";
 const ENERGY_PROPERTY = "energy";
 
 /**
- * Multipliers converting a device-source's declared energy unit to the
- * canonical watt-hour (design.md D7). A source declares its own truthful unit
- * and the aggregator normalizes here, rather than forcing lossy conversion at
- * the source. An absent unit is read as the canonical `Wh`.
+ * Multipliers converting a source's declared energy unit to the canonical
+ * watt-hour; an absent unit is read as the canonical `Wh`.
  */
 const ENERGY_UNIT_TO_WH: Record<string, number> = {
   Wh: 1,
@@ -46,11 +39,8 @@ export interface EnergyAggregatorOptions {
 }
 
 /**
- * Reads the current snapshot's metering totals plus the retained history.
- *
- * `powerWatts`/`energyWh` are computed live from the device descriptors on
- * every call so the endpoint is useful before the first interval elapses,
- * while `history` is the bounded ring populated by {@link sample}.
+ * Reads the current metering totals plus the retained history. Totals are computed live
+ * on every call; `history` is the bounded ring populated by {@link sample}.
  */
 export class EnergyAggregator {
   private readonly history: EnergyHistorySample[] = [];
@@ -70,8 +60,7 @@ export class EnergyAggregator {
   }
 
   /**
-   * Begin sampling: take one sample immediately, then one per configured
-   * interval. Idempotent — a second call is a no-op while the timer runs.
+   * Begin sampling: one sample immediately, then one per interval. Idempotent while running.
    */
   start(): void {
     if (this.timer) return;
@@ -87,10 +76,8 @@ export class EnergyAggregator {
   }
 
   /**
-   * Compute the current energy view: live totals, the per-device breakdown,
-   * and a copy of the retained history (oldest first). Never fails on a
-   * deployment with no metering devices — the totals are zero and the
-   * breakdown is empty.
+   * Compute the current energy view — live totals, per-device breakdown, and a copy of the
+   * history — defaulting to zero totals with no metering devices.
    */
   snapshot(): EnergyData {
     const { powerWatts, energyWh, breakdown } = this.compute();
@@ -98,11 +85,8 @@ export class EnergyAggregator {
   }
 
   /**
-   * Append one timestamped home-power sample to the bounded ring.
-   *
-   * A no-op beyond computing nothing when history is disabled
-   * (`historyMinutes === 0`); the current totals remain available through
-   * {@link snapshot} regardless.
+   * Append one timestamped home-power sample to the bounded ring; a no-op when history is
+   * disabled (`historyMinutes === 0`).
    */
   sample(): void {
     if (this.maxSamples === 0) return;
@@ -115,15 +99,9 @@ export class EnergyAggregator {
   }
 
   /**
-   * Derive the home's totals and per-device breakdown from the current device
-   * descriptors.
-   *
-   * A device contributes to the breakdown only when it declares a power or
-   * energy capability. Its readings come from the matching state properties
-   * and are summed only when finite and reachable; a missing or non-finite
-   * reading is never treated as zero, and an unreachable device is reported
-   * `available: false` with its readings withheld so an outage cannot silently
-   * reduce the apparent total (specs/energy-monitoring).
+   * Derive the home's totals and per-device breakdown from the current descriptors. A
+   * missing or non-finite reading is never treated as zero; an unreachable device is
+   * reported `available: false` with its readings withheld.
    */
   private compute(): {
     powerWatts: number;

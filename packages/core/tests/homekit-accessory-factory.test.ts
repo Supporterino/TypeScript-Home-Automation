@@ -1,16 +1,7 @@
 /**
- * Unit tests for homekit-accessory-factory.
- *
- * hap-nodejs checks for the `chacha20-poly1305` cipher at import-time, which
- * is not available under Bun's crypto layer.  We therefore replace the entire
- * module with a lightweight in-process mock before loading the factory.
- *
- * Design:
- * - Service and Characteristic "types" are plain classes used as Map keys.
- * - Mock Characteristic instances track their value and a single `onSet` handler.
- * - Mock Service instances store characteristics keyed by their type class.
- * - Mock Accessory stores services keyed by their type class, pre-populating
- *   AccessoryInformation (as real HAP does).
+ * Unit tests for homekit-accessory-factory. `hap-nodejs`'s chacha20-poly1305 check is
+ * unavailable under Bun, so the module is replaced with an in-process mock before loading
+ * the factory; the mocks use plain classes as type keys and track values and `onSet` handlers.
  */
 import { beforeAll, describe, expect, it, mock } from "bun:test";
 import type { Service } from "hap-nodejs";

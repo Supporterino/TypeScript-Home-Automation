@@ -156,7 +156,7 @@ describe("NanoleafDeviceSource", () => {
   });
 
   // -------------------------------------------------------------------------
-  // Durable device state store (design.md D2, D4; task 2.1)
+  // Durable device state store
   // -------------------------------------------------------------------------
 
   it("seeds enumeration from the durable store's last-known state before any poll (task 2.1)", () => {

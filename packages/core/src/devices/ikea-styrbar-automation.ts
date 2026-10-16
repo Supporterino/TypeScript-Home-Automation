@@ -3,50 +3,8 @@ import { Automation, type Trigger, type TriggerContext } from "../automation.js"
 
 /**
  * Abstract base class for automations driven by an IKEA STYRBAR remote
- * (E2001 / E2002 / E2313).
- *
- * Provides a clean handler-per-action pattern. Subclasses set `remoteName`
- * and override only the action handlers they need — unhandled actions are
- * silently ignored (no-op).
- *
- * The STYRBAR has 4 buttons with 11 possible actions:
- *
- * | Action                 | Gesture                            |
- * |------------------------|------------------------------------|
- * | `on`                   | Press top button                   |
- * | `off`                  | Press bottom button                |
- * | `brightness_move_up`   | Hold top button                    |
- * | `brightness_move_down` | Hold bottom button                 |
- * | `brightness_stop`      | Release top or bottom button       |
- * | `arrow_left_click`     | Press left arrow button            |
- * | `arrow_left_hold`      | Hold left arrow button             |
- * | `arrow_left_release`   | Release left arrow button          |
- * | `arrow_right_click`    | Press right arrow button           |
- * | `arrow_right_hold`     | Hold right arrow button            |
- * | `arrow_right_release`  | Release right arrow button         |
- *
- * @example
- * ```ts
- * import { IkeaStyrbarAutomation } from "@ts-ha/core";
- *
- * export default class LivingRoomRemote extends IkeaStyrbarAutomation {
- *   readonly name = "living-room-remote";
- *   protected readonly remoteName = "living_room_styrbar";
- *
- *   protected async onOn(): Promise<void> {
- *     this.mqtt.publishToDevice("ceiling_light", { state: "ON", brightness: 254 });
- *   }
- *
- *   protected async onOff(): Promise<void> {
- *     this.mqtt.publishToDevice("ceiling_light", { state: "OFF" });
- *   }
- *
- *   protected async onArrowLeftClick(): Promise<void> {
- *     const shelly = this.services.get<ShellyService>("shelly");
- *     if (shelly) await shelly.toggle("tv_plug");
- *   }
- * }
- * ```
+ * (E2001 / E2002 / E2313). Subclasses set `remoteName` and override only the action
+ * handlers they need; unhandled actions are a no-op.
  */
 export abstract class IkeaStyrbarAutomation extends Automation {
   /**

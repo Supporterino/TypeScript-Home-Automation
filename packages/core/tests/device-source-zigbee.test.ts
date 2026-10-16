@@ -260,7 +260,7 @@ describe("ZigbeeDeviceSource", () => {
   });
 
   // -------------------------------------------------------------------------
-  // Durable device state store (design.md D2; task 2.1)
+  // Durable device state store
   // -------------------------------------------------------------------------
 
   it("records a state-change observation into the durable store (task 2.1)", () => {

@@ -31,9 +31,7 @@ function createTestEngine(overrides: Record<string, unknown> = {}): Engine {
     logger,
     config: {
       httpServer: { port: 0, token: "" },
-      // State/device-registry persistence now defaults to true (design.md
-      // D6); disable it here so engine tests never write real files unless a
-      // test explicitly opts back in via `overrides`.
+      // Persistence defaults to true; disable it so tests never write real files unless opted in.
       state: { persist: false, filePath: "./state.json", flushIntervalMs: 1000 },
       deviceRegistry: { enabled: false, persist: false, filePath: "./device-registry.json" },
       deviceState: DEVICE_STATE_DISABLED,
@@ -315,7 +313,7 @@ describe("createEngine", () => {
     });
   });
 
-  // ── Realtime event stream (group 5) ─────────────────────────────────────
+  // ── Realtime event stream ───────────────────────────────────────────────
 
   describe("realtime event stream", () => {
     it("constructs a stream-only logger distinct from the supplied logger (task 5.0b)", () => {
@@ -390,7 +388,7 @@ describe("createEngine", () => {
     });
   });
 
-  // ── Automation observability (group 8) ──────────────────────────────────
+  // ── Automation observability ────────────────────────────────────────────
 
   describe("automation execution observability", () => {
     it("emits an automation_execution event naming the automation, trigger, duration, and outcome (task 8.7)", async () => {
@@ -534,9 +532,8 @@ describe("createEngine", () => {
     });
 
     it("an automation's onStart() sees a populated device accessor (task 6.13a)", async () => {
-      // discoverAndRegister runs after deviceSources.start() (task 6.13a); an
-      // engine.devices populated with a configured state toggle proves the
-      // ordering, since automations register during discovery.
+      // discoverAndRegister runs after deviceSources.start(); a populated engine.devices
+      // proves the ordering, since automations register during discovery.
       engine = createEngine({
         automationsDir: fixturesDir,
         logger,
@@ -693,7 +690,7 @@ describe("createEngine", () => {
     });
   });
 
-  // ── Durable device state store (design.md D1, D4; task 3.2) ──────────────
+  // ── Durable device state store ──────────────────────────────────────────
 
   describe("device state store", () => {
     it("restores a device's last-known state into the first enumeration (task 3.2)", async () => {
@@ -750,8 +747,7 @@ describe("createEngine", () => {
 
       const device = engine.devices.list().find((d) => d.qualifiedId === "shelly:living_room_plug");
       expect(device?.state).toEqual({ on: true, power: 12 });
-      // The restored observation is used verbatim — not stamped with the read
-      // time (design.md D4).
+      // The restored observation is used verbatim — not stamped with the read time.
       expect(device?.observation).toEqual(storedObservation);
 
       await engine.stop();
@@ -867,7 +863,7 @@ describe("createEngine", () => {
     });
   });
 
-  // ── Walls (design.md D2, D9) ──────────────────────────────────────────────
+  // ── Walls ───────────────────────────────────────────────────────────────
 
   describe("walls", () => {
     const wallConfig = {
@@ -926,7 +922,7 @@ describe("createEngine", () => {
     });
   });
 
-  // ── Device visibility (task 5.3) ─────────────────────────────────────────
+  // ── Device visibility ───────────────────────────────────────────────────
 
   describe("device visibility", () => {
     it("always exposes engine.deviceVisibility", () => {
@@ -977,7 +973,7 @@ describe("createEngine", () => {
     });
   });
 
-  // ── Energy aggregation (design.md D6, D7; tasks 4.1–4.4) ──────────────────
+  // ── Energy aggregation ──────────────────────────────────────────────────
 
   describe("energy aggregation", () => {
     it("always exposes engine.energy", () => {

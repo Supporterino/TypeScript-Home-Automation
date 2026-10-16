@@ -459,15 +459,8 @@ describe("AutomationManager", () => {
 // ── Group 3: automation control plane (enable/disable, source, discovery) ──
 
 /**
- * Writes a fixture automation file to `dir`. Its `execute()` increments a
- * public state counter `<name>:executed-count`, and its `onStart()` sets
- * `<name>:started` — both readable from tests without needing a live
- * instance reference, so behaviour survives across disable/enable cycles and
- * process-simulated restarts (a fresh `StateManager` reused across manager
- * instances).
- *
- * `onStartBody` may reference `this.state` to make `onStart()` conditionally
- * throw (task 3.6's failed-enable scenario).
+ * Write a fixture automation file to `dir` whose `execute()` increments `<name>:executed-count`
+ * and whose `onStart()` sets `<name>:started`, both readable without a live instance.
  */
 async function writeAutomationFixture(
   dir: string,
@@ -948,8 +941,7 @@ describe("AutomationManager — control plane (group 3)", () => {
     });
 
     it("has no parameter through which a caller could supply a file path directly", () => {
-      // getSource(name: string) — the only addressing mechanism is the
-      // retained-path map keyed by automation name (design.md D5).
+      // getSource(name: string) — the only addressing mechanism is the name.
       expect(AutomationManager.prototype.getSource.length).toBe(1);
     });
   });
@@ -1148,8 +1140,7 @@ describe("AutomationManager — observability (group 8)", () => {
       // unknown automation.
       expect(manager.getRelationships("rich")).toBeNull();
 
-      // Registered but never triggered — relationships must still be
-      // reported in full (design.md D11).
+      // Registered but never triggered — relationships must still be reported in full.
       await manager.register(new RichAutomation());
 
       const result = manager.getRelationships("rich");
@@ -1161,11 +1152,8 @@ describe("AutomationManager — observability (group 8)", () => {
     });
 
     it("reports each declared required service's current registration status, including one that is not registered", async () => {
-      // A disabled automation is never validated at startup (design.md D4),
-      // so this is the natural way for a declared required service to be
-      // unregistered without the fail-fast startup check throwing first —
-      // an operator inspecting a disabled automation's relationships before
-      // deciding whether to re-enable it.
+      // A disabled automation is never validated at startup, so this leaves a declared
+      // required service unregistered without the fail-fast startup check throwing first.
       const deps = createRealDeps();
       deps.services.register("shelly", {});
       const manager = createManagerWithDeps(deps);

@@ -2,16 +2,8 @@ import { describe, expect, it } from "bun:test";
 import { LogBuffer } from "../src/logging/log-buffer.js";
 
 /**
- * Benchmark for LogBuffer.write() throughput with and without a subscriber
- * (design.md D32, R9; task 5.0a).
- *
- * `write()` is pino's synchronous sink — every `logger.*` call in the engine
- * reaches it. Notification is deferred past the write call specifically so
- * adding a subscriber (the SSE event stream's log category) does not put
- * fan-out on that hot path. This test is the enforcement: it measures raw
- * `write()` throughput with zero listeners against the same throughput with a
- * listener registered, and fails on a measurable regression, on the same
- * terms as the existing MQTT dispatch benchmark (`tests/mqtt-perf.test.ts`).
+ * Benchmark for LogBuffer.write() throughput with and without a subscriber. Measures raw
+ * write() throughput against the same with a listener registered, and fails on a regression.
  */
 function entry(i: number): string {
   return JSON.stringify({ level: 30, time: Date.now(), msg: `message-${i}` });

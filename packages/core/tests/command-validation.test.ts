@@ -5,9 +5,8 @@ import {
   validateCommand,
 } from "../src/device-sources/command-validation.js";
 
-// A Zigbee-shaped capability set: an on/off switch (Z2M "state" convention)
-// plus a ranged numeric brightness and an enumerated effect — enough to
-// exercise every violation kind against one device (task 7.1).
+// A Zigbee-shaped capability set: an on/off switch plus a ranged numeric brightness
+// and an enumerated effect.
 const ZIGBEE_LIGHT_CAPABILITIES: Capability[] = [
   {
     kind: "light",
@@ -56,9 +55,8 @@ const STATE_TOGGLE_CAPABILITIES: Capability[] = [
   },
 ];
 
-// A Shelly-shaped switch: a real boolean encoding, declared explicitly
-// (design.md D1, task 3.1) rather than relying on the absent-declaration
-// default — the shape a Shelly `on` property has after that task.
+// A Shelly-shaped switch: a real boolean encoding, declared explicitly rather than
+// relying on the absent-declaration default.
 const SHELLY_SWITCH_CAPABILITIES: Capability[] = [
   {
     kind: "switch",

@@ -2,7 +2,7 @@ import type { Logger } from "pino";
 import type { DeviceDescriptor } from "../device-sources/device-source.js";
 import type { EventBus, StreamEvent } from "../events/event-bus.js";
 
-/** Fixed per-connection outgoing buffer size (design.md D28; task 5.6b). */
+/** Fixed per-connection outgoing buffer size. */
 export const DEFAULT_CONNECTION_BUFFER_CAPACITY = 100;
 
 /** Keep-alive interval, comfortably under a typical proxy idle timeout. */
@@ -24,13 +24,11 @@ interface Connection {
   id: number;
   controller: ReadableStreamDefaultController<Uint8Array>;
   /**
-   * One-time initial device snapshot (design.md D6), flushed ahead of the
-   * bounded outbox and never dropped. It is bounded by device count, which is
-   * inherent, so it must not share `bufferCapacity` with live events — sharing
-   * it would let a single live event evict a snapshot `device_appeared`.
+   * One-time initial device snapshot, flushed ahead of the bounded outbox and
+   * never dropped; it does not share `bufferCapacity` with live events.
    */
   snapshot: StreamEvent[];
-  /** Events buffered because the connection is backed up (task 5.6b). */
+  /** Events buffered because the connection is backed up. */
   outbox: StreamEvent[];
   /** Set once this connection has had to discard events; cleared on drain. */
   fellBehind: boolean;
@@ -38,31 +36,16 @@ interface Connection {
 }
 
 /**
- * Manages every open SSE connection for the realtime event stream.
- *
- * Subscribes to the shared {@link EventBus} exactly once and fans each event
- * out to every open connection, isolating a connection whose write fails
- * (design.md's Multiple Concurrent Clients requirement; task 5.6) and
- * bounding what accumulates for a connection that stops reading without
- * erroring — a genuinely different failure from a write error (design.md D28;
- * task 5.6b).
- *
- * Per design.md D32/R21, every log call reachable from delivering an event —
- * fan-out, overflow, the fell-behind signal, serialisation, failing-client
- * isolation — MUST go through `deliveryLogger` (the stdout-only instance from
- * `engine.ts`), never through `lifecycleLogger`. Only connection accepted/
- * closed logging uses `lifecycleLogger` (the primary logger), so an operator
- * diagnosing a stalled dashboard can still find stream activity in the log
- * view. This is enforced by {@link assertLogCycleIsClosed}, not by review.
+ * Manages every open SSE connection for the realtime event stream; delivery-path
+ * logging must use `deliveryLogger`, never `lifecycleLogger`.
  */
 export class EventStreamHub {
   private nextConnectionId = 1;
   private readonly connections: Map<number, Connection> = new Map();
   private readonly unsubscribeFromBus: () => void;
   /**
-   * Supplies each new connection's initial device snapshot (design.md D6).
-   * Defaults to an empty enumeration, so a hub wired with no supplier sends
-   * no snapshot frames.
+   * Supplies each new connection's initial device snapshot; defaults to an
+   * empty enumeration.
    */
   private deviceSupplier: () => DeviceDescriptor[] = () => [];
 
@@ -82,11 +65,8 @@ export class EventStreamHub {
   }
 
   /**
-   * Supply the hub with the current *total* device enumeration — including
-   * hidden devices, matching the REST device-catalog snapshot — used as each
-   * new connection's initial snapshot (design.md D6). Read lazily, once per
-   * connection, so the supplier may read state wired after construction.
-   * Defaults to an empty enumeration.
+   * Supply the hub with the current total device enumeration, used as each new
+   * connection's initial snapshot. Read lazily, once per connection.
    */
   setDeviceSupplier(supplier: () => DeviceDescriptor[]): void {
     this.deviceSupplier = supplier;
@@ -101,13 +81,8 @@ export class EventStreamHub {
         const connection: Connection = {
           id,
           controller,
-          // Per-connection initial snapshot (design.md D6): one
-          // `device_appeared` frame per enumerated device, held in this
-          // connection's own unbounded snapshot buffer *before* it joins the
-          // fan-out set. It is flushed ahead of the bounded outbox and never
-          // dropped, so a concurrent bus event cannot interleave ahead of it
-          // and cannot evict a snapshot frame. One-time and per-connection:
-          // never resent on later events.
+          // One `device_appeared` frame per enumerated device, held in this
+          // connection's own unbounded snapshot buffer and flushed ahead of the outbox.
           snapshot: this.deviceSupplier().map(
             (device): StreamEvent => ({ category: "device_appeared", device }),
           ),
@@ -151,7 +126,7 @@ export class EventStreamHub {
   }
 
   // ---------------------------------------------------------------------------
-  // Delivery (design.md D32/R21 boundary — deliveryLogger only, below this line)
+  // Delivery (deliveryLogger only, below this line)
   // ---------------------------------------------------------------------------
 
   private broadcast(event: StreamEvent): void {
@@ -166,9 +141,8 @@ export class EventStreamHub {
   }
 
   private deliver(connection: Connection, event: StreamEvent): void {
-    // Preserve order: once anything is buffered — the one-time snapshot or the
-    // live outbox — keep buffering until a drain empties both, rather than
-    // interleaving direct writes with buffered ones.
+    // Preserve order: once anything is buffered, keep buffering until a drain
+    // empties both, rather than interleaving direct writes with buffered ones.
     if (
       connection.snapshot.length > 0 ||
       connection.outbox.length > 0 ||
@@ -203,9 +177,8 @@ export class EventStreamHub {
   }
 
   private drain(connection: Connection): void {
-    // Flush the one-time snapshot first, in full, ahead of any live event.
-    // It is never dropped or truncated to `bufferCapacity`; an unwritable
-    // client closes the connection rather than losing part of it.
+    // Flush the one-time snapshot first, in full; an unwritable client closes
+    // the connection rather than losing part of it.
     while (connection.snapshot.length > 0) {
       if (this.isBackedUp(connection)) return;
       const next = connection.snapshot.shift();

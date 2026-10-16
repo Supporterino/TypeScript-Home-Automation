@@ -25,13 +25,7 @@ export class CronScheduler {
     );
   }
 
-  /**
-   * Schedule a cron job.
-   *
-   * @param id Unique identifier for the job (typically automation name + trigger index)
-   * @param expression Cron expression (e.g. "0 7 * * *" for daily at 7 AM)
-   * @param callback Function to execute when the cron fires
-   */
+  /** Schedule a cron job by id; `expression` is a standard cron expression. */
   schedule(id: string, expression: string, callback: () => void | Promise<void>): void {
     // Stop any existing job for the same id before replacing it so the previous
     // job's timer is not leaked.

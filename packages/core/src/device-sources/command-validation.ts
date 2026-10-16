@@ -1,11 +1,7 @@
 /**
- * Command validation against a device's declared capability schema
- * (design.md's device-sources spec, "Command Dispatch"; task 7.1).
- *
- * Every `DeviceSource.command()` implementation validates through
- * {@link validateCommand} before touching its transport, so an unknown
- * property or an out-of-range/non-permitted value is rejected with a
- * descriptive error and never reaches a device (task 7.3).
+ * Command validation against a device's declared capability schema. Every
+ * `DeviceSource.command()` validates through {@link validateCommand} before
+ * touching its transport, so an invalid property never reaches a device.
  */
 import {
   type Capability,
@@ -16,10 +12,8 @@ import {
 export type CommandValidationResult = { ok: true } | { ok: false; error: string };
 
 /**
- * Flattens a capability tree into a `property -> Capability` map, walking
- * into `features` for container/composite capabilities. A later entry with
- * the same property name overwrites an earlier one, which only matters for
- * malformed/duplicate schemas.
+ * Flatten a capability tree into a `property -> Capability` map, walking into `features`
+ * for container capabilities; a later duplicate property overwrites an earlier one.
  */
 export function flattenByProperty(
   capabilities: Capability[],
@@ -54,13 +48,8 @@ function validateValue(capability: Capability, value: unknown): CommandValidatio
 
   switch (capability.valueType) {
     case "boolean": {
-      // A command's `boolean` property is valid as a real boolean regardless
-      // of the capability's declared encoding — that keeps existing callers
-      // (HomeKit, automations, the API) working — or as one of the two
-      // values this specific capability declares for on/off, defaulting to
-      // `true`/`false` when it declares nothing (design.md D1, D3). This
-      // replaces a hardcoded `"ON"`/`"OFF"` special case that accepted (and
-      // silently mishandled) Zigbee2MQTT's convention for every source.
+      // A boolean property is valid as a real boolean (keeping existing callers
+      // working) or as one of the capability's declared on/off values.
       if (typeof value === "boolean") return { ok: true };
       const onValue = capability.valueOn ?? true;
       const offValue = capability.valueOff ?? false;
@@ -115,21 +104,16 @@ function validateValue(capability: Capability, value: unknown): CommandValidatio
       }
       return { ok: true };
 
-    // Composite/list/unknown capabilities carry a source-defined shape the
-    // vocabulary does not otherwise constrain (design.md D22) — a known,
-    // writable property of one of these kinds is accepted without further
-    // shape enforcement.
+    // Composite/list/unknown capabilities carry a source-defined shape, so a known,
+    // writable property of these kinds is accepted without further enforcement.
     default:
       return { ok: true };
   }
 }
 
 /**
- * Validates a command's properties against a device's declared capability
- * schema. Rejects a property the schema does not declare, a property the
- * schema declares read-only, or a value outside a declared range or
- * permitted set — with a descriptive, per-property error and short-circuits
- * on the first violation encountered.
+ * Validate a command's properties against a device's declared capability schema, rejecting
+ * an undeclared, read-only, or out-of-range property with a descriptive error.
  */
 export function validateCommand(
   capabilities: Capability[],
@@ -153,19 +137,9 @@ export function validateCommand(
 }
 
 /**
- * Translates a validated command's properties into the target capability's
- * declared encoding immediately before dispatch (design.md D2; device-sources
- * "Command Dispatch").
- *
- * Validation deliberately accepts a real boolean for a boolean property, so a
- * caller with no source-specific knowledge — HomeKit, an automation, the API,
- * the CLI — stays able to actuate any device. The dispatch step is where that
- * accepted form is made right: a real boolean is composed into the
- * capability's declared on/off value through the single shared rule
- * (`composeBooleanCapabilityValue`), so a device is never sent a value its
- * declared capability does not express for the requested state. A value
- * already in the declared encoding, and any non-boolean property, is left
- * untouched.
+ * Translate a validated command's properties into the target capability's declared
+ * encoding immediately before dispatch: a real boolean is composed into the
+ * capability's on/off value, and any other value is left untouched.
  */
 export function translateCommandProperties(
   capabilities: Capability[],

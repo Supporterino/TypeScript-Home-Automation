@@ -148,10 +148,8 @@ function createMockMqtt(
 }
 
 /**
- * A controllable MQTT mock for the concurrent-seed race. `Shelly.GetComponents`
- * on one topic prefix and `Switch.GetStatus` for one channel of another prefix
- * are withheld until the test releases them, so a seed can be held in flight
- * while a second device's discovery completes and rebuilds the entry set.
+ * A controllable MQTT mock for the concurrent-seed race: responses on chosen topics are
+ * withheld until released, holding a seed in flight while another device's discovery completes.
  */
 function createGatedMqtt(options: {
   components: unknown[];
@@ -1381,7 +1379,7 @@ describe("ShellyDeviceSource", () => {
   });
 
   // -------------------------------------------------------------------------
-  // Per-channel kind composition (design.md D5)
+  // Per-channel kind composition
   // -------------------------------------------------------------------------
 
   it("describes and commands a discovered switch component as a switch on a cover-registered device", async () => {
@@ -1970,7 +1968,7 @@ describe("ShellyDeviceSource", () => {
 });
 
 // ---------------------------------------------------------------------------
-// End-to-end per-channel verification (task 6.2)
+// End-to-end per-channel verification
 // ---------------------------------------------------------------------------
 
 describe("ShellyDeviceSource end-to-end per-channel", () => {
@@ -2089,7 +2087,7 @@ describe("ShellyDeviceSource end-to-end per-channel", () => {
   });
 
   // -------------------------------------------------------------------------
-  // Durable device state store (design.md D2, D4; task 2.1)
+  // Durable device state store
   // -------------------------------------------------------------------------
 
   it("seeds enumeration from the durable store's last-known state before any observation (task 2.1)", async () => {

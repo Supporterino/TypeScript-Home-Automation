@@ -28,22 +28,8 @@ interface NanoleafDevice {
 }
 
 /**
- * Service for interacting with Nanoleaf devices over their local HTTP API.
- *
- * Supports Light Panels, Canvas, Shapes, Elements, and Lines.
- * Devices are registered by name with a host and auth token, then
- * controlled via convenience methods.
- *
- * @example
- * ```ts
- * // In an automation:
- * const nanoleaf = this.services.get<NanoleafService>("nanoleaf");
- * if (!nanoleaf) return;
- * await nanoleaf.turnOn("panels");
- * await nanoleaf.setBrightness("panels", 80, 2);
- * await nanoleaf.setColor("panels", 120, 100);
- * await nanoleaf.setEffect("panels", "Northern Lights");
- * ```
+ * Service for interacting with Nanoleaf devices over their local HTTP API; devices are
+ * registered by name with a host and auth token, then controlled via convenience methods.
  */
 export class NanoleafService {
   private readonly devices: Map<string, NanoleafDevice> = new Map();
@@ -54,13 +40,8 @@ export class NanoleafService {
   ) {}
 
   /**
-   * Register a Nanoleaf device for use in automations.
-   *
-   * Accepts IP addresses, hostnames, mDNS names, or full URLs.
-   * The scheme and trailing slashes are stripped automatically.
-   *
-   * @param name Friendly name for the device (used in all other methods)
-   * @param config Device configuration (host, token, optional port)
+   * Register a Nanoleaf device by name; the host may be an IP, hostname, mDNS name, or
+   * full URL (scheme and trailing slashes are stripped).
    */
   register(name: string, config: NanoleafDeviceConfig): void {
     const host = this.normalizeHost(config.host);
@@ -80,20 +61,15 @@ export class NanoleafService {
   }
 
   /**
-   * Return the friendly names of every currently registered device.
-   *
-   * Only names are returned — the auth token embedded in each device's
-   * `baseUrl` is never exposed through this or any other public method.
+   * Return the friendly names of every registered device; the auth token is never exposed.
    */
   getDevices(): string[] {
     return Array.from(this.devices.keys());
   }
 
   /**
-   * Check whether a registered device currently responds, without throwing.
-   *
-   * Performs a lightweight device-info request; any failure (network error,
-   * non-2xx response) is treated as unreachable rather than propagated.
+   * Check whether a registered device responds, without throwing; any failure is treated
+   * as unreachable.
    */
   async isReachable(name: string): Promise<boolean> {
     try {
@@ -137,13 +113,7 @@ export class NanoleafService {
   // Brightness
   // -------------------------------------------------------------------------
 
-  /**
-   * Set brightness.
-   *
-   * @param name Device friendly name
-   * @param value Brightness 0-100
-   * @param duration Transition time in seconds (optional)
-   */
+  /** Set brightness 0-100, with an optional transition time in seconds. */
   async setBrightness(name: string, value: number, duration?: number): Promise<void> {
     const clamped = Math.max(0, Math.min(100, Math.round(value)));
     if (clamped !== value) {
@@ -165,13 +135,7 @@ export class NanoleafService {
   // Color
   // -------------------------------------------------------------------------
 
-  /**
-   * Set color using hue and saturation.
-   *
-   * @param name Device friendly name
-   * @param hue Hue 0-360
-   * @param saturation Saturation 0-100
-   */
+  /** Set color by hue (0-360) and saturation (0-100). */
   async setColor(name: string, hue: number, saturation: number): Promise<void> {
     const clampedHue = Math.max(0, Math.min(360, Math.round(hue)));
     const clampedSat = Math.max(0, Math.min(100, Math.round(saturation)));
@@ -185,12 +149,7 @@ export class NanoleafService {
     });
   }
 
-  /**
-   * Set color temperature.
-   *
-   * @param name Device friendly name
-   * @param value Color temperature in Kelvin (1200-6500)
-   */
+  /** Set color temperature in Kelvin (1200-6500). */
   async setColorTemp(name: string, value: number): Promise<void> {
     const clamped = Math.max(1200, Math.min(6500, Math.round(value)));
     if (clamped !== value) {
@@ -207,12 +166,7 @@ export class NanoleafService {
   // State (combined set/get)
   // -------------------------------------------------------------------------
 
-  /**
-   * Set multiple state properties at once.
-   *
-   * @param name Device friendly name
-   * @param state State properties to set
-   */
+  /** Set multiple state properties at once. */
   async setState(name: string, state: NanoleafStateSet): Promise<void> {
     await this.put(name, "/state", state);
   }
@@ -259,12 +213,7 @@ export class NanoleafService {
     return this.get<string>(name, "/effects/select");
   }
 
-  /**
-   * Activate an effect by name.
-   *
-   * @param name Device friendly name
-   * @param effectName Name of the effect to activate
-   */
+  /** Activate an effect by name. */
   async setEffect(name: string, effectName: string): Promise<void> {
     this.logger.info({ device: name, effect: effectName }, "Setting Nanoleaf effect");
     await this.put(name, "/effects", { select: effectName });

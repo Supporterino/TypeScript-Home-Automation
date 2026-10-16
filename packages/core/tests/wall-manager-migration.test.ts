@@ -13,9 +13,8 @@ import { WallManager, wallKey } from "../src/wall-manager.js";
 const logger = pino({ level: "silent" });
 
 /**
- * A stored version-1 profile: a widget that named a single device, one that
- * named a set of devices, a non-device widget, and an orientation override
- * (design.md D8; specs/wall-display "Wall Profile Version and Migration").
+ * A stored version-1 profile: a single-device widget, a multi-device widget, a
+ * non-device widget, and an orientation override.
  */
 function storedV1Profile(): WallV1Profile {
   return {

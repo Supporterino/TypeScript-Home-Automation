@@ -15,20 +15,16 @@ export interface ExecutionCompletionEvent {
 
 export type ExecutionCompletionListener = (event: ExecutionCompletionEvent) => void;
 
-/** Per-automation retention default for execution history (design.md R10). */
+/** Per-automation retention default for execution history. */
 const DEFAULT_HISTORY_LIMIT = 20;
 
-/** Per-automation retention default for observed write keys (design.md R15). */
+/** Per-automation retention default for observed write keys. */
 const DEFAULT_OBSERVED_WRITES_LIMIT = 20;
 
 /**
- * Records automation execution history and observed state writes, and
- * broadcasts execution completions to subscribers (the realtime event
- * stream, Prometheus counters).
- *
- * Every one of those consumers derives from the same `run()` call so history,
- * counters, and the completion event can never disagree (design.md D18;
- * task 8.8).
+ * Records automation execution history and observed state writes, and broadcasts
+ * execution completions to subscribers. Every consumer derives from the same `run()`
+ * call so history, counters, and the completion event cannot disagree.
  */
 export class ExecutionRecorder {
   private readonly history: Map<string, ExecutionRecord[]> = new Map();
@@ -42,16 +38,9 @@ export class ExecutionRecorder {
   ) {}
 
   /**
-   * Runs `fn` inside an execution context attributed to `automationName`,
-   * timing it and recording the outcome regardless of whether it resolves
-   * or rejects. Rethrows `fn`'s rejection unchanged, so existing callers'
-   * `.catch()` / `try`/`catch` handling is unaffected by this wrapping
-   * (design.md D11; task 8.1).
-   *
-   * A failure while recording the outcome (history bookkeeping, or a
-   * subscriber's completion listener) is logged and swallowed — it MUST
-   * NOT surface as, or be mistaken for, a failure of the automation run
-   * itself (design.md task 8.4).
+   * Run `fn` inside an execution context attributed to `automationName`, timing it and
+   * recording the outcome; rethrows `fn`'s rejection unchanged. A failure while
+   * recording is logged and swallowed, never mistaken for a run failure.
    */
   async run(
     automationName: string,
@@ -116,11 +105,9 @@ export class ExecutionRecorder {
   }
 
   /**
-   * Returns `automationName`'s retained execution history, most recent
-   * first. Returns an empty array for an automation that has never run
-   * (task 8.3) — the caller distinguishes "never run" from "unknown
-   * automation" itself, since this recorder has no notion of which
-   * automations exist.
+   * Return `automationName`'s retained execution history, most recent first; empty
+   * for an automation that has never run. The caller distinguishes "never run" from
+   * "unknown automation" itself.
    */
   getHistory(automationName: string): ExecutionRecord[] {
     const list = this.history.get(automationName);
@@ -129,10 +116,8 @@ export class ExecutionRecorder {
   }
 
   /**
-   * Records that `automationName` wrote `key`, evicting the
-   * least-recently-written key once the retained set exceeds the bound
-   * (design.md R15; task 8.2b). Writing an already-tracked key moves it to
-   * most-recently-written without growing the set.
+   * Record that `automationName` wrote `key`, evicting the least-recently-written key
+   * once the set exceeds the bound. Re-writing a tracked key just moves it to MRU.
    */
   recordObservedWrite(automationName: string, key: string): void {
     let entry = this.observedWrites.get(automationName);
@@ -154,12 +139,8 @@ export class ExecutionRecorder {
   }
 
   /**
-   * Returns `automationName`'s observed writes, oldest-retained first, and
-   * whether the set has ever been truncated (tasks 8.2b, 8.2c). An
-   * automation that has never written any state key returns an empty,
-   * non-truncated set — distinguishable from "writes nothing" only by the
-   * caller framing this as observations accumulated since startup, not a
-   * complete description (design.md R12).
+   * Return `automationName`'s observed writes, oldest-retained first, and whether the
+   * set has been truncated. Empty and non-truncated for an automation that never wrote.
    */
   getObservedWrites(automationName: string): ObservedWrites {
     const entry = this.observedWrites.get(automationName);
@@ -168,13 +149,8 @@ export class ExecutionRecorder {
   }
 
   /**
-   * Subscribe to execution completions — used to broadcast the realtime
-   * `automation_execution` event category and to increment the Prometheus
-   * execution/failure counters (design.md D18; tasks 8.7, 8.8). Each
-   * listener is isolated: a throwing listener is logged and does not
-   * prevent the others from running, mirroring `EventBus`/`LogBuffer`.
-   *
-   * Returns an unsubscribe function.
+   * Subscribe to execution completions; a throwing listener is logged and does not
+   * prevent the others from running. Returns an unsubscribe function.
    */
   onCompletion(listener: ExecutionCompletionListener): () => void {
     this.completionListeners.add(listener);

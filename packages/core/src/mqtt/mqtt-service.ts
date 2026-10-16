@@ -30,18 +30,9 @@ interface WildcardSubscription {
 }
 
 /**
- * MQTT client wrapper with optimized message dispatch.
- *
- * Subscriptions are split into two categories:
- * - **Exact topics** — indexed in a Map for O(1) lookup per message
- * - **Wildcard patterns** — iterated linearly (pre-split for faster matching)
- *
- * This means a message to `zigbee2mqtt/sensor_a` with 100 exact subscriptions
- * and 2 wildcard subscriptions only does 1 Map lookup + 2 pattern comparisons,
- * instead of 102 string splits + comparisons.
- *
- * JSON parsing is deferred until at least one handler matches, avoiding
- * wasted work for messages that no subscription cares about.
+ * MQTT client wrapper with optimized message dispatch: exact topics are indexed in a
+ * Map for O(1) lookup, wildcard patterns are pre-split and iterated, and JSON parsing is
+ * deferred until at least one handler matches.
  */
 export class MqttService {
   private client: MqttClient | null = null;
@@ -265,13 +256,7 @@ export class MqttService {
   // Internal
   // -------------------------------------------------------------------------
 
-  /**
-   * Dispatch an incoming MQTT message to matching handlers.
-   *
-   * 1. Look up exact handlers by topic (O(1) Map lookup)
-   * 2. Scan wildcard handlers (O(w) where w = wildcard count, typically small)
-   * 3. Parse JSON only if at least one handler matched
-   */
+  /** Dispatch an incoming MQTT message to matching handlers. */
   private dispatch(topic: string, message: Buffer): void {
     // Collect matching handlers before parsing
     const exactSubs = this.exactHandlers.get(topic);

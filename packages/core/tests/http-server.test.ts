@@ -693,9 +693,8 @@ describe("HttpServer — GET /api/events", () => {
   });
 
   it("logs a connect and a disconnect retrievable through the log query API (task 5.0c)", async () => {
-    // The lifecycle logger writes into the same LogBuffer the log category
-    // (and /api/logs) reads from — unlike the delivery-path logger, which
-    // must not (design.md D32; asserted separately below).
+    // The lifecycle logger writes into the same LogBuffer the log category reads from,
+    // unlike the delivery-path logger, which must not.
     const logBuffer = new LogBuffer(100);
     const realLogger = pino({ level: "info" }, logBuffer);
     const bus = new EventBus();
@@ -736,8 +735,7 @@ describe("HttpServer — GET /api/events", () => {
     const { value } = await reader.read();
     const chunk = new TextDecoder().decode(value);
     const payload = JSON.parse(chunk.replace(/^data: /, "").trim());
-    // Only the changed key is present — a delta, not a full state snapshot
-    // (task 5.4).
+    // Only the changed key is present — a delta, not a full state snapshot.
     expect(payload).toEqual({
       category: "state",
       key: "night_mode",
@@ -1320,7 +1318,7 @@ const INVALID_WALL_CONFIG = {
   widgets: [{ id: "wide", type: "clock", config: {}, x: 6, y: 0, w: 8, h: 1 }],
 };
 
-/** A config whose sole room widget is missing its required `roomId` (design.md D10). */
+/** A config whose sole room widget is missing its required `roomId`. */
 const INVALID_WIDGET_CONFIG = {
   widgets: [{ id: "room", type: "room", config: {}, x: 0, y: 0, w: 6, h: 5 }],
 };
@@ -1616,7 +1614,7 @@ describe("HttpServer — /api/walls", () => {
   });
 });
 
-// ── Room batch command (design.md D5; tasks 5.1–5.4) ──────────────────────
+// ── Room batch command ────────────────────────────────────────────────────
 
 const ON_CAPABILITY: Capability = {
   kind: "switch",
@@ -1656,10 +1654,8 @@ function makeDescriptor(qualifiedId: string, capabilities: Capability[]): Device
 }
 
 /**
- * A server whose room manager and device accessor share one stub aggregate,
- * so membership resolution and command dispatch agree. The stub's `command`
- * runs the real `validateCommand`, making task 5.4's "validation is not
- * bypassed" observable end to end.
+ * A server whose room manager and device accessor share one stub aggregate, whose `command`
+ * runs the real `validateCommand`, so "validation is not bypassed" is observable.
  */
 function makeBatchServer(members: DeviceDescriptor[]) {
   const aggregate = {
@@ -1810,7 +1806,7 @@ describe("HttpServer — POST /api/rooms/:id/command", () => {
   });
 });
 
-// ── Weather endpoint (design.md D8; tasks 6.1–6.3) ────────────────────────
+// ── Weather endpoint ─────────────────────────────────────────────────────
 
 const CURRENT_WEATHER: CurrentWeather = {
   temperature: 20,

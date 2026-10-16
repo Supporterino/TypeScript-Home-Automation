@@ -197,7 +197,7 @@ describe("StateDeviceSource", () => {
   });
 
   // -------------------------------------------------------------------------
-  // Durable device state store (design.md D2; task 2.1)
+  // Durable device state store
   // -------------------------------------------------------------------------
 
   it("records a change observation into the durable store (task 2.1)", () => {
@@ -221,7 +221,7 @@ describe("StateDeviceSource", () => {
   });
 
   // -------------------------------------------------------------------------
-  // Subscription delivery matches enumeration (design.md D2; task 2.2)
+  // Subscription delivery matches enumeration
   // -------------------------------------------------------------------------
 
   it("delivers the same state to a subscriber as enumeration returns (task 2.2)", () => {

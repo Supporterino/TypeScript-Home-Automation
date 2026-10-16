@@ -5,14 +5,8 @@ import type { Logger } from "pino";
 import { readJsonWithBackup, writeJsonAtomically } from "../state/json-persistence.js";
 
 /**
- * A device's last-known state together with the observation that produced it
- * (design.md D1, D4; specs/device-state-store). The observation is retained so
- * a restored value is presented as last-known rather than live.
- *
- * Reachability is deliberately not part of a record: design.md D1 scopes the
- * store to state + observation only. A restored descriptor therefore defaults
- * to reachable until the next observation arrives (see `trackedFor()` in the
- * Shelly/Nanoleaf sources).
+ * A device's last-known state together with the observation that produced it, so a
+ * restored value reads as last-known. Reachability is deliberately not persisted.
  */
 export interface DeviceStateRecord {
   state: Record<string, unknown>;
@@ -31,17 +25,15 @@ export interface DeviceStateStoreOptions {
   persist?: boolean;
 
   /**
-   * Path to the JSON file for device state persistence.
-   * Only used when `persist` is true.
+   * Path to the JSON file for device state persistence; used when `persist` is true.
    *
    * @default "./device-state.json"
    */
   filePath?: string;
 
   /**
-   * Milliseconds to wait after a mutation before flushing a coalesced save to
-   * disk. Multiple writes within one window produce a single save. `0` saves
-   * on every mutation. Only used when `persist` is true.
+   * Milliseconds to wait after a mutation before flushing a coalesced save; `0` saves on
+   * every mutation.
    *
    * @default 1000
    */
@@ -49,17 +41,8 @@ export interface DeviceStateStoreOptions {
 }
 
 /**
- * Durable, unified store of the last-known state and observation for every
- * device, keyed by qualified id (design.md D1, D3; specs/device-state-store).
- *
- * A device source records each observation here and seeds a descriptor's
- * state from the store when it has no fresher in-memory observation, so a
- * device's last-known state is available after a restart without waiting for
- * a new observation. The store is a seed, never an authority — a reported
- * observation always wins over the persisted value.
- *
- * Persistence mirrors `StateManager`: a debounced write-behind JSON file with
- * chained, serialized saves and atomic temp-file writes.
+ * Durable, unified store of the last-known state and observation for every device,
+ * keyed by qualified id. The store is a seed, never an authority.
  */
 export class DeviceStateStore {
   private readonly records: Map<string, DeviceStateRecord> = new Map();
@@ -92,28 +75,16 @@ export class DeviceStateStore {
   }
 
   /**
-   * Look up the last-known state and observation for a device.
-   *
-   * The returned record is the store's own — treat it as read-only; mutating
-   * its `state` in place would silently change the persisted value. Only
-   * {@link record} should modify a record, and it copies the state it is given
-   * so a caller's later mutation cannot leak in.
-   *
-   * @param qualifiedId The device's qualified identifier
-   * @returns The stored record, or `undefined` when the device is unknown
+   * Look up the last-known state and observation for a device. The returned record is the
+   * store's own — treat it as read-only; only {@link record} should modify one.
    */
   get(qualifiedId: string): DeviceStateRecord | undefined {
     return this.records.get(qualifiedId);
   }
 
   /**
-   * Record a device's state and the observation that produced it, overwriting
-   * any previous record, and schedule a coalesced save when persistence is
-   * enabled.
-   *
-   * @param qualifiedId The device's qualified identifier
-   * @param state The device's last-known state
-   * @param observation How and when the state was observed
+   * Record a device's state and the observation that produced it, overwriting any previous
+   * record and scheduling a coalesced save.
    */
   record(
     qualifiedId: string,
@@ -127,12 +98,8 @@ export class DeviceStateStore {
   }
 
   /**
-   * Remove a device's stored record, so a disappeared device does not reappear
-   * after a restart (design.md D5). Schedules a coalesced save when a record
-   * was actually removed.
-   *
-   * @param qualifiedId The device's qualified identifier
-   * @returns true if a record existed and was removed
+   * Remove a device's stored record, so a disappeared device does not reappear after
+   * a restart; returns whether a record existed.
    */
   prune(qualifiedId: string): boolean {
     const existed = this.records.delete(qualifiedId);
@@ -143,9 +110,8 @@ export class DeviceStateStore {
   }
 
   /**
-   * Every qualified id currently held, for reconciling the store against a
-   * live device enumeration (design.md D5). Returns a fresh array of the
-   * current keys, so pruning while iterating over the result is safe.
+   * Every qualified id currently held, for reconciling the store against a live
+   * enumeration; returns a fresh array, so pruning while iterating is safe.
    */
   keys(): string[] {
     return [...this.records.keys()];
@@ -156,12 +122,8 @@ export class DeviceStateStore {
   // -------------------------------------------------------------------------
 
   /**
-   * Load persisted device state from disk (if persistence is enabled). Called
-   * by the engine on startup, before any device source starts (design.md D1).
-   *
-   * A restored record keeps its original `observation` verbatim — the
-   * observedAt is the time it was recorded, never the read time (design.md
-   * D4), so a restored value reads as last-known rather than live.
+   * Load persisted device state from disk, called on startup before any source
+   * starts. A restored record keeps its original `observation` verbatim.
    */
   async load(): Promise<void> {
     if (!this.persist) return;
@@ -186,11 +148,8 @@ export class DeviceStateStore {
   }
 
   /**
-   * Save current device state to disk (if persistence is enabled).
-   *
-   * Concurrent calls are serialized onto one chain so they never open the same
-   * temp file at once. A failed save is logged and does not prevent a later
-   * save from running.
+   * Save current device state to disk; concurrent calls are serialized so they never open
+   * the same temp file at once.
    */
   async save(): Promise<void> {
     if (!this.persist) return;
@@ -233,12 +192,8 @@ export class DeviceStateStore {
   }
 
   /**
-   * Schedules a coalesced save after a mutation, when persistence is enabled.
-   * Multiple writes inside one `flushIntervalMs` window produce a single save —
-   * the first write in an idle period starts the timer, and later writes ride
-   * along until it fires rather than restarting it.
-   *
-   * `flushIntervalMs: 0` saves on every mutation instead of scheduling.
+   * Schedule a coalesced save after a mutation: the first write in an idle period starts
+   * the timer and later writes ride along. `flushIntervalMs: 0` saves on every mutation.
    */
   private scheduleFlush(): void {
     if (!this.persist) return;

@@ -42,10 +42,8 @@ function makeDescriptor(
 }
 
 /**
- * A fake `DeviceSource` whose device list and availability can be mutated
- * after construction, so tests can simulate a device unpairing, reappearing,
- * or its whole source being disabled — none of which `AggregateDeviceSource`
- * caches, so mutating this in place is visible on the very next call.
+ * A fake `DeviceSource` whose device list and availability can be mutated after
+ * construction, so tests can simulate unpairing, reappearance, or a disabled source.
  */
 function makeMutableSource(id: string, initialDevices: DeviceDescriptor[] = []) {
   const devices: DeviceDescriptor[] = [...initialDevices];
@@ -419,11 +417,8 @@ describe("RoomManager", () => {
     });
 
     it("survives an abrupt termination once the write-behind window has elapsed", async () => {
-      // No flush()/stop() is ever called on s1 below — the assignment reaches
-      // disk only through the coalesced background flush that set()/setInternal()
-      // schedules on its own, exactly like a process killed without a graceful
-      // shutdown after the debounce window has already fired (design.md D6;
-      // specs/device-rooms "Rooms survive abrupt termination").
+      // No flush()/stop() is called on s1 — the assignment reaches disk only through the
+      // coalesced background flush, like a process killed after the debounce window fired.
       const s1 = new StateManager(logger, { persist: true, filePath, flushIntervalMs: 10 });
       const zigbee1 = makeMutableSource("zigbee", [makeDescriptor("zigbee", "0xaaa111")]);
       const agg1 = new AggregateDeviceSource([zigbee1.source], makeVisibility(), logger);

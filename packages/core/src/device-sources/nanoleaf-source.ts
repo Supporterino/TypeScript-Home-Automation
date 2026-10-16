@@ -1,14 +1,7 @@
 /**
- * The Nanoleaf `DeviceSource` (design.md D17, D22; tasks 6.5, 6.6).
- *
- * Nanoleaf has no push transport, so every device is refreshed on a
- * configurable interval; one unreachable device is marked unreachable and
- * logged without disrupting the refresh cycle for the others.
- *
- * The effect list is described as an enumerated writable capability whose
- * permitted values are the device's own reported effect list, refreshed
- * whenever that list changes — so the generic renderer needs no
- * Nanoleaf-specific handling to present it as a select control.
+ * The Nanoleaf `DeviceSource`. Nanoleaf has no push transport, so every device is
+ * refreshed on a configurable interval; the effect list is exposed as an enumerated
+ * writable capability whose values are the device's own reported effects.
  */
 
 import type { Capability } from "@ts-ha/shared";
@@ -200,16 +193,13 @@ export class NanoleafDeviceSource implements DeviceSource {
           reachable: true,
           observation,
         });
-        // Record the poll's observation at the point it is made, never on a
-        // read (design.md D2).
+        // Record the poll's observation at the point it is made, never on a read.
         this.deviceStateStore?.record(qualifyDeviceId(this.id, name), state, observation);
         this.notify(name);
       } catch (err) {
         this.logger.error({ err, device: name }, "Nanoleaf poll failed for device — skipping");
         // A failed poll makes no observation: keep the last-known state and its
-        // original observation — restored from the store when the device has
-        // none in memory — rather than stamping a new observedAt or wiping the
-        // state (design.md D4).
+        // original observation rather than stamping a new observedAt or wiping state.
         const existing = this.trackedFor(name);
         this.tracked.set(name, {
           state: existing.state,
@@ -234,11 +224,8 @@ export class NanoleafDeviceSource implements DeviceSource {
   }
 
   /**
-   * The tracked state for a device, falling back to the durable store's
-   * last-known record when the device has no in-memory observation yet
-   * (design.md D2, D4). A restored record's state and observation are used
-   * verbatim — observedAt stays the time it was recorded, never the read
-   * time, so a restored value reads as last-known rather than live.
+   * The tracked state for a device, falling back to the durable store's last-known
+   * record (used verbatim) when there is no in-memory observation.
    */
   private trackedFor(name: string): TrackedNanoleafState {
     const tracked = this.tracked.get(name);
@@ -247,9 +234,7 @@ export class NanoleafDeviceSource implements DeviceSource {
     return {
       state: restored?.state ?? {},
       effects: [],
-      // Reachability is not persisted — design.md D1 scopes a record to state +
-      // observation — so a restored device seeds as reachable until its next
-      // observation reports otherwise.
+      // Reachability is not persisted, so a restored device seeds as reachable.
       reachable: true,
       observation: restored?.observation ?? {
         mode: "polled",
@@ -270,8 +255,7 @@ export class NanoleafDeviceSource implements DeviceSource {
       capabilities: nanoleafCapabilities(tracked.effects),
       reachable: tracked.reachable,
       observation: tracked.observation,
-      // Stamped by `AggregateDeviceSource` (design.md D8) — a source does
-      // not know a user's visibility preference for its own devices.
+      // Stamped by `AggregateDeviceSource`; a source does not know visibility preferences.
       hidden: false,
     };
   }

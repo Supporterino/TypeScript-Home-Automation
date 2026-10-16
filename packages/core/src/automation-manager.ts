@@ -30,8 +30,8 @@ import type {
 } from "./zigbee/device-registry.js";
 
 /**
- * Reserved-namespace prefix under which each automation's enabled preference
- * is stored, keyed by automation name (design.md D20, D30).
+ * Reserved-namespace prefix under which each automation's enabled preference is
+ * stored, keyed by automation name.
  */
 export const AUTOMATION_ENABLED_PREFIX = `${INTERNAL_STATE_PREFIX}automation-enabled:`;
 
@@ -41,12 +41,8 @@ export function automationEnabledKey(name: string): string {
 }
 
 /**
- * Derives a device name from an MQTT trigger's topic for relationship
- * reporting (design.md task 8.5). Every example automation subscribes to
- * `zigbee2mqtt/<friendly-name>` (per `Trigger`'s own "mqtt" doc comment); the
- * prefix is stripped when present so the reported name matches the one used
- * by device triggers, and the raw topic is reported unchanged otherwise,
- * since an MQTT trigger is not required to name a device at all.
+ * Derive a device name from an MQTT trigger's topic for relationship reporting,
+ * stripping the `zigbee2mqtt/` prefix when present.
  */
 function stripZigbeeMqttPrefix(topic: string): string {
   const prefix = "zigbee2mqtt/";
@@ -74,14 +70,9 @@ export type {
 } from "@ts-ha/shared";
 
 /**
- * A discovered or directly-registered automation and its current lifecycle
- * state.
- *
- * `instance` is `null` while the automation is disabled: no triggers are
- * wired and no live instance exists to run — disabling is a full stop, not a
- * guard flag (design.md D4). `triggers` and `requiredServices` are cached
- * from the most recent instance so the automation remains listable (with its
- * declared triggers and relationships) while disabled.
+ * A discovered or directly-registered automation and its current lifecycle state.
+ * `instance` is `null` while disabled — disabling is a full stop, and `triggers`
+ * and `requiredServices` stay cached so the automation remains listable.
  */
 interface AutomationRecord {
   name: string;
@@ -99,11 +90,8 @@ interface AutomationRecord {
 }
 
 /**
- * Discovers, registers, and manages the lifecycle of all automations.
- *
- * On startup it scans the automations directory, dynamically imports each file,
- * and wires up the declared triggers (MQTT subscriptions, cron jobs,
- * state change listeners, and webhook endpoints).
+ * Discovers, registers, and manages the lifecycle of all automations: scans the
+ * automations directory, imports each file, and wires the declared triggers.
  */
 export class AutomationManager {
   private records: AutomationRecord[] = [];
@@ -126,10 +114,8 @@ export class AutomationManager {
   private deviceLeftHandlers: Map<Automation, DeviceRemovedHandler[]> = new Map();
 
   /**
-   * Execution history, observed state writes, and completion broadcasts for
-   * every automation (design.md D11). Exposed for the observability
-   * endpoints (task 8.6), the realtime event stream (task 8.7), and the
-   * Prometheus counters (task 8.8) via {@link getExecutionRecorder}.
+   * Execution history, observed state writes, and completion broadcasts for every
+   * automation, exposed via {@link getExecutionRecorder}.
    */
   private readonly executionRecorder: ExecutionRecorder;
 
@@ -147,42 +133,31 @@ export class AutomationManager {
   ) {
     this.executionRecorder =
       executionRecorder ?? new ExecutionRecorder(logger.child({ service: "execution-recorder" }));
-    // Attributes state writes made during an automation's execute() to that
-    // automation, without any change to StateManager itself (design.md D11;
-    // task 8.2). Lives for the manager's lifetime — there is exactly one
-    // manager per engine, so this is never unwired.
+    // Attribute state writes made during an automation's execute() to that
+    // automation, leaving StateManager untouched.
     wireStateWriteAttribution(this.stateManager, this.executionRecorder);
   }
 
   /**
-   * The shared execution recorder, for wiring the realtime event stream's
-   * `automation_execution` category and the Prometheus execution/failure
-   * counters (design.md D18; tasks 8.7, 8.8).
+   * The shared execution recorder, wired by the event stream and the Prometheus
+   * execution/failure counters.
    */
   getExecutionRecorder(): ExecutionRecorder {
     return this.executionRecorder;
   }
 
   /**
-   * Runs `automation.execute(context)` inside the execution context,
-   * recording its outcome (design.md D11; tasks 8.1, 8.3). Shared by every
-   * trigger dispatch path and by `triggerAutomation()`, so every run — MQTT,
-   * cron, state, webhook, device, and manual — is recorded identically.
+   * Run `automation.execute(context)` inside the execution context, recording its
+   * outcome. Shared by every trigger dispatch path and by `triggerAutomation()`.
    */
   private runExecution(automation: Automation, context: TriggerContext): Promise<void> {
     return this.executionRecorder.run(automation.name, context, () => automation.execute(context));
   }
 
   /**
-   * Discover and register all automations from the given directory.
-   * Each file should have a default export that is a class extending Automation.
-   *
-   * A discovered automation whose stored preference is disabled is
-   * registered — listed by the query API — but has no triggers wired and no
-   * `onStart()` invoked (design.md D4, D20).
-   *
-   * @param automationsDir Path to the automations directory
-   * @param recursive Whether to scan subdirectories recursively (default: false)
+   * Discover and register all automations from the given directory. Each file
+   * should default-export a class extending `Automation`; a disabled automation is
+   * registered but has no triggers wired and no `onStart()` invoked.
    */
   async discoverAndRegister(automationsDir: string, recursive = false): Promise<void> {
     const absoluteDir = resolve(automationsDir);
@@ -202,10 +177,8 @@ export class AutomationManager {
       this.logger.warn({ dir: absoluteDir }, "No automation files found");
     }
 
-    // Names successfully discovered this scan — used to decide which stored
-    // enabled preferences are stale (design.md D30). An empty set here is
-    // indistinguishable from an unreadable or unmounted directory, so the
-    // reap below is skipped entirely rather than run against it.
+    // Names discovered this scan; an empty set is indistinguishable from an
+    // unreadable directory, so the reap below is skipped when it is empty.
     const discoveredNames = new Set<string>();
 
     for (const file of files) {
@@ -268,11 +241,9 @@ export class AutomationManager {
   }
 
   /**
-   * Discards stored enabled preferences naming no discovered automation,
-   * logging each at warning level (design.md D30). Callers MUST only invoke
-   * this when discovery yielded at least one automation — an empty scan is
-   * indistinguishable from an unreadable directory, and reaping on it would
-   * re-enable every deliberately disabled automation on the next start.
+   * Discard stored enabled preferences naming no discovered automation, logging
+   * each at warning level. Callers must only invoke this when discovery yielded
+   * at least one automation — reaping an empty scan would re-enable everything.
    */
   private reapStaleEnabledPreferences(discoveredNames: Set<string>): void {
     const keys = this.stateManager.keysInternal(AUTOMATION_ENABLED_PREFIX);
@@ -289,11 +260,8 @@ export class AutomationManager {
   }
 
   /**
-   * Register a single automation instance.
-   * Injects dependencies, wires up triggers, and calls onStart.
-   *
-   * A name that names an existing but currently disabled record is not a
-   * duplicate — the record is replaced in place (task 3.6).
+   * Register a single automation instance: inject dependencies, wire triggers, and
+   * call `onStart`. A currently disabled record of the same name is replaced in place.
    */
   async register(automation: Automation, options?: { filePath?: string }): Promise<void> {
     // Detect duplicate *active* automation names (would cause cron job ID
@@ -342,11 +310,8 @@ export class AutomationManager {
   }
 
   /**
-   * Disable an automation by name: deregisters every trigger and invokes
-   * `onStop()`, then discards the live instance (design.md D4). Persists the
-   * disabled preference under the reserved namespace (design.md D20).
-   *
-   * A no-op, without side effects, when the automation is already disabled.
+   * Disable an automation by name: deregister every trigger, invoke `onStop()`,
+   * discard the live instance, and persist the disabled preference.
    */
   async stop(name: string): Promise<"stopped" | "not_found"> {
     const record = this.records.find((r) => r.name === name);
@@ -360,14 +325,9 @@ export class AutomationManager {
   }
 
   /**
-   * Enable a previously disabled automation by name: re-imports its source
-   * file with a cache-busting suffix, constructs a fresh instance, validates
-   * required services, wires triggers in declared order, and invokes
-   * `onStart()` (design.md D4, D5).
-   *
-   * A no-op, without side effects, when the automation is already enabled.
-   * A failed enable unwinds any partially wired triggers and leaves the
-   * automation disabled, reporting a descriptive error (task 3.6).
+   * Enable a previously disabled automation by name: re-import its source with a
+   * cache-busting suffix, construct a fresh instance, wire triggers, and invoke
+   * `onStart`. A failed enable unwinds partial triggers and leaves it disabled.
    */
   async start(name: string): Promise<AutomationStartResult> {
     const record = this.records.find((r) => r.name === name);
@@ -425,12 +385,8 @@ export class AutomationManager {
   }
 
   /**
-   * Wire every declared trigger for `automation` and invoke `onStart()`.
-   * Shared by `register()` and `start()`.
-   *
-   * If `onStart()` throws, any triggers wired during this call are unwound
-   * and `onStop()` is invoked best-effort before the error is rethrown to
-   * the caller — the caller decides what "stopped" means for its record.
+   * Wire every declared trigger for `automation` and invoke `onStart()`, unwinding any
+   * wired triggers if it throws before rethrowing.
    */
   private async wireAndStart(automation: Automation): Promise<void> {
     const childLogger = this.logger.child({ automation: automation.name });
@@ -634,13 +590,8 @@ export class AutomationManager {
   }
 
   /**
-   * Deregister every trigger wired for `automation` — MQTT subscriptions,
-   * cron jobs, state listeners, webhook routes, and device joined/left/state
-   * listeners — then invoke `onStop()` best-effort. Shared by the
-   * onStart-failure rollback, `stop()`, and `stopAll()` (tasks 3.2, 3.3).
-   *
-   * Errors from `onStop()` are logged and swallowed; the automation is
-   * considered stopped regardless (design.md R18/D4).
+   * Deregister every trigger wired for `automation` — MQTT, cron, state, webhook,
+   * and device listeners — then invoke `onStop()` best-effort (errors are swallowed).
    */
   private async unwireAndStop(automation: Automation): Promise<void> {
     const mqttH = this.mqttHandlers.get(automation) ?? [];
@@ -690,10 +641,8 @@ export class AutomationManager {
   }
 
   /**
-   * Throws a descriptive error, before any wiring occurs, when `automation`
-   * declares a webhook trigger whose path is already claimed by a different,
-   * currently active automation — leaving the existing route intact
-   * (design.md D5; task 3.7).
+   * Throw a descriptive error, before any wiring, when `automation` declares a
+   * webhook path already claimed by a different active automation.
    */
   private assertNoWebhookConflict(automation: Automation): void {
     const claimedBy = new Map<string, string>();
@@ -785,10 +734,8 @@ export class AutomationManager {
   }
 
   /**
-   * Return `name`'s retained execution history, most recent first, or
-   * `null` for an unknown automation — distinct from an automation that is
-   * known but has never run, which returns an empty array (design.md D11;
-   * task 8.3).
+   * Return `name`'s retained execution history, most recent first, or `null` for
+   * an unknown automation (a known but never-run automation returns an empty array).
    */
   getHistory(name: string): ExecutionRecord[] | null {
     const record = this.records.find((r) => r.name === name);
@@ -797,15 +744,9 @@ export class AutomationManager {
   }
 
   /**
-   * Return `name`'s declared and observed relationships, or `null` for an
-   * unknown automation (design.md D11; task 8.5).
-   *
-   * Declared relationships — required services (with current registration
-   * status), devices referenced by device and MQTT triggers, and state keys
-   * watched by state triggers — are derived from the automation's
-   * declarations, so they are reported in full even if it has never run.
-   * Observed writes are runtime attribution and therefore partial, growing
-   * only with use (design.md R12).
+   * Return `name`'s declared and observed relationships, or `null` for an unknown
+   * automation. Declared relationships are complete from the declarations; observed
+   * writes are runtime attribution and grow only with use.
    */
   getRelationships(name: string): AutomationRelationships | null {
     const record = this.records.find((r) => r.name === name);
@@ -846,9 +787,8 @@ export class AutomationManager {
   }
 
   /**
-   * Return the current contents of the file `name` was loaded from,
-   * addressed strictly by automation name — a caller-supplied path is never
-   * accepted (design.md D5; task 3.10).
+   * Return the current contents of the file `name` was loaded from, addressed
+   * strictly by automation name — a caller-supplied path is never accepted.
    */
   async getSource(name: string): Promise<AutomationSourceResult> {
     const record = this.records.find((r) => r.name === name);
@@ -922,17 +862,9 @@ export class AutomationManager {
   }
 
   /**
-   * Manually trigger an automation with a synthetic context.
-   * Used by the debug API for testing automations without real device events.
-   *
-   * A disabled automation is refused with `"disabled"` rather than executed
-   * — disabling deregisters every trigger and discards the instance, so
-   * running it on demand would act on the house through an automation the
-   * system reports as off (design.md D27; task 3.8c). This is distinct from
-   * `"not_found"`, so an operator can tell "switched off" from "gone".
-   *
-   * @param name Automation name
-   * @param context The trigger context to pass to execute()
+   * Manually trigger an automation with a synthetic context, used by the debug API.
+   * A disabled automation is refused with `"disabled"` rather than executed; that is
+   * distinct from `"not_found"`, so an operator can tell "switched off" from "gone".
    */
   async triggerAutomation(name: string, context: TriggerContext): Promise<AutomationTriggerResult> {
     const record = this.records.find((r) => r.name === name);

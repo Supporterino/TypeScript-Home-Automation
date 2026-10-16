@@ -128,7 +128,7 @@ function createMockMqtt() {
 }
 
 // ---------------------------------------------------------------------------
-// Pure functions: capability intersection (task 2.1)
+// Pure functions: capability intersection
 // ---------------------------------------------------------------------------
 
 describe("intersectCapabilities", () => {
@@ -209,7 +209,7 @@ describe("intersectCapabilities", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Pure functions: state derivation (task 2.2)
+// Pure functions: state derivation
 // ---------------------------------------------------------------------------
 
 describe("deriveGroupState", () => {
@@ -465,7 +465,7 @@ describe("ZigbeeGroupDeviceSource", () => {
   });
 
   // -------------------------------------------------------------------------
-  // Durable device state store (design.md D2; task 2.1)
+  // Durable device state store
   // -------------------------------------------------------------------------
 
   it("records a derived group observation into the durable store (task 2.1)", () => {

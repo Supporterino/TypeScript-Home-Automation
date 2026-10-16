@@ -75,11 +75,8 @@ export interface ShellyMqttRegisterOptions {
 export type ShellyDeviceRegisteredHandler = (device: ShellyDevice) => void;
 
 /**
- * Dependency context passed to a `ShellyServiceFactory`.
- *
- * Carries every dependency `ShellyService` needs — the shared `HttpClient`,
- * the shared `MqttService` (needed for MQTT-transport devices), and a scoped
- * `Logger`. Mirrors the `HomekitServiceContext` pattern.
+ * Dependency context passed to a `ShellyServiceFactory`: the shared `HttpClient` and
+ * `MqttService` plus a scoped `Logger`.
  */
 export interface ShellyServiceContext {
   http: HttpClient;
@@ -88,20 +85,8 @@ export interface ShellyServiceContext {
 }
 
 /**
- * Factory function type specifically for `ShellyService`.
- *
- * Receives a single {@link ShellyServiceContext} object rather than positional
- * arguments.
- *
- * @example
- * ```ts
- * shelly: (ctx) => {
- *   const svc = new ShellyService(ctx.http, ctx.mqtt, ctx.logger);
- *   svc.register("living_room_plug", "192.168.1.50");
- *   svc.register("garage_plug", { transport: "mqtt", topicPrefix: "shellyplus1-a8032abe54dc" });
- *   return svc;
- * },
- * ```
+ * Factory function type specifically for `ShellyService`: receives a single
+ * {@link ShellyServiceContext} object rather than positional arguments.
  */
 export type ShellyServiceFactory = (ctx: ShellyServiceContext) => ShellyService;
 
@@ -116,10 +101,8 @@ interface PendingMqttRpc {
 }
 
 /**
- * Parse one raw `Shelly.GetComponents` entry into a typed component status.
- * Returns `null` for unrecognized kinds (`input:N`, `light:N`, …) or malformed
- * entries, so the caller can page the inventory without treating an unsupported
- * component as an error.
+ * Parse one raw `Shelly.GetComponents` entry into a typed component status, or `null` for
+ * an unrecognized kind or malformed entry.
  */
 function parseShellyComponent(raw: unknown): ShellyComponentStatus | null {
   if (raw === null || typeof raw !== "object") return null;
@@ -146,11 +129,8 @@ function parseShellyComponent(raw: unknown): ShellyComponentStatus | null {
 }
 
 /**
- * Parse a raw `Shelly.GetComponents` response into the shared
- * {@link ShellyComponentsStatus} shape — one `ShellyComponentStatus` per
- * recognized switch/cover entry, plus the raw page size needed to page the full
- * inventory. Returns `null` when the shape is unsupported so discovery can stop
- * without throwing.
+ * Parse a raw `Shelly.GetComponents` response into the shared {@link ShellyComponentsStatus}
+ * shape, or `null` when unsupported.
  */
 function parseGetComponentsPage(response: unknown, offset: number): ShellyComponentsStatus | null {
   if (response === null || typeof response !== "object") return null;
@@ -169,10 +149,7 @@ function parseGetComponentsPage(response: unknown, offset: number): ShellyCompon
   return { components, total, offset, returned: rawComponents.length };
 }
 
-/**
- * Whether a recognized component reported a finite cumulative energy reading in
- * its status, which marks its channel as metered.
- */
+/** Whether a component's status reported a finite cumulative energy reading. */
 function componentIsMetered(status: Record<string, unknown> | undefined): boolean {
   const aenergy = status?.aenergy;
   if (aenergy === null || typeof aenergy !== "object") return false;
@@ -181,32 +158,16 @@ function componentIsMetered(status: Record<string, unknown> | undefined): boolea
 }
 
 /**
- * Service for interacting with Shelly Gen 2 devices over either their HTTP
- * RPC API or their native RPC-over-MQTT channel.
- *
- * Devices are registered by name with an explicit, fixed-per-device transport
- * (`"http"` with a host, or `"mqtt"` with a topic prefix), then controlled via
- * convenience methods that route to the correct transport transparently.
- *
- * @example
- * ```ts
- * // Inside an automation:
- * const shelly = this.services.get<ShellyService>("shelly");
- * if (!shelly) return;
- * await shelly.turnOn("living_room_plug");
- * await shelly.turnOff("living_room_plug");
- *
- * const status = await shelly.getStatus("living_room_plug");
- * this.logger.info({ power: status.apower }, "Current power draw");
- * ```
+ * Service for interacting with Shelly Gen 2 devices over their HTTP RPC API or their
+ * native RPC-over-MQTT channel; devices are registered by name with a fixed transport and
+ * controlled via convenience methods that route to the correct transport.
  */
 export class ShellyService {
   private readonly devices: Map<string, ShellyDevice> = new Map();
 
   /**
    * Channel-scoped records materialized by the device source after component
-   * discovery, kept separate from `devices` so `getDevices()` stays the public
-   * registration-only view (design.md D1).
+   * discovery, kept separate from `devices` so `getDevices()` stays registration-only.
    */
   private readonly channelDevices: Map<string, ShellyDevice> = new Map();
 
@@ -236,33 +197,14 @@ export class ShellyService {
   ) {}
 
   /**
-   * Register a Shelly device for use in automations, over HTTP.
-   *
-   * Accepts IP addresses, hostnames, or full URLs. The scheme is stripped
-   * automatically if provided:
-   * - `"192.168.1.50"` → OK
-   * - `"shelly-plug.local"` → OK
-   * - `"shelly-plug.local:8080"` → OK (custom port)
-   * - `"http://shelly-plug.local"` → normalized to `"shelly-plug.local"`
-   *
-   * An optional device `type` (`"switch" | "outlet" | "cover"`) controls how
-   * the HomeKit bridge models the device; it defaults to `"switch"` so existing
-   * two-argument calls keep working.
-   *
-   * @param name Friendly name for the device (used in all other methods)
-   * @param host IP address, hostname, or URL of the Shelly device
+   * Register an HTTP-transport Shelly device by name; the host may be an IP, hostname, or
+   * URL (scheme stripped), and `type` defaults to `"switch"`.
    */
   register(name: string, host: string): void;
   register(name: string, host: string, type: ShellyDeviceType): void;
   /**
-   * Register a Shelly device for use in automations, over MQTT.
-   *
-   * The device must have `MQTT.SetConfig` (`enable`, `server`, `enable_rpc`,
-   * `rpc_ntf`, `status_ntf`) configured on-device out-of-band — see
-   * `docs/services/shelly.md`.
-   *
-   * @param name Friendly name for the device (used in all other methods)
-   * @param options `{ type?, transport: "mqtt", topicPrefix }`
+   * Register an MQTT-transport Shelly device by name; the device's `MQTT.SetConfig` must
+   * be set on-device out-of-band.
    */
   register(name: string, options: ShellyMqttRegisterOptions): void;
   register(
@@ -295,8 +237,7 @@ export class ShellyService {
       "Shelly device registered",
     );
 
-    // Notify registration listeners, isolating each so one failure does not
-    // prevent the others from running.
+    // Notify registration listeners, isolating each so one failure does not stop the others.
     for (const cb of this.deviceRegisteredHandlers) {
       try {
         cb(device);
@@ -307,10 +248,8 @@ export class ShellyService {
   }
 
   /**
-   * Register multiple Shelly devices at once.
-   *
-   * @param devices Array of `ShellyDevice`-like objects (HTTP or MQTT entries,
-   *   mixed) or a `Record<name, host>` (HTTP-only shorthand)
+   * Register multiple Shelly devices at once, as an array of HTTP/MQTT entries or a
+   * `Record<name, host>` shorthand.
    */
   registerMany(
     devices:
@@ -342,18 +281,8 @@ export class ShellyService {
   /**
    * @internal
    *
-   * Materialize a channel-scoped record for a component discovered on an
-   * already-registered device. Called by the Shelly device source after
-   * component discovery — not part of the public registration API.
-   *
-   * The record inherits its base registration's transport identity and is
-   * stored in a separate internal map, so `getDevices()` keeps returning
-   * registrations only. It does **not** fire `onDeviceRegistered` listeners;
-   * discovery must not re-enter registration or it would loop (design.md D1).
-   *
-   * @param baseName Name of the registration the component belongs to
-   * @param channel Component channel the record addresses
-   * @param options The channel record's logical `name` and effective `type`
+   * Materialize a channel-scoped record for a component discovered on an already-registered
+   * device, without firing `onDeviceRegistered` listeners.
    */
   registerChannel(
     baseName: string,
@@ -384,13 +313,8 @@ export class ShellyService {
   /**
    * @internal
    *
-   * Remove channel records materialized for `baseName` whose logical name is no
-   * longer among the source's current entries, so a component rename does not
-   * leave the old id commandable forever. Records for retained entries are
-   * kept: the source passes their ids in `keepNames`.
-   *
-   * @param baseName Name of the registration whose records should be pruned
-   * @param keepNames Logical names that must remain resolvable
+   * Remove channel records for `baseName` whose logical name is not in `keepNames`, so a
+   * component rename does not leave the old id commandable.
    */
   pruneChannels(baseName: string, keepNames: ReadonlySet<string>): void {
     for (const [name, recordBase] of this.channelBaseNames) {
@@ -405,29 +329,20 @@ export class ShellyService {
   /**
    * @internal
    *
-   * Drop every channel record materialized by the device source. Called when
-   * the source stops, so a stop/start within the same service lifetime cannot
-   * resolve a command through a stale record — for example after a component
-   * relocates away from the channel a record was materialized for.
+   * Drop every channel record materialized by the device source, so a stop/start cannot
+   * resolve a command through a stale record.
    */
   clearChannelRecords(): void {
     this.channelDevices.clear();
     this.channelBaseNames.clear();
   }
 
-  /**
-   * Return a read-only snapshot of all currently registered devices, including
-   * their name, transport, normalized host or topic prefix, and type.
-   */
+  /** Return a read-only snapshot of all registered devices. */
   getDevices(): ShellyDevice[] {
     return Array.from(this.devices.values());
   }
 
-  /**
-   * Subscribe to device registrations. The handler is invoked synchronously
-   * whenever a device is registered (including devices registered after service
-   * startup).
-   */
+  /** Subscribe to device registrations; the handler runs synchronously on each registration. */
   onDeviceRegistered(cb: ShellyDeviceRegisteredHandler): void {
     this.deviceRegisteredHandlers.add(cb);
   }
@@ -441,13 +356,7 @@ export class ShellyService {
   // Switch control
   // -------------------------------------------------------------------------
 
-  /**
-   * Turn a Shelly switch on.
-   *
-   * @param name Device friendly name
-   * @param toggleAfter Optional: automatically toggle back after N seconds
-   * @returns The switch state before the command
-   */
+  /** Turn a Shelly switch on, optionally toggling back after `toggleAfter` seconds. */
   async turnOn(name: string, toggleAfter?: number): Promise<ShellySwitchSetResult> {
     const params: Record<string, unknown> = { id: this.channelOf(name), on: true };
     if (toggleAfter !== undefined) {
@@ -457,13 +366,7 @@ export class ShellyService {
     return this.rpc<ShellySwitchSetResult>(name, "Switch.Set", params);
   }
 
-  /**
-   * Turn a Shelly switch off.
-   *
-   * @param name Device friendly name
-   * @param toggleAfter Optional: automatically toggle back after N seconds
-   * @returns The switch state before the command
-   */
+  /** Turn a Shelly switch off, optionally toggling back after `toggleAfter` seconds. */
   async turnOff(name: string, toggleAfter?: number): Promise<ShellySwitchSetResult> {
     const params: Record<string, unknown> = { id: this.channelOf(name), on: false };
     if (toggleAfter !== undefined) {
@@ -473,12 +376,7 @@ export class ShellyService {
     return this.rpc<ShellySwitchSetResult>(name, "Switch.Set", params);
   }
 
-  /**
-   * Toggle a Shelly switch.
-   *
-   * @param name Device friendly name
-   * @returns The switch state before the command
-   */
+  /** Toggle a Shelly switch. */
   async toggle(name: string): Promise<ShellySwitchSetResult> {
     this.logger.info({ device: name }, "Toggling Shelly switch");
     return this.rpc<ShellySwitchSetResult>(name, "Switch.Toggle", { id: this.channelOf(name) });
@@ -488,12 +386,7 @@ export class ShellyService {
   // Cover/shutter control (Shelly Plus 2PM in roller mode)
   // -------------------------------------------------------------------------
 
-  /**
-   * Open a Shelly cover/shutter.
-   *
-   * @param name Device friendly name
-   * @param duration Optional: stop after N seconds (partial open)
-   */
+  /** Open a Shelly cover, optionally stopping after `duration` seconds. */
   async coverOpen(name: string, duration?: number): Promise<void> {
     const params: Record<string, unknown> = { id: this.channelOf(name) };
     if (duration !== undefined) {
@@ -503,12 +396,7 @@ export class ShellyService {
     await this.rpc(name, "Cover.Open", params);
   }
 
-  /**
-   * Close a Shelly cover/shutter.
-   *
-   * @param name Device friendly name
-   * @param duration Optional: stop after N seconds (partial close)
-   */
+  /** Close a Shelly cover, optionally stopping after `duration` seconds. */
   async coverClose(name: string, duration?: number): Promise<void> {
     const params: Record<string, unknown> = { id: this.channelOf(name) };
     if (duration !== undefined) {
@@ -518,23 +406,13 @@ export class ShellyService {
     await this.rpc(name, "Cover.Close", params);
   }
 
-  /**
-   * Stop a Shelly cover/shutter.
-   *
-   * @param name Device friendly name
-   */
+  /** Stop a Shelly cover. */
   async coverStop(name: string): Promise<void> {
     this.logger.info({ device: name }, "Stopping Shelly cover");
     await this.rpc(name, "Cover.Stop", { id: this.channelOf(name) });
   }
 
-  /**
-   * Move a Shelly cover/shutter to an absolute position.
-   * Requires the cover to be calibrated.
-   *
-   * @param name Device friendly name
-   * @param position Target position 0–100 (0 = closed, 100 = fully open)
-   */
+  /** Move a Shelly cover to an absolute position 0–100; requires calibration. */
   async coverGoToPosition(name: string, position: number): Promise<void> {
     const clamped = Math.max(0, Math.min(100, Math.round(position)));
     if (clamped !== position) {
@@ -547,13 +425,7 @@ export class ShellyService {
     await this.rpc(name, "Cover.GoToPosition", { id: this.channelOf(name), pos: clamped });
   }
 
-  /**
-   * Move a Shelly cover/shutter by a relative offset.
-   * Requires the cover to be calibrated.
-   *
-   * @param name Device friendly name
-   * @param offset Relative position change (-100 to 100, positive = open, negative = close)
-   */
+  /** Move a Shelly cover by a relative offset -100..100; requires calibration. */
   async coverMoveRelative(name: string, offset: number): Promise<void> {
     const clamped = Math.max(-100, Math.min(100, Math.round(offset)));
     if (clamped !== offset) {
@@ -566,50 +438,29 @@ export class ShellyService {
     await this.rpc(name, "Cover.GoToPosition", { id: this.channelOf(name), rel: clamped });
   }
 
-  /**
-   * Get the current status of a Shelly cover (position, state, power).
-   *
-   * @param name Device friendly name
-   */
+  /** Get the current status of a Shelly cover (position, state, power). */
   async getCoverStatus(name: string): Promise<ShellyCoverStatus> {
     return this.rpc<ShellyCoverStatus>(name, "Cover.GetStatus", { id: this.channelOf(name) });
   }
 
-  /**
-   * Get the configuration of a Shelly cover.
-   *
-   * @param name Device friendly name
-   */
+  /** Get the configuration of a Shelly cover. */
   async getCoverConfig(name: string): Promise<ShellyCoverConfig> {
     return this.rpc<ShellyCoverConfig>(name, "Cover.GetConfig", { id: this.channelOf(name) });
   }
 
-  /**
-   * Start calibration of a Shelly cover. The cover will open and close
-   * fully to measure travel times.
-   *
-   * @param name Device friendly name
-   */
+  /** Start calibration: the cover opens and closes fully to measure travel times. */
   async coverCalibrate(name: string): Promise<void> {
     this.logger.warn({ device: name }, "Starting Shelly cover calibration");
     await this.rpc(name, "Cover.Calibrate", { id: this.channelOf(name) });
   }
 
-  /**
-   * Get the current position of a Shelly cover (0–100, null if uncalibrated).
-   *
-   * @param name Device friendly name
-   */
+  /** Get the current position of a Shelly cover (0–100, or null if uncalibrated). */
   async getCoverPosition(name: string): Promise<number | null> {
     const status = await this.getCoverStatus(name);
     return status.current_pos;
   }
 
-  /**
-   * Get the current state of a Shelly cover.
-   *
-   * @param name Device friendly name
-   */
+  /** Get the current state of a Shelly cover. */
   async getCoverState(name: string): Promise<ShellyCoverState> {
     const status = await this.getCoverStatus(name);
     return status.state;
@@ -619,68 +470,39 @@ export class ShellyService {
   // Status and info (shared across Switch and Cover devices)
   // -------------------------------------------------------------------------
 
-  /**
-   * Get the current status of a Shelly switch (including power metering).
-   *
-   * @param name Device friendly name
-   */
+  /** Get the current status of a Shelly switch, including power metering. */
   async getStatus(name: string): Promise<ShellySwitchStatus> {
     return this.rpc<ShellySwitchStatus>(name, "Switch.GetStatus", { id: this.channelOf(name) });
   }
 
-  /**
-   * Get the configuration of a Shelly switch.
-   *
-   * @param name Device friendly name
-   */
+  /** Get the configuration of a Shelly switch. */
   async getConfig(name: string): Promise<ShellySwitchConfig> {
     return this.rpc<ShellySwitchConfig>(name, "Switch.GetConfig", { id: this.channelOf(name) });
   }
 
-  /**
-   * Get device identification info.
-   *
-   * @param name Device friendly name
-   */
+  /** Get device identification info. */
   async getDeviceInfo(name: string): Promise<ShellyDeviceInfo> {
     return this.rpc<ShellyDeviceInfo>(name, "Shelly.GetDeviceInfo");
   }
 
-  /**
-   * Get system-level status (uptime, RAM, firmware updates, etc.).
-   *
-   * @param name Device friendly name
-   */
+  /** Get system-level status (uptime, RAM, firmware updates). */
   async getSysStatus(name: string): Promise<ShellySysStatus> {
     return this.rpc<ShellySysStatus>(name, "Sys.GetStatus");
   }
 
-  /**
-   * Check if the switch is currently on.
-   *
-   * @param name Device friendly name
-   */
+  /** Check whether the switch is currently on. */
   async isOn(name: string): Promise<boolean> {
     const status = await this.getStatus(name);
     return status.output;
   }
 
-  /**
-   * Get the current power consumption in Watts.
-   *
-   * @param name Device friendly name
-   */
+  /** Get the current power consumption in Watts. */
   async getPower(name: string): Promise<number> {
     const status = await this.getStatus(name);
     return status.apower;
   }
 
-  /**
-   * Reboot a Shelly device.
-   *
-   * @param name Device friendly name
-   * @param delayMs Optional: delay in milliseconds before rebooting
-   */
+  /** Reboot a Shelly device, optionally after `delayMs` milliseconds. */
   async reboot(name: string, delayMs?: number): Promise<void> {
     const params = delayMs !== undefined ? { delay_ms: delayMs } : undefined;
     this.logger.warn({ device: name }, "Rebooting Shelly device");
@@ -692,19 +514,9 @@ export class ShellyService {
   // -------------------------------------------------------------------------
 
   /**
-   * Enumerate the switch/cover components a device exposes via
-   * `Shelly.GetComponents`, paging the inventory until every reported
-   * component has been covered (design.md D2).
-   *
-   * Only `switch:N` / `cover:N` components are recognized; a component's
-   * configured name comes from its `config.name` and its metering from a
-   * finite `status.aenergy.total`. Because a partial inventory is not a valid
-   * inventory, any page that fails or parses as unsupported discards the whole
-   * result — returning `[]` so the caller falls back to a single channel-0
-   * component rather than describing only the pages already read (design.md D2).
-   *
-   * @param name Device friendly name
-   * @returns The recognized components, in inventory order
+   * Enumerate the `switch:N`/`cover:N` components a device exposes via
+   * `Shelly.GetComponents`, paging the whole inventory. A page that fails or is
+   * unsupported discards the entire result, returning `[]`.
    */
   async discoverComponents(name: string): Promise<ShellyDiscoveredComponent[]> {
     const discovered: ShellyDiscoveredComponent[] = [];
@@ -752,10 +564,8 @@ export class ShellyService {
         });
       }
 
-      // Page on the raw component count, not the recognized subset: a page can
-      // carry unsupported kinds (`input:*`) that sort ahead of switch/cover, so
-      // advancing by the recognized count would re-read or skip inventory
-      // (design.md D2).
+      // Page on the raw component count: a page can carry unsupported kinds that sort
+      // ahead of switch/cover, so advancing by the recognized count would skip inventory.
       const returned = page.returned ?? page.components.length;
       // Stop on the last page or an empty page (which would otherwise let
       // `offset` stall and loop forever).
@@ -784,12 +594,8 @@ export class ShellyService {
   }
 
   /**
-   * Look up a device by name, resolving both public registrations and the
-   * internal channel map so channel-scoped records are commandable through the
-   * same public methods. A channel record takes precedence so a single-component
-   * device whose sole component lives at a non-zero channel can keep the base
-   * registration's identity while still threading that channel. Throws if the
-   * name is unknown.
+   * Look up a device by name across public registrations and the internal channel map,
+   * with channel records taking precedence; throws if unknown.
    */
   private getDevice(name: string): ShellyDevice {
     const device = this.channelDevices.get(name) ?? this.devices.get(name);
@@ -810,14 +616,8 @@ export class ShellyService {
   }
 
   /**
-   * Dispatch an RPC call to a Shelly device, routing to HTTP or MQTT based on
-   * the device's registered transport. No automatic fallback between
-   * transports.
-   *
-   * @param name Device friendly name
-   * @param method RPC method (e.g. "Switch.Set")
-   * @param params RPC method parameters
-   * @param timeoutMs Optional HTTP timeout; omitted calls use the client default
+   * Dispatch an RPC call to a Shelly device, routing to HTTP or MQTT by its transport,
+   * with no automatic fallback.
    */
   private async rpc<T>(
     name: string,
@@ -888,11 +688,8 @@ export class ShellyService {
   }
 
   /**
-   * Execute an RPC call to a Shelly device over the MQTT RPC channel.
-   *
-   * Publishes a JSON-RPC request to `<topicPrefix>/rpc` and correlates the
-   * response on the single shared `<src>/rpc` subscription by request `id`,
-   * with a fixed 5s timeout. No automatic fallback to HTTP.
+   * Execute an RPC call over the MQTT RPC channel, correlating the response by request
+   * `id` with a fixed 5s timeout.
    */
   private async mqttRpc<T>(
     device: ShellyDevice,

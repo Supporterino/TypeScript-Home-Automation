@@ -39,12 +39,8 @@ function looksLikeToken(segment: string): boolean {
 }
 
 /**
- * Mask sensitive credentials in a URL for safe logging.
- *
- * Replaces values of known sensitive query parameter names with "***", and
- * masks token-like path segments (e.g. a Nanoleaf API token in
- * `/api/v1/{token}/...`) so credentials placed in the path are not written to
- * log output in plaintext.
+ * Mask sensitive credentials in a URL for safe logging: known query parameters and
+ * token-like path segments are replaced with "***".
  */
 function sanitizeUrl(url: string): string {
   try {
@@ -82,13 +78,7 @@ function sanitizeUrl(url: string): string {
 export class HttpClient {
   constructor(private readonly logger: Logger) {}
 
-  /**
-   * Make an HTTP request. Uses Bun's native fetch under the hood.
-   *
-   * @param url The URL to request
-   * @param options Request options (method, headers, body, timeout, retries)
-   * @returns Typed response with parsed JSON body
-   */
+  /** Make an HTTP request, using Bun's native fetch and returning a parsed JSON body. */
   async request<T = unknown>(
     url: string,
     options: HttpRequestOptions = {},
@@ -184,10 +174,8 @@ export class HttpClient {
   }
 
   /**
-   * Parse a delivered response body. Handles JSON, text, and empty
-   * (`204`/no content) responses. On a JSON parse failure, throws a descriptive
-   * error including the status and sanitized URL — this is a terminal error and
-   * must NOT trigger a retry.
+   * Parse a delivered JSON, text, or empty response body; a JSON parse failure throws a
+   * terminal (non-retryable) error including the status and sanitized URL.
    */
   private async parseBody<T>(response: Response, safeUrl: string): Promise<T> {
     // Empty / no-content responses yield null data without a parse error.

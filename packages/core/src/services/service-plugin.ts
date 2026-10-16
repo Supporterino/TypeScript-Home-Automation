@@ -4,12 +4,7 @@ import type { HttpClient } from "../http/http-client.js";
 import type { ExecutionRecorder } from "../observability/execution-recorder.js";
 import type { DeviceRegistry } from "../zigbee/device-registry.js";
 
-/**
- * Minimal context provided to a `ServicePlugin.onStart()` hook.
- *
- * Contains the shared infrastructure services every plugin may need during
- * its startup phase.
- */
+/** Minimal context provided to a `ServicePlugin.onStart()` hook. */
 export interface CoreContext {
   /** The shared HTTP client for outbound requests. */
   http: HttpClient;
@@ -21,40 +16,16 @@ export interface CoreContext {
    */
   deviceRegistry: DeviceRegistry | null;
   /**
-   * Records automation execution history and broadcasts completions.
-   * `PrometheusMetricsService` subscribes here to export the per-automation
-   * execution/failure counters from the same recording path that populates
-   * the history (design.md D18; task 8.8). Always present.
+   * Records automation execution history and broadcasts completions; the Prometheus
+   * metrics service subscribes here to export per-automation counters.
    */
   executionRecorder: ExecutionRecorder;
 }
 
 /**
- * Optional lifecycle interface for services registered with `ServiceRegistry`.
- *
- * Implement this interface on a service class to receive engine lifecycle hooks
- * and/or to mount custom HTTP API routes — without touching any core files.
- *
- * All methods are optional. Only implement what you need.
- *
- * @example
- * ```ts
- * export class MyService implements ServicePlugin {
- *   readonly serviceKey = "my-service";
- *
- *   async onStart(ctx: CoreContext): Promise<void> {
- *     ctx.logger.info("MyService starting up");
- *   }
- *
- *   async onStop(): Promise<void> {
- *     // cleanup
- *   }
- *
- *   registerRoutes(app: Hono): void {
- *     app.get("/api/my-service/status", (c) => c.json({ ok: true }));
- *   }
- * }
- * ```
+ * Optional lifecycle interface for services registered with `ServiceRegistry`:
+ * implement it to receive engine lifecycle hooks and/or mount custom HTTP routes.
+ * All methods are optional.
  */
 export interface ServicePlugin {
   /**
@@ -63,23 +34,12 @@ export interface ServicePlugin {
    */
   readonly serviceKey: string;
 
-  /**
-   * Called once after the state manager has loaded and before MQTT connects.
-   * Use this to perform async initialization (e.g. connect to an external API).
-   */
+  /** Called once after the state manager has loaded and before MQTT connects. */
   onStart?(context: CoreContext): Promise<void>;
 
-  /**
-   * Called during engine shutdown after automations have stopped but before
-   * MQTT disconnects. Use this to flush buffers or close connections.
-   */
+  /** Called during engine shutdown after automations stop and before MQTT disconnects. */
   onStop?(): Promise<void>;
 
-  /**
-   * Called once when the HTTP server is available, before it starts listening.
-   * Use this to mount custom API routes on the shared Hono app.
-   *
-   * @param app The shared Hono application instance.
-   */
+  /** Called once when the HTTP server is available, before it starts listening. */
   registerRoutes?(app: Hono): void;
 }

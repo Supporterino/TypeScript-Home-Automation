@@ -18,35 +18,26 @@ export function isReservedStateKey(key: string): boolean {
   return key.startsWith(INTERNAL_STATE_PREFIX);
 }
 
-/**
- * Options for the StateManager.
- */
+/** Options for the `StateManager`. */
 export interface StateManagerOptions {
   /**
-   * Whether to persist state to a JSON file on shutdown and
-   * restore it on startup.
+   * Whether to persist state to a JSON file on shutdown and restore on startup.
    *
    * @default true
    */
   persist?: boolean;
 
   /**
-   * Path to the JSON file for state persistence.
-   * Only used when `persist` is true.
+   * Path to the JSON file for state persistence; used when `persist` is true.
    *
    * @default "./state.json"
    */
   filePath?: string;
 
   /**
-   * Milliseconds to wait after a mutation before flushing a coalesced save to
-   * disk. Multiple writes within one window produce a single save. `0` saves
-   * on every mutation. Only used when `persist` is true.
-   *
-   * An abrupt process kill loses mutations from the current window — a
-   * bounded trade-off against writing through on every `set()`, which is not
-   * viable given `save()` rewrites and fsyncs the whole store (design.md D6,
-   * R3).
+   * Milliseconds to wait after a mutation before flushing a coalesced save to disk;
+   * `0` saves on every mutation, and multiple writes in one window produce one save.
+   * An abrupt process kill loses mutations from the current window.
    *
    * @default 1000
    */
@@ -54,28 +45,8 @@ export interface StateManagerOptions {
 }
 
 /**
- * Generic state manager for sharing and persisting state across automations.
- *
- * Provides typed get/set/delete operations on an in-memory key-value store.
- * Supports change listeners that fire when a key is set or deleted, enabling
- * the `state` trigger type in automations.
- *
- * Optionally persists state to a JSON file on shutdown and restores it on
- * startup.
- *
- * @example
- * ```ts
- * // In an automation:
- * this.state.set("night_mode", true);
- * const isNight = this.state.get<boolean>("night_mode");
- *
- * // Typed with a default:
- * const count = this.state.get<number>("motion_count", 0);
- * this.state.set("motion_count", count + 1);
- *
- * // Delete:
- * this.state.delete("temporary_flag");
- * ```
+ * Generic state manager for sharing and persisting state across automations: typed
+ * get/set/delete over an in-memory store, with change listeners, optionally persisted.
  */
 export class StateManager {
   private readonly store: Map<string, unknown> = new Map();
@@ -90,10 +61,7 @@ export class StateManager {
   private flushTimer: ReturnType<typeof setTimeout> | null = null;
 
   /**
-   * Chains every `save()` call (scheduled or explicit) so overlapping calls
-   * never race on the same file — a scheduled flush and an explicit call from
-   * graceful shutdown can otherwise land inside `writeJsonAtomically()`
-   * concurrently.
+   * Chains every `save()` call so overlapping calls never race on the same file.
    */
   private saveChain: Promise<void> = Promise.resolve();
 
@@ -110,13 +78,7 @@ export class StateManager {
   // Core operations
   // -------------------------------------------------------------------------
 
-  /**
-   * Get a value from the state store.
-   *
-   * @param key The state key
-   * @param defaultValue Value to return if the key doesn't exist
-   * @returns The stored value cast to T, or the default
-   */
+  /** Get a value from the state store, or `defaultValue` when the key is absent. */
   get<T = unknown>(key: string, defaultValue?: T): T | undefined {
     if (this.store.has(key)) {
       return this.store.get(key) as T;
@@ -125,16 +87,11 @@ export class StateManager {
   }
 
   /**
-   * Set a value in the state store.
+   * Set a value in the state store, firing change listeners if it actually changed
+   * and scheduling a coalesced save when persistence is enabled.
    *
-   * Fires change listeners if the value actually changed, and schedules a
-   * coalesced save when persistence is enabled.
-   *
-   * @param key The state key
-   * @param value The value to store
-   * @throws {Error} if `key` falls inside the reserved internal namespace
-   * (design.md D20). Use {@link setInternal} for room and automation
-   * enabled-flag writes.
+   * @throws {Error} if `key` falls inside the reserved internal namespace; use
+   * {@link setInternal} for room and automation enabled-flag writes.
    */
   set<T = unknown>(key: string, value: T): void {
     if (isReservedStateKey(key)) {
@@ -144,16 +101,11 @@ export class StateManager {
   }
 
   /**
-   * Writes a key under the reserved internal namespace, bypassing the
-   * rejection {@link set} applies to public callers. Used only by the room
-   * and automation enabled-flag writers (design.md D20).
+   * Write a key under the reserved internal namespace, bypassing the rejection
+   * {@link set} applies; the write is otherwise unchanged. Used only by the room and
+   * automation enabled-flag writers.
    *
-   * Everything else about the write is unchanged — it is persisted,
-   * coalesced by the flush interval, and delivered to change listeners like
-   * any other key.
-   *
-   * @throws {Error} if `key` does not fall inside the reserved namespace —
-   * this path exists for internal keys only.
+   * @throws {Error} if `key` does not fall inside the reserved namespace.
    */
   setInternal<T = unknown>(key: string, value: T): void {
     if (!isReservedStateKey(key)) {
@@ -178,15 +130,10 @@ export class StateManager {
   }
 
   /**
-   * Delete a key from the state store.
+   * Delete a key from the state store, firing change listeners if it existed; returns
+   * whether it existed.
    *
-   * Fires change listeners if the key existed, and schedules a coalesced
-   * save when persistence is enabled.
-   *
-   * @param key The state key
-   * @returns true if the key existed and was deleted
    * @throws {Error} if `key` falls inside the reserved internal namespace.
-   * Use {@link deleteInternal} for room and automation enabled-flag deletes.
    */
   delete(key: string): boolean {
     if (isReservedStateKey(key)) {
@@ -196,8 +143,8 @@ export class StateManager {
   }
 
   /**
-   * Deletes a key under the reserved internal namespace, bypassing the
-   * rejection {@link delete} applies to public callers (design.md D20).
+   * Delete a key under the reserved internal namespace, bypassing the rejection
+   * {@link delete} applies.
    *
    * @throws {Error} if `key` does not fall inside the reserved namespace.
    */
@@ -230,23 +177,15 @@ export class StateManager {
     return this.store.has(key);
   }
 
-  /**
-   * Get all keys in the state store, excluding reserved internal keys
-   * (design.md D20). Every surface that lists or counts keys derives from
-   * this method, so a count alongside a listing can never disagree with it.
-   */
+  /** Get all keys in the state store, excluding reserved internal keys. */
   keys(): string[] {
     return [...this.store.keys()].filter((key) => !isReservedStateKey(key));
   }
 
   /**
-   * Returns reserved internal keys starting with `prefix`, for an internal
-   * consumer that owns a slice of the reserved namespace and needs to
-   * enumerate it — for example the automation-enabled reaper discarding
-   * preferences for automations no longer discovered (design.md D20, D30).
-   *
-   * The reserved namespace is otherwise unenumerable through the public API
-   * by design; this exists for internal consumers only.
+   * Return reserved internal keys starting with `prefix`, for an internal consumer
+   * that owns a slice of the reserved namespace; it is otherwise unenumerable through
+   * the public API.
    *
    * @throws {Error} if `prefix` does not fall inside the reserved namespace.
    */
@@ -263,12 +202,7 @@ export class StateManager {
   // Change listeners
   // -------------------------------------------------------------------------
 
-  /**
-   * Register a listener for changes to a specific key.
-   *
-   * @param key The state key to watch
-   * @param handler Callback fired with (key, newValue, oldValue)
-   */
+  /** Register a listener for changes to a specific key, fired with (key, newValue, oldValue). */
   /** Threshold for warning about potential listener leaks. */
   private static readonly LISTENER_WARN_THRESHOLD = 10;
 
@@ -341,12 +275,8 @@ export class StateManager {
   }
 
   /**
-   * Save current state to disk (if persistence is enabled).
-   *
-   * Concurrent calls — a scheduled coalesced flush racing an explicit call
-   * from graceful shutdown — are serialized onto one chain so they never
-   * open the same temp file at once. A failed save is logged and does not
-   * prevent a later save from running (design.md R3; task 2.5).
+   * Save current state to disk. Concurrent calls are serialized onto one chain so
+   * they never open the same temp file at once; a failed save is logged.
    */
   async save(): Promise<void> {
     if (!this.persist) return;
@@ -386,14 +316,9 @@ export class StateManager {
   }
 
   /**
-   * Schedules a coalesced save after a mutation, when persistence is
-   * enabled. Multiple writes inside one `flushIntervalMs` window produce a
-   * single save — the first write in an idle period starts the timer, and
-   * later writes ride along until it fires rather than restarting it, so a
-   * sustained stream of writes still flushes at a bounded interval rather
-   * than being deferred indefinitely (design.md D6).
-   *
-   * `flushIntervalMs: 0` saves on every mutation instead of scheduling.
+   * Schedule a coalesced save after a mutation: the first write in an idle period
+   * starts the timer and later writes ride along, so a sustained stream still flushes
+   * at a bounded interval. `flushIntervalMs: 0` saves on every mutation.
    */
   private scheduleFlush(): void {
     if (!this.persist) return;
@@ -414,10 +339,8 @@ export class StateManager {
   }
 
   /**
-   * Cancels any pending coalesced save and performs one immediately.
-   *
-   * Called by the engine on graceful shutdown so mutations made inside the
-   * current debounce window are not lost (design.md D6; task 2.3).
+   * Cancel any pending coalesced save and perform one immediately, called on
+   * graceful shutdown so mutations inside the current window are not lost.
    */
   async flush(): Promise<void> {
     if (this.flushTimer) {

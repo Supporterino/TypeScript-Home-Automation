@@ -1,12 +1,7 @@
 /**
- * The source-agnostic `DeviceSource` abstraction (design.md D2, D21, D22;
- * specs/device-sources/spec.md).
- *
- * Every controllable thing the engine knows about — Zigbee, Shelly, and
- * Nanoleaf devices, and configured state toggles — is exposed through one
- * interface: enumeration, command dispatch, and state subscription. The
- * HomeKit bridge and the web UI consume the same device model instead of
- * each reimplementing discovery, freshness, and write-back per family.
+ * The source-agnostic `DeviceSource` abstraction. Every controllable thing the
+ * engine knows about is exposed through one interface: enumeration, command
+ * dispatch, and state subscription.
  */
 import type { DeviceDescriptor } from "@ts-ha/shared";
 import { formatQualifiedId } from "./qualified-id.js";
@@ -28,12 +23,9 @@ export type DeviceCommandOutcome =
   | { status: "invalid"; error: string };
 
 /**
- * A source-agnostic supplier of devices from one device family.
- *
- * A source MUST enumerate its devices, accept commands for them, notify
- * subscribers of state and reachability changes, and be started and stopped
- * as part of the engine lifecycle. It reports itself unavailable — rather
- * than throwing — when its backing service or configuration is absent.
+ * A source-agnostic supplier of devices from one device family: it enumerates devices,
+ * accepts commands, notifies of state changes, and reports itself unavailable rather than
+ * throwing when its backing service is absent.
  */
 export interface DeviceSource {
   /** Short, stable identifier for this source (e.g. "zigbee", "shelly", "nanoleaf", "state"). Never contains the qualified-id delimiter. */
@@ -59,14 +51,8 @@ export interface DeviceSource {
   get(deviceId: string): DeviceDescriptor | undefined;
 
   /**
-   * Dispatch a command to one of this source's devices.
-   *
-   * Returns `"not_found"` for an unrecognised device identifier,
-   * `"unavailable"` when the source itself is unavailable, and `"invalid"`
-   * with a descriptive error when the properties fail validation against the
-   * device's declared capability schema (task 7.1) — rather than throwing —
-   * so callers can map each to a distinct HTTP status. An invalid command
-   * MUST NOT reach the device's transport (task 7.3).
+   * Dispatch a command to one of this source's devices. An invalid command is
+   * rejected rather than thrown, and must not reach the device's transport.
    */
   command(deviceId: string, properties: Record<string, unknown>): Promise<DeviceCommandOutcome>;
 

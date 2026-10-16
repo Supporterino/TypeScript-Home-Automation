@@ -2,52 +2,9 @@ import type { IkeaRodretAction } from "@ts-ha/shared/types";
 import { Automation, type Trigger, type TriggerContext } from "../automation.js";
 
 /**
- * Abstract base class for automations driven by an IKEA RODRET dimmer
- * (E2201).
- *
- * Provides a clean handler-per-action pattern. Subclasses set `remoteName`
- * and override only the action handlers they need — unhandled actions are
- * silently ignored (no-op).
- *
- * The RODRET has 2 buttons with 5 possible actions:
- *
- * | Action                 | Gesture                      |
- * |------------------------|------------------------------|
- * | `on`                   | Press top button             |
- * | `off`                  | Press bottom button          |
- * | `brightness_move_up`   | Hold top button              |
- * | `brightness_move_down` | Hold bottom button           |
- * | `brightness_stop`      | Release after hold           |
- *
- * @example
- * ```ts
- * import { IkeaRodretAutomation } from "@ts-ha/core";
- *
- * export default class BedroomDimmer extends IkeaRodretAutomation {
- *   readonly name = "bedroom-dimmer";
- *   protected readonly remoteName = "bedroom_rodret";
- *
- *   protected async onOn(): Promise<void> {
- *     this.mqtt.publishToDevice("bedroom_light", { state: "ON", brightness: 254 });
- *   }
- *
- *   protected async onOff(): Promise<void> {
- *     this.mqtt.publishToDevice("bedroom_light", { state: "OFF" });
- *   }
- *
- *   protected async onBrightnessMoveUp(): Promise<void> {
- *     this.mqtt.publishToDevice("bedroom_light", { brightness_move: 40 });
- *   }
- *
- *   protected async onBrightnessMoveDown(): Promise<void> {
- *     this.mqtt.publishToDevice("bedroom_light", { brightness_move: -40 });
- *   }
- *
- *   protected async onBrightnessStop(): Promise<void> {
- *     this.mqtt.publishToDevice("bedroom_light", { brightness_move: 0 });
- *   }
- * }
- * ```
+ * Abstract base class for automations driven by an IKEA RODRET dimmer (E2201).
+ * Subclasses set `remoteName` and override only the action handlers they need; unhandled
+ * actions are a no-op.
  */
 export abstract class IkeaRodretAutomation extends Automation {
   /**

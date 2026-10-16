@@ -7,10 +7,8 @@ import {
 } from "../src/mqtt/mqtt-utils.js";
 
 /**
- * Performance comparison tests for MQTT message dispatch.
- *
- * These tests measure the old O(n) approach (topicMatches on every subscription)
- * vs the new indexed approach (Map lookup for exact topics + pre-split wildcards).
+ * Performance comparison for MQTT dispatch: the old O(n) substring scan versus the indexed
+ * Map-lookup approach.
  */
 
 // Simulate a realistic set of subscriptions
