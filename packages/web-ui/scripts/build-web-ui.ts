@@ -1,16 +1,8 @@
 #!/usr/bin/env bun
 /**
- * Build script for the web UI frontend.
- *
- * Uses Bun.build to compile the React + Tailwind CSS app into content-hashed,
- * code-split, pre-compressed JS and CSS assets, then writes them as a
- * generated asset manifest module that the server serves from
- * content-addressed routes (see `packages/web-ui/src/asset-routes.ts`).
- *
- * Run automatically via:
- *   - prebuild      (bun run build)
- *   - build:web-ui  (bun run build:web-ui)
- *   - build:web-ui --watch (wired into `bun run dev`)
+ * Builds the web UI frontend: Bun.build compiles the React + Tailwind app into
+ * content-hashed, code-split, pre-compressed assets, written out as a generated
+ * manifest module the server serves from content-addressed routes.
  */
 
 import { existsSync } from "node:fs";
@@ -23,40 +15,28 @@ const ENTRY = join(PACKAGE_ROOT, "src/app/index.tsx");
 const APP_DIR = join(PACKAGE_ROOT, "src/app");
 const OUT_MANIFEST = join(PACKAGE_ROOT, "src/assets/manifest.ts");
 
-// The display face is referenced from `styles/app.css` by this relative
-// path. Bun's CSS bundler inlines `url()` assets as base64 data URLs
-// (oven-sh/bun#24599), so the reference is marked external, the file is
-// emitted as its own content-hashed asset below, and the CSS url is rewritten
-// to point at it (design.md D3, D10).
+// The display face is referenced from `styles/app.css` by this relative path.
+// Bun inlines `url()` assets as base64, so the reference is marked external,
+// the font is emitted as its own content-hashed asset, and the CSS url is
+// rewritten to point at it.
 const FONT_SOURCE = join(APP_DIR, "fonts/plus-jakarta-sans-latin.woff2");
 const FONT_CSS_REF = "../fonts/plus-jakarta-sans-latin.woff2";
 
 const WATCH = process.argv.includes("--watch");
 
 /**
- * Whether a `hearth.css` import comes from a wall **display** module — the only
- * place Hearth belongs (design.md D5, D8; task 1.3). The editor
- * (`wall/editor/**`) is deliberately excluded: it stays on Lumen and lives in a
- * different lazy chunk, so a stray editor import must fall through to the normal
- * CSS path and be caught by `web-ui-assets.test.ts` rather than being silently
- * emitted as an on-demand asset.
+ * Whether a `hearth.css` import comes from a wall display module — the only
+ * place Hearth belongs. Wall-editor imports are excluded on purpose.
  */
 function isWallDisplayImporter(importer: string): boolean {
   return /[\\/]wall[\\/]/.test(importer) && !/[\\/]wall[\\/]editor[\\/]/.test(importer);
 }
 
 /**
- * Delivers the wall's stylesheet on demand (design.md D5; specs/wall-display
- * "On-Demand Wall Stylesheet"; specs/web-ui "On-Demand Feature Stylesheets").
- *
- * Bun folds every imported stylesheet into the entry CSS, so a plain CSS import
- * would put Hearth in the dashboard's first paint. A wall-display import is
- * loaded here as a `file` asset instead, so Bun emits it as its own
- * content-hashed stylesheet, referenced by the wall chunk and absent from the
- * entry CSS. A wall sheet imported from anywhere else — the entry or the editor
- * — is left to the normal CSS path on purpose, where `web-ui-assets.test.ts`
- * fails rather than silently shipping Hearth to every dashboard load. Registered
- * before `bun-plugin-tailwind` so this loader wins for the wall sheet.
+ * Delivers the wall's stylesheet on demand: a wall-display `hearth.css` import
+ * is loaded as a `file` asset, so Bun emits it as its own content-hashed
+ * stylesheet instead of folding Hearth into the entry CSS. Registered before
+ * `bun-plugin-tailwind` so this loader wins.
  */
 function wallStylesheetPlugin(): Bun.BunPlugin {
   const NAMESPACE = "wall-stylesheet";
@@ -83,8 +63,8 @@ function contentTypeFor(path: string): string {
 }
 
 /**
- * Emits the self-hosted display face as a content-hashed first-paint asset.
- * Returns null when the font has not been added to the tree yet.
+ * Emits the self-hosted display face as a content-hashed first-paint asset, or
+ * null when the font is not in the tree.
  */
 async function buildFontAsset(): Promise<BuiltAsset | null> {
   if (!existsSync(FONT_SOURCE)) return null;
@@ -116,36 +96,28 @@ async function buildOnce(): Promise<boolean> {
 
   const result = await Bun.build({
     entrypoints: [ENTRY],
-    // Compile the Tailwind v4 stylesheet as part of this same bundle step
-    // (design.md D2). `app.css` is the CSS entry, reached through the entry
-    // module's import; no PostCSS pipeline is introduced.
+    // Compile the Tailwind v4 stylesheet in this same bundle step.
     // `bun-plugin-tailwind` default-exports the plugin instance, not a factory.
     plugins: [wallStylesheetPlugin(), tailwind],
     target: "browser",
     format: "esm",
     minify: true,
-    // Content-hashed, split output — non-first-paint chunks (behind a
-    // dynamic import) are emitted separately from the entry bundle.
+    // Content-hashed, split output: lazy chunks are emitted separately.
     splitting: true,
     naming: "[dir]/[name]-[hash].[ext]",
-    // Override the repo-wide jsxImportSource (@opentui/react) so the browser
-    // bundle uses standard React JSX, not OpenTUI intrinsics.
+    // Override the repo-wide jsxImportSource so the browser bundle uses React JSX.
     jsx: {
       runtime: "automatic",
       importSource: "react",
     },
-    // Keep the CSS font url as a relative path instead of inlining the woff2
-    // as base64; we emit and rewrite it ourselves after the build (D3).
+    // Keep the font url relative; we emit and rewrite it after the build.
     external: ["*.woff2"],
-    // Fold `process.env.NODE_ENV` so React/ReactDOM resolve to their
-    // production builds. Bun's `development` resolution condition (kept for
-    // `@ts-ha/shared` source) otherwise drags in the dev runtime, which alone
-    // costs well over the first-paint budget.
+    // Fold `process.env.NODE_ENV` so React/ReactDOM resolve to their production
+    // builds rather than the dev runtime the `development` condition pulls in.
     define: {
       "process.env.NODE_ENV": JSON.stringify("production"),
     },
-    // Resolve `@ts-ha/shared` to its TypeScript source rather than a
-    // not-yet-built `dist`, so the asset build is order-free (design.md D6).
+    // Resolve `@ts-ha/shared` to source, not a not-yet-built `dist`.
     conditions: ["development"],
     // No outdir → in-memory artifacts only; we write them ourselves below.
   });
@@ -178,10 +150,8 @@ async function buildOnce(): Promise<boolean> {
       hash: artifact.hash ?? "",
       rawBase64: Buffer.from(rawBytes).toString("base64"),
       gzipBase64: Buffer.from(gzipBytes).toString("base64"),
-      // "chunk" artifacts and copied "file" assets are only reachable through
-      // the dynamic import that references them — the lazy route chunks and the
-      // wall's on-demand stylesheet — so they are excluded from the first-paint
-      // budget (design.md D5, D24).
+      // Chunks and copied file assets are only reachable through a dynamic
+      // import, so they are excluded from the first-paint budget.
       firstPaint: artifact.kind !== "chunk" && artifact.loader !== "file",
     });
   }
@@ -219,9 +189,7 @@ export const ASSETS: readonly BuiltAsset[] = ${JSON.stringify(assets, null, 2)};
 }
 
 async function main() {
-  // Skip if the entry point doesn't exist yet (e.g. during initial bun install
-  // before the repo is fully set up, or in CI environments building only the
-  // server-side package).
+  // Skip when the entry point is absent (e.g. a server-only CI build).
   if (!existsSync(ENTRY)) {
     console.log("[build-web-ui] Entry point not found, skipping.");
     return;
