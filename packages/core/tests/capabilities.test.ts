@@ -152,7 +152,7 @@ describe("mapZ2MExposes", () => {
     expect(capability.valueOff).toBe("OFF");
   });
 
-  it("declares neither on/off value when a binary expose omits them (design R1)", () => {
+  it("declares neither on/off value when a binary expose omits them", () => {
     const [capability] = mapZ2MExposes([{ type: "binary", property: "contact", access: 1 }]);
     expect(capability.valueOn).toBeUndefined();
     expect(capability.valueOff).toBeUndefined();

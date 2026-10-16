@@ -10,7 +10,7 @@ import { LogBuffer } from "../src/logging/log-buffer.js";
  * path's own logging must never become another entry in the buffer the log category
  * delivers.
  */
-describe("log-cycle boundary (design.md D32, R21)", () => {
+describe("log-cycle boundary", () => {
   it("the delivery path's own logging never reaches the LogBuffer it would otherwise feed", () => {
     let writeCount = 0;
     class CountingLogBuffer extends LogBuffer {

@@ -121,7 +121,7 @@ describe("ZigbeeDeviceSource", () => {
     expect(devices[0].observation.mode).toBe("push");
   });
 
-  it("preserves a binary expose's declared on/off encoding end-to-end (design.md D1/D2)", () => {
+  it("preserves a binary expose's declared on/off encoding end-to-end", () => {
     mqttMock.emit("zigbee2mqtt/bridge/devices", [
       makeDevice("lamp", "0xaaa", [STATE_EXPOSE]),
     ] as unknown as Record<string, unknown>);
@@ -166,7 +166,7 @@ describe("ZigbeeDeviceSource", () => {
     ]);
   });
 
-  it("dispatches an accepted real boolean in the capability's declared encoding (design D2; task 3.2)", async () => {
+  it("dispatches an accepted real boolean in the capability's declared encoding", async () => {
     mqttMock.emit("zigbee2mqtt/bridge/devices", [
       makeDevice("lamp", "0xaaa", [STATE_EXPOSE]),
     ] as unknown as Record<string, unknown>);
@@ -263,7 +263,7 @@ describe("ZigbeeDeviceSource", () => {
   // Durable device state store
   // -------------------------------------------------------------------------
 
-  it("records a state-change observation into the durable store (task 2.1)", () => {
+  it("records a state-change observation into the durable store", () => {
     const store = new DeviceStateStore(logger, { persist: false });
     const withStore = new ZigbeeDeviceSource(registry, mqttMock.mqtt, logger, store);
 

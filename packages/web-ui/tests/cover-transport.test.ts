@@ -75,7 +75,7 @@ function transportLabels(capabilities: Capability[]): string[] {
   return ["Open", "Close", ...(coverStopCommand(capabilities) ? ["Stop"] : [])];
 }
 
-describe("cover detection — position or a declared transport action (design D15)", () => {
+describe("cover detection — position or a declared transport action", () => {
   it("recognises a cover whose primary action is a position", () => {
     const capabilities = zigbeeCover();
     expect(cardArchetype(rankDeviceTile(capabilities), capabilities)).toBe("cover");
@@ -102,7 +102,7 @@ describe("cover detection — position or a declared transport action (design D1
   });
 });
 
-describe("cover transport values (design D15)", () => {
+describe("cover transport values", () => {
   it("uses the declared transport values for open and close", () => {
     const transport = coverTransportAction(shellyCover());
     expect(transport).toEqual({ property: "action", open: "open", close: "close", stop: "stop" });
@@ -150,7 +150,7 @@ describe("cover transport values (design D15)", () => {
   });
 });
 
-describe("cover transport control set (design D15)", () => {
+describe("cover transport control set", () => {
   it("shows three controls for a stop-capable cover", () => {
     expect(transportLabels(zigbeeCover())).toEqual(["Open", "Close", "Stop"]);
     expect(transportLabels(shellyCover())).toEqual(["Open", "Close", "Stop"]);

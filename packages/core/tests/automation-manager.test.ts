@@ -973,7 +973,7 @@ describe("AutomationManager — observability (group 8)", () => {
     await rm(tmpDir, { recursive: true, force: true });
   });
 
-  describe("execution history (tasks 8.1, 8.3)", () => {
+  describe("execution history", () => {
     it("returns an empty history for an automation that has never run", async () => {
       const mocks = createMocks();
       const manager = new AutomationManager(
@@ -1089,7 +1089,7 @@ describe("AutomationManager — observability (group 8)", () => {
     });
   });
 
-  describe("state write attribution (task 8.2)", () => {
+  describe("state write attribution", () => {
     it("attributes a state write made during an automation's execute() to that automation", async () => {
       const deps = createRealDeps();
       const manager = createManagerWithDeps(deps);
@@ -1120,7 +1120,7 @@ describe("AutomationManager — observability (group 8)", () => {
     });
   });
 
-  describe("declared relationships (task 8.5)", () => {
+  describe("declared relationships", () => {
     it("reports related devices and watched state keys for a never-run enabled automation", async () => {
       const deps = createRealDeps();
       const manager = createManagerWithDeps(deps);
@@ -1193,7 +1193,7 @@ export default class extends Automation {
     });
   });
 
-  describe("execution completion broadcasts (task 8.7)", () => {
+  describe("execution completion broadcasts", () => {
     it("notifies the shared execution recorder's completion listeners", async () => {
       const mocks = createMocks();
       const manager = new AutomationManager(

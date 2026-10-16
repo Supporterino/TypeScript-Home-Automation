@@ -716,7 +716,7 @@ describe("PrometheusMetricsService", () => {
     });
   });
 
-  describe("no unbounded labels (task 8.8)", () => {
+  describe("no unbounded labels", () => {
     it("never derives a metric label from a trigger payload, device name, or state value", async () => {
       const recorder = new ExecutionRecorder(logger);
       await service.onStart({

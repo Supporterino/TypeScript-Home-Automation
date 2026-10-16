@@ -118,7 +118,7 @@ describe("selectPrimaryAction — an unrankable device", () => {
   });
 });
 
-describe("selectPrimaryAction — fallback ranks (gated on OUTPUT_KINDS, design D4)", () => {
+describe("selectPrimaryAction — fallback ranks (gated on OUTPUT_KINDS)", () => {
   it("falls back to a writable enum when it belongs to an output-kind capability", () => {
     const capabilities: Capability[] = [
       outputContainer("fan", [
@@ -157,7 +157,7 @@ describe("selectPrimaryAction — fallback ranks (gated on OUTPUT_KINDS, design 
   });
 });
 
-describe("isOperableDevice — agrees with selectPrimaryAction (design D4)", () => {
+describe("isOperableDevice — agrees with selectPrimaryAction", () => {
   const fixtures: { name: string; capabilities: Capability[] }[] = [
     { name: "dimmable light", capabilities: [light([onOff("state"), numeric("brightness")])] },
     {
@@ -275,7 +275,7 @@ describe("rankDeviceTile", () => {
   });
 });
 
-describe("coverStopCommand (design D6)", () => {
+describe("coverStopCommand", () => {
   it("returns the stop property and the exact permitted value for a Zigbee cover", () => {
     const capabilities: Capability[] = [
       {
@@ -378,7 +378,7 @@ describe("coverStopCommand (design D6)", () => {
   });
 });
 
-describe("coverTransportAction (design D15)", () => {
+describe("coverTransportAction", () => {
   it("finds the declared transport and its exact open/close/stop values", () => {
     const capabilities = [numeric("position"), transportEnum("action", ["open", "close", "stop"])];
     expect(coverTransportAction(capabilities)).toEqual({
@@ -429,7 +429,7 @@ describe("coverTransportAction (design D15)", () => {
   });
 });
 
-describe("coverTransportTargets (design D15)", () => {
+describe("coverTransportTargets", () => {
   it("commands the declared transport values when one is declared", () => {
     const capabilities = [numeric("position"), transportEnum("action", ["open", "close", "stop"])];
     expect(coverTransportTargets(coverTransportAction(capabilities), undefined)).toEqual({

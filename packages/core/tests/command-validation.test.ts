@@ -89,7 +89,7 @@ describe("validateCommand — Zigbee device", () => {
     expect(result).toEqual({ ok: true });
   });
 
-  it("rejects a value in a foreign encoding with a descriptive error (design D3)", () => {
+  it("rejects a value in a foreign encoding with a descriptive error", () => {
     const result = validateCommand(ZIGBEE_LIGHT_CAPABILITIES, { state: 1 });
     expect(result.ok).toBe(false);
     expect((result as { error: string }).error).toMatch(/must be a boolean/);
@@ -197,7 +197,7 @@ const TOP_LEVEL_POWER: Capability[] = [
   },
 ];
 
-describe("translateCommandProperties — dispatch encoding (design D2)", () => {
+describe("translateCommandProperties — dispatch encoding", () => {
   it("composes a real boolean into the declared on value of a nested capability", () => {
     expect(translateCommandProperties(ZIGBEE_LIGHT_CAPABILITIES, { state: true })).toEqual({
       state: "ON",

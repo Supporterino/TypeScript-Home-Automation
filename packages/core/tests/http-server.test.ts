@@ -311,7 +311,7 @@ describe("HttpServer — /api/automations", () => {
     });
   });
 
-  describe("GET /api/automations/:name/history (task 8.6)", () => {
+  describe("GET /api/automations/:name/history", () => {
     it("returns 404 for an unknown automation", async () => {
       const server = makeServer({ automations: [] });
       const res = await req(server, "/api/automations/nonexistent/history");
@@ -344,7 +344,7 @@ describe("HttpServer — /api/automations", () => {
     });
   });
 
-  describe("GET /api/automations/:name/relationships (task 8.6)", () => {
+  describe("GET /api/automations/:name/relationships", () => {
     it("returns 404 for an unknown automation", async () => {
       const server = makeServer({ automations: [] });
       const res = await req(server, "/api/automations/nonexistent/relationships");
@@ -668,14 +668,14 @@ describe("HttpServer — GET /api/events", () => {
     expect(res.status).toBe(503);
   });
 
-  it("is subject to the same authorisation as other API endpoints (task 5.2)", async () => {
+  it("is subject to the same authorisation as other API endpoints", async () => {
     const server = makeServer({ token: "secret", eventBus: new EventBus() });
     const res = await req(server, "/api/events");
     expect(res.status).toBe(401);
     await res.body?.cancel();
   });
 
-  it("authorises from the session cookie alone, with no request header (task 5.3)", async () => {
+  it("authorises from the session cookie alone, with no request header", async () => {
     const server = makeServer({ token: "secret", eventBus: new EventBus() });
     const res = await req(server, "/api/events", {
       headers: { Cookie: "ts-ha-session=secret" },
@@ -692,7 +692,7 @@ describe("HttpServer — GET /api/events", () => {
     expect(res.status).toBe(401);
   });
 
-  it("logs a connect and a disconnect retrievable through the log query API (task 5.0c)", async () => {
+  it("logs a connect and a disconnect retrievable through the log query API", async () => {
     // The lifecycle logger writes into the same LogBuffer the log category reads from,
     // unlike the delivery-path logger, which must not.
     const logBuffer = new LogBuffer(100);
@@ -816,7 +816,7 @@ describe("HttpServer — /api/device-catalog", () => {
     ]);
   });
 
-  it("returns every device carrying its hidden status, including hidden devices (task 5.2)", async () => {
+  it("returns every device carrying its hidden status, including hidden devices", async () => {
     const server = makeServer();
     const visible = {
       source: "shelly",

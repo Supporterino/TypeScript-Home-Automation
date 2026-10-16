@@ -9,7 +9,7 @@ const logger = pino({ level: "silent" });
 
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-describe("wireStateWriteAttribution (task 8.2)", () => {
+describe("wireStateWriteAttribution", () => {
   it("attributes a write made inside an automation's execution context", () => {
     const state = new StateManager(logger, { persist: false });
     const recorder = new ExecutionRecorder(logger);

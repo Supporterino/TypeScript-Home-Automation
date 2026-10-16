@@ -118,7 +118,7 @@ describe("StateDeviceSource", () => {
     source.stop();
   });
 
-  it("rejects a non-boolean command value and never writes the state key (task 7.1, 7.3)", async () => {
+  it("rejects a non-boolean command value and never writes the state key", async () => {
     const source = new StateDeviceSource(
       state,
       [{ stateKey: "night_mode", name: "Night Mode" }],
@@ -200,7 +200,7 @@ describe("StateDeviceSource", () => {
   // Durable device state store
   // -------------------------------------------------------------------------
 
-  it("records a change observation into the durable store (task 2.1)", () => {
+  it("records a change observation into the durable store", () => {
     const store = new DeviceStateStore(logger, { persist: false });
     const source = new StateDeviceSource(
       state,
@@ -224,7 +224,7 @@ describe("StateDeviceSource", () => {
   // Subscription delivery matches enumeration
   // -------------------------------------------------------------------------
 
-  it("delivers the same state to a subscriber as enumeration returns (task 2.2)", () => {
+  it("delivers the same state to a subscriber as enumeration returns", () => {
     const source = new StateDeviceSource(
       state,
       [{ stateKey: "night_mode", name: "Night Mode" }],

@@ -30,7 +30,7 @@ describe("shellyCapabilitiesFor", () => {
     expect(metered).toEqual(["on", "power", "voltage", "current", "energy"]);
   });
 
-  describe("per-channel composition (task 4.1)", () => {
+  describe("per-channel composition", () => {
     it("describes two channels of one device independently: only the metered channel declares energy", () => {
       const metered = shellyCapabilitiesFor("switch", { metered: true });
       const nonMetered = shellyCapabilitiesFor("switch", { metered: false });
@@ -66,7 +66,7 @@ describe("shellyCapabilitiesFor", () => {
     });
   });
 
-  describe("cover transport action (design.md D15)", () => {
+  describe("cover transport action", () => {
     it("declares a write-only transport enum naming open, close and stop", () => {
       const action = shellyCapabilitiesFor("cover").find((c) => c.property === "action");
 

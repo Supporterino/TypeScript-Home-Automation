@@ -159,7 +159,7 @@ describe("NanoleafDeviceSource", () => {
   // Durable device state store
   // -------------------------------------------------------------------------
 
-  it("seeds enumeration from the durable store's last-known state before any poll (task 2.1)", () => {
+  it("seeds enumeration from the durable store's last-known state before any poll", () => {
     const store = new DeviceStateStore(logger, { persist: false });
     const storedObservation = {
       mode: "polled" as const,
@@ -183,7 +183,7 @@ describe("NanoleafDeviceSource", () => {
     expect(device?.observation).toEqual(storedObservation);
   });
 
-  it("a fresh poll supersedes the seed and updates the store (task 2.1)", async () => {
+  it("a fresh poll supersedes the seed and updates the store", async () => {
     const store = new DeviceStateStore(logger, { persist: false });
     store.record(
       "nanoleaf:panels",

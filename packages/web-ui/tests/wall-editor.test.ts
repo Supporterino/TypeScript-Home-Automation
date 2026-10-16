@@ -388,7 +388,7 @@ describe("validateProfileDraft", () => {
   });
 });
 
-describe("widget list layout (task 7.1)", () => {
+describe("widget list layout", () => {
   const EDITOR = join(import.meta.dir, "..", "src/app/wall/editor/WallEditor.tsx");
 
   /** Removes block and line comments so prose is not mistaken for markup. */
@@ -447,7 +447,7 @@ describe("submitProfileDraft", () => {
   });
 });
 
-describe("the zone field (task 6.1)", () => {
+describe("the zone field", () => {
   const ZONED = "Climate";
   /** A draft with one clock widget, whose id the tests address by. */
   function clockDraft(): { config: WallProfileConfig; id: string } {
@@ -507,7 +507,7 @@ describe("the zone field (task 6.1)", () => {
   });
 });
 
-describe("the link and device-grid fields (task 6.3)", () => {
+describe("the link and device-grid fields", () => {
   it("round-trips a link's target profile through save validation", () => {
     const config = addWidget(emptyWallConfig(), "link");
     const id = widgetAt(config, 0).id;
@@ -575,7 +575,7 @@ describe("the link and device-grid fields (task 6.3)", () => {
   });
 });
 
-describe("the draft preview and its save gate (task 6.2)", () => {
+describe("the draft preview and its save gate", () => {
   /** A draft whose composition is taller than the panel at the wall's floors. */
   function unfittableConfig(): WallProfileConfig {
     return {
@@ -642,7 +642,7 @@ describe("the draft preview and its save gate (task 6.2)", () => {
   });
 });
 
-describe("the typed device widget configuration (task 7.1)", () => {
+describe("the typed device widget configuration", () => {
   const MODEL = join(EDITOR_DIR, "model.ts");
 
   /** A Zigbee/Nanoleaf light: an on/off switch plus a writable brightness. */
@@ -792,7 +792,7 @@ describe("the typed device widget configuration (task 7.1)", () => {
   });
 });
 
-describe("the re-derived editor floors and fit report (task 7.2)", () => {
+describe("the re-derived editor floors and fit report", () => {
   it("derives its height floor from the ported card's row unit, not the retired scale", async () => {
     // The editor's height floor is `WALL_TITLE_ROWS` — the title block measured in the wall's
     // shortest row, `ROW_UNIT_MIN`.

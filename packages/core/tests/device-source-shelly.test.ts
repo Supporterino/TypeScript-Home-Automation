@@ -836,7 +836,7 @@ describe("ShellyDeviceSource", () => {
     source.stop();
   });
 
-  it("now accepts a stop command for a cover, which it previously rejected (design.md D15)", async () => {
+  it("now accepts a stop command for a cover, which it previously rejected", async () => {
     const routed = createRoutedHttpMock({ components: [makeComponent("cover:0")] });
     const shelly = new ShellyService(routed.http, mqttMock.mqtt, logger);
     shelly.register("blinds", "192.168.1.60", "cover");
@@ -2090,7 +2090,7 @@ describe("ShellyDeviceSource end-to-end per-channel", () => {
   // Durable device state store
   // -------------------------------------------------------------------------
 
-  it("seeds enumeration from the durable store's last-known state before any observation (task 2.1)", async () => {
+  it("seeds enumeration from the durable store's last-known state before any observation", async () => {
     const store = new DeviceStateStore(logger, { persist: false });
     const storedObservation = {
       mode: "polled" as const,
@@ -2114,7 +2114,7 @@ describe("ShellyDeviceSource end-to-end per-channel", () => {
     source.stop();
   });
 
-  it("a fresh observation supersedes the seed and updates the store (task 2.1)", async () => {
+  it("a fresh observation supersedes the seed and updates the store", async () => {
     const store = new DeviceStateStore(logger, { persist: false });
     store.record(
       "shelly:plug",

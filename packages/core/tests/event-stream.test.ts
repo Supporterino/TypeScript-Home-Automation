@@ -58,7 +58,7 @@ describe("EventStreamHub", () => {
     expect(chunk).toContain('"ready":true');
   });
 
-  it("carries only the delta, not a snapshot (task 5.4)", async () => {
+  it("carries only the delta, not a snapshot", async () => {
     const res = hub.open();
     const reader = res.body?.getReader();
     if (!reader) throw new Error("no body");
@@ -75,7 +75,7 @@ describe("EventStreamHub", () => {
     });
   });
 
-  it("fans out one event to every connected client (task 5.6)", async () => {
+  it("fans out one event to every connected client", async () => {
     const readers = [hub.open(), hub.open(), hub.open()].map((res) => res.body?.getReader());
     if (readers.some((r) => !r)) throw new Error("missing body");
 
@@ -87,7 +87,7 @@ describe("EventStreamHub", () => {
     }
   });
 
-  it("isolates a disconnected client without affecting the others (tasks 5.5, 5.6)", async () => {
+  it("isolates a disconnected client without affecting the others", async () => {
     const a = hub.open();
     const b = hub.open();
     const c = hub.open();
@@ -136,7 +136,7 @@ describe("EventStreamHub", () => {
     expect(deliverySpy).not.toHaveBeenCalled();
   });
 
-  describe("bounded per-connection buffering (task 5.6b)", () => {
+  describe("bounded per-connection buffering", () => {
     it("stops retained events at the fixed limit for a client that stops reading", async () => {
       const capacity = 3;
       const localHub = new EventStreamHub(bus, makeLogger(), makeLogger(), capacity);
@@ -236,8 +236,8 @@ describe("EventStreamHub", () => {
     });
   });
 
-  describe("per-connection device snapshot (design.md D6; tasks 4.1, 4.2)", () => {
-    it("sends one device_appeared per device before any subsequent event (task 4.1)", async () => {
+  describe("per-connection device snapshot", () => {
+    it("sends one device_appeared per device before any subsequent event", async () => {
       const devices = [makeDevice("bulb-1"), makeDevice("bulb-2", true), makeDevice("bulb-3")];
       const localHub = new EventStreamHub(bus, makeLogger(), makeLogger());
       localHub.setDeviceSupplier(() => devices);
@@ -268,7 +268,7 @@ describe("EventStreamHub", () => {
       await reader.cancel();
     });
 
-    it("delivers every snapshot device_appeared when the device count exceeds the buffer limit (design.md D6, D28)", async () => {
+    it("delivers every snapshot device_appeared when the device count exceeds the buffer limit", async () => {
       const capacity = 3;
       const devices = Array.from({ length: capacity + 5 }, (_, i) => makeDevice(`bulb-${i}`));
       const localHub = new EventStreamHub(bus, makeLogger(), makeLogger(), capacity);
@@ -300,7 +300,7 @@ describe("EventStreamHub", () => {
       await reader.cancel();
     });
 
-    it("binds the snapshot to the connecting client and never resends it (task 4.2)", async () => {
+    it("binds the snapshot to the connecting client and never resends it", async () => {
       const devices = [makeDevice("plug-1"), makeDevice("plug-2")];
       const localHub = new EventStreamHub(bus, makeLogger(), makeLogger());
       localHub.setDeviceSupplier(() => devices);

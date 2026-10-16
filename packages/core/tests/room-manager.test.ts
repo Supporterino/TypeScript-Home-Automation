@@ -95,7 +95,7 @@ describe("RoomManager", () => {
     await aggregate.stop();
   });
 
-  describe("room definition (task 9.1)", () => {
+  describe("room definition", () => {
     it("creates a room with no members", () => {
       const result = rooms.createRoom("Living Room");
       expect(result.status).toBe("ok");
@@ -165,7 +165,7 @@ describe("RoomManager", () => {
     });
   });
 
-  describe("single room membership (task 9.2)", () => {
+  describe("single room membership", () => {
     it("reports a device in only its new room after reassignment", () => {
       const a = rooms.createRoom("A");
       const b = rooms.createRoom("B");
@@ -213,7 +213,7 @@ describe("RoomManager", () => {
     });
   });
 
-  describe("rooms span device sources (task 9.5)", () => {
+  describe("rooms span device sources", () => {
     it("holds a Zigbee, a Shelly, and a Nanoleaf device simultaneously", () => {
       const created = rooms.createRoom("Living Room");
       if (created.status !== "ok") throw new Error("unreachable");
@@ -233,7 +233,7 @@ describe("RoomManager", () => {
     });
   });
 
-  describe("absent devices retain their assignment (task 9.3)", () => {
+  describe("absent devices retain their assignment", () => {
     it("marks an unpaired device unavailable but keeps it in the room", () => {
       const created = rooms.createRoom("Living Room");
       if (created.status !== "ok") throw new Error("unreachable");
@@ -289,7 +289,7 @@ describe("RoomManager", () => {
     });
   });
 
-  describe("membership queries (task 9.4)", () => {
+  describe("membership queries", () => {
     it("reports both a present and an absent member of the same room", () => {
       const created = rooms.createRoom("Living Room");
       if (created.status !== "ok") throw new Error("unreachable");
@@ -326,7 +326,7 @@ describe("RoomManager", () => {
     });
   });
 
-  describe("visibility (design.md D9; task 3.8)", () => {
+  describe("visibility", () => {
     it("hiding a device leaves its room membership intact", async () => {
       const realVisibility = new DeviceVisibility(state, logger);
       const visAggregate = new AggregateDeviceSource(
@@ -373,7 +373,7 @@ describe("RoomManager", () => {
     });
   });
 
-  describe("durability (task 9.8)", () => {
+  describe("durability", () => {
     let tmpDir: string;
     let filePath: string;
 

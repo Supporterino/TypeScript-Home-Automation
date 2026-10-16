@@ -15,7 +15,7 @@ const cronTrigger = (expression = "0 7 * * *"): TriggerContext => ({
 });
 
 describe("ExecutionRecorder", () => {
-  describe("execution history (task 8.3)", () => {
+  describe("execution history", () => {
     it("returns an empty history for an automation that has never run", () => {
       const recorder = new ExecutionRecorder(logger);
       expect(recorder.getHistory("never-run")).toEqual([]);
@@ -72,7 +72,7 @@ describe("ExecutionRecorder", () => {
     });
   });
 
-  describe("observed writes (tasks 8.2b, 8.2c)", () => {
+  describe("observed writes", () => {
     it("returns an empty, non-truncated set for an automation with no observed writes", () => {
       const recorder = new ExecutionRecorder(logger);
       expect(recorder.getObservedWrites("motion-light")).toEqual({ keys: [], truncated: false });
@@ -141,7 +141,7 @@ describe("ExecutionRecorder", () => {
     });
   });
 
-  describe("completion broadcasts (tasks 8.7, 8.8)", () => {
+  describe("completion broadcasts", () => {
     it("notifies a subscribed listener with automation, trigger, duration, and outcome", async () => {
       const recorder = new ExecutionRecorder(logger);
       const events: ExecutionCompletionEvent[] = [];
@@ -197,7 +197,7 @@ describe("ExecutionRecorder", () => {
     });
   });
 
-  describe("recording failure does not fail the run (task 8.4)", () => {
+  describe("recording failure does not fail the run", () => {
     it("swallows a throwing completion listener and still resolves normally on success", async () => {
       const errorLogger = { error: mock(() => {}) } as unknown as typeof logger;
       const recorder = new ExecutionRecorder(errorLogger);
@@ -234,7 +234,7 @@ describe("ExecutionRecorder", () => {
     });
   });
 
-  describe("concurrent overlapping runs (design.md R9)", () => {
+  describe("concurrent overlapping runs", () => {
     it("attributes both runs of the same automation without loss or duplication", async () => {
       const recorder = new ExecutionRecorder(logger);
       const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));

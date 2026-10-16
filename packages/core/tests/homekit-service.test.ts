@@ -182,7 +182,7 @@ describe("HomekitService (source host)", () => {
     publishError = null;
   });
 
-  it("rejects the old stateToggles location, naming the new one (design.md D19)", () => {
+  it("rejects the old stateToggles location, naming the new one", () => {
     const devices = new AggregateDeviceSource([], makeVisibility(), logger);
     expect(
       () =>

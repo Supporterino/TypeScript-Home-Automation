@@ -177,7 +177,7 @@ function makeFakeFactory(): (descriptor: DeviceDescriptor) => CreatedAccessory |
 }
 
 describe("DeviceCatalogSource visibility", () => {
-  it("never bridges an already-hidden device at startup (task 4.1)", () => {
+  it("never bridges an already-hidden device at startup", () => {
     const stateManager = new StateManager(logger, { persist: false });
     const visibility = new DeviceVisibility(stateManager, logger);
     visibility.hide("shelly:plug");
@@ -192,7 +192,7 @@ describe("DeviceCatalogSource visibility", () => {
     expect(sink.added.size).toBe(0);
   });
 
-  it("removes the accessory when the device is hidden, with no intervening device notification (task 4.2)", () => {
+  it("removes the accessory when the device is hidden, with no intervening device notification", () => {
     const stateManager = new StateManager(logger, { persist: false });
     const visibility = new DeviceVisibility(stateManager, logger);
 
@@ -214,7 +214,7 @@ describe("DeviceCatalogSource visibility", () => {
     expect(sink.added.size).toBe(0);
   });
 
-  it("adds the accessory back when the device is unhidden (task 4.2)", () => {
+  it("adds the accessory back when the device is unhidden", () => {
     const stateManager = new StateManager(logger, { persist: false });
     const visibility = new DeviceVisibility(stateManager, logger);
     visibility.hide("shelly:plug");
@@ -233,7 +233,7 @@ describe("DeviceCatalogSource visibility", () => {
     expect(sink.added.size).toBe(1);
   });
 
-  it("the re-added accessory's derived UUID matches the original — no re-pairing (task 4.3)", () => {
+  it("the re-added accessory's derived UUID matches the original — no re-pairing", () => {
     const stateManager = new StateManager(logger, { persist: false });
     const visibility = new DeviceVisibility(stateManager, logger);
 

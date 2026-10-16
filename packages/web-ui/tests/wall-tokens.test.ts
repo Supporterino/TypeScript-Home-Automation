@@ -108,7 +108,7 @@ const PORTED_PAGE_ROWS: readonly { readonly row: string; readonly value: string 
 ];
 
 describe("the ported card metrics", () => {
-  it("ports Mushroom's values (design.md D2)", () => {
+  it("ports Mushroom's values", () => {
     expect(WALL_CARD_METRICS.iconSize).toBe(36);
     expect(WALL_CARD_METRICS.iconSymbol).toBe(0.667);
     expect(WALL_CARD_METRICS.iconShapeRadius).toBe("50%");

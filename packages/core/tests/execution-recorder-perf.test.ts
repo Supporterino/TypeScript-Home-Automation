@@ -33,7 +33,7 @@ async function recordedCalls(recorder: ExecutionRecorder, count: number): Promis
   return performance.now() - start;
 }
 
-describe("ExecutionRecorder overhead (task 8.9)", () => {
+describe("ExecutionRecorder overhead", () => {
   const CALL_COUNT = 2000;
 
   it("is not measurably slower than calling execute() directly", async () => {

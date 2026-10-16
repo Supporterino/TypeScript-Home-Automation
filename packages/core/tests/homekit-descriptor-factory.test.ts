@@ -401,7 +401,7 @@ describe("createAccessoryFromDescriptor", () => {
     });
   });
 
-  describe("UUID seeding (frozen per source, task 6.15)", () => {
+  describe("UUID seeding (frozen per source)", () => {
     it("seeds a Zigbee accessory from the IEEE address alone", () => {
       const created = factory.createAccessoryFromDescriptor(
         descriptor({
@@ -447,7 +447,7 @@ describe("createAccessoryFromDescriptor", () => {
 // Multi-channel Shelly fan-out: one accessory per channel, keyed by the descriptor's seed.
 // ---------------------------------------------------------------------------
 
-describe("Shelly multi-channel HomeKit fan-out (task 4.2)", () => {
+describe("Shelly multi-channel HomeKit fan-out", () => {
   const channelIds = [
     "pro4pm_channel_0",
     "pro4pm_channel_1",

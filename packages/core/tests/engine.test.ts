@@ -316,7 +316,7 @@ describe("createEngine", () => {
   // ── Realtime event stream ───────────────────────────────────────────────
 
   describe("realtime event stream", () => {
-    it("constructs a stream-only logger distinct from the supplied logger (task 5.0b)", () => {
+    it("constructs a stream-only logger distinct from the supplied logger", () => {
       engine = createTestEngine();
       expect(engine.streamLogger).toBeDefined();
       expect(engine.streamLogger).not.toBe(engine.logger);
@@ -342,7 +342,7 @@ describe("createEngine", () => {
       ]);
     });
 
-    it("emits only an automation category event for an enabled-flag change, not a state event (task 5.7)", async () => {
+    it("emits only an automation category event for an enabled-flag change, not a state event", async () => {
       engine = createTestEngine();
       await engine.start();
 
@@ -391,7 +391,7 @@ describe("createEngine", () => {
   // ── Automation observability ────────────────────────────────────────────
 
   describe("automation execution observability", () => {
-    it("emits an automation_execution event naming the automation, trigger, duration, and outcome (task 8.7)", async () => {
+    it("emits an automation_execution event naming the automation, trigger, duration, and outcome", async () => {
       engine = createTestEngine();
       await engine.start();
 
@@ -420,7 +420,7 @@ describe("createEngine", () => {
       });
     });
 
-    it("exposes execution history and relationships through the manager (tasks 8.3, 8.5)", async () => {
+    it("exposes execution history and relationships through the manager", async () => {
       engine = createTestEngine();
       await engine.start();
 
@@ -477,7 +477,7 @@ describe("createEngine", () => {
       expect(statuses.get("state")).toBe(true);
     });
 
-    it("registers the zigbee-group source alongside zigbee, both unavailable with the registry disabled (task 3.7)", () => {
+    it("registers the zigbee-group source alongside zigbee, both unavailable with the registry disabled", () => {
       engine = createTestEngine();
       const statuses = new Map(engine.devices.sources().map((s) => [s.id, s.available]));
       expect(statuses.has("zigbee-group")).toBe(true);
@@ -485,7 +485,7 @@ describe("createEngine", () => {
       expect(engine.devices.list()).toEqual([]);
     });
 
-    it("exposes engine.deviceVisibility, and the aggregate stamps hidden on a device through it (task 3.7)", async () => {
+    it("exposes engine.deviceVisibility, and the aggregate stamps hidden on a device through it", async () => {
       engine = createEngine({
         automationsDir: fixturesDir,
         logger,
@@ -531,7 +531,7 @@ describe("createEngine", () => {
       expect(devices[0].qualifiedId).toBe("state:night_mode");
     });
 
-    it("an automation's onStart() sees a populated device accessor (task 6.13a)", async () => {
+    it("an automation's onStart() sees a populated device accessor", async () => {
       // discoverAndRegister runs after deviceSources.start(); a populated engine.devices
       // proves the ordering, since automations register during discovery.
       engine = createEngine({
@@ -619,7 +619,7 @@ describe("createEngine", () => {
       expect(stopSpy).toHaveBeenCalledTimes(1);
     });
 
-    it("keeps device sources running through an automation's onStop() (task 6.13c)", async () => {
+    it("keeps device sources running through an automation's onStop()", async () => {
       engine = createEngine({
         automationsDir: fixturesDir,
         logger,
@@ -651,7 +651,7 @@ describe("createEngine", () => {
       expect(dispatchedDuringStop).toEqual({ status: "ok" });
     });
 
-    it("passes HomekitService a context exposing http, logger, devices, and deviceVisibility (task 6.16b)", () => {
+    it("passes HomekitService a context exposing http, logger, devices, and deviceVisibility", () => {
       let receivedContext: Record<string, unknown> | null = null;
       engine = createEngine({
         automationsDir: fixturesDir,
@@ -679,7 +679,7 @@ describe("createEngine", () => {
       ]);
     });
 
-    it("no device source is registered in the ServiceRegistry (task 6.13d)", () => {
+    it("no device source is registered in the ServiceRegistry", () => {
       engine = createTestEngine();
       const keys = engine.services.keys();
       expect(keys).not.toContain("zigbee");
@@ -693,7 +693,7 @@ describe("createEngine", () => {
   // ── Durable device state store ──────────────────────────────────────────
 
   describe("device state store", () => {
-    it("restores a device's last-known state into the first enumeration (task 3.2)", async () => {
+    it("restores a device's last-known state into the first enumeration", async () => {
       const dir = await mkdtemp(join(tmpdir(), "ts-ha-device-state-"));
       const filePath = join(dir, "device-state.json");
       const recordedAt = 1_700_000_000_000;
@@ -764,7 +764,7 @@ describe("createEngine", () => {
       expect(typeof engine.rooms.createRoom).toBe("function");
     });
 
-    it("emits a room category event, not a state event, when a room is created (task 9.7)", async () => {
+    it("emits a room category event, not a state event, when a room is created", async () => {
       engine = createTestEngine();
       await engine.start();
 
@@ -779,7 +779,7 @@ describe("createEngine", () => {
       ]);
     });
 
-    it("emits only a room_membership delta for one device, not a full room list, on assignment (task 9.7)", async () => {
+    it("emits only a room_membership delta for one device, not a full room list, on assignment", async () => {
       engine = createTestEngine();
       await engine.start();
 
@@ -876,7 +876,7 @@ describe("createEngine", () => {
       expect(typeof engine.walls.createWall).toBe("function");
     });
 
-    it("emits a wall created event and no state event for the reserved key (task 2.4)", async () => {
+    it("emits a wall created event and no state event for the reserved key", async () => {
       engine = createTestEngine();
       await engine.start();
 
@@ -931,7 +931,7 @@ describe("createEngine", () => {
       expect(typeof engine.deviceVisibility.hide).toBe("function");
     });
 
-    it("emits a device_visibility event naming the device and its new visibility on hide (task 5.3)", async () => {
+    it("emits a device_visibility event naming the device and its new visibility on hide", async () => {
       engine = createTestEngine();
       await engine.start();
 
@@ -960,7 +960,7 @@ describe("createEngine", () => {
       ]);
     });
 
-    it("emits no state-key event for the reserved key backing visibility (task 5.3)", async () => {
+    it("emits no state-key event for the reserved key backing visibility", async () => {
       engine = createTestEngine();
       await engine.start();
 
