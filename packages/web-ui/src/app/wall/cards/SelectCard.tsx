@@ -15,6 +15,7 @@ import {
   WallCardEnumControl,
   WallCardIcon,
   WallCardObservation,
+  WallCardSlim,
   WallCardText,
 } from "./card-anatomy.js";
 import {
@@ -40,6 +41,14 @@ export function selectCardModel(capabilities: Capability[]): WallSelectCardModel
     (c) => c.valueType === "enum" && c.access.writable && (c.permittedValues?.length ?? 0) > 0,
   );
   return { control, values: control?.permittedValues ?? [] };
+}
+
+/**
+ * Whether the select card presents a control: a writable enumerated capability. A device
+ * declaring only a readable enum presents none, so it may be one row.
+ */
+export function selectCardPresentsControls(capabilities: Capability[]): boolean {
+  return selectCardModel(capabilities).control !== undefined;
 }
 
 /**
@@ -78,7 +87,7 @@ export function SelectCard({ device, config, box, contained }: WallDeviceCardPro
     box: box ?? DEFAULT_WALL_CARD_BOX,
     layout: config?.layout,
     collapsibleControls: config?.collapsible_controls,
-    hasControls: model.control !== undefined,
+    hasControls: selectCardPresentsControls(device.capabilities),
     active: true,
   });
 
@@ -87,6 +96,25 @@ export function SelectCard({ device, config, box, contained }: WallDeviceCardPro
   const surface = contained
     ? {}
     : { background: "var(--hearth-surface-raised)", borderRadius: WALL_CARD_METRICS.radius };
+  const icon = (
+    <WallCardIcon
+      glyph={<ListChecks size={WALL_CARD_GLYPH_SIZE} aria-hidden />}
+      disabled={disabled}
+    />
+  );
+
+  // A one-row cell renders the shared slim line: no observation, no actions row.
+  if (composition.form === "slim") {
+    return (
+      <WallCardSlim
+        icon={icon}
+        name={shortDeviceName(label)}
+        state={selectCardReading(current)}
+        disabled={disabled}
+        contained={contained}
+      />
+    );
+  }
 
   return (
     <div
@@ -109,10 +137,7 @@ export function SelectCard({ device, config, box, contained }: WallDeviceCardPro
           padding: WALL_CARD_METRICS.padding,
         }}
       >
-        <WallCardIcon
-          glyph={<ListChecks size={WALL_CARD_GLYPH_SIZE} aria-hidden />}
-          disabled={disabled}
-        />
+        {icon}
         <WallCardText
           name={shortDeviceName(label)}
           state={selectCardReading(current)}

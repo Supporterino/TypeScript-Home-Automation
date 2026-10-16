@@ -25,6 +25,7 @@ import {
   WallCardIcon,
   WallCardIconButton,
   WallCardObservation,
+  WallCardSlim,
   WallCardText,
 } from "./card-anatomy.js";
 import {
@@ -73,6 +74,14 @@ export function coverCardModel(capabilities: Capability[]): WallCoverCardModel {
     targets: coverTransportTargets(transport, writablePosition),
     stop: coverStopCommand(capabilities),
   };
+}
+
+/**
+ * Whether the cover card presents a control: a property its Open/Close options drive.
+ * A cover reporting only a readable state presents none, so it may be one row.
+ */
+export function coverCardPresentsControls(capabilities: Capability[]): boolean {
+  return coverCardModel(capabilities).transportProperty !== undefined;
 }
 
 /**
@@ -136,19 +145,40 @@ export function CoverCard({ device, config, box, contained }: WallDeviceCardProp
   const surface = contained
     ? {}
     : { background: "var(--hearth-surface-raised)", borderRadius: WALL_CARD_METRICS.radius };
+  const reading = coverCardReading({
+    position: model.position,
+    positionValue: model.position ? device.state[model.position.property] : undefined,
+    stateValue: model.stateProperty ? device.state[model.stateProperty] : undefined,
+  });
+  const icon = (
+    <WallCardIcon glyph={<Blinds size={WALL_CARD_GLYPH_SIZE} aria-hidden />} disabled={disabled} />
+  );
 
   // A closed cover is idle, so collapsible controls hide its transport until open.
   const composition = resolveDeviceCardComposition({
     box: box ?? DEFAULT_WALL_CARD_BOX,
     layout: config?.layout,
     collapsibleControls: config?.collapsible_controls,
-    hasControls: model.transportProperty !== undefined,
+    hasControls: coverCardPresentsControls(device.capabilities),
     active: coverCardActive({
       position: model.position,
       positionValue: model.position ? device.state[model.position.property] : undefined,
       stateValue: model.stateProperty ? device.state[model.stateProperty] : undefined,
     }),
   });
+
+  // A one-row cell renders the shared slim line: no observation, no actions row.
+  if (composition.form === "slim") {
+    return (
+      <WallCardSlim
+        icon={icon}
+        name={shortDeviceName(label)}
+        state={reading}
+        disabled={disabled}
+        contained={contained}
+      />
+    );
+  }
 
   return (
     <div
@@ -171,17 +201,10 @@ export function CoverCard({ device, config, box, contained }: WallDeviceCardProp
           padding: WALL_CARD_METRICS.padding,
         }}
       >
-        <WallCardIcon
-          glyph={<Blinds size={WALL_CARD_GLYPH_SIZE} aria-hidden />}
-          disabled={disabled}
-        />
+        {icon}
         <WallCardText
           name={shortDeviceName(label)}
-          state={coverCardReading({
-            position: model.position,
-            positionValue: model.position ? device.state[model.position.property] : undefined,
-            stateValue: model.stateProperty ? device.state[model.stateProperty] : undefined,
-          })}
+          state={reading}
           prominent={composition.form === "full"}
         />
         <WallCardObservation observation={deviceTileObservation(device, now)} />

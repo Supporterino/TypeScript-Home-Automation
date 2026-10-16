@@ -149,7 +149,7 @@ describe("every typed card at its minimum span, on both panels", () => {
           shownWidgets(DEFAULT_DRAFT, panel),
           HARNESS_PANEL_SIZES[panel].height,
         );
-        const values = widgetValues(widget, rowUnit);
+        const values = widgetValues(widget, rowUnit, WALL_HARNESS_FIXTURES.devices);
         // A device widget's frame draws no surface and the widget configures no title,
         // so the renderer's box is the whole cell.
         expect(values.framed).toBe(false);

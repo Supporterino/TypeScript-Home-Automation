@@ -3,6 +3,7 @@
  * through the wall's own functions.
  */
 import { WALL_GRID_COLUMNS, WALL_GRID_MAX_ROWS, type WallWidget } from "@ts-ha/shared";
+import type { DeviceDescriptor } from "../../types.js";
 import { updateWidgetPlacement } from "../editor/model.js";
 import { resolveDraftPreview } from "../editor/preview.js";
 import {
@@ -13,6 +14,7 @@ import {
 } from "../frame.js";
 import { wallGridMetrics } from "../grid.js";
 import { getWidgetDescriptor, type WallWidgetDescriptor } from "../registry.js";
+import { boundDeviceReadOnly, effectiveSpanDescriptor } from "../slim.js";
 import {
   cardHeightPx,
   composesMinimumSpan,
@@ -21,7 +23,25 @@ import {
   type WallCardForm,
   type WallWidgetTier,
 } from "../span.js";
+import { WALL_HARNESS_FIXTURES } from "./fixtures.js";
 import { HARNESS_PANEL_SIZES, type HarnessBenchControls, type HarnessPanel } from "./messages.js";
+
+/**
+ * A widget's bound device within a device set, or `undefined` when it binds none — the
+ * same lookup the wall's own frame performs against the store.
+ */
+function boundDevice(
+  widget: WallWidget,
+  devices: Iterable<DeviceDescriptor>,
+): DeviceDescriptor | undefined {
+  const qualifiedId =
+    typeof widget.config.qualifiedId === "string" ? widget.config.qualifiedId : "";
+  if (qualifiedId.length === 0) return undefined;
+  for (const device of devices) {
+    if (device.qualifiedId === qualifiedId) return device;
+  }
+  return undefined;
+}
 
 /** The wall's own composition values for one widget at one panel. */
 export interface HarnessWidgetValues {
@@ -54,14 +74,33 @@ export function panelHeightPx(panel: HarnessPanel): number {
   return HARNESS_PANEL_SIZES[panel].height;
 }
 
-/** Resolves every value the panel shows for one widget, through the wall's own functions. */
-export function widgetValues(widget: WallWidget, rowUnit: number): HarnessWidgetValues {
+/**
+ * Resolves every value the panel shows for one widget, through the wall's own functions.
+ * `devices` is the same device set the stage's store receives, so a bound device toggled
+ * absent degrades the panel's preview exactly as it degrades the wall.
+ */
+export function widgetValues(
+  widget: WallWidget,
+  rowUnit: number,
+  devices: Iterable<DeviceDescriptor>,
+): HarnessWidgetValues {
   const descriptor = getWidgetDescriptor(widget.type);
+  // The effective minimum reads the widget's bound device in that set: a control-less one
+  // resolves a single row, and a missing one degrades to the type's own minimum as the
+  // frame's own resolver does.
+  const effective = effectiveSpanDescriptor(
+    descriptor,
+    boundDeviceReadOnly(descriptor, boundDevice(widget, devices)),
+  );
   const framed = wallFrameDrawsSurface(widget.type, descriptor.grammar, widget);
   const titled = widgetTitle(widget) !== null;
   const cellHeightPx = cardHeightPx({ rows: widget.h, rowUnit });
   const rendererHeightPx = rendererBoxHeightPx({ cellHeightPx, framed, titled });
-  const minimumRendererHeightPx = minimumRendererBoxHeightPx({ descriptor, rowUnit, framed });
+  const minimumRendererHeightPx = minimumRendererBoxHeightPx({
+    descriptor: effective,
+    rowUnit,
+    framed,
+  });
 
   return {
     descriptor,
@@ -74,7 +113,7 @@ export function widgetValues(widget: WallWidget, rowUnit: number): HarnessWidget
     minimumRendererHeightPx,
     tooSmall: !composesMinimumSpan({
       placement: widget,
-      descriptor,
+      descriptor: effective,
       rendererHeightPx,
       minimumRendererHeightPx,
     }),
@@ -85,10 +124,16 @@ export function widgetValues(widget: WallWidget, rowUnit: number): HarnessWidget
 
 /**
  * Whether the editor would author a `{w, h}` span for this widget, decided by the
- * editor's own placement rule.
+ * editor's own placement rule against the fixture roster's devices.
  */
 function editorAcceptsSpan(widget: WallWidget, w: number, h: number): boolean {
-  const placed = updateWidgetPlacement({ widgets: [widget] }, widget.id, { w, h, x: 0, y: 0 });
+  const placed = updateWidgetPlacement(
+    { widgets: [widget] },
+    widget.id,
+    { w, h, x: 0, y: 0 },
+    undefined,
+    WALL_HARNESS_FIXTURES.devices,
+  );
   const next = placed.widgets[0];
   return next !== undefined && next.w === w && next.h === h;
 }

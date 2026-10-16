@@ -30,11 +30,17 @@ import { resolveDraftPreview } from "../src/app/wall/editor/preview.js";
 import { ROW_UNIT_MAX, ROW_UNIT_MIN } from "../src/app/wall/grid.js";
 import { resolvePagedTiles } from "../src/app/wall/pages.js";
 import { getWidgetDescriptor, WALL_WIDGET_REGISTRY } from "../src/app/wall/registry.js";
+import {
+  boundDeviceReadOnly,
+  effectiveSpanDescriptor,
+  resolveEffectiveMin,
+} from "../src/app/wall/slim.js";
 import { WALL_TITLE_BLOCK_PX, WALL_TITLE_ROWS } from "../src/app/wall/span.js";
 
 const EDITOR_DIR = join(import.meta.dir, "..", "src/app/wall/editor");
 const EDITOR = join(EDITOR_DIR, "WallEditor.tsx");
 const FIELDS = join(EDITOR_DIR, "WidgetConfigFields.tsx");
+const SLIM = join(import.meta.dir, "..", "src/app/wall/slim.ts");
 
 /** Removes block and line comments so prose is not mistaken for markup. */
 function stripComments(content: string): string {
@@ -828,9 +834,11 @@ describe("the re-derived editor floors and fit report", () => {
     expect(widgetAt(resized, 0).h).toBe(descriptor.min.h + WALL_TITLE_ROWS);
 
     const editor = await readSource(EDITOR);
-    const model = await readSource(join(EDITOR_DIR, "model.ts"));
+    const slim = await readSource(SLIM);
     expect(editor).toContain("WALL_TITLE_ROWS");
-    expect(model).toContain("WALL_TITLE_ROWS");
+    // The title-row floor is the slim rule's: the editor clamp and the save validator
+    // read it from one module.
+    expect(slim).toContain("WALL_TITLE_ROWS");
   });
 
   it("resolves its fit report at the ported card's row unit bounds", () => {
@@ -889,5 +897,185 @@ describe("the re-derived editor floors and fit report", () => {
     expect(preview.grids).toEqual([
       { widgetId: "grid", devices: selected.length, pages: wallPlan.pageCount },
     ]);
+  });
+});
+
+/** A minimal device descriptor for the slim rule's device-aware resolution. */
+function testDevice(qualifiedId: string, capabilities: Capability[]): DeviceDescriptor {
+  return {
+    source: "test",
+    id: qualifiedId,
+    qualifiedId,
+    displayName: "Test device",
+    state: {},
+    capabilities,
+    reachable: true,
+    observation: { mode: "push", observedAt: 0 },
+    hidden: false,
+  };
+}
+
+/** The capabilities of a lock reporting a readable state and nothing writable. */
+const READ_ONLY_LOCK: Capability[] = [
+  {
+    kind: "lock",
+    property: "state",
+    access: { readable: true, writable: false },
+    valueType: "enum",
+    permittedValues: ["LOCK", "UNLOCK"],
+  },
+];
+
+/** The capabilities of a lock whose state both reads and writes. */
+const WRITABLE_LOCK: Capability[] = [
+  {
+    kind: "lock",
+    property: "state",
+    access: { readable: true, writable: true },
+    valueType: "enum",
+    permittedValues: ["LOCK", "UNLOCK"],
+  },
+];
+
+describe("resolveEffectiveMin", () => {
+  it("reads the slim span for an always-slim type, titled or not", () => {
+    const link = WALL_WIDGET_REGISTRY.link;
+    expect(resolveEffectiveMin(link, false, false)).toEqual({ w: 2, h: 1 });
+    expect(resolveEffectiveMin(link, true, false)).toEqual({ w: 2, h: 1 + WALL_TITLE_ROWS });
+    // An `always` rule does not read the device state.
+    expect(resolveEffectiveMin(link, false, true)).toEqual({ w: 2, h: 1 });
+  });
+
+  it("keeps a read-only type's own minimum while its device presents controls", () => {
+    const light = WALL_WIDGET_REGISTRY.light;
+    expect(resolveEffectiveMin(light, false, false)).toEqual(light.min);
+    expect(resolveEffectiveMin(light, false, false)).toEqual({ w: 3, h: 2 });
+  });
+
+  it("reads the slim one-row span for a read-only type whose device presents no controls", () => {
+    const light = WALL_WIDGET_REGISTRY.light;
+    expect(resolveEffectiveMin(light, false, true)).toEqual({ w: 3, h: 1 });
+    // A configured title still costs its rows on top of the slim span.
+    expect(resolveEffectiveMin(light, true, true)).toEqual({ w: 3, h: 1 + WALL_TITLE_ROWS });
+  });
+
+  it("defaults to the type's own minimum for a type with no slim rule", () => {
+    const clock = WALL_WIDGET_REGISTRY.clock;
+    expect(resolveEffectiveMin(clock, false, true)).toEqual(clock.min);
+  });
+});
+
+describe("effectiveSpanDescriptor", () => {
+  it("carries the effective minimum beside the type's defaults and maximum", () => {
+    const light = WALL_WIDGET_REGISTRY.light;
+    const readOnly = effectiveSpanDescriptor(light, true);
+    expect(readOnly.min).toEqual({ w: 3, h: 1 });
+    expect(readOnly.defaults).toEqual(light.defaults);
+    expect(readOnly.max).toEqual(light.max);
+
+    expect(effectiveSpanDescriptor(light, false).min).toEqual(light.min);
+  });
+
+  it("omits the title rows the guard accounts for through the renderer's box", () => {
+    const light = WALL_WIDGET_REGISTRY.light;
+    expect(effectiveSpanDescriptor(light, true).min.h).toBe(1);
+  });
+});
+
+describe("boundDeviceReadOnly", () => {
+  it("is true only for a read-only type whose bound device presents no controls", () => {
+    const lock = WALL_WIDGET_REGISTRY.lock;
+    expect(boundDeviceReadOnly(lock, testDevice("test:lock", READ_ONLY_LOCK))).toBe(true);
+    expect(boundDeviceReadOnly(lock, testDevice("test:lock", WRITABLE_LOCK))).toBe(false);
+  });
+
+  it("is conservative for a missing device and for a type with no read-only rule", () => {
+    expect(boundDeviceReadOnly(WALL_WIDGET_REGISTRY.lock, undefined)).toBe(false);
+    // A link's rule is `always`, so its device state never makes it read-only.
+    expect(
+      boundDeviceReadOnly(WALL_WIDGET_REGISTRY.link, testDevice("test:lock", READ_ONLY_LOCK)),
+    ).toBe(false);
+  });
+});
+
+describe("the device-aware minimum in validation and the clamp", () => {
+  /** A one-row typed lock widget bound to `test:lock`. */
+  function oneRowLock(): WallProfileConfig {
+    return {
+      widgets: [
+        {
+          id: "lock-1",
+          type: "lock",
+          config: { qualifiedId: "test:lock" },
+          x: 0,
+          y: 0,
+          w: 3,
+          h: 1,
+        },
+      ],
+    };
+  }
+
+  it("refuses a one-row cell without devices and admits it for a control-less device", () => {
+    const config = oneRowLock();
+
+    // Conservative with no devices: the two-row minimum refuses the one-row cell.
+    expect(validateProfileDraft("one-row", config).ok).toBe(false);
+    // A control-less device makes the same cell authorable.
+    expect(
+      validateProfileDraft("one-row", config, [testDevice("test:lock", READ_ONLY_LOCK)]).ok,
+    ).toBe(true);
+    // A control-bearing device keeps the two-row minimum.
+    expect(
+      validateProfileDraft("one-row", config, [testDevice("test:lock", WRITABLE_LOCK)]).ok,
+    ).toBe(false);
+  });
+
+  it("clamps a one-row request by the same device-aware minimum", () => {
+    const config: WallProfileConfig = oneRowLock();
+    const request = { x: 0, y: 0, w: 3, h: 1 };
+
+    const readOnly = updateWidgetPlacement(config, "lock-1", request, undefined, [
+      testDevice("test:lock", READ_ONLY_LOCK),
+    ]);
+    expect(widgetAt(readOnly, 0).h).toBe(1);
+
+    const controlBearing = updateWidgetPlacement(config, "lock-1", request, undefined, [
+      testDevice("test:lock", WRITABLE_LOCK),
+    ]);
+    expect(widgetAt(controlBearing, 0).h).toBe(2);
+
+    // No devices: conservative, so the clamp keeps the type's own two-row minimum.
+    expect(widgetAt(updateWidgetPlacement(config, "lock-1", request), 0).h).toBe(2);
+  });
+
+  it("saves a one-row control-less draft and refuses a one-row control-bearing one", async () => {
+    const persist = mock(async () => {});
+    const config = oneRowLock();
+
+    const saved = await submitProfileDraft("one-row", config, persist, [
+      testDevice("test:lock", READ_ONLY_LOCK),
+    ]);
+    expect(saved.ok).toBe(true);
+    expect(persist).toHaveBeenCalledTimes(1);
+
+    // The same draft under a control-bearing device is refused, and never persisted.
+    const refused = await submitProfileDraft("one-row", config, persist, [
+      testDevice("test:lock", WRITABLE_LOCK),
+    ]);
+    expect(refused.ok).toBe(false);
+    expect(persist).toHaveBeenCalledTimes(1);
+  });
+
+  it("wires the store's devices into the editor's clamp and save validation", async () => {
+    const editor = await readSource(EDITOR);
+
+    // The editor reads the store and hands the same device set to both the placement
+    // clamp and the save validation, so authoring and saving agree.
+    expect(editor).toContain("useDataStore()");
+    expect(editor).toContain(
+      "updateWidgetPlacement(config, widget.id, placement, undefined, devices)",
+    );
+    expect(editor).toContain("submitProfileDraft(profile.name, config, persist, devices)");
   });
 });

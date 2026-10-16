@@ -4,6 +4,8 @@ import { join } from "node:path";
 import { WALL_GRID_COLUMNS, WALL_GRID_MAX_ROWS } from "@ts-ha/shared";
 import { WALL_WIDGET_CONFIG_SCHEMAS, wallProfileConfigSchema } from "@ts-ha/shared/wall-schema";
 import { resolveBands } from "../src/app/wall/bands.js";
+import { isWallDeviceClass } from "../src/app/wall/cards/device-class.js";
+import { widgetTitle } from "../src/app/wall/frame.js";
 import { wallGridMetrics } from "../src/app/wall/grid.js";
 import { DEFAULT_DRAFT } from "../src/app/wall/harness/draft.js";
 import { fixtureSetFor, WALL_HARNESS_FIXTURES } from "../src/app/wall/harness/fixtures.js";
@@ -23,7 +25,9 @@ import {
   settleRebuild,
 } from "../src/app/wall/harness/rebuild-loop.js";
 import { WALL_WIDGET_REGISTRY } from "../src/app/wall/registry.js";
+import { boundDeviceReadOnly, resolveEffectiveMin } from "../src/app/wall/slim.js";
 import { WALL_TYPE_RAMP } from "../src/app/wall/type-ramp.js";
+import { linkTileLayout } from "../src/app/wall/widgets/link-model.js";
 import { temperatureWidgetState } from "../src/app/wall/widgets/temperature-model.js";
 
 /**
@@ -96,18 +100,62 @@ describe("the harness draft", () => {
     }
   });
 
-  it("places every widget at or above its registry minimum", () => {
+  it("places every widget at or above its effective minimum", () => {
     const layouts = [DEFAULT_DRAFT.widgets, DEFAULT_DRAFT.orientations?.portrait ?? []];
+    const devices = new Map(
+      WALL_HARNESS_FIXTURES.devices.map((device) => [device.qualifiedId, device]),
+    );
 
     for (const layout of layouts) {
       expect(layout.length).toBeGreaterThan(1);
       for (const widget of layout) {
-        const { min, max } = WALL_WIDGET_REGISTRY[widget.type];
-        expect(widget.w, `${widget.id} width`).toBeGreaterThanOrEqual(min.w);
-        expect(widget.h, `${widget.id} height`).toBeGreaterThanOrEqual(min.h);
-        expect(widget.w, `${widget.id} width`).toBeLessThanOrEqual(max.w);
-        expect(widget.h, `${widget.id} height`).toBeLessThanOrEqual(max.h);
+        const descriptor = WALL_WIDGET_REGISTRY[widget.type];
+        const qualifiedId =
+          typeof widget.config.qualifiedId === "string" ? widget.config.qualifiedId : "";
+        // The effective minimum reads the widget's bound fixture device, so a control-less
+        // typed device may sit at one row while a control-bearing one keeps two.
+        const minimum = resolveEffectiveMin(
+          descriptor,
+          widgetTitle(widget) !== null,
+          boundDeviceReadOnly(descriptor, devices.get(qualifiedId)),
+        );
+        expect(widget.w, `${widget.id} width`).toBeGreaterThanOrEqual(minimum.w);
+        expect(widget.h, `${widget.id} height`).toBeGreaterThanOrEqual(minimum.h);
+        expect(widget.w, `${widget.id} width`).toBeLessThanOrEqual(descriptor.max.w);
+        expect(widget.h, `${widget.id} height`).toBeLessThanOrEqual(descriptor.max.h);
       }
+    }
+  });
+
+  it("carries a one-row link and a one-row read-only device, so a walk reaches both", () => {
+    const layouts = [DEFAULT_DRAFT.widgets, DEFAULT_DRAFT.orientations?.portrait ?? []];
+    const devices = new Map(
+      WALL_HARNESS_FIXTURES.devices.map((device) => [device.qualifiedId, device]),
+    );
+
+    for (const layout of layouts) {
+      // The one-row link draws the route flush, so its whole cell is the anchor.
+      const link = layout.find((widget) => widget.type === "link");
+      if (!link) throw new Error("the draft carries no link widget");
+      expect(link.h).toBe(1);
+      expect(linkTileLayout(link)).toBe("flush");
+
+      // The one-row read-only device: authorable only through its effective minimum,
+      // which the fixture's control-less device resolves.
+      const readOnly = layout.find((widget) => {
+        if (!isWallDeviceClass(widget.type)) return false;
+        const descriptor = WALL_WIDGET_REGISTRY[widget.type];
+        const qualifiedId =
+          typeof widget.config.qualifiedId === "string" ? widget.config.qualifiedId : "";
+        return boundDeviceReadOnly(descriptor, devices.get(qualifiedId));
+      });
+      if (!readOnly) throw new Error("the draft carries no one-row read-only device");
+
+      const descriptor = WALL_WIDGET_REGISTRY[readOnly.type];
+      expect(readOnly.h).toBe(1);
+      expect(resolveEffectiveMin(descriptor, false, true).h).toBe(1);
+      // The plain type minimum would not admit it: the fixture's device is what does.
+      expect(resolveEffectiveMin(descriptor, false, false).h).toBeGreaterThan(readOnly.h);
     }
   });
 

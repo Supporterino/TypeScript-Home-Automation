@@ -1,9 +1,18 @@
 import { describe, expect, it } from "bun:test";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { Capability } from "@ts-ha/shared";
+import type { Capability, DeviceDescriptor } from "@ts-ha/shared";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { type DataStoreFixtures, DataStoreProvider } from "../src/app/lib/data-store.js";
 import { resolveDeviceClass } from "../src/app/wall/cards/device-class.js";
-import { lockCardLocked, lockCardModel, lockCardReading } from "../src/app/wall/cards/LockCard.js";
+import {
+  LockCard,
+  lockCardLocked,
+  lockCardModel,
+  lockCardReading,
+} from "../src/app/wall/cards/LockCard.js";
+import { ROW_UNIT_MIN, WALL_MIN_DEVICE_COLUMNS } from "../src/app/wall/grid.js";
 
 /**
  * The wall lock card: the property it is driven on and the exact lock/unlock values
@@ -164,5 +173,53 @@ describe("wall lock card source", () => {
     ]) {
       expect(source).not.toContain(affordance);
     }
+  });
+});
+
+/** Renders the lock card at a one-row device box, inside the store the wall renders it in. */
+function renderOneRow(capabilities: Capability[]): string {
+  const device: DeviceDescriptor = {
+    source: "test",
+    id: "front",
+    qualifiedId: "test:front",
+    displayName: "Front door",
+    state: { state: "LOCK" },
+    capabilities,
+    reachable: true,
+    observation: { mode: "push", observedAt: 0 },
+    hidden: false,
+  };
+  const fixtures: DataStoreFixtures = {
+    devices: [device],
+    state: {},
+    rooms: [],
+    automations: [],
+    transport: "live",
+  };
+  return renderToStaticMarkup(
+    createElement(
+      DataStoreProvider,
+      { fixtures },
+      createElement(LockCard, {
+        device,
+        box: { widthPx: WALL_MIN_DEVICE_COLUMNS * ROW_UNIT_MIN, heightPx: ROW_UNIT_MIN },
+      }),
+    ),
+  );
+}
+
+describe("the lock card's one-row slim form", () => {
+  it("renders the inline line at a one-row box with no observation", () => {
+    const html = renderOneRow(READ_ONLY_LOCK);
+
+    expect(html).toContain("Front door");
+    expect(html).toContain("Locked");
+    expect(html).not.toContain('role="img"');
+  });
+
+  it("draws no control for a read-only lock, whose primary action is not a toggle", () => {
+    const html = renderOneRow(READ_ONLY_LOCK);
+
+    expect(html).not.toContain("<button");
   });
 });

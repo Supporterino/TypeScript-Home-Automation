@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { WALL_CARD_FULL_HEIGHT_PX } from "../src/app/wall/cards/card-composition.js";
-import { rendererBoxHeightPx } from "../src/app/wall/frame.js";
+import { minimumRendererBoxHeightPx, rendererBoxHeightPx } from "../src/app/wall/frame.js";
 import {
   ROW_UNIT_MAX,
   ROW_UNIT_MIN,
@@ -13,6 +13,7 @@ import {
   WALL_WIDGET_REGISTRY,
   type WallWidgetSpan,
 } from "../src/app/wall/registry.js";
+import { effectiveSpanDescriptor } from "../src/app/wall/slim.js";
 import {
   cardHeightPx,
   composesMinimumSpan,
@@ -335,5 +336,58 @@ describe("the ported touch target", () => {
       WALL_COMPACT_CARD_HEIGHT_PX,
     );
     expect(WALL_MIN_TOUCH_TARGET).toBeGreaterThanOrEqual(42);
+  });
+});
+
+describe("the device-aware minimum a one-row cell is judged against", () => {
+  /** A typed device's frame is chrome-less, so its renderer box is the whole cell. */
+  function deviceBox(rows: number, rowUnit: number): number {
+    return rendererBoxHeightPx({
+      cellHeightPx: cardHeightPx({ rows, rowUnit }),
+      framed: false,
+      titled: false,
+    });
+  }
+
+  /** Whether a `{w, h}` placement composes against the effective minimum for `readOnly`. */
+  function composes(
+    descriptor: WallSpanDescriptor,
+    placement: WallWidgetSpan,
+    rowUnit: number,
+    readOnly: boolean,
+  ): boolean {
+    const effective = effectiveSpanDescriptor(descriptor, readOnly);
+    return composesMinimumSpan({
+      placement,
+      descriptor: effective,
+      rendererHeightPx: deviceBox(placement.h, rowUnit),
+      minimumRendererHeightPx: minimumRendererBoxHeightPx({
+        descriptor: effective,
+        rowUnit,
+        framed: false,
+      }),
+    });
+  }
+
+  it("explains a one-row control-bearing device and admits a one-row control-less one", () => {
+    const light = WALL_WIDGET_REGISTRY.light;
+    const oneRow = { w: light.min.w, h: 1 };
+
+    for (const rowUnit of [ROW_UNIT_MIN, ROW_UNIT_MAX]) {
+      // The device-aware minimum flips the same one-row cell: read-only composes, a
+      // control-bearing device is explained.
+      expect(composes(light, oneRow, rowUnit, true), `read-only at ${rowUnit}px`).toBe(true);
+      expect(composes(light, oneRow, rowUnit, false), `control-bearing at ${rowUnit}px`).toBe(
+        false,
+      );
+    }
+  });
+
+  it("still accepts the type's own two-row minimum at either device state", () => {
+    const light = WALL_WIDGET_REGISTRY.light;
+    for (const rowUnit of [ROW_UNIT_MIN, ROW_UNIT_MAX]) {
+      expect(composes(light, light.min, rowUnit, false)).toBe(true);
+      expect(composes(light, light.min, rowUnit, true)).toBe(true);
+    }
   });
 });

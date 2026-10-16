@@ -28,6 +28,7 @@ import {
   WallCardIconButton,
   WallCardObservation,
   WallCardSlider,
+  WallCardSlim,
   WallCardText,
 } from "./card-anatomy.js";
 import {
@@ -61,6 +62,13 @@ export function lightCardControls(capabilities: Capability[]): WallLightControl[
   const color = writableColorCapability(capabilities);
   if (color) controls.push({ kind: "color", capability: color });
   return controls;
+}
+
+/**
+ * Whether the light card presents a control: at least one declared value control.
+ */
+export function lightCardPresentsControls(capabilities: Capability[]): boolean {
+  return lightCardControls(capabilities).length > 0;
 }
 
 /**
@@ -182,15 +190,56 @@ export function LightCard({ device, config, box, contained }: WallDeviceCardProp
   const surface = contained
     ? {}
     : { background: "var(--hearth-surface-raised)", borderRadius: WALL_CARD_METRICS.radius };
+  const reading = lightCardReading({
+    isOn,
+    brightnessValue: brightness ? brightnessControl.value : undefined,
+    range: brightness?.range,
+  });
+  const readingColor = isOn && device.reachable ? "var(--hearth-text)" : "var(--hearth-text-muted)";
+  const toggleOnOff = onOffCapability
+    ? () => onOffControl.setValue(deviceTileToggledValue(onOffCapability, onOffControl.value))
+    : undefined;
+  const icon = (
+    <WallCardIcon
+      glyph={
+        isOn ? (
+          <Lightbulb size={WALL_CARD_GLYPH_SIZE} fill="currentColor" aria-hidden />
+        ) : (
+          <Lightbulb size={WALL_CARD_GLYPH_SIZE} aria-hidden />
+        )
+      }
+      color={accent}
+      active={isOn}
+      onActivate={toggleOnOff}
+      pressed={isOn}
+      disabled={disabled}
+      label={`Turn ${isOn ? "off" : "on"} ${label}`}
+    />
+  );
 
   // A light that is off is inactive, so collapsible controls hide its actions row.
   const composition = resolveDeviceCardComposition({
     box: box ?? DEFAULT_WALL_CARD_BOX,
     layout: config?.layout,
     collapsibleControls: config?.collapsible_controls,
-    hasControls: controls.length > 0,
+    hasControls: lightCardPresentsControls(device.capabilities),
     active: isOn,
   });
+
+  // A one-row cell renders the shared slim line: no observation, no actions row.
+  if (composition.form === "slim") {
+    return (
+      <WallCardSlim
+        icon={icon}
+        name={shortDeviceName(label)}
+        state={reading}
+        stateColor={readingColor}
+        onActivate={toggleOnOff}
+        disabled={disabled}
+        contained={contained}
+      />
+    );
+  }
 
   return (
     <div
@@ -213,34 +262,11 @@ export function LightCard({ device, config, box, contained }: WallDeviceCardProp
           padding: WALL_CARD_METRICS.padding,
         }}
       >
-        <WallCardIcon
-          glyph={
-            isOn ? (
-              <Lightbulb size={WALL_CARD_GLYPH_SIZE} fill="currentColor" aria-hidden />
-            ) : (
-              <Lightbulb size={WALL_CARD_GLYPH_SIZE} aria-hidden />
-            )
-          }
-          color={accent}
-          active={isOn}
-          onActivate={
-            onOffCapability
-              ? () =>
-                  onOffControl.setValue(deviceTileToggledValue(onOffCapability, onOffControl.value))
-              : undefined
-          }
-          pressed={isOn}
-          disabled={disabled}
-          label={`Turn ${isOn ? "off" : "on"} ${label}`}
-        />
+        {icon}
         <WallCardText
           name={shortDeviceName(label)}
-          state={lightCardReading({
-            isOn,
-            brightnessValue: brightness ? brightnessControl.value : undefined,
-            range: brightness?.range,
-          })}
-          stateColor={isOn && device.reachable ? "var(--hearth-text)" : "var(--hearth-text-muted)"}
+          state={reading}
+          stateColor={readingColor}
           prominent={composition.form === "full"}
         />
         <WallCardObservation observation={deviceTileObservation(device, now)} />

@@ -1,12 +1,18 @@
 import { describe, expect, it } from "bun:test";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { Capability } from "@ts-ha/shared";
+import type { Capability, DeviceDescriptor } from "@ts-ha/shared";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { type DataStoreFixtures, DataStoreProvider } from "../src/app/lib/data-store.js";
 import {
+  EntityCard,
   entityCardModel,
   entityCardReading,
   entityCardWholeCardActuates,
 } from "../src/app/wall/cards/EntityCard.js";
+import { ROW_UNIT_MIN, WALL_MIN_DEVICE_COLUMNS } from "../src/app/wall/grid.js";
+import { WALL_MIN_TOUCH_TARGET } from "../src/app/wall/registry.js";
 
 /**
  * The wall entity card — the typed fallback: a switch has a toggle the whole card
@@ -173,5 +179,78 @@ describe("wall entity card source", () => {
     ]) {
       expect(source).not.toContain(affordance);
     }
+  });
+});
+
+/** A device descriptor carrying the given capabilities, with the state the card reads. */
+function entityDevice(capabilities: Capability[]): DeviceDescriptor {
+  return {
+    source: "test",
+    id: "hall",
+    qualifiedId: "test:hall",
+    displayName: "Hall switch",
+    state: { on: true, temperature: 21.5 },
+    capabilities,
+    reachable: true,
+    observation: { mode: "push", observedAt: 0 },
+    hidden: false,
+  };
+}
+
+/** Renders the entity card at a one-row device box, inside the store the wall renders it in. */
+function renderOneRow(capabilities: Capability[]): string {
+  const device = entityDevice(capabilities);
+  const fixtures: DataStoreFixtures = {
+    devices: [device],
+    state: {},
+    rooms: [],
+    automations: [],
+    transport: "live",
+  };
+  return renderToStaticMarkup(
+    createElement(
+      DataStoreProvider,
+      { fixtures },
+      createElement(EntityCard, {
+        device,
+        box: { widthPx: WALL_MIN_DEVICE_COLUMNS * ROW_UNIT_MIN, heightPx: ROW_UNIT_MIN },
+      }),
+    ),
+  );
+}
+
+describe("the entity card's one-row slim form", () => {
+  it("branches to the shared slim line and keeps the whole-cell toggle up to reachability", async () => {
+    const source = await cardSource();
+
+    expect(source).toContain("WallCardSlim");
+    expect(source).toContain('composition.form === "slim"');
+    // The slim cell is the actuation target in the same case the icon affordance is.
+    expect(source).toContain("onActivate={actuates && !disabled ? toggle : undefined}");
+  });
+
+  it("draws the name over a single line with no observation indicator", () => {
+    const html = renderOneRow(SWITCH);
+
+    expect(html).toContain("Hall switch");
+    expect(html).not.toContain('role="img"');
+  });
+
+  it("keeps its one control at the wall's touch target at one row", () => {
+    const html = renderOneRow(SWITCH);
+
+    // The icon affordance is the only control the one-row line draws, at the ported
+    // control height — never a sub-target control.
+    expect(html.match(/<button/g) ?? []).toHaveLength(1);
+    expect(html).toContain(`min-height:${WALL_MIN_TOUCH_TARGET}px`);
+    expect(WALL_MIN_TOUCH_TARGET).toBe(42);
+  });
+
+  it("offers no control and no observation for a read-only device at one row", () => {
+    const html = renderOneRow(SENSOR);
+
+    expect(html).toContain("21.5 °C");
+    expect(html).not.toContain("<button");
+    expect(html).not.toContain('role="img"');
   });
 });

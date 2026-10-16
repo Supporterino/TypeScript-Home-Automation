@@ -189,6 +189,118 @@ export function WallCardText({
 }
 
 /**
+ * The one-row ("slim") card line every typed card composes at a one-row box: a leading
+ * affordance and the device's name with its state on a single line, with no observation
+ * indicator. `onActivate` makes the whole cell the actuation target, drawn only where the
+ * device's primary action is a toggle.
+ */
+export function WallCardSlim({
+  icon,
+  name,
+  state,
+  stateColor,
+  onActivate,
+  disabled,
+  contained,
+}: {
+  /** The leading affordance, drawn by the card as its own {@link WallCardIcon}. */
+  icon: ReactNode;
+  name: ReactNode;
+  state: ReactNode;
+  /** The state's colour — the device's own accent, muted when unreachable. */
+  stateColor?: string;
+  /** The whole cell's actuation, present only where the primary action is a toggle. */
+  onActivate?: () => void;
+  /** Whether the device is unreachable — the whole-cell target is inert. */
+  disabled?: boolean;
+  /** Whether the frame around the card draws the surface, so the card draws none of its own. */
+  contained?: boolean;
+}): ReactNode {
+  const surface = contained
+    ? {}
+    : { background: "var(--hearth-surface-raised)", borderRadius: WALL_CARD_METRICS.radius };
+
+  return (
+    <div
+      onClick={onActivate === undefined || disabled === true ? undefined : onActivate}
+      style={{
+        position: "relative",
+        display: "flex",
+        alignItems: "center",
+        gap: WALL_CARD_METRICS.padding,
+        minWidth: 0,
+        height: "100%",
+        boxSizing: "border-box",
+        overflow: "hidden",
+        cursor: onActivate === undefined || disabled === true ? undefined : "pointer",
+        ...surface,
+      }}
+    >
+      {icon}
+      <WallCardSlimText name={name} state={state} stateColor={stateColor} />
+    </div>
+  );
+}
+
+/**
+ * The slim line's name and state, drawn on one line: the name shortens with an ellipsis
+ * while the state stays legible beside it.
+ */
+function WallCardSlimText({
+  name,
+  state,
+  stateColor,
+}: {
+  name: ReactNode;
+  state: ReactNode;
+  /** The state's colour — the device's own accent, muted when unreachable. */
+  stateColor?: string;
+}): ReactNode {
+  return (
+    <span
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: `${WALL_CARD_METRICS.padding}px`,
+        minWidth: 0,
+        flex: "1 1 0",
+      }}
+    >
+      <span
+        style={{
+          minWidth: 0,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+          color: "var(--hearth-text)",
+          fontFamily: "var(--hearth-font-display)",
+          fontSize: WALL_CARD_PRIMARY_FONT_SIZE,
+          fontWeight: WALL_CARD_METRICS.primaryWeight,
+          lineHeight: `${WALL_CARD_METRICS.primaryLeading}px`,
+          letterSpacing: `${WALL_CARD_METRICS.primaryTracking}px`,
+        }}
+      >
+        {name}
+      </span>
+      <span
+        style={{
+          flex: "none",
+          whiteSpace: "nowrap",
+          color: stateColor ?? "var(--hearth-text-muted)",
+          fontFamily: "var(--hearth-font-display)",
+          fontSize: WALL_CARD_SECONDARY_FONT_SIZE,
+          fontWeight: WALL_CARD_METRICS.secondaryWeight,
+          lineHeight: `${WALL_CARD_METRICS.secondaryLeading}px`,
+          letterSpacing: `${WALL_CARD_METRICS.secondaryTracking}px`,
+        }}
+      >
+        {state}
+      </span>
+    </span>
+  );
+}
+
+/**
  * How an actions row uses the card's width: `distributed` spreads a row of
  * fixed-size controls across it, `flexible` keeps a flexible control's own grow
  * and centres the fixed controls beside it.
@@ -744,14 +856,41 @@ export function WallCardControl({
 }
 
 /**
+ * How a route affordance is drawn: the ported `pill`, or the chrome-less `flush` one-row
+ * form whose whole cell is the anchor.
+ */
+export type WallCardRouteVariant = "pill" | "flush";
+
+/**
+ * The flush one-row route treatment: the anchor fills its cell with no border, no raised
+ * background, and no inset, so the whole cell is the route's touch target.
+ */
+function wallCardFlushRouteStyle(): CSSProperties {
+  return {
+    display: "flex",
+    flex: "1 1 0",
+    width: "100%",
+    height: "100%",
+    minWidth: 0,
+    minHeight: WALL_CARD_METRICS.controlHeight,
+    justifyContent: "flex-start",
+    padding: 0,
+    border: "none",
+    background: "transparent",
+  };
+}
+
+/**
  * A route affordance — the link widget's target and the wall view's back link — the
- * ported control treatment carried by the router's own link.
+ * ported control treatment carried by the router's own link. The `flush` variant drops
+ * the pill entirely, so a one-row route's whole cell is its touch target.
  */
 export function WallCardRoute({
   to,
   glyph,
   label,
   labelSize,
+  variant = "pill",
   style,
 }: {
   /** The address the route opens, resolved by the router's own `wallPath`. */
@@ -762,11 +901,20 @@ export function WallCardRoute({
   label: ReactNode;
   /** The label's size — the ported primary size unless the caller names the wall's own tier. */
   labelSize?: string;
+  /** How the route is drawn — the ported pill, or the flush one-row form. */
+  variant?: WallCardRouteVariant;
   /** Where the route is placed, for a caller that overlays it on the composition. */
   style?: CSSProperties;
 }): ReactNode {
   return (
-    <Link to={to} style={{ ...wallCardControlStyle(), ...style }}>
+    <Link
+      to={to}
+      style={{
+        ...wallCardControlStyle(),
+        ...(variant === "flush" ? wallCardFlushRouteStyle() : {}),
+        ...style,
+      }}
+    >
       {glyph}
       <WallCardLabel size={labelSize}>{label}</WallCardLabel>
     </Link>

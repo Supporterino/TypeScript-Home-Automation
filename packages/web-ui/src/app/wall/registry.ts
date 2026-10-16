@@ -79,6 +79,13 @@ export interface WallWidgetDescriptor {
   /** The largest `{w, h}` the editor may place this type at. */
   max: WallWidgetSpan;
   /**
+   * The type's one-row ("slim") placement rule, when it has one: the `{w, h}` the
+   * type may occupy at one row, and whether that applies `always` or only when the
+   * bound device presents no controls (`read-only`). The frame's surface decision
+   * and the effective-minimum resolver both read it.
+   */
+  slim?: { min: WallWidgetSpan; when: "always" | "read-only" };
+  /**
    * The type's config schema — the same shared per-type schema the server
    * validates against.
    */
@@ -98,6 +105,12 @@ function typedDeviceDescriptor(type: WallDeviceClass): WallWidgetDescriptor {
     defaults: { w: WALL_MIN_DEVICE_COLUMNS, h: WALL_MIN_DEVICE_ROWS },
     min: { w: WALL_MIN_DEVICE_COLUMNS, h: WALL_MIN_DEVICE_ROWS },
     max: { w: 6, h: 6 },
+    /**
+     * One row: a typed device may be authored slim exactly when its bound device
+     * presents no controls — an `entity`, or a device reporting no writable
+     * property. The minimum stays two rows for a device that does present controls.
+     */
+    slim: { min: { w: 3, h: 1 }, when: "read-only" },
     configSchema: WALL_WIDGET_CONFIG_SCHEMAS[type],
     renderer: DeviceWidget,
   };
@@ -220,6 +233,7 @@ export const WALL_WIDGET_REGISTRY: Readonly<Record<WallWidgetType, WallWidgetDes
        */
       min: { w: 2, h: 1 },
       max: { w: 6, h: 4 },
+      slim: { min: { w: 2, h: 1 }, when: "always" },
       configSchema: WALL_WIDGET_CONFIG_SCHEMAS.scene,
       renderer: SceneWidget,
     },
@@ -228,8 +242,13 @@ export const WALL_WIDGET_REGISTRY: Readonly<Record<WallWidgetType, WallWidgetDes
       label: "Link",
       grammar: "control",
       defaults: { w: 3, h: 2 },
-      min: { w: 2, h: 2 },
+      /**
+       * One row: a link may be authored slim. At one row the wall renders it
+       * chrome-less and the route draws flush, so the whole cell is the target.
+       */
+      min: { w: 2, h: 1 },
       max: { w: 6, h: 4 },
+      slim: { min: { w: 2, h: 1 }, when: "always" },
       configSchema: WALL_WIDGET_CONFIG_SCHEMAS.link,
       renderer: LinkWidget,
     },

@@ -25,9 +25,10 @@ function isDeviceClass(type: string): boolean {
 }
 
 describe("wallFrameDrawsSurface", () => {
-  it("keeps the grammar-derived surface for every non-device widget type above one row", () => {
+  it("keeps the grammar-derived surface for every type without an always-slim rule", () => {
     for (const type of WALL_WIDGET_TYPES) {
-      if (isDeviceClass(type) || type === "scene") continue;
+      if (isDeviceClass(type)) continue;
+      if (WALL_WIDGET_REGISTRY[type].slim?.when === "always") continue;
       const grammar = WALL_WIDGET_REGISTRY[type].grammar;
       expect(wallFrameDrawsSurface(type, grammar, WALL_WIDGET_REGISTRY[type].min)).toBe(
         grammar === "control",
@@ -54,12 +55,34 @@ describe("wallFrameDrawsSurface", () => {
     }
   });
 
+  it("reads a chrome-less one-row from the type's own always-slim rule", () => {
+    // No per-type branch: every `when: "always"` type is chrome-less at its slim rows
+    // and draws its grammar-derived surface above them.
+    for (const type of WALL_WIDGET_TYPES) {
+      const slim = WALL_WIDGET_REGISTRY[type].slim;
+      if (slim?.when !== "always") continue;
+      const grammar = WALL_WIDGET_REGISTRY[type].grammar;
+      expect(wallFrameDrawsSurface(type, grammar, slim.min)).toBe(false);
+      expect(wallFrameDrawsSurface(type, grammar, { w: slim.min.w, h: slim.min.h + 1 })).toBe(
+        grammar === "control",
+      );
+    }
+  });
+
   it("drops a scene's surface at one row and keeps the framed tile from two rows", () => {
     // The one-row scene renders chrome-less, so the whole cell is its touch target; at
     // two rows the frame draws the surface and the framed glyph-and-label tile returns.
     expect(WALL_WIDGET_REGISTRY.scene.min).toEqual({ w: 2, h: 1 });
     expect(wallFrameDrawsSurface("scene", "control", { w: 2, h: 1 })).toBe(false);
     expect(wallFrameDrawsSurface("scene", "control", { w: 2, h: 2 })).toBe(true);
+  });
+
+  it("drops a link's surface at one row and keeps the framed route from two rows", () => {
+    // A one-row link is chrome-less too, so the whole cell is the link's touch target;
+    // at two rows the frame draws the surface and the framed labelled route returns.
+    expect(WALL_WIDGET_REGISTRY.link.min).toEqual({ w: 2, h: 1 });
+    expect(wallFrameDrawsSurface("link", "control", { w: 2, h: 1 })).toBe(false);
+    expect(wallFrameDrawsSurface("link", "control", { w: 2, h: 2 })).toBe(true);
   });
 });
 

@@ -17,6 +17,7 @@ import {
   wallCardRootLayout,
 } from "../src/app/wall/cards/card-composition.js";
 import { WALL_CARD_METRICS } from "../src/app/wall/cards/metrics.js";
+import { ROW_UNIT_MIN } from "../src/app/wall/grid.js";
 
 /**
  * The per-card options and box-resolved composition: the pure resolver and the
@@ -82,6 +83,16 @@ describe("resolveCardFormForBox", () => {
     expect(short).not.toBe(medium);
     expect(medium).not.toBe(tall);
     expect(short).not.toBe(tall);
+  });
+
+  it("resolves the slim one-row form below the compact composition's budget", () => {
+    // A one-row device cell at the wall's row-unit floor is shorter than the smallest
+    // stacked composition, so it composes the slim line instead.
+    expect(WALL_CARD_COMPACT_HEIGHT_PX).toBeGreaterThan(ROW_UNIT_MIN);
+    expect(resolveCardFormForBox(ROW_UNIT_MIN)).toBe("slim");
+    expect(resolveCardFormForBox(WALL_CARD_COMPACT_HEIGHT_PX - 1)).toBe("slim");
+    // The compact budget itself is where the slim form ends.
+    expect(resolveCardFormForBox(WALL_CARD_COMPACT_HEIGHT_PX)).toBe("compact");
   });
 
   it("derives each threshold from the card's own ported rows", () => {
@@ -221,6 +232,16 @@ describe("resolveDeviceCardComposition", () => {
     expect(composition.siblings).toBe(false);
   });
 
+  it("draws no sibling controls in a slim box — the slim line has no actions row", () => {
+    const composition = resolveDeviceCardComposition({
+      box: box(WALL_CARD_INLINE_MIN_WIDTH_PX, WALL_CARD_COMPACT_HEIGHT_PX - 1),
+      hasControls: false,
+      active: true,
+    });
+    expect(composition.form).toBe("slim");
+    expect(composition.siblings).toBe(false);
+  });
+
   it("defaults an unwired card to the box of its fullest composition", () => {
     expect(resolveCardFormForBox(DEFAULT_WALL_CARD_BOX.heightPx)).toBe("full");
     expect(DEFAULT_WALL_CARD_BOX.widthPx).toBeGreaterThanOrEqual(WALL_CARD_INLINE_MIN_WIDTH_PX);
@@ -284,6 +305,15 @@ describe("every card resolves its own options and box", () => {
     it(`${name} composes the other controls beside the active one from the box`, async () => {
       const source = await cardSource(name);
       expect(source).toContain("composition.siblings");
+    });
+  }
+
+  for (const name of EVERY_CARD) {
+    it(`${name} branches to the shared slim line at a slim box`, async () => {
+      const source = await cardSource(name);
+      // The line is composed once, in the anatomy; each card only branches to it.
+      expect(source).toContain("WallCardSlim");
+      expect(source).toContain('composition.form === "slim"');
     });
   }
 });

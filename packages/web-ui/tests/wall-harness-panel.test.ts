@@ -2,7 +2,11 @@ import { describe, expect, it } from "bun:test";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { WallWidget } from "@ts-ha/shared";
-import { addWidget, updateWidgetPlacement } from "../src/app/wall/editor/model.js";
+import {
+  addWidget,
+  updateWidgetPlacement,
+  validateProfileDraft,
+} from "../src/app/wall/editor/model.js";
 import {
   minimumRendererBoxHeightPx,
   rendererBoxHeightPx,
@@ -25,7 +29,12 @@ import {
   editActiveList,
   shownWidgets,
 } from "../src/app/wall/harness/draft.js";
-import { HARNESS_PANEL_SIZES, type HarnessPanel } from "../src/app/wall/harness/messages.js";
+import { fixtureSetFor, WALL_HARNESS_FIXTURES } from "../src/app/wall/harness/fixtures.js";
+import {
+  DEFAULT_FIXTURE_CONTROLS,
+  HARNESS_PANEL_SIZES,
+  type HarnessPanel,
+} from "../src/app/wall/harness/messages.js";
 import { getWidgetDescriptor, WALL_MIN_TOUCH_TARGET } from "../src/app/wall/registry.js";
 import { cardHeightPx, resolveCardFormForHeight, resolveSpanTier } from "../src/app/wall/span.js";
 import { deviceGridIds, resolveDeviceGridPage } from "../src/app/wall/widgets/device-grid-model.js";
@@ -96,7 +105,7 @@ describe("the panel's Stage-computed values", () => {
 
       for (const widget of [titled, device, grid]) {
         const expected = expectedValues(widget, rowUnit);
-        const actual = widgetValues(widget, rowUnit);
+        const actual = widgetValues(widget, rowUnit, WALL_HARNESS_FIXTURES.devices);
 
         expect(actual.cellHeightPx, `${panel} ${widget.id}`).toBe(expected.cellHeightPx);
         expect(actual.rendererHeightPx, `${panel} ${widget.id}`).toBe(expected.rendererHeightPx);
@@ -110,10 +119,10 @@ describe("the panel's Stage-computed values", () => {
 
       // The type-specific checks the three widgets stand for: the `device` widget's frame is
       // chrome-less, the titled clock spends rows on its title, and the grid pages.
-      expect(widgetValues(device, rowUnit).framed).toBe(false);
-      expect(widgetValues(titled, rowUnit).rendererHeightPx).toBeLessThan(
-        widgetValues(clock, rowUnit).rendererHeightPx,
-      );
+      expect(widgetValues(device, rowUnit, WALL_HARNESS_FIXTURES.devices).framed).toBe(false);
+      expect(
+        widgetValues(titled, rowUnit, WALL_HARNESS_FIXTURES.devices).rendererHeightPx,
+      ).toBeLessThan(widgetValues(clock, rowUnit, WALL_HARNESS_FIXTURES.devices).rendererHeightPx);
 
       const page = resolveDeviceGridPage({
         ids: deviceGridIds(grid.config),
@@ -161,7 +170,7 @@ describe("the panel's Stage-computed values", () => {
     const scene = draftWidget(panel, "scene-evening");
     const oneRow: WallWidget = { ...scene, h: 1 };
 
-    const values = widgetValues(oneRow, rowUnit);
+    const values = widgetValues(oneRow, rowUnit, WALL_HARNESS_FIXTURES.devices);
     expect(values.framed).toBe(false);
     expect(values.titled).toBe(false);
     expect(values.rendererHeightPx).toBe(cardHeightPx({ rows: 1, rowUnit }));
@@ -172,7 +181,7 @@ describe("the panel's Stage-computed values", () => {
     );
 
     // The same scene at two rows keeps the framed tile.
-    expect(widgetValues(scene, rowUnit).framed).toBe(true);
+    expect(widgetValues(scene, rowUnit, WALL_HARNESS_FIXTURES.devices).framed).toBe(true);
   });
 });
 
@@ -263,7 +272,7 @@ describe("the bench", () => {
   it("starts from the Stage-computed values and takes the panel's overrides", () => {
     const widget = draftWidget("landscape", "device-light");
     const rowUnit = panelRowUnit(shownWidgets(DEFAULT_DRAFT, "landscape"), 1080);
-    const values = widgetValues(widget, rowUnit);
+    const values = widgetValues(widget, rowUnit, WALL_HARNESS_FIXTURES.devices);
 
     const untouched = resolveBenchControls(widget, values, rowUnit, NO_BENCH_OVERRIDES);
     expect(untouched.contained).toBe(values.framed);
@@ -289,7 +298,7 @@ describe("the bench", () => {
         HARNESS_PANEL_SIZES[panel].height,
       );
       const widget = draftWidget(panel, "device-light");
-      const values = widgetValues(widget, rowUnit);
+      const values = widgetValues(widget, rowUnit, WALL_HARNESS_FIXTURES.devices);
       const reachable = reachableRendererHeights(widget, rowUnit);
 
       // The Stage-computed height is by definition one a legal placement produces.
@@ -305,6 +314,99 @@ describe("the bench", () => {
       expect(reachable, panel).not.toContain(belowMinimum);
       expect(belowMinimum).toBeLessThan(values.rendererHeightPx);
     }
+  });
+});
+
+describe("the draft's one-row widgets in the panel's values", () => {
+  it("resolves the one-row link and the one-row read-only device against the fixtures", () => {
+    for (const panel of PANELS) {
+      const rowUnit = panelRowUnit(
+        shownWidgets(DEFAULT_DRAFT, panel),
+        HARNESS_PANEL_SIZES[panel].height,
+      );
+
+      for (const id of ["link-hall", "device-entity"]) {
+        const widget = draftWidget(panel, id);
+        expect(widget.h, `${panel} ${id}`).toBe(1);
+
+        const values = widgetValues(widget, rowUnit, WALL_HARNESS_FIXTURES.devices);
+        // The panel reports the one-row cell as renderable rather than below its
+        // minimum, and each is a chrome-less cell.
+        expect(values.tooSmall, `${panel} ${id}`).toBe(false);
+        expect(values.framed, `${panel} ${id}`).toBe(false);
+      }
+    }
+  });
+
+  it("still reports a one-row cell below the minimum for a control-bearing device", () => {
+    for (const panel of PANELS) {
+      const rowUnit = panelRowUnit(
+        shownWidgets(DEFAULT_DRAFT, panel),
+        HARNESS_PANEL_SIZES[panel].height,
+      );
+      const oneRowLight: WallWidget = { ...draftWidget(panel, "device-light"), h: 1 };
+
+      // The fixtures' full light presents controls, so its one-row cell stays below the
+      // effective minimum — the contrast the read-only device's one row depends on.
+      expect(
+        widgetValues(oneRowLight, rowUnit, WALL_HARNESS_FIXTURES.devices).tooSmall,
+        panel,
+      ).toBe(true);
+    }
+  });
+});
+
+describe("the panel's preview against the stage's device set", () => {
+  it("mirrors the stage's degradation when a bound device is toggled absent", () => {
+    for (const panel of PANELS) {
+      const rowUnit = panelRowUnit(
+        shownWidgets(DEFAULT_DRAFT, panel),
+        HARNESS_PANEL_SIZES[panel].height,
+      );
+      const widget = draftWidget(panel, "device-entity");
+
+      // Present: the fixtures' control-less device resolves the one-row cell.
+      const present = widgetValues(
+        widget,
+        rowUnit,
+        fixtureSetFor(DEFAULT_FIXTURE_CONTROLS).devices,
+      );
+      expect(present.tooSmall, panel).toBe(false);
+
+      // Absent: the stage's store carries no device, so its frame falls back to the type's
+      // own minimum — the panel must report the same verdict, not a stale one.
+      const absent = widgetValues(
+        widget,
+        rowUnit,
+        fixtureSetFor({ ...DEFAULT_FIXTURE_CONTROLS, device: "entity", devicePresent: false })
+          .devices,
+      );
+      expect(absent.tooSmall, panel).toBe(true);
+      expect(absent.minimumRendererHeightPx, panel).toBeGreaterThan(
+        present.minimumRendererHeightPx,
+      );
+      // The stage's own fallback, computed the way `WidgetFrame` resolves a missing device
+      // (`wall-frame.test.ts` pins the same degradation).
+      expect(absent.minimumRendererHeightPx, panel).toBe(
+        minimumRendererBoxHeightPx({
+          descriptor: getWidgetDescriptor(widget.type),
+          rowUnit,
+          framed: absent.framed,
+        }),
+      );
+    }
+  });
+
+  it("keeps the draft authorable while a device is toggled absent", () => {
+    // "Device present = false" is a runtime store condition the stage simulates, not an
+    // authorability one: validation keeps the whole roster, so the toggle never invalidates
+    // the draft.
+    const validation = validateProfileDraft(
+      "harness",
+      DEFAULT_DRAFT,
+      WALL_HARNESS_FIXTURES.devices,
+    );
+    expect(validation.ok).toBe(true);
   });
 });
 

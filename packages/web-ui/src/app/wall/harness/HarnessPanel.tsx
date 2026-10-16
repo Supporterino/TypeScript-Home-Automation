@@ -35,6 +35,7 @@ import {
   editActiveList,
   shownWidgets,
 } from "./draft.js";
+import { fixtureSetFor, WALL_HARNESS_FIXTURES } from "./fixtures.js";
 import { WALL_HARNESS_MARKER } from "./marker.js";
 import {
   DEFAULT_FIXTURE_CONTROLS,
@@ -321,9 +322,13 @@ export function HarnessPanel() {
   const target = activeTarget(draft, panel);
   const selected = shown.find((widget) => widget.id === selectedId) ?? shown[0] ?? null;
   const rowUnit = panelRowUnit(shown, panelHeightPx(panel));
+  // The device set the stage's store receives, so the panel's per-widget preview resolves
+  // the same effective minimum the wall does — including a device toggled absent, which
+  // the stage simulates as a missing device.
+  const fixtureDevices = useMemo(() => fixtureSetFor(controls).devices, [controls]);
   const values = useMemo(
-    () => (selected === null ? null : widgetValues(selected, rowUnit)),
-    [selected, rowUnit],
+    () => (selected === null ? null : widgetValues(selected, rowUnit, fixtureDevices)),
+    [selected, rowUnit, fixtureDevices],
   );
   const bench = useMemo(
     () => resolveBenchControls(selected, values, rowUnit, overrides),
@@ -333,7 +338,7 @@ export function HarnessPanel() {
     () => (selected === null ? [] : reachableRendererHeights(selected, rowUnit)),
     [selected, rowUnit],
   );
-  const validation = validateProfileDraft(PROFILE_NAME, draft);
+  const validation = validateProfileDraft(PROFILE_NAME, draft, WALL_HARNESS_FIXTURES.devices);
   const errors = validation.ok ? [] : validation.errors;
   const fit = panelFitSummary(shown, panel);
 
@@ -362,14 +367,21 @@ export function HarnessPanel() {
   }
 
   function handlePlacement(widget: WallWidget, patch: Partial<WallWidget>): void {
-    // The editor's own resize, which clamps the span and the grid position.
+    // The editor's own resize, which clamps the span and the grid position against the
+    // fixtures' devices.
     edit((config) =>
-      updateWidgetPlacement(config, widget.id, {
-        x: patch.x ?? widget.x,
-        y: patch.y ?? widget.y,
-        w: patch.w ?? widget.w,
-        h: patch.h ?? widget.h,
-      }),
+      updateWidgetPlacement(
+        config,
+        widget.id,
+        {
+          x: patch.x ?? widget.x,
+          y: patch.y ?? widget.y,
+          w: patch.w ?? widget.w,
+          h: patch.h ?? widget.h,
+        },
+        undefined,
+        WALL_HARNESS_FIXTURES.devices,
+      ),
     );
   }
 

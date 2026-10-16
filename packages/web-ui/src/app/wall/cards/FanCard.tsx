@@ -25,6 +25,7 @@ import {
   WallCardIcon,
   WallCardObservation,
   WallCardSlider,
+  WallCardSlim,
   WallCardText,
 } from "./card-anatomy.js";
 import {
@@ -95,6 +96,15 @@ export function fanCardModel(capabilities: Capability[]): WallFanCardModel {
   };
 }
 
+/**
+ * Whether the fan card presents a control: a declared percentage or set of presets. A fan
+ * declaring neither presents none, so it may be one row.
+ */
+export function fanCardPresentsControls(capabilities: Capability[]): boolean {
+  const model = fanCardModel(capabilities);
+  return model.percentage !== undefined || model.presets !== undefined;
+}
+
 /** The percentage slider's bounds, with the ported fallbacks. */
 export function fanPercentageRange(percentage: FlatCapability): CapabilityRange {
   return { min: percentage.range?.min ?? 0, max: percentage.range?.max ?? 100 };
@@ -152,7 +162,7 @@ export function FanCard({ device, config, box, contained }: WallDeviceCardProps)
     box: box ?? DEFAULT_WALL_CARD_BOX,
     layout: config?.layout,
     collapsibleControls: config?.collapsible_controls,
-    hasControls: model.percentage !== undefined || model.presets !== undefined,
+    hasControls: fanCardPresentsControls(device.capabilities),
     active: model.onOff ? isOn : true,
   });
 
@@ -161,6 +171,46 @@ export function FanCard({ device, config, box, contained }: WallDeviceCardProps)
     ? {}
     : { background: "var(--hearth-surface-raised)", borderRadius: WALL_CARD_METRICS.radius };
   const error = onOffControl.error ?? percentageControl.error ?? presetsControl.error;
+  const reading = fanCardReading({
+    hasOnOff: model.onOff !== null,
+    isOn,
+    percentageValue: model.percentage ? percentageControl.value : undefined,
+    unit: model.readout?.unit,
+  });
+  const toggleOnOff = onOff
+    ? () => onOffControl.setValue(deviceTileToggledValue(onOff, onOffControl.value))
+    : undefined;
+  const icon = (
+    <WallCardIcon
+      glyph={
+        isOn ? (
+          <Fan size={WALL_CARD_GLYPH_SIZE} fill="currentColor" aria-hidden />
+        ) : (
+          <Fan size={WALL_CARD_GLYPH_SIZE} aria-hidden />
+        )
+      }
+      tint={isOn ? "var(--hearth-on)" : undefined}
+      onActivate={toggleOnOff}
+      pressed={isOn}
+      disabled={disabled}
+      label={`Turn ${isOn ? "off" : "on"} ${label}`}
+    />
+  );
+
+  // A one-row cell renders the shared slim line: no observation, no actions row, and the
+  // whole cell is the device's toggle.
+  if (composition.form === "slim") {
+    return (
+      <WallCardSlim
+        icon={icon}
+        name={shortDeviceName(label)}
+        state={reading}
+        onActivate={toggleOnOff}
+        disabled={disabled}
+        contained={contained}
+      />
+    );
+  }
 
   return (
     <div
@@ -183,32 +233,10 @@ export function FanCard({ device, config, box, contained }: WallDeviceCardProps)
           padding: WALL_CARD_METRICS.padding,
         }}
       >
-        <WallCardIcon
-          glyph={
-            isOn ? (
-              <Fan size={WALL_CARD_GLYPH_SIZE} fill="currentColor" aria-hidden />
-            ) : (
-              <Fan size={WALL_CARD_GLYPH_SIZE} aria-hidden />
-            )
-          }
-          tint={isOn ? "var(--hearth-on)" : undefined}
-          onActivate={
-            onOff
-              ? () => onOffControl.setValue(deviceTileToggledValue(onOff, onOffControl.value))
-              : undefined
-          }
-          pressed={isOn}
-          disabled={disabled}
-          label={`Turn ${isOn ? "off" : "on"} ${label}`}
-        />
+        {icon}
         <WallCardText
           name={shortDeviceName(label)}
-          state={fanCardReading({
-            hasOnOff: model.onOff !== null,
-            isOn,
-            percentageValue: model.percentage ? percentageControl.value : undefined,
-            unit: model.readout?.unit,
-          })}
+          state={reading}
           prominent={composition.form === "full"}
         />
         <WallCardObservation observation={deviceTileObservation(device, now)} />

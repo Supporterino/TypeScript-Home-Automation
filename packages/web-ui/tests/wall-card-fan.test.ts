@@ -150,6 +150,19 @@ describe("wall fan card source", () => {
     expect(source).toContain("<WallCardObservation");
   });
 
+  it("makes the whole one-row cell the fan's toggle's actuation target", async () => {
+    const source = await cardSource();
+    // The one-row ("slim") branch supplies the whole-cell actuation, mirroring the entity
+    // card: a fan whose only action is its on/off toggle is exactly the case a one-row fan
+    // is authorable in.
+    const start = source.indexOf('composition.form === "slim"');
+    const end = source.indexOf("\n  return (", start);
+    const slim = source.slice(start, end === -1 ? source.length : end);
+
+    expect(slim).toContain("<WallCardSlim");
+    expect(slim).toContain("onActivate={toggleOnOff}");
+  });
+
   it("presents the percentage as a slider with the presets beside it", async () => {
     const source = await cardSource();
     // The slider is flexible, so the row keeps it flexible rather than spreading it.

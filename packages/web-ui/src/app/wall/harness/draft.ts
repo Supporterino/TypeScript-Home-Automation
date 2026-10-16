@@ -3,33 +3,61 @@
  * algorithm.
  */
 import type { WallProfileConfig, WallWidget } from "@ts-ha/shared";
+import type { DeviceDescriptor } from "../../types.js";
 import type { WallDeviceClass } from "../cards/device-class.js";
 import { resolveLayout, WALL_MIN_DEVICE_COLUMNS, WALL_MIN_DEVICE_ROWS } from "../grid.js";
+import { getWidgetDescriptor } from "../registry.js";
+import { boundDeviceReadOnly, resolveEffectiveMin } from "../slim.js";
 import {
   DEVICE_CLASS_DEVICE_IDS,
   DEVICE_GRID_SELECTION,
   HARNESS_ROOM_ID,
   HARNESS_SCENE_NAME,
   HARNESS_TEMPERATURE_ONLY_SENSOR_ID,
+  WALL_HARNESS_FIXTURES,
 } from "./fixtures.js";
 import type { HarnessPanel } from "./messages.js";
 
+/** The fixture device backing one wall device class. */
+function fixtureDevice(deviceClass: WallDeviceClass): DeviceDescriptor | undefined {
+  const qualifiedId = DEVICE_CLASS_DEVICE_IDS[deviceClass];
+  return WALL_HARNESS_FIXTURES.devices.find((device) => device.qualifiedId === qualifiedId);
+}
+
 /**
- * A typed device widget for one device class the fixture roster backs, at the type's
- * minimum span.
+ * A typed device widget for one device class the fixture roster backs, placed at its
+ * effective minimum: the one-row span where its fixture presents no controls, else the
+ * type's own two-row minimum.
  */
 function deviceClassWidget(
   deviceClass: WallDeviceClass,
   placement: { readonly x: number; readonly y: number },
 ): WallWidget {
+  const descriptor = getWidgetDescriptor(deviceClass);
+  const device = fixtureDevice(deviceClass);
+  const minimum = resolveEffectiveMin(descriptor, false, boundDeviceReadOnly(descriptor, device));
   return {
     id: `device-${deviceClass}`,
     type: deviceClass,
     config: { qualifiedId: DEVICE_CLASS_DEVICE_IDS[deviceClass] },
     x: placement.x,
     y: placement.y,
-    w: WALL_MIN_DEVICE_COLUMNS,
-    h: WALL_MIN_DEVICE_ROWS,
+    w: minimum.w,
+    h: minimum.h,
+  };
+}
+
+/** The one-row link both drafts carry, so a walk reaches the flush route. */
+function oneRowLink(placement: { readonly x: number; readonly y: number }): WallWidget {
+  const { min } = getWidgetDescriptor("link");
+  return {
+    id: "link-hall",
+    type: "link",
+    config: { target: "Kitchen" },
+    x: placement.x,
+    y: placement.y,
+    w: min.w,
+    h: min.h,
   };
 }
 
@@ -115,6 +143,7 @@ const LANDSCAPE: readonly WallWidget[] = [
   { id: "favorites", type: "favorites", config: {}, x: 6, y: 9, w: 3, h: 5 },
   deviceClassWidget("select", { x: 9, y: 9 }),
   deviceClassWidget("entity", { x: 9, y: 11 }),
+  oneRowLink({ x: 0, y: 13 }),
 ];
 
 /**
@@ -191,6 +220,7 @@ const PORTRAIT: readonly WallWidget[] = [
     h: 5,
   },
   { id: "favorites", type: "favorites", config: {}, x: 8, y: 14, w: 4, h: 5 },
+  oneRowLink({ x: 2, y: 19 }),
 ];
 
 /** The draft the stage opens with; the panel edits a copy of it (group 5). */

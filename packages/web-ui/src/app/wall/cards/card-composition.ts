@@ -17,10 +17,11 @@ export interface WallCardBox {
 }
 
 /**
- * The form a wall device card composes at the box it was given: `compact` the
- * smallest composition, `full` a box beyond the card's content.
+ * The form a wall device card composes at the box it was given: `slim` the smallest
+ * one-row line, `compact` the smallest stacked composition, `full` a box beyond the
+ * card's content.
  */
-export type WallDeviceCardForm = "compact" | "regular" | "full";
+export type WallDeviceCardForm = "slim" | "compact" | "regular" | "full";
 
 /** The direction a card lays its state item and its actions row out. */
 export type WallDeviceCardOrientation = "stacked" | "inline";
@@ -141,12 +142,13 @@ export const WALL_CARD_INLINE_MIN_WIDTH_PX =
 
 /**
  * The form a card composes into a box `heightPx` tall: the richest form whose
- * threshold the box meets, `compact` below all of them.
+ * threshold the box meets, `slim` below the smallest stacked composition's budget.
  */
 export function resolveCardFormForBox(heightPx: number): WallDeviceCardForm {
   if (heightPx >= WALL_CARD_FULL_HEIGHT_PX) return "full";
   if (heightPx >= WALL_CARD_REGULAR_HEIGHT_PX) return "regular";
-  return "compact";
+  if (heightPx >= WALL_CARD_COMPACT_HEIGHT_PX) return "compact";
+  return "slim";
 }
 
 /** What a box composes a card into — its form, its orientation, and its controls. */
@@ -157,7 +159,8 @@ export interface WallDeviceCardComposition {
   readonly orientation: WallDeviceCardOrientation;
   /**
    * Whether the actions row carries the device's other controls beside the active
-   * one. A compact box holds the active control alone.
+   * one. A compact box holds the active control alone; a slim box draws no actions
+   * row at all, so it carries no siblings.
    */
   readonly siblings: boolean;
   /**
@@ -189,7 +192,7 @@ export function resolveDeviceCardComposition(input: {
   return {
     form,
     orientation: inline ? "inline" : "stacked",
-    siblings: form !== "compact",
+    siblings: form === "regular" || form === "full",
     controls: input.hasControls && !(input.collapsibleControls === true && !input.active),
   };
 }

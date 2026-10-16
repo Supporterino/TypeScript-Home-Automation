@@ -9,7 +9,7 @@ import { useRouter } from "../../lib/router-context.js";
 import { WallCardMessage, WallCardRoute } from "../cards/card-anatomy.js";
 import { WALL_CARD_GLYPH_SIZE } from "../cards/metrics.js";
 import type { WallWidgetProps } from "../registry.js";
-import { linkLabel, linkLabelFontSize, linkTarget } from "./link-model.js";
+import { linkLabel, linkLabelFontSize, linkTarget, linkTileLayout } from "./link-model.js";
 
 export function LinkWidget({ widget, tier }: WallWidgetProps) {
   const { basePath } = useRouter();
@@ -26,6 +26,21 @@ export function LinkWidget({ widget, tier }: WallWidgetProps) {
     );
   }
 
+  // The placement decides the composition: a one-row link draws the route flush, so the
+  // whole cell is the anchor; above it the centred pill returns.
+  const layout = linkTileLayout(widget);
+  const route = (
+    <WallCardRoute
+      to={wallPath(basePath, target)}
+      glyph={<ArrowRight size={WALL_CARD_GLYPH_SIZE} aria-hidden />}
+      label={shortDeviceName(label ?? target)}
+      labelSize={linkLabelFontSize(tier)}
+      variant={layout}
+    />
+  );
+
+  if (layout === "flush") return route;
+
   return (
     <div
       style={{
@@ -35,12 +50,7 @@ export function LinkWidget({ widget, tier }: WallWidgetProps) {
         justifyContent: "center",
       }}
     >
-      <WallCardRoute
-        to={wallPath(basePath, target)}
-        glyph={<ArrowRight size={WALL_CARD_GLYPH_SIZE} aria-hidden />}
-        label={shortDeviceName(label ?? target)}
-        labelSize={linkLabelFontSize(tier)}
-      />
+      {route}
     </div>
   );
 }

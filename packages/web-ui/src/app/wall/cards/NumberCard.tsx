@@ -16,6 +16,7 @@ import {
   WallCardIcon,
   WallCardObservation,
   WallCardSlider,
+  WallCardSlim,
   WallCardText,
 } from "./card-anatomy.js";
 import {
@@ -34,6 +35,14 @@ export function numberCardControl(capabilities: Capability[]): FlatCapability | 
   return flattenCapabilities(capabilities).find(
     (c) => c.valueType === "numeric" && c.access.writable && c.range !== undefined,
   );
+}
+
+/**
+ * Whether the number card presents a control: a bounded writable numeric. A device
+ * declaring only a readable numeric presents none, so it may be one row.
+ */
+export function numberCardPresentsControls(capabilities: Capability[]): boolean {
+  return numberCardControl(capabilities) !== undefined;
 }
 
 /**
@@ -78,7 +87,7 @@ export function NumberCard({ device, config, box, contained }: WallDeviceCardPro
     box: box ?? DEFAULT_WALL_CARD_BOX,
     layout: config?.layout,
     collapsibleControls: config?.collapsible_controls,
-    hasControls: control !== undefined,
+    hasControls: numberCardPresentsControls(device.capabilities),
     active: true,
   });
 
@@ -87,6 +96,25 @@ export function NumberCard({ device, config, box, contained }: WallDeviceCardPro
   const surface = contained
     ? {}
     : { background: "var(--hearth-surface-raised)", borderRadius: WALL_CARD_METRICS.radius };
+  const icon = (
+    <WallCardIcon
+      glyph={<SlidersHorizontal size={WALL_CARD_GLYPH_SIZE} aria-hidden />}
+      disabled={disabled}
+    />
+  );
+
+  // A one-row cell renders the shared slim line: no observation, no actions row.
+  if (composition.form === "slim") {
+    return (
+      <WallCardSlim
+        icon={icon}
+        name={shortDeviceName(label)}
+        state={numberCardReading(current, readout?.unit)}
+        disabled={disabled}
+        contained={contained}
+      />
+    );
+  }
 
   return (
     <div
@@ -109,10 +137,7 @@ export function NumberCard({ device, config, box, contained }: WallDeviceCardPro
           padding: WALL_CARD_METRICS.padding,
         }}
       >
-        <WallCardIcon
-          glyph={<SlidersHorizontal size={WALL_CARD_GLYPH_SIZE} aria-hidden />}
-          disabled={disabled}
-        />
+        {icon}
         <WallCardText
           name={shortDeviceName(label)}
           state={numberCardReading(current, readout?.unit)}

@@ -159,12 +159,16 @@ describe("the typed device catalogue", () => {
 
   it("gives every typed device widget the ported card's derived minimum span as its default", () => {
     for (const deviceClass of WALL_DEVICE_CLASSES) {
-      const { min, defaults, max } = WALL_WIDGET_REGISTRY[deviceClass];
+      const { min, defaults, max, slim } = WALL_WIDGET_REGISTRY[deviceClass];
       // The width is the columns whose cell holds the widest control row a card draws; the
       // height is the rows the row unit is derived to hold a compact card in.
       expect(min).toEqual({ w: WALL_MIN_DEVICE_COLUMNS, h: WALL_MIN_DEVICE_ROWS });
       expect(defaults).toEqual({ w: WALL_MIN_DEVICE_COLUMNS, h: WALL_MIN_DEVICE_ROWS });
       expect(max).toEqual({ w: 6, h: 6 });
+      // The one-row rule is device-aware: every typed device is slim exactly when its
+      // bound device presents no controls, at a three-column one-row minimum, while the
+      // static minimum stays two rows so a control-bearing cell is still explained.
+      expect(slim).toEqual({ min: { w: 3, h: 1 }, when: "read-only" });
     }
     expect(WALL_MIN_DEVICE_COLUMNS).toBeGreaterThan(WALL_MIN_DEVICE_ROWS);
   });
@@ -209,5 +213,36 @@ describe("scene descriptor", () => {
     expect(descriptor.min).toEqual({ w: 2, h: 1 });
     expect(descriptor.defaults).toEqual({ w: 2, h: 2 });
     expect(descriptor.configSchema).toBe(WALL_WIDGET_CONFIG_SCHEMAS.scene);
+  });
+
+  it("declares its one-row rule once, in the descriptor", () => {
+    // The frame's surface decision reads this, so the scene's one-row chrome-less
+    // treatment is the catalogue's own declaration, not a per-type branch.
+    expect(WALL_WIDGET_REGISTRY.scene.slim).toEqual({
+      min: { w: 2, h: 1 },
+      when: "always",
+    });
+  });
+});
+
+describe("link descriptor", () => {
+  it("offers a link at a one-row minimum, so a slim link is authorable", () => {
+    const descriptor = WALL_WIDGET_REGISTRY.link;
+    expect(descriptor.type).toBe("link");
+    expect(descriptor.grammar).toBe("control");
+    // Only the minimum height changes: a link may be authored one row tall, but a new
+    // one still lands at the two-row default.
+    expect(descriptor.min).toEqual({ w: 2, h: 1 });
+    expect(descriptor.defaults).toEqual({ w: 3, h: 2 });
+    expect(descriptor.configSchema).toBe(WALL_WIDGET_CONFIG_SCHEMAS.link);
+  });
+
+  it("declares its one-row rule once, in the descriptor", () => {
+    // The frame's surface decision reads this, so a one-row link is chrome-less by its
+    // own declaration rather than a per-type branch.
+    expect(WALL_WIDGET_REGISTRY.link.slim).toEqual({
+      min: { w: 2, h: 1 },
+      when: "always",
+    });
   });
 });

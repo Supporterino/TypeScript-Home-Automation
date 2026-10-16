@@ -163,6 +163,54 @@ describe("the card anatomy components", () => {
   });
 });
 
+describe("the slim card line", () => {
+  it("declares the one-row line every typed card composes", async () => {
+    const anatomy = await source(ANATOMY);
+
+    expect(anatomy).toContain("export function WallCardSlim");
+  });
+
+  it("leads with the touch-sized icon and introduces no control of its own", async () => {
+    const anatomy = await source(ANATOMY);
+    const slim = functionSource(anatomy, "WallCardSlim");
+
+    // The line draws no control itself: its one control is the shared icon affordance,
+    // whose control is the ported control height — the wall's touch target.
+    expect(slim).toContain("{icon}");
+    expect(slim).not.toContain("<button");
+    expect(slim).not.toContain("<input");
+    expect(slim).not.toContain("<select");
+    expect(WALL_CARD_METRICS.controlHeight).toBeGreaterThanOrEqual(WALL_MIN_TOUCH_TARGET);
+  });
+
+  it("draws no observation indicator at one row", async () => {
+    const anatomy = await source(ANATOMY);
+    const slim = functionSource(anatomy, "WallCardSlim");
+
+    expect(slim).not.toContain("WallCardObservation");
+  });
+
+  it("keeps the whole-cell target inert for an unreachable device", async () => {
+    const anatomy = await source(ANATOMY);
+    const slim = functionSource(anatomy, "WallCardSlim");
+
+    // The gate is inside the shared line, so no caller can make an unreachable device's
+    // cell actuate by passing an ungated handler — the prop's own contract holds.
+    expect(slim).toContain(
+      "onClick={onActivate === undefined || disabled === true ? undefined : onActivate}",
+    );
+  });
+
+  it("draws the name and the state on one line, at the ported sizes", async () => {
+    const anatomy = await source(ANATOMY);
+    const text = functionSource(anatomy, "WallCardSlimText");
+
+    expect(text).toContain('whiteSpace: "nowrap"');
+    expect(text).toContain("WALL_CARD_PRIMARY_FONT_SIZE");
+    expect(text).toContain("WALL_CARD_SECONDARY_FONT_SIZE");
+  });
+});
+
 describe("the actions row distribution", () => {
   it("spreads a row of fixed controls across the card rather than bunching or centring it", async () => {
     const anatomy = await source(ANATOMY);
@@ -311,6 +359,31 @@ describe("the widget vocabulary", () => {
     // treatment of their own.
     expect(functionSource(anatomy, "WallCardControl")).toContain("...wallCardControlStyle()");
     expect(functionSource(anatomy, "WallCardRoute")).toContain("...wallCardControlStyle()");
+  });
+
+  it("keeps the ported pill as the route's base, opted out of only by name", async () => {
+    const anatomy = await source(ANATOMY);
+    const route = functionSource(anatomy, "WallCardRoute");
+
+    expect(route).toContain('variant = "pill"');
+    expect(route).toContain('variant === "flush"');
+    // The pill is still the base treatment the flush variant overrides.
+    expect(route).toContain("...wallCardControlStyle()");
+  });
+
+  it("drops the pill's border, background, and inset in the flush one-row route", async () => {
+    const anatomy = await source(ANATOMY);
+    const flush = functionSource(anatomy, "wallCardFlushRouteStyle");
+
+    // No border, no raised background, no inset…
+    expect(flush).toContain('border: "none"');
+    expect(flush).toContain('background: "transparent"');
+    expect(flush).toContain("padding: 0");
+    // …so the whole cell is the route's touch target, never below the ported control
+    // height.
+    expect(flush).toContain('width: "100%"');
+    expect(flush).toContain('height: "100%"');
+    expect(flush).toContain("minHeight: WALL_CARD_METRICS.controlHeight");
   });
 
   it("spaces a widget's controls by the ported control spacing", async () => {

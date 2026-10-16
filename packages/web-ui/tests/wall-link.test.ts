@@ -6,7 +6,13 @@ import { wallPath } from "../src/app/lib/router.js";
 import { WALL_CARD_METRICS, WALL_CARD_PRIMARY_FONT_SIZE } from "../src/app/wall/cards/metrics.js";
 import { WALL_WIDGET_REGISTRY } from "../src/app/wall/registry.js";
 import { WALL_TITLE_FONT_SIZE, WALL_TYPE_RAMP } from "../src/app/wall/type-ramp.js";
-import { linkLabel, linkLabelFontSize, linkTarget } from "../src/app/wall/widgets/link-model.js";
+import {
+  LINK_MIN_SPAN,
+  linkLabel,
+  linkLabelFontSize,
+  linkTarget,
+  linkTileLayout,
+} from "../src/app/wall/widgets/link-model.js";
 
 /**
  * The wall link widget: the label rules are pure; the affordance's wiring — the route
@@ -85,15 +91,37 @@ describe("the link descriptor", () => {
     expect(typeof descriptor.renderer).toBe("function");
   });
 
-  it("declares a min span that holds a touch target and stays within its bounds", () => {
-    const { min, defaults, max } = WALL_WIDGET_REGISTRY.link;
+  it("declares a one-row minimum with an always-slim rule, within its bounds", () => {
+    const { min, defaults, max, slim } = WALL_WIDGET_REGISTRY.link;
 
+    // A link may be authored one row tall: the frame drops its surface and the route
+    // draws flush, so the whole cell is the touch target. The rule is declared once,
+    // in the descriptor, and the frame's surface decision reads it.
+    expect(min).toEqual({ w: 2, h: 1 });
+    expect(slim).toEqual({ min: { w: 2, h: 1 }, when: "always" });
     expect(min.w).toBeGreaterThanOrEqual(2);
-    expect(min.h).toBeGreaterThanOrEqual(2);
     expect(min.w).toBeLessThanOrEqual(defaults.w);
     expect(defaults.w).toBeLessThanOrEqual(max.w);
     expect(min.h).toBeLessThanOrEqual(defaults.h);
     expect(defaults.h).toBeLessThanOrEqual(max.h);
+  });
+});
+
+describe("the link's one-row composition", () => {
+  it("draws flush at the type's one-row minimum and the framed pill above it", () => {
+    expect(LINK_MIN_SPAN).toEqual({ w: 2, h: 1 });
+
+    expect(linkTileLayout({ w: 2, h: 1 })).toBe("flush");
+    // The framed labelled route returns from two rows.
+    expect(linkTileLayout({ w: 2, h: 2 })).toBe("pill");
+    expect(linkTileLayout({ w: 6, h: 4 })).toBe("pill");
+  });
+
+  it("mirrors the registry's own minimum span, and the rows the frame drops its surface at", () => {
+    // The flush rows and the frame's chrome-less rows are the same rows, so the anchor
+    // and the surface always agree.
+    expect(LINK_MIN_SPAN).toEqual(WALL_WIDGET_REGISTRY.link.min);
+    expect(LINK_MIN_SPAN).toEqual(WALL_WIDGET_REGISTRY.link.slim?.min);
   });
 });
 
@@ -150,5 +178,23 @@ describe("the link renderer", () => {
 
     expect(source).toContain("target === null");
     expect(source).toContain("WallCardMessage");
+  });
+
+  it("opts into the flush route at its one-row minimum, as the renderer's own root", async () => {
+    const source = await rendererSource();
+
+    // The placement decides the composition, and the flush route is the renderer's root
+    // element — so the whole cell is the anchor rather than a centred pill.
+    expect(source).toContain("linkTileLayout(widget)");
+    expect(source).toContain("variant={layout}");
+    expect(source).toContain('if (layout === "flush") return route;');
+  });
+
+  it("opens the target from the flush route as it does from the framed pill", async () => {
+    const source = await rendererSource();
+
+    // The one-row route is the same route, so a one-row link still opens its target.
+    expect(source).toContain("to={wallPath(basePath, target)}");
+    expect(source).toContain("<WallCardRoute");
   });
 });

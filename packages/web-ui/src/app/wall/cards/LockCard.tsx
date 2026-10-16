@@ -15,6 +15,7 @@ import {
   WallCardIcon,
   WallCardObservation,
   WallCardOption,
+  WallCardSlim,
   WallCardText,
 } from "./card-anatomy.js";
 import {
@@ -106,6 +107,14 @@ export function lockCardLocked(stateValue: unknown): boolean | undefined {
 }
 
 /**
+ * Whether the lock card presents a control: a writable property its Lock/Unlock options
+ * drive. A lock reporting only a readable state presents none, so it may be one row.
+ */
+export function lockCardPresentsControls(capabilities: Capability[]): boolean {
+  return lockCardModel(capabilities).property !== undefined;
+}
+
+/**
  * The card's reading: "Locked" or "Unlocked" for a recognised state, else the state
  * as reported, or an em dash.
  */
@@ -134,7 +143,7 @@ export function LockCard({ device, config, box, contained }: WallDeviceCardProps
     box: box ?? DEFAULT_WALL_CARD_BOX,
     layout: config?.layout,
     collapsibleControls: config?.collapsible_controls,
-    hasControls: model.property !== undefined,
+    hasControls: lockCardPresentsControls(device.capabilities),
     // A lock is either locked or unlocked, never idle, so its controls are always present.
     active: true,
   });
@@ -149,6 +158,26 @@ export function LockCard({ device, config, box, contained }: WallDeviceCardProps
   const surface = contained
     ? {}
     : { background: "var(--hearth-surface-raised)", borderRadius: WALL_CARD_METRICS.radius };
+  const icon = (
+    <WallCardIcon
+      glyph={<Lock size={WALL_CARD_GLYPH_SIZE} aria-hidden />}
+      tint={locked === true ? "var(--hearth-on)" : "var(--hearth-off)"}
+      disabled={disabled}
+    />
+  );
+
+  // A one-row cell renders the shared slim line: no observation, no actions row.
+  if (composition.form === "slim") {
+    return (
+      <WallCardSlim
+        icon={icon}
+        name={shortDeviceName(label)}
+        state={lockCardReading(state)}
+        disabled={disabled}
+        contained={contained}
+      />
+    );
+  }
 
   return (
     <div
@@ -171,11 +200,7 @@ export function LockCard({ device, config, box, contained }: WallDeviceCardProps
           padding: WALL_CARD_METRICS.padding,
         }}
       >
-        <WallCardIcon
-          glyph={<Lock size={WALL_CARD_GLYPH_SIZE} aria-hidden />}
-          tint={locked === true ? "var(--hearth-on)" : "var(--hearth-off)"}
-          disabled={disabled}
-        />
+        {icon}
         <WallCardText
           name={shortDeviceName(label)}
           state={lockCardReading(state)}

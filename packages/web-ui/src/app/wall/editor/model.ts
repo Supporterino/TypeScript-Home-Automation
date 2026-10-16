@@ -21,7 +21,7 @@ import {
   type WallWidgetDescriptor,
   type WallWidgetSpan,
 } from "../registry.js";
-import { WALL_TITLE_ROWS } from "../span.js";
+import { boundDeviceReadOnly, resolveEffectiveMin } from "../slim.js";
 import { deviceGridIds } from "../widgets/device-grid-model.js";
 import { resolveDraftPreview } from "./preview.js";
 
@@ -103,18 +103,33 @@ export function removeWidget(config: WallProfileConfig, id: string): WallProfile
   return { ...config, widgets };
 }
 
+/** The devices a resolution pass looks up, keyed by qualified id. */
+function devicesById(
+  devices: Iterable<DeviceDescriptor> | undefined,
+): ReadonlyMap<string, DeviceDescriptor> {
+  const entries = devices === undefined ? [] : [...devices];
+  return new Map(entries.map((device) => [device.qualifiedId, device]));
+}
+
+/** A widget's bound qualified id, or an empty string when its config carries none. */
+function boundQualifiedId(widget: WallWidget): string {
+  return typeof widget.config.qualifiedId === "string" ? widget.config.qualifiedId : "";
+}
+
 /**
- * Clamps a span to its type's minimum and maximum and to the column bound, rounded to
- * whole cells.
+ * Clamps a span to its type's effective minimum and maximum and to the column bound,
+ * rounded to whole cells.
  */
 function clampSpan(
   span: WallWidgetSpan,
   descriptor: WallWidgetDescriptor,
   titled = false,
+  readOnly = false,
 ): WallWidgetSpan {
-  const minW = Math.max(1, descriptor.min.w);
+  const minimum = resolveEffectiveMin(descriptor, titled, readOnly);
+  const minW = Math.max(1, minimum.w);
   const maxW = Math.min(WALL_GRID_COLUMNS, Math.max(minW, descriptor.max.w));
-  const minH = Math.max(1, descriptor.min.h + (titled ? WALL_TITLE_ROWS : 0));
+  const minH = Math.max(1, minimum.h);
   const maxH = Math.max(minH, descriptor.max.h);
   return {
     w: Math.min(maxW, Math.max(minW, Math.round(span.w))),
@@ -123,19 +138,24 @@ function clampSpan(
 }
 
 /**
- * Moves and/or resizes a widget, clamping its span and every cell to the grid.
+ * Moves and/or resizes a widget, clamping its span and every cell to the grid. The
+ * `devices` a widget may be bound to decide its effective minimum, so a control-less
+ * typed device may be authored one row; without them the clamp is conservative.
  */
 export function updateWidgetPlacement(
   config: WallProfileConfig,
   id: string,
   placement: WallPlacement,
   descriptor?: WallWidgetDescriptor,
+  devices?: Iterable<DeviceDescriptor>,
 ): WallProfileConfig {
+  const byId = devicesById(devices);
   const widgets = config.widgets.map((widget) => {
     if (widget.id !== id) return widget;
     const desc = descriptor ?? getWidgetDescriptor(widget.type);
     const titled = widgetTitle(widget) !== null;
-    const { w, h } = clampSpan({ w: placement.w, h: placement.h }, desc, titled);
+    const readOnly = boundDeviceReadOnly(desc, byId.get(boundQualifiedId(widget)));
+    const { w, h } = clampSpan({ w: placement.w, h: placement.h }, desc, titled, readOnly);
     const x = Math.min(Math.max(0, Math.round(placement.x)), WALL_GRID_COLUMNS - w);
     const y = Math.min(Math.max(0, Math.round(placement.y)), Math.max(0, WALL_GRID_MAX_ROWS - h));
     return { ...widget, x, y, w, h };
@@ -220,14 +240,6 @@ export function offeredDevices(
   return [...devices].filter((device) => deviceCanDriveClass(device.capabilities, deviceClass));
 }
 
-/**
- * The smallest `{w, h}` a widget may occupy — its type's minimum span plus the rows a
- * configured title costs.
- */
-function minimumSpanFor(descriptor: WallWidgetDescriptor, titled: boolean): WallWidgetSpan {
-  return { w: descriptor.min.w, h: descriptor.min.h + (titled ? WALL_TITLE_ROWS : 0) };
-}
-
 function formatIssue(issue: { path: readonly PropertyKey[]; message: string }): string {
   const path = issue.path.map((segment) => String(segment)).join(".");
   return path ? `${path}: ${issue.message}` : issue.message;
@@ -251,10 +263,17 @@ function everyWidgetList(config: WallProfileConfig): readonly (readonly WallWidg
 
 /**
  * Validates a draft against the shared profile schema and each widget's own descriptor
- * schema.
+ * schema. The `devices` a widget may be bound to decide its effective minimum, so a
+ * control-less typed device may be saved one row; without them the minimum is
+ * conservative (two rows), leaving existing callers unaffected.
  */
-export function validateProfileDraft(name: string, config: WallProfileConfig): WallDraftValidation {
+export function validateProfileDraft(
+  name: string,
+  config: WallProfileConfig,
+  devices?: Iterable<DeviceDescriptor>,
+): WallDraftValidation {
   const errors: string[] = [];
+  const byId = devicesById(devices);
 
   const result = wallProfileSchema.safeParse({
     name: name.trim(),
@@ -282,9 +301,11 @@ export function validateProfileDraft(name: string, config: WallProfileConfig): W
           errors.push(`${widget.id}: ${issue.message}`);
         }
       }
-      // A placement below the type's minimum cannot render the card the wall guarantees.
+      // A placement below the type's effective minimum cannot render the card the wall
+      // guarantees — the slim one-row minimum only for a control-less typed device.
       const titled = widgetTitle(widget) !== null;
-      const minimum = minimumSpanFor(descriptor, titled);
+      const readOnly = boundDeviceReadOnly(descriptor, byId.get(boundQualifiedId(widget)));
+      const minimum = resolveEffectiveMin(descriptor, titled, readOnly);
       if (widget.w < minimum.w || widget.h < minimum.h) {
         errors.push(
           `${widget.id}: below its minimum size (${minimum.w}×${minimum.h}${
@@ -315,8 +336,9 @@ export async function submitProfileDraft(
   name: string,
   config: WallProfileConfig,
   persist: (config: WallProfileConfig) => Promise<void>,
+  devices?: Iterable<DeviceDescriptor>,
 ): Promise<WallDraftValidation> {
-  const validation = validateProfileDraft(name, config);
+  const validation = validateProfileDraft(name, config, devices);
   if (!validation.ok) return validation;
 
   const fitError = draftFitError(config);

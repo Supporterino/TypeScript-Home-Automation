@@ -14,6 +14,7 @@ import {
 import { Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { updateWall } from "../../api.js";
+import { useDataStore } from "../../lib/data-store.js";
 import {
   Badge,
   Button,
@@ -68,6 +69,9 @@ export function WallEditor({ profile, onClose, onSaved }: WallEditorProps) {
   const [addType, setAddType] = useState<WallWidgetType>("clock");
   const [errors, setErrors] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+  // The store's devices decide each typed widget's effective minimum, so the editor's
+  // clamp and its save validation agree on a one-row control-less device.
+  const { devices } = useDataStore();
 
   // The draft's preview at the wall's target panel, via the same pure resolver.
   const preview = resolveDraftPreview(config);
@@ -82,9 +86,10 @@ export function WallEditor({ profile, onClose, onSaved }: WallEditorProps) {
     setSaving(true);
     setErrors([]);
     try {
-      const result = await submitProfileDraft(profile.name, config, async (next) => {
+      const persist = async (next: WallProfileConfig) => {
         await updateWall(profile.name, { config: next });
-      });
+      };
+      const result = await submitProfileDraft(profile.name, config, persist, devices);
       if (!result.ok) {
         setErrors(result.errors);
         return;
@@ -175,7 +180,7 @@ export function WallEditor({ profile, onClose, onSaved }: WallEditorProps) {
                   key={widget.id}
                   widget={widget}
                   onPlacement={(placement) =>
-                    edit(updateWidgetPlacement(config, widget.id, placement))
+                    edit(updateWidgetPlacement(config, widget.id, placement, undefined, devices))
                   }
                   onConfig={(patch) => edit(updateWidgetConfig(config, widget.id, patch))}
                   onZoneChange={(zone) => edit(updateWidgetZone(config, widget.id, zone))}

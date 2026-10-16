@@ -16,7 +16,7 @@ import {
 import { humanizeDeviceName, shortDeviceName } from "../../lib/humanize-name.js";
 import { useNow } from "../../lib/use-now.js";
 import { useOptimisticDeviceProperty } from "../../lib/use-optimistic-property.js";
-import { WallCardIcon, WallCardObservation, WallCardText } from "./card-anatomy.js";
+import { WallCardIcon, WallCardObservation, WallCardSlim, WallCardText } from "./card-anatomy.js";
 import {
   DEFAULT_WALL_CARD_BOX,
   resolveDeviceCardComposition,
@@ -93,6 +93,32 @@ export function EntityCard({ device, config, box, contained }: WallDeviceCardPro
   const surface = contained
     ? {}
     : { background: "var(--hearth-surface-raised)", borderRadius: WALL_CARD_METRICS.radius };
+  const reading = entityCardReading({
+    readout: model.readout,
+    readoutValue: model.readout ? device.state[model.readout.property] : undefined,
+    toggle: model.toggle,
+    resolvedToggleValue: toggleControl.value,
+  });
+  const icon = (
+    <WallCardIcon
+      glyph={
+        actuates ? (
+          onOff?.value ? (
+            <Power size={WALL_CARD_GLYPH_SIZE} fill="currentColor" aria-hidden />
+          ) : (
+            <Power size={WALL_CARD_GLYPH_SIZE} aria-hidden />
+          )
+        ) : (
+          <Activity size={WALL_CARD_GLYPH_SIZE} aria-hidden />
+        )
+      }
+      tint={actuates ? (onOff?.value ? "var(--hearth-on)" : "var(--hearth-off)") : undefined}
+      onActivate={model.toggle ? toggle : undefined}
+      pressed={onOff?.value}
+      disabled={disabled}
+      label={`Turn ${onOff?.value ? "off" : "on"} ${label}`}
+    />
+  );
 
   // An entity card's control is the card itself, so it has no actions row.
   const composition = resolveDeviceCardComposition({
@@ -102,6 +128,21 @@ export function EntityCard({ device, config, box, contained }: WallDeviceCardPro
     hasControls: false,
     active: onOff?.value ?? true,
   });
+
+  // A one-row cell renders the shared slim line: no observation, and the whole cell is
+  // the actuation target where the device's primary action is a toggle.
+  if (composition.form === "slim") {
+    return (
+      <WallCardSlim
+        icon={icon}
+        name={shortDeviceName(label)}
+        state={reading}
+        onActivate={actuates && !disabled ? toggle : undefined}
+        disabled={disabled}
+        contained={contained}
+      />
+    );
+  }
 
   return (
     <div
@@ -126,34 +167,8 @@ export function EntityCard({ device, config, box, contained }: WallDeviceCardPro
           padding: WALL_CARD_METRICS.padding,
         }}
       >
-        <WallCardIcon
-          glyph={
-            actuates ? (
-              onOff?.value ? (
-                <Power size={WALL_CARD_GLYPH_SIZE} fill="currentColor" aria-hidden />
-              ) : (
-                <Power size={WALL_CARD_GLYPH_SIZE} aria-hidden />
-              )
-            ) : (
-              <Activity size={WALL_CARD_GLYPH_SIZE} aria-hidden />
-            )
-          }
-          tint={actuates ? (onOff?.value ? "var(--hearth-on)" : "var(--hearth-off)") : undefined}
-          onActivate={model.toggle ? toggle : undefined}
-          pressed={onOff?.value}
-          disabled={disabled}
-          label={`Turn ${onOff?.value ? "off" : "on"} ${label}`}
-        />
-        <WallCardText
-          name={shortDeviceName(label)}
-          state={entityCardReading({
-            readout: model.readout,
-            readoutValue: model.readout ? device.state[model.readout.property] : undefined,
-            toggle: model.toggle,
-            resolvedToggleValue: toggleControl.value,
-          })}
-          prominent={!actuates}
-        />
+        {icon}
+        <WallCardText name={shortDeviceName(label)} state={reading} prominent={!actuates} />
         <WallCardObservation observation={deviceTileObservation(device, now)} />
       </div>
 

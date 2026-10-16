@@ -1,11 +1,21 @@
 import { describe, expect, it } from "bun:test";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { WALL_WIDGET_TYPES, type WallWidget, type WallWidgetType } from "@ts-ha/shared";
+import {
+  type Capability,
+  type DeviceDescriptor,
+  WALL_WIDGET_TYPES,
+  type WallWidget,
+  type WallWidgetType,
+} from "@ts-ha/shared";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { type DataStoreFixtures, DataStoreProvider } from "../src/app/lib/data-store.js";
 import { WALL_CARD_METRICS } from "../src/app/wall/cards/metrics.js";
 import {
   minimumRendererBoxHeightPx,
   rendererBoxHeightPx,
+  WALL_TOO_SMALL_MESSAGE,
   wallBandChrome,
   wallChromeTextStyle,
   wallFrameChrome,
@@ -14,6 +24,7 @@ import {
 import { ROW_UNIT_MAX, ROW_UNIT_MIN, WALL_COMPACT_CARD_HEIGHT_PX } from "../src/app/wall/grid.js";
 import { WALL_FRAME_INSET_PX, WALL_FRAME_RESERVED_PX } from "../src/app/wall/pages.js";
 import { WALL_WIDGET_REGISTRY } from "../src/app/wall/registry.js";
+import { effectiveSpanDescriptor } from "../src/app/wall/slim.js";
 import {
   cardHeightPx,
   composesMinimumSpan,
@@ -23,6 +34,7 @@ import {
   WALL_TITLE_BLOCK_PX,
   WALL_TITLE_ROWS,
 } from "../src/app/wall/span.js";
+import { WidgetFrame } from "../src/app/wall/WidgetFrame.js";
 
 // Pure frame decisions — no DOM. The ambient/control grammar and the opt-in title
 // rule are the whole frame's behaviour.
@@ -377,5 +389,113 @@ describe("the frame's surface and the wall's own chrome", () => {
     // from `WALL_CARD_METRICS` rather than written as a second table.
     expect(frameModule).toContain("fontWeight: WALL_CARD_METRICS.primaryWeight");
     expect(frameModule).toMatch(/letterSpacing: `\$\{WALL_CARD_METRICS\.primaryTracking\}px`/);
+  });
+});
+
+/** The capabilities of a lock reporting a readable state and nothing writable. */
+const READ_ONLY_LOCK_CAPS: Capability[] = [
+  {
+    kind: "lock",
+    property: "state",
+    access: { readable: true, writable: false },
+    valueType: "enum",
+    permittedValues: ["LOCK", "UNLOCK"],
+  },
+];
+
+/** The capabilities of a lock whose state both reads and writes. */
+const WRITABLE_LOCK_CAPS: Capability[] = [
+  {
+    kind: "lock",
+    property: "state",
+    access: { readable: true, writable: true },
+    valueType: "enum",
+    permittedValues: ["LOCK", "UNLOCK"],
+  },
+];
+
+function lockDevice(qualifiedId: string, capabilities: Capability[]): DeviceDescriptor {
+  return {
+    source: "test",
+    id: qualifiedId,
+    qualifiedId,
+    displayName: "Front door",
+    state: { state: "LOCK" },
+    capabilities,
+    reachable: true,
+    observation: { mode: "push", observedAt: 0 },
+    hidden: false,
+  };
+}
+
+function lockFixtures(devices: DeviceDescriptor[]): DataStoreFixtures {
+  return { devices, state: {}, rooms: [], automations: [], transport: "live" };
+}
+
+/** Renders one widget through the frame, inside the store the wall renders it in. */
+function renderFrame(widget: WallWidget, devices: DeviceDescriptor[]): string {
+  return renderToStaticMarkup(
+    createElement(
+      DataStoreProvider,
+      { fixtures: lockFixtures(devices) },
+      createElement(WidgetFrame, { widget, rowUnit: ROW_UNIT_MIN }),
+    ),
+  );
+}
+
+describe("the frame's device-aware too-small guard", () => {
+  /** A one-row typed lock widget bound to `test:lock`. */
+  const ONE_ROW_LOCK: WallWidget = {
+    id: "lock-1",
+    type: "lock",
+    config: { qualifiedId: "test:lock" },
+    x: 0,
+    y: 0,
+    w: WALL_WIDGET_REGISTRY.lock.min.w,
+    h: 1,
+  };
+
+  it("compares the guard against the effective descriptor's minimum", () => {
+    const light = WALL_WIDGET_REGISTRY.light;
+    const controlBearing = minimumRendererBoxHeightPx({
+      descriptor: effectiveSpanDescriptor(light, false),
+      rowUnit: ROW_UNIT_MIN,
+      framed: false,
+    });
+    const readOnly = minimumRendererBoxHeightPx({
+      descriptor: effectiveSpanDescriptor(light, true),
+      rowUnit: ROW_UNIT_MIN,
+      framed: false,
+    });
+
+    expect(controlBearing).toBeGreaterThan(readOnly);
+    // A one-row cell at the floors is exactly the read-only minimum box.
+    expect(readOnly).toBe(ROW_UNIT_MIN);
+  });
+
+  it("renders a one-row read-only device and explains a one-row control-bearing one", () => {
+    const readOnlyHtml = renderFrame(ONE_ROW_LOCK, [lockDevice("test:lock", READ_ONLY_LOCK_CAPS)]);
+    // A control-less device composes its card in a one-row cell rather than the explanation.
+    expect(readOnlyHtml).not.toContain(WALL_TOO_SMALL_MESSAGE);
+
+    const controlHtml = renderFrame(ONE_ROW_LOCK, [lockDevice("test:lock", WRITABLE_LOCK_CAPS)]);
+    // A control-bearing device keeps the two-row minimum, so the wall explains the cell.
+    expect(controlHtml).toContain(WALL_TOO_SMALL_MESSAGE);
+  });
+
+  it("degrades to the type's static minimum when the bound device is absent", () => {
+    const html = renderFrame(ONE_ROW_LOCK, []);
+    expect(html).toContain(WALL_TOO_SMALL_MESSAGE);
+  });
+
+  it("resolves its bound device and hands the guard the effective descriptor", async () => {
+    const widgetFrame = await source("wall/WidgetFrame.tsx");
+
+    expect(widgetFrame).toContain("useDataStore()");
+    expect(widgetFrame).toContain("boundDeviceReadOnly(descriptor, devicesByQualifiedId.get(");
+    expect(widgetFrame).toContain(
+      "const effective = effectiveSpanDescriptor(descriptor, readOnly)",
+    );
+    expect(widgetFrame).toContain("descriptor: effective,");
   });
 });

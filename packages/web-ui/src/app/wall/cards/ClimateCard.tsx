@@ -17,6 +17,7 @@ import {
   WallCardIcon,
   WallCardObservation,
   WallCardSlider,
+  WallCardSlim,
   WallCardText,
 } from "./card-anatomy.js";
 import {
@@ -97,6 +98,15 @@ export function climateCardModel(capabilities: Capability[]): WallClimateCardMod
   };
 }
 
+/**
+ * Whether the climate card presents a control: a declared setpoint or mode. A climate
+ * declaring neither presents none, so it may be one row.
+ */
+export function climateCardPresentsControls(capabilities: Capability[]): boolean {
+  const model = climateCardModel(capabilities);
+  return model.setpoint !== undefined || model.mode !== undefined;
+}
+
 /** The setpoint slider's bounds, with the ported fallbacks. */
 export function climateSetpointRange(setpoint: FlatCapability): CapabilityRange {
   return { min: setpoint.range?.min ?? 5, max: setpoint.range?.max ?? 35 };
@@ -148,7 +158,7 @@ export function ClimateCard({ device, config, box, contained }: WallDeviceCardPr
     box: box ?? DEFAULT_WALL_CARD_BOX,
     layout: config?.layout,
     collapsibleControls: config?.collapsible_controls,
-    hasControls: model.setpoint !== undefined || model.mode !== undefined,
+    hasControls: climateCardPresentsControls(device.capabilities),
     active: climateCardActive(modeValue),
   });
 
@@ -157,6 +167,30 @@ export function ClimateCard({ device, config, box, contained }: WallDeviceCardPr
     ? {}
     : { background: "var(--hearth-surface-raised)", borderRadius: WALL_CARD_METRICS.radius };
   const error = setpointControl.error ?? modeControl.error;
+  const reading = climateCardReading({
+    readout: model.readout,
+    value: model.readout ? device.state[model.readout.property] : undefined,
+  });
+  const icon = (
+    <WallCardIcon
+      glyph={<Thermometer size={WALL_CARD_GLYPH_SIZE} aria-hidden />}
+      tint={climateCardActive(modeValue) ? "var(--hearth-on)" : "var(--hearth-off)"}
+      disabled={disabled}
+    />
+  );
+
+  // A one-row cell renders the shared slim line: no observation, no actions row.
+  if (composition.form === "slim") {
+    return (
+      <WallCardSlim
+        icon={icon}
+        name={shortDeviceName(label)}
+        state={reading}
+        disabled={disabled}
+        contained={contained}
+      />
+    );
+  }
 
   return (
     <div
@@ -179,17 +213,10 @@ export function ClimateCard({ device, config, box, contained }: WallDeviceCardPr
           padding: WALL_CARD_METRICS.padding,
         }}
       >
-        <WallCardIcon
-          glyph={<Thermometer size={WALL_CARD_GLYPH_SIZE} aria-hidden />}
-          tint={climateCardActive(modeValue) ? "var(--hearth-on)" : "var(--hearth-off)"}
-          disabled={disabled}
-        />
+        {icon}
         <WallCardText
           name={shortDeviceName(label)}
-          state={climateCardReading({
-            readout: model.readout,
-            value: model.readout ? device.state[model.readout.property] : undefined,
-          })}
+          state={reading}
           prominent={composition.form === "full"}
         />
         <WallCardObservation observation={deviceTileObservation(device, now)} />
