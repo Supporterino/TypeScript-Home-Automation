@@ -40,7 +40,7 @@
     "access": "public"
   },
   "dependencies": {
-    "@opentui/core": "^0.4.0",
+    "@opentui/core": "^0.6.0",
     "@opentui/react": "^0.4.0",
     "@ts-ha/core": "workspace:*",
     "@ts-ha/shared": "workspace:*",
