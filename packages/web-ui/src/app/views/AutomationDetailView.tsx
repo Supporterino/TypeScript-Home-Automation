@@ -39,6 +39,7 @@ import {
 } from "../api.js";
 import { SourceViewer } from "../components/SourceViewer.js";
 import { useDataStore } from "../lib/data-store.js";
+import { entryKey, formatDateTime, formatTime, LEVEL_NAMES } from "../lib/log-utils.js";
 import { deviceDetailPath } from "../lib/router.js";
 import { Link, useRouter } from "../lib/router-context.js";
 import type { AutomationRelationships, ExecutionRecord, TriggerContext } from "../types.js";
@@ -55,7 +56,6 @@ import {
   Stack,
   Switch,
 } from "../ui/index.js";
-import { entryKey, formatDateTime, formatTime, LEVEL_NAMES } from "../utils/logUtils.js";
 
 /** How many of an automation's most recent log entries the detail view lists. */
 const LOG_LIMIT = 50;

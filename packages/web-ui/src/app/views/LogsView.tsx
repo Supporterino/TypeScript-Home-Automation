@@ -19,6 +19,15 @@ import {
   type LogFilter,
 } from "../lib/log-filter.js";
 import {
+  entryKey,
+  extraFields,
+  formatDateTime,
+  formatFieldValue,
+  formatTime,
+  LEVEL_NAMES,
+  LEVEL_OPTIONS,
+} from "../lib/log-utils.js";
+import {
   Badge,
   type BadgeTone,
   Button,
@@ -31,15 +40,6 @@ import {
   ToggleGroup,
   ToggleGroupItem,
 } from "../ui/index.js";
-import {
-  entryKey,
-  extraFields,
-  formatDateTime,
-  formatFieldValue,
-  formatTime,
-  LEVEL_NAMES,
-  LEVEL_OPTIONS,
-} from "../utils/logUtils.js";
 
 /** The badge tone for a pino level, doubling as the non-colour-coded severity. */
 function levelTone(level: number): BadgeTone {

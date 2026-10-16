@@ -76,7 +76,6 @@ import type {
   StatusData,
   TransportState,
 } from "../types.js";
-import { normalizeStreamEvent } from "../utils/normalize.js";
 import { CommandCoalescer, coalescingKey } from "./command-coalescing.js";
 import { reduceDeviceEvent, unknownDeviceDeltaId } from "./device-reduction.js";
 import {
@@ -86,6 +85,7 @@ import {
   toggleFavorite as toggleFavoriteInList,
 } from "./favorites.js";
 import { applyLogRingBuffer, LOG_BUFFER_CAPACITY } from "./log-ring-buffer.js";
+import { normalizeStreamEvent } from "./normalize.js";
 import { computeRevertDeadlineMs, POLLED_DEFAULT_DEADLINE_MS } from "./revert-deadline.js";
 
 /** One coalesced device-property command request (design.md D31). */

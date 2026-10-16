@@ -1,5 +1,4 @@
 import { describe, expect, it } from "bun:test";
-import type { Capability } from "../src/app/types.js";
 import {
   asArray,
   asBoolean,
@@ -21,7 +20,8 @@ import {
   normalizeState,
   normalizeStatus,
   normalizeStreamEvent,
-} from "../src/app/utils/normalize.js";
+} from "../src/app/lib/normalize.js";
+import type { Capability } from "../src/app/types.js";
 
 describe("primitive coercions", () => {
   it("asString falls back for non-string input", () => {
@@ -631,7 +631,7 @@ describe("normalizeStreamEvent", () => {
 //
 // The normaliser rebuilds a capability from a fixed field list, so the shape is
 // declared a second time in the client. The compile-time half of the guard — an
-// exhaustive pin of `Capability`'s key set — lives in `src/app/utils/normalize.ts`:
+// exhaustive pin of `Capability`'s key set — lives in `src/app/lib/normalize.ts`:
 // that is the module the drift would occur in, and the one `tsc -p
 // src/app/tsconfig.json` actually compiles (this file is not typechecked). The
 // runtime half below asserts that every declared field `normalizeCapability`
