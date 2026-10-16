@@ -1,7 +1,8 @@
 import { useKeyboard, useTerminalDimensions } from "@opentui/react";
 import type { LogEntry } from "@ts-ha/shared";
 import { useMemo, useState } from "react";
-import { COLORS, formatValue, levelColor, levelName, valueColor } from "./theme.js";
+import { levelName } from "../format.js";
+import { COLORS, formatValue, levelColor, valueColor } from "./theme.js";
 import type { LogsData } from "./types.js";
 
 const LEVEL_FILTERS = [

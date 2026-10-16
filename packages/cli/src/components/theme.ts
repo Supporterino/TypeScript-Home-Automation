@@ -16,18 +16,6 @@ export const COLORS = {
 } as const;
 
 /**
- * Map pino numeric level to display name.
- */
-export function levelName(level: number): string {
-  if (level <= 10) return "TRACE";
-  if (level <= 20) return "DEBUG";
-  if (level <= 30) return "INFO";
-  if (level <= 40) return "WARN";
-  if (level <= 50) return "ERROR";
-  return "FATAL";
-}
-
-/**
  * Map pino numeric level to a color.
  */
 export function levelColor(level: number): string {

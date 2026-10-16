@@ -1,6 +1,7 @@
 import { useKeyboard, useTerminalDimensions } from "@opentui/react";
 import { useCallback, useState } from "react";
 import type { DebugClient } from "../client.js";
+import { parseCommandValue } from "../command-value.js";
 import { COLORS, formatValue, valueColor } from "./theme.js";
 import type { StateData } from "./types.js";
 
@@ -29,12 +30,7 @@ export function StateTab({
 
   const submitEdit = useCallback(
     async (key: string, rawValue: string) => {
-      let value: unknown;
-      try {
-        value = JSON.parse(rawValue);
-      } catch {
-        value = rawValue;
-      }
+      const value = parseCommandValue(rawValue);
       try {
         await client.setState(key, value);
         setMessage(`Set ${key} = ${formatValue(value)}`);

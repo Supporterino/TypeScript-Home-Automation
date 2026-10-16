@@ -201,16 +201,16 @@ export function formatLogEntry(entry: {
   [key: string]: unknown;
 }): string {
   const time = new Date(entry.time).toISOString().slice(11, 23);
-  const level = levelToName(entry.level).padEnd(5);
+  const level = levelName(entry.level).padEnd(5);
   const automation = entry.automation ? ` [${entry.automation}]` : "";
   const service = entry.service ? ` (${entry.service})` : "";
   return `${time} ${level}${automation}${service} ${entry.msg}`;
 }
 
 /**
- * Map pino numeric level to name.
+ * Map pino numeric level to a display name.
  */
-function levelToName(level: number): string {
+export function levelName(level: number): string {
   if (level <= 10) return "TRACE";
   if (level <= 20) return "DEBUG";
   if (level <= 30) return "INFO";
