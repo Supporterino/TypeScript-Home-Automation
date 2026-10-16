@@ -1,10 +1,6 @@
 /**
- * Pure projection of a source-neutral device descriptor into the summary row
- * both the `devices` command table and the dashboard's Devices tab render
- * (specs/cli "Command Surface" — `ts-ha devices`).
- *
- * Kept DOM/JSX-free so the projection is unit-testable without a render
- * harness, mirroring the web UI's `device-tile-state.ts` approach.
+ * Pure projection of a device descriptor into the summary row shared by the
+ * `devices` command table and the dashboard's Devices tab.
  */
 
 import type { Capability, DeviceDescriptor } from "@ts-ha/shared";

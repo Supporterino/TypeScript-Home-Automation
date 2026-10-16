@@ -1,9 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { normalizeListSubcommand } from "../src/subcommand.js";
 
-// specs/cli "Command Surface" — the bare invocation lists for the listable
-// domains (`ts-ha devices`, `ts-ha automations`, `ts-ha state`, `ts-ha rooms`,
-// `ts-ha walls`). Regression coverage for the dispatcher's alias handling.
+// Regression coverage for the dispatcher's alias handling.
 
 describe("normalizeListSubcommand", () => {
   it("treats the bare form as list", () => {

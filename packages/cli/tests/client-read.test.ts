@@ -3,8 +3,6 @@ import type { CurrentWeather, DeviceDescriptor, WeatherData } from "@ts-ha/share
 import { DebugClient } from "../src/client.js";
 import { isStreamAuthError } from "../src/event-stream.js";
 
-// specs/cli "Engine Communication" (task 2.1) — read surfaces added in Phase 2.
-
 const originalFetch = globalThis.fetch;
 
 function mockFetch(body: unknown, status = 200): ReturnType<typeof mock> {

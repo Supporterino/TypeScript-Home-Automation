@@ -10,8 +10,6 @@ import {
   readControlBoolean,
 } from "../src/device-controls.js";
 
-// specs/cli "Terminal Device Control" (task 3.5; design.md D5).
-
 function descriptor(overrides: Partial<DeviceDescriptor> = {}): DeviceDescriptor {
   return {
     source: "zigbee",

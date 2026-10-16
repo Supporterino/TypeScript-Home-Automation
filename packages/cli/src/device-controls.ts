@@ -1,17 +1,6 @@
 /**
- * Pure projection of a device's capability schema into terminal controls
- * (specs/cli "Terminal Device Control"; design.md D5).
- *
- * Every flattened writable capability becomes a control matching its declared
- * type — a boolean toggle, a numeric adjuster, an enum cycler, or a text
- * editor — and a read-only capability becomes a plain readout. Boolean read
- * and compose go through the shared `readBooleanCapabilityValue` /
- * `composeBooleanCapabilityValue` helpers, so a source that reports and
- * accepts `"ON"`/`"OFF"` (Zigbee2MQTT) is interpreted and commanded correctly
- * without source-specific knowledge.
- *
- * DOM/JSX-free so the projection and command composition are unit-testable
- * without a render harness, mirroring the web UI's `device-tile-state.ts`.
+ * Pure projection of a device's capability schema into terminal controls,
+ * reading and writing booleans through the shared capability helpers.
  */
 
 import type { Capability, CapabilityValueType, DeviceDescriptor } from "@ts-ha/shared";

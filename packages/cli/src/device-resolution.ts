@@ -1,10 +1,6 @@
 /**
- * Device addressing (specs/cli "Device Addressing"; design.md D1).
- *
- * A command argument is a `qualifiedId` (`source:id`) when it matches one
- * exactly. Otherwise it is resolved as a case-insensitive substring of a
- * device's display name — acting only when exactly one device matches, and
- * reporting the ambiguity or absence rather than silently choosing.
+ * Device addressing: an exact `qualifiedId` (`source:id`) match, else a
+ * case-insensitive display-name substring.
  */
 
 import type { DeviceDescriptor } from "@ts-ha/shared";

@@ -3,9 +3,7 @@ import type { DeviceDescriptor } from "@ts-ha/shared";
 import type { DevicesData } from "../src/components/types.js";
 import { flattenCapabilities, projectDeviceRows } from "../src/device-rows.js";
 
-// specs/cli "Command Surface" / dashboard Devices tab (task 1.4). The tab
-// renders the catalog through a pure projection, so it is tested here without
-// a React/OpenTUI render harness.
+// The tab renders the catalog through a pure projection, so it needs no render harness.
 
 function descriptor(overrides: Partial<DeviceDescriptor>): DeviceDescriptor {
   return {

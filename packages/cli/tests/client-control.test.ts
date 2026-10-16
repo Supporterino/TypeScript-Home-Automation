@@ -1,8 +1,6 @@
 import { afterEach, describe, expect, it, mock } from "bun:test";
 import { DebugClient, httpStatusOf } from "../src/client.js";
 
-// specs/cli "Engine Communication" (task 3.1) — control surfaces.
-
 const originalFetch = globalThis.fetch;
 
 function mockFetch(body: unknown, status = 200): ReturnType<typeof mock> {

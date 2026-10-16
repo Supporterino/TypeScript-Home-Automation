@@ -2,10 +2,6 @@ import { afterEach, describe, expect, it, mock } from "bun:test";
 import type { DeviceDescriptor } from "@ts-ha/shared";
 import { DebugClient } from "../src/client.js";
 
-// specs/cli "Engine Communication" (task 1.1). The client talks to the
-// unified `/api/device-catalog` API rather than the removed Zigbee-only
-// `/api/devices` endpoints.
-
 const originalFetch = globalThis.fetch;
 
 function mockFetch(body: unknown, status = 200): ReturnType<typeof mock> {

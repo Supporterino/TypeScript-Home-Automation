@@ -158,9 +158,8 @@ function formatCapability(capability: Capability): string {
 }
 
 /**
- * Summarize a trigger context for the compact execution-history view.
- * Unlike {@link formatTrigger}, this handles the runtime `TriggerContext`
- * union (including the device_* triggers).
+ * Summarize a runtime `TriggerContext` for the compact history view
+ * (including the device_* triggers).
  */
 export function summarizeTriggerContext(trigger: TriggerContext): string {
   switch (trigger.type) {
@@ -181,9 +180,8 @@ export function summarizeTriggerContext(trigger: TriggerContext): string {
 }
 
 /**
- * The CLI's message for an unconfigured weather feature. The engine reports
- * this as an unavailable marker (a 404/400), not an error, so the command
- * reports it plainly rather than failing.
+ * The CLI's message for an unconfigured weather feature, which the engine
+ * reports as an unavailable marker rather than an error.
  */
 export function weatherUnavailableMessage(reason: WeatherUnavailable["reason"]): string {
   return reason === "service_unregistered"

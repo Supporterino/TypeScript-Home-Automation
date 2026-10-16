@@ -2,8 +2,6 @@ import { describe, expect, it } from "bun:test";
 import type { DeviceDescriptor, RoomWithMembers } from "@ts-ha/shared";
 import { parseRoomCommandInput, projectRoomRows, summarizeOutcomes } from "../src/room-model.js";
 
-// specs/cli "Command Surface" — Rooms tab (task 3.6).
-
 function descriptor(overrides: Partial<DeviceDescriptor> = {}): DeviceDescriptor {
   return {
     source: "zigbee",

@@ -1,7 +1,4 @@
-/**
- * Parse a CLI command value (specs/cli "Command Surface"): a JSON literal when
- * the argument is valid JSON, otherwise the raw string — mirroring `state set`.
- */
+/** Parse a CLI command value as JSON when valid, otherwise the raw string. */
 export function parseCommandValue(raw: string): unknown {
   try {
     return JSON.parse(raw);

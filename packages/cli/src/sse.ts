@@ -1,13 +1,6 @@
 /**
- * Server-sent-events frame parsing (specs/cli "Realtime Dashboard Updates";
- * design.md D3).
- *
- * The engine's hub emits only `data: {json}\n\n` frames and `: keep-alive\n\n`
- * comments (`event-stream.ts`), but this parses the general SSE framing — a
- * frame is a run of lines terminated by a blank line, and `data:` lines are
- * concatenated with newlines. Kept pure and stream-agnostic so a caller can
- * feed it successive decoded chunks (a frame may be split mid-chunk) without a
- * network.
+ * Server-sent-events frame parsing: a frame is a run of lines terminated by a
+ * blank line, with `data:` lines joined by newlines; pure and stream-agnostic.
  */
 
 export interface SseFrameParseResult {
@@ -37,9 +30,8 @@ export function parseSseFrames(buffer: string): SseFrameParseResult {
 }
 
 /**
- * Join a frame's `data:` lines (SSE spec), ignoring comment lines and any
- * other field. Returns `null` when the frame carries no data — a keep-alive
- * comment, or a blank frame.
+ * Join a frame's `data:` lines, ignoring comment lines and other fields.
+ * Returns `null` when the frame carries no data.
  */
 function extractData(frame: string): string | null {
   const dataLines: string[] = [];

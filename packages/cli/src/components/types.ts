@@ -1,9 +1,6 @@
 /**
- * Shared types for dashboard components.
- *
- * Wire-response DTOs (`LogEntry`, `HomekitStatus`, `Automation`,
- * `DeviceDescriptor`) come from `@ts-ha/shared`; only dashboard aggregation
- * shapes are declared here (design.md D1).
+ * Shared types for dashboard components; wire DTOs come from `@ts-ha/shared`
+ * and only aggregation shapes are declared here.
  */
 
 import type {
