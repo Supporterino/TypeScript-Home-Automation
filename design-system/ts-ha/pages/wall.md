@@ -185,9 +185,19 @@ control draws one touch-sized option per permitted value, each label bounded to 
 same width with an ellipsis (`WallCardOption` in
 `wall/cards/card-anatomy.tsx`) — so a row of options is bounded exactly as a row of
 icon controls and a card's actions row is bounded by its control count rather than by
-its labels. A select card's values, a thermostat's mode, and a fan's presets are all
-this one control: where its permitted values do not fit its row at that **42 px**
-target, it draws a single dropdown affordance carrying them all
+its labels. That bound is the row's own content, not the width it is drawn at: an
+actions row **uses the width of the card it sits in**. A row composed solely of
+fixed-size controls distributes them across that width; a row that contains a
+**flexible** control — a slider, or an enumerated control drawn as its single
+dropdown — keeps that control growing to fill the space and centres the fixed controls
+beside it, so no control is stretched into a different-looking affordance or left
+bunched at the card's left. The row
+declares which of the two it is (`distribution` on `WallCardActions` in
+`wall/cards/card-anatomy.tsx`) rather than measuring its children, and the ported
+42 px control height and 12 px radius are untouched, so distribution only consumes
+width a card already has. A select card's values, a thermostat's mode, and a fan's
+presets are all this one control: where its permitted values do not fit its row at
+that **42 px** target, it draws a single dropdown affordance carrying them all
 (`WallCardDropdown`) instead, so no option ever shrinks below the target and every
 value stays reachable. That bound is what makes the widest control row a finite
 width, and so what a typed device widget's minimum *column* span is derived from (see
@@ -315,8 +325,9 @@ the composition tier and the legal spans cannot drift:
 
 - **`compact`** — the placement's area is no larger than the midpoint between the
   type's `min` and `defaults` areas. A type whose default *is* its minimum (every
-  typed device widget, and `scene`) therefore always receives the compact
-  composition at its smallest legal card.
+  typed device widget) therefore always receives the compact composition at its
+  smallest legal card; a `scene`, whose `default` (`2 × 2`) is now larger than its
+  `2 × 1` minimum, is compact at one row and regular at its default.
 - **`roomy`** — the area is at or above the midpoint between `defaults` and `max`.
 - **`regular`** — everything between, which includes the type's default placement.
 
@@ -366,7 +377,10 @@ The vocabulary's **state item** is a leading icon beside a label over a reading:
   ported `WallCardIconButton` / `WallCardOption` / `WallCardDropdown` /
   `WallCardEnumControl` at the ported 42 px control height and 12 px control radius
   (`--hearth-card-control-height` / `-radius`), spaced by the ported 12 px control
-  spacing — still above the wall's ≥ 8 px adjacent-control floor.
+  spacing — still above the wall's ≥ 8 px adjacent-control floor — and using the
+  card's whole width: spread across it for a row of fixed controls, or held flexible
+  around a slider or an enumerated control drawn as its single dropdown, with the
+  fixed controls centred beside it.
 
 `WallCardStateItem` composes the first three, so an ambient stat, a control card's
 head and a count are one anatomy. A contained explanation (`WallCardMessage`) fills
@@ -395,9 +409,11 @@ frame draws a surface:
   `--hearth-hairline`) at the ported card surface — `--hearth-card-radius` **12 px**
   and `--hearth-card-padding` **10 px** — with a head (icon + title), a reading, and
   the actions row. A **typed device widget's** frame is chrome-less, so its card
-  owns the surface and draws on the ported metrics; the `devices` widget's frame
-  draws the surface and its tiles draw none, so a grid of tiles is still a single
-  surface.
+  owns the surface and draws on the ported metrics; a `scene` placed at its one-row
+  minimum is chrome-less too, so the whole cell is the scene's touch target and its
+  compact composition draws flush, while at two rows or more the framed tile returns;
+  the `devices` widget's frame draws the surface and its tiles draw none, so a grid
+  of tiles is still a single surface.
 
 ### Widget catalog and spans
 
@@ -414,7 +430,7 @@ same three spans.
 | `favorites` | control | 3 × 5 | 6 × 6 | 12 × 8 |
 | `temperature` | ambient | 2 × 2 | 3 × 2 | 6 × 4 |
 | `status` | ambient | 3 × 2 | 4 × 3 | 8 × 6 |
-| `scene` | control | 2 × 2 | 2 × 2 | 6 × 4 |
+| `scene` | control | 2 × 1 | 2 × 2 | 6 × 4 |
 | `link` | control | 2 × 2 | 3 × 2 | 6 × 4 |
 | `devices` | control | 6 × 4 | 6 × 4 | 12 × 12 |
 | `light` | control | 3 × 2 | 3 × 2 | 6 × 6 |
@@ -437,10 +453,23 @@ device grid can never be placed too small to page.
 
 ### Redesigned widgets
 
+- **Energy** — an ambient readout of `GET /api/energy`: the home's **instantaneous
+  power** and its **usage over the recent rolling window**, in place of any cumulative
+  lifetime total — a lifetime figure is not a recent reading. The usage is labelled
+  with the span the retained samples actually cover (`last 24h` at a full window, or
+  `last 6h` at a partial one), so a partial window is drawn as partial rather than as
+  a full-window figure, and when nothing has been covered the reading is **absent**
+  rather than a zero. A deployment whose devices report no metering reading keeps the
+  contained explanation its own area draws. The dashboard's own energy view is
+  unchanged: it still presents its Current power / Cumulative / Metering devices
+  stats.
 - **Temperature** — an ambient readout over a configured sensor device
-  (`{ qualifiedId, title? }`): a leading circular thermometer icon, the short device
-  name on the label tier, and the reading on the tier its span calls for — the band
-  tier at its default span, the metric tier only when the card is roomy. Where the
+  (`{ qualifiedId, title? }`): a leading circular thermometer icon, the sensor on the
+  label tier identified by **its room's name** where the store assigns the device to a
+  room and by the **shortened device name** otherwise — so several identically-named
+  sensors read as the rooms they sit in, with the full name kept as the label's
+  tooltip — and the reading on the tier its span calls for — the band tier at its
+  default span, the metric tier only when the card is roomy. Where the
   sensor declares a **humidity** reading, it is presented beneath the temperature as
   the widget's secondary reading — one value with its own unit, never split — with
   no config field and no profile change; a sensor that declares none renders exactly
@@ -453,12 +482,15 @@ device grid can never be placed too small to page.
   name takes the quiet ported secondary line, and no control surface competes with
   the reading. There is no separate readout card type.
 - **Scene tile** — a leading scene glyph at the wall's 42 px touch target at its
-  minimum span, with the whole tile as the trigger affordance. At that span the glyph
-  sits **beside** the label (the default placement's anatomy); a scene card with room
-  centres a larger glyph **over** the label rather than repeating the minimum-span
-  row. Pressed and busy are paint-only states (background, elevation, and a spinner
-  in place of the glyph), so the tile does not shift while it is operated; a failed
-  trigger is surfaced on the tile itself.
+  minimum span, with the whole tile as the trigger affordance. At the type's one-row
+  minimum the frame draws no surface and the button draws no inset, so the whole cell
+  is the trigger — at or above the 42 px target — and the compact glyph-beside-label
+  composition fills it flush; at two rows or more the framed tile returns, with its
+  12 px inset and the glyph **beside** the label at the default placement's anatomy;
+  a scene card with room centres a larger glyph **over** the label rather than
+  repeating the minimum-span row. Pressed and busy are paint-only states (background,
+  elevation, and a spinner in place of the glyph), so the tile does not shift while
+  it is operated; a failed trigger is surfaced on the tile itself.
 - **Link** — opens another named wall profile; see below.
 - **Device grid** — an explicitly selected device set, paged; see below.
 - **Device cards** — one typed card per device class, ported from
@@ -526,9 +558,10 @@ grid of the wall's typed device cards.
   the 8 px gap separating it from the tiles, **70 px** in all — so a promised page
   always fits the card. Empty space is never reserved for a control that is not
   drawn.
-- Page controls meet the wall's 42 px minimum touch target, and a tile actuates
-  exactly as a wall device card does elsewhere. A selection edit that removes pages
-  moves an open wall back onto a real page rather than a blank one.
+- Page controls meet the wall's 42 px minimum touch target and are distributed
+  across the card's width around the `n / m` label, and a tile actuates exactly as a
+  wall device card does elsewhere. A selection edit that removes pages moves an open
+  wall back onto a real page rather than a blank one.
 - An empty selection explains itself inside the widget's own area.
 - The editor reports how many pages a selection implies, so an author sees a very
   large selection's cost before saving.
@@ -666,36 +699,40 @@ reports no colour falls back to the wall's own accent (`--hearth-accent`, and
   its fill as well as its colour, and the shape carries the light's contrast-improved
   colour); the name sits over the brightness reading or `Off`; and the actions row
   carries the active control as the slider — brightness, colour temperature, or
-  colour, whichever the device declares — with the other declared controls beside it
-  as touch-sized icon buttons. A control the device does not declare is never
-  rendered, so two lights of the same model can show different controls. Turning a
-  control while the light is off turns it on first.
+  colour, whichever the device declares — kept flexible across the row with the other
+  declared controls centred beside it as touch-sized icon buttons. A control the
+  device does not declare is never rendered, so two lights of the same model can show
+  different controls. Turning a control while the light is off turns it on first.
 - **Cover** — discrete, touch-friendly transport rather than a bare position slider:
   the position (when the device has one) is the primary reading, and the actions row
-  carries Open, Stop, and Close as touch-sized icon controls, with Stop drawn **only**
-  when a writable property can express it. Open/Close command the declared transport
-  action and fall back to the position extremes otherwise.
+  carries Open, Stop, and Close as touch-sized icon controls distributed across the
+  card's width, with Stop drawn **only** when a writable property can express it.
+  Open/Close command the declared transport action and fall back to the position
+  extremes otherwise.
 - **Fan** — the icon affordance is the on/off control, the name sits over the
-  percentage reading, and the actions row carries the percentage as a slider with the
-  presets beside it as the shared enumerated control — touch-sized options where they
-  fit its row, or a single dropdown affordance where they do not. Dragging the
-  percentage while the fan is off commands it on first.
+  percentage reading, and the actions row carries the percentage as a slider, kept
+  flexible across the row with the presets centred beside it as the shared enumerated
+  control — touch-sized options where they fit its row, or a single dropdown
+  affordance where they do not; a fan with presets but no percentage draws them across
+  the row. Dragging the percentage while the fan is off commands it on first.
 - **Climate** — the name sits over the temperature reading, and the actions row
-  carries the setpoint as a slider with the thermostat's mode beside it as the shared
-  enumerated control — touch-sized options where they fit its row, or a single
-  dropdown affordance where they do not. A thermostat that only reports presents the
-  reading and no inert control.
+  carries the setpoint as a slider, kept flexible across the row with the thermostat's
+  mode centred beside it as the shared enumerated control — touch-sized options where
+  they fit its row, or a single dropdown affordance where they do not; a thermostat
+  with a mode but no setpoint draws its mode across the row. A thermostat that only
+  reports presents the reading and no inert control.
 - **Lock** — the name sits over its locked/unlocked reading, and the actions row
-  carries Lock and Unlock as touch-sized options, the one matching the reported state
-  marked active, each commanding the property's own authored value. A lock is never
-  "inactive", so its controls are always drawn.
-- **Number** — a bounded numeric control as the sole action, the slider being the
-  value's actuation target (a bare card activation cannot express the value to set).
-  A writable numeric with no declared range is not presented at all.
-- **Select** — the enumerated control as the sole action: one touch-sized option per
-  permitted value where they fit its row at the 42 px target, or a single dropdown
-  affordance carrying every value where they do not. An enum with no permitted values
-  presents no control.
+  carries Lock and Unlock as touch-sized options distributed across the card's width,
+  the one matching the reported state marked active, each commanding the property's
+  own authored value. A lock is never "inactive", so its controls are always drawn.
+- **Number** — a bounded numeric control as the sole action, the slider using the
+  row's full width as the value's actuation target (a bare card activation cannot
+  express the value to set). A writable numeric with no declared range is not
+  presented at all.
+- **Select** — the enumerated control as the sole action, distributed across the
+  card's width: one touch-sized option per permitted value where they fit its row at
+  the 42 px target, or a single dropdown affordance carrying every value where they do
+  not. An enum with no permitted values presents no control.
 - **Entity** — the typed fallback: the icon affordance and the name over the state.
   Where the primary action is a pure toggle the whole card is the actuation target;
   where the device has no actuatable property the reading becomes the card's dominant

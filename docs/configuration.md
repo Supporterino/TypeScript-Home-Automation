@@ -246,7 +246,7 @@ restart (design.md D6/D7).
 | Variable | Default | Description |
 |---|---|---|
 | `ENERGY_SAMPLE_MS` | `60000` | Interval, in milliseconds, between power-history samples. Must be a positive integer; `0` is normalized to the default so history can never be sampled at a zero interval. |
-| `ENERGY_HISTORY_MINUTES` | `1440` | Rolling history window, in minutes. The retained sample count is bounded by `historyMinutes / sampleIntervalMs`. `0` disables history while current totals remain available. |
+| `ENERGY_HISTORY_MINUTES` | `1440` | Rolling history window, in minutes. The retained power-sample count is bounded by `historyMinutes / sampleIntervalMs`, and the same window bounds the per-device cumulative ring the endpoint's `usageWh`, `windowMinutes`, and `coveredMinutes` are derived from. `0` disables history while current totals remain available. |
 
 ---
 
