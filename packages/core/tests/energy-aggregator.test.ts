@@ -63,6 +63,20 @@ function mutableAccessor(devices: DeviceDescriptor[]): {
   };
 }
 
+/** A reachable device declaring a cumulative-energy reading, in watt-hours. */
+function energyDevice(qualifiedId: string, energyWh: number): DeviceDescriptor {
+  return descriptor({
+    qualifiedId,
+    state: { energy: energyWh },
+    capabilities: [energyCapability("Wh")],
+  });
+}
+
+/** A single reachable device declaring a cumulative-energy reading, in watt-hours. */
+function scenario(plugEnergyWh: number): DeviceDescriptor[] {
+  return [energyDevice("shelly:plug", plugEnergyWh)];
+}
+
 // ── Tests ─────────────────────────────────────────────────────────────────
 
 describe("EnergyAggregator", () => {
@@ -390,6 +404,237 @@ describe("EnergyAggregator", () => {
       expect(snapshot.history).toEqual([]);
       expect(snapshot.powerWatts).toBe(42);
       expect(snapshot.energyWh).toBe(1000);
+
+      aggregator.stop();
+    });
+  });
+
+  describe("windowed usage", () => {
+    beforeEach(() => {
+      jest.useFakeTimers();
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it("reports the cumulative change over a fully covered window", () => {
+      jest.setSystemTime(1_000_000);
+      const { accessor: devices, set } = mutableAccessor(scenario(1000));
+      const aggregator = new EnergyAggregator(
+        devices,
+        { sampleIntervalMs: 1000, historyMinutes: 1 },
+        logger,
+      );
+
+      // The cumulative ring retains the power samples plus one baseline, so 61
+      // samples at a 1s interval span the one-minute window exactly.
+      aggregator.start();
+      set(scenario(1600));
+      jest.advanceTimersByTime(60_000);
+
+      const snapshot = aggregator.snapshot();
+      expect(snapshot.windowMinutes).toBe(1);
+      expect(snapshot.coveredMinutes).toBe(1);
+      expect(snapshot.usageWh).toBe(600);
+
+      aggregator.stop();
+    });
+
+    it("sums each device's change across the retained span", () => {
+      jest.setSystemTime(1_000_000);
+      const { accessor: devices, set } = mutableAccessor([
+        energyDevice("shelly:a", 1000),
+        energyDevice("shelly:b", 200),
+      ]);
+      const aggregator = new EnergyAggregator(
+        devices,
+        { sampleIntervalMs: 1000, historyMinutes: 10 },
+        logger,
+      );
+
+      aggregator.start();
+      set([energyDevice("shelly:a", 1600), energyDevice("shelly:b", 500)]);
+      jest.advanceTimersByTime(1000);
+
+      // 600 Wh from `a` plus 300 Wh from `b`.
+      const snapshot = aggregator.snapshot();
+      expect(snapshot.usageWh).toBe(900);
+
+      aggregator.stop();
+    });
+
+    it("reports a partial window with the span it actually covers", () => {
+      jest.setSystemTime(1_000_000);
+      const { accessor: devices, set } = mutableAccessor(scenario(1000));
+      const aggregator = new EnergyAggregator(
+        devices,
+        { sampleIntervalMs: 1000, historyMinutes: 10 },
+        logger,
+      );
+
+      aggregator.start();
+      set(scenario(1300));
+      jest.advanceTimersByTime(30_000);
+
+      const snapshot = aggregator.snapshot();
+      expect(snapshot.windowMinutes).toBe(10);
+      expect(snapshot.coveredMinutes).toBe(0.5);
+      expect(snapshot.usageWh).toBe(300);
+
+      aggregator.stop();
+    });
+
+    it("reports usage as absent when no retained sample precedes the newest", () => {
+      jest.setSystemTime(1_000_000);
+      const aggregator = new EnergyAggregator(
+        accessor(scenario(1000)),
+        { sampleIntervalMs: 1000, historyMinutes: 1 },
+        logger,
+      );
+
+      // A single sample is no baseline: the window is uncovered, so the usage is
+      // absent rather than a zero.
+      aggregator.start();
+
+      const snapshot = aggregator.snapshot();
+      expect(snapshot.windowMinutes).toBe(1);
+      expect("usageWh" in snapshot).toBe(false);
+      expect("coveredMinutes" in snapshot).toBe(false);
+
+      aggregator.stop();
+    });
+
+    it("reports no window at all when history is disabled", () => {
+      const aggregator = new EnergyAggregator(
+        accessor(scenario(1000)),
+        { sampleIntervalMs: 1000, historyMinutes: 0 },
+        logger,
+      );
+
+      const snapshot = aggregator.snapshot();
+      expect("windowMinutes" in snapshot).toBe(false);
+      expect("usageWh" in snapshot).toBe(false);
+      expect("coveredMinutes" in snapshot).toBe(false);
+    });
+
+    it("excludes a device that is unreachable or silent at both ends", () => {
+      jest.setSystemTime(1_000_000);
+      const { accessor: devices, set } = mutableAccessor([
+        energyDevice("shelly:plug", 1000),
+        descriptor({
+          qualifiedId: "shelly:offline",
+          reachable: false,
+          state: { energy: 9999 },
+          capabilities: [energyCapability("Wh")],
+        }),
+        descriptor({
+          qualifiedId: "shelly:silent",
+          state: {},
+          capabilities: [energyCapability("Wh")],
+        }),
+      ]);
+      const aggregator = new EnergyAggregator(
+        devices,
+        { sampleIntervalMs: 1000, historyMinutes: 10 },
+        logger,
+      );
+
+      aggregator.start();
+      set([
+        energyDevice("shelly:plug", 1300),
+        descriptor({
+          qualifiedId: "shelly:offline",
+          reachable: false,
+          state: { energy: 9999 },
+          capabilities: [energyCapability("Wh")],
+        }),
+        descriptor({
+          qualifiedId: "shelly:silent",
+          state: {},
+          capabilities: [energyCapability("Wh")],
+        }),
+      ]);
+      jest.advanceTimersByTime(1000);
+
+      // Only the reachable device declaring a reading contributes: the offline
+      // device's 9999 Wh and the silent device's absent reading never enter either
+      // end, rather than being counted as having consumed nothing.
+      const snapshot = aggregator.snapshot();
+      expect(snapshot.usageWh).toBe(300);
+
+      aggregator.stop();
+    });
+
+    it("excludes a device that drops out mid-window instead of subtracting it", () => {
+      jest.setSystemTime(1_000_000);
+      const { accessor: devices, set } = mutableAccessor([
+        energyDevice("shelly:steady", 1000),
+        energyDevice("shelly:dropping", 5000),
+      ]);
+      const aggregator = new EnergyAggregator(
+        devices,
+        { sampleIntervalMs: 1000, historyMinutes: 10 },
+        logger,
+      );
+
+      aggregator.start();
+      set([
+        energyDevice("shelly:steady", 1300),
+        descriptor({
+          qualifiedId: "shelly:dropping",
+          reachable: false,
+          state: { energy: 5000 },
+          capabilities: [energyCapability("Wh")],
+        }),
+      ]);
+      jest.advanceTimersByTime(1000);
+
+      // `steady` is the only device reporting at both ends, so the usage is its
+      // 300 Wh change: the dropped device's 5000 Wh is excluded, not subtracted —
+      // a pre-summed home reading would report 1300 - 6000 = a negative 4700.
+      const snapshot = aggregator.snapshot();
+      expect(snapshot.usageWh).toBe(300);
+      expect(snapshot.usageWh ?? 0).toBeGreaterThanOrEqual(0);
+
+      aggregator.stop();
+    });
+
+    it("reports usage as absent when no device reports at both ends", () => {
+      jest.setSystemTime(1_000_000);
+      const { accessor: devices, set } = mutableAccessor([
+        energyDevice("shelly:a", 1000),
+        descriptor({
+          qualifiedId: "shelly:b",
+          reachable: false,
+          state: { energy: 5000 },
+          capabilities: [energyCapability("Wh")],
+        }),
+      ]);
+      const aggregator = new EnergyAggregator(
+        devices,
+        { sampleIntervalMs: 1000, historyMinutes: 10 },
+        logger,
+      );
+
+      aggregator.start();
+      // `a` drops out just as `b` recovers: no device is present at both ends, so
+      // the window's usage is absent rather than a false zero.
+      set([
+        descriptor({
+          qualifiedId: "shelly:a",
+          reachable: false,
+          state: { energy: 1000 },
+          capabilities: [energyCapability("Wh")],
+        }),
+        energyDevice("shelly:b", 5000),
+      ]);
+      jest.advanceTimersByTime(1000);
+
+      const snapshot = aggregator.snapshot();
+      expect(snapshot.windowMinutes).toBe(10);
+      expect("usageWh" in snapshot).toBe(false);
+      expect("coveredMinutes" in snapshot).toBe(false);
 
       aggregator.stop();
     });

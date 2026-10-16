@@ -2177,6 +2177,9 @@ describe("HttpServer — GET /api/energy", () => {
   const populated: EnergyData = {
     powerWatts: 35,
     energyWh: 4000,
+    usageWh: 4200,
+    windowMinutes: 1440,
+    coveredMinutes: 360,
     breakdown: [
       {
         qualifiedId: "shelly:plug",
@@ -2211,6 +2214,9 @@ describe("HttpServer — GET /api/energy", () => {
 
     const body = (await res.json()) as EnergyData;
     expect(body).toEqual(populated);
+    expect(body.usageWh).toBe(4200);
+    expect(body.windowMinutes).toBe(1440);
+    expect(body.coveredMinutes).toBe(360);
     expect(body.breakdown[1]?.available).toBe(false);
     expect(body.history.map((sample) => sample.timestamp)).toEqual([1000, 2000]);
   });
