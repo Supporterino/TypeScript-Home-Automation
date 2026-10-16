@@ -25,6 +25,20 @@ describe("energy and weather wire shapes", () => {
     expect(data.breakdown).toEqual([]);
   });
 
+  it("accepts a rolling-window usage with its window and coverage", () => {
+    const data: EnergyData = {
+      powerWatts: 35,
+      energyWh: 4000,
+      usageWh: 600,
+      windowMinutes: 1440,
+      coveredMinutes: 360,
+      breakdown: [],
+      history: [],
+    };
+    expect(data.usageWh).toBe(600);
+    expect(data.coveredMinutes).toBeLessThan(data.windowMinutes ?? 0);
+  });
+
   it("reuses the existing weather types on a weather payload", () => {
     const data: WeatherData = {
       location: { latitude: 52.52, longitude: 13.405 },

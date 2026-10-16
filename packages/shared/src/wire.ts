@@ -85,6 +85,27 @@ export interface EnergyData {
   powerWatts: number;
   /** Home cumulative consumption across reachable metering devices, in watt-hours. */
   energyWh: number;
+  /**
+   * Home usage over the rolling window, in watt-hours: the total change over the
+   * retained span, summed across the devices that report a cumulative reading at
+   * both ends. A device that is unreachable or declares no reading at either end
+   * is excluded rather than counted as having consumed nothing. Absent when there
+   * is no baseline or no device contributes at both ends, so a client presents
+   * usage as absent rather than as a zero or a full-window figure.
+   */
+  usageWh?: number;
+  /**
+   * Length of the rolling window, in minutes. Absent when history is disabled
+   * (`ENERGY_HISTORY_MINUTES=0`), since no window is retained.
+   */
+  windowMinutes?: number;
+  /**
+   * Extent the retained samples actually cover, in minutes, never exceeding
+   * `windowMinutes`. Present only alongside `usageWh`; a value below
+   * `windowMinutes` marks a partial window, and an absent value marks no
+   * coverage.
+   */
+  coveredMinutes?: number;
   /** Per-device contributions; empty when no device meters energy. */
   breakdown: EnergyDeviceBreakdown[];
   /** Rolling history, oldest first; empty when history is disabled. */
