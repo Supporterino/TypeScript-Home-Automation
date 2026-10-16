@@ -270,9 +270,15 @@ widget per device class** — `light`, `cover`, `fan`, `climate`, `lock`, `numbe
 **grammar**: **ambient** readouts (clock, weather, energy, temperature, status)
 render chrome-less with large type directly on the background, while **control**
 widgets (room, favorites, scene, link, devices, and every device widget) render as
-surfaces whose whole card is the touch target — except a `scene` at its one-row
-minimum, which draws no surface and is still the whole cell's touch target. A
-widget whose backing feature is unconfigured — for example weather with no weather
+surfaces whose whole card is the touch target — except a `scene` or a `link` at its
+one-row minimum, and a read-only device widget at one row, which draw no surface and
+are still the whole cell's touch target. A typed device widget's minimum is
+**device-aware**: it is authorable at a single row exactly when its bound
+device's card draws no control of its own (an `entity`, or a device whose only
+writable state is its on/off toggle), while a card that draws one keeps a two-row
+minimum; a widget placed below its effective minimum is replaced by the wall's
+explanation rather than a clipped card. A widget whose backing feature is
+unconfigured — for example weather with no weather
 service registered — reports that inside its own area and never prevents the rest
 of the profile from rendering.
 
@@ -319,10 +325,14 @@ device's name over its state or primary reading, and, where the device has contr
 one actions row carrying the active control and the affordances for the others —
 and every control actuates through the shared optimistic channel
 (`reflect → reconcile → revert`), so a wall control reflects, reconciles, and
-reverts exactly as it does elsewhere. A widget bound to a device whose capabilities
-cannot drive its class reports that inside its own area instead of presenting an
-inert card, which is also how a device class the device sources cannot yet express
-behaves. See [Wall device cards](#wall-device-cards) below.
+reverts exactly as it does elsewhere. A device widget whose bound device's card draws
+**no control of its own** is authorable at a single row, composing the shared **slim**
+card form — a single inline line (icon, name, state), the whole cell actuating a
+toggle where the primary action is one, and no observation indicator; a widget whose
+card draws one keeps a two-row minimum. A widget bound to a device whose
+capabilities cannot drive its class reports that inside its own area instead of
+presenting an inert card, which is also how a device class the device sources cannot
+yet express behaves. See [Wall device cards](#wall-device-cards) below.
 
 ### Composition and panel fit
 
@@ -336,11 +346,14 @@ reserves the panel padding and the inter-row gaps, and the unit is bounded at
 produces) and **56 px** (`ROW_UNIT_MAX`, the density ceiling just above it). Cards
 are separated from each other, and inset from the panel edge, by a single gutter of
 `clamp(16px, 2vmin, 24px)`. The row unit is only the vertical axis: a typed device
-widget's minimum (and default) span is **3 × 2**, its column count derived the same
-way the row unit is — the fewest columns whose cell is at least the widest bounded
-control row a card draws at its minimum span (the cover's Open/Stop/Close transport),
-so `3 · 50 + 2 · 16 = 182` clears that row's 174 px — and a card at that span never
-clips a control horizontally on either panel. A surfaced widget is padded by the
+widget's minimum *column* span is **3** — its default span **3 × 2** — derived the
+same way the row unit is: the fewest columns whose cell is at least the widest
+bounded control row a card draws at its minimum span (the cover's Open/Stop/Close
+transport), so `3 · 50 + 2 · 16 = 182` clears that row's 174 px — and a card at that
+span never clips a control horizontally on either panel. A widget bound to a
+control-less device is authorable at **3 × 1** instead; because that cell draws no
+frame surface its content holds the wall's 42 px floor within one row unit, so the
+derived floor is unchanged. A surfaced widget is padded by the
 ported card surface's own inset — **10 px** (`--hearth-card-padding`) — so a
 control widget's tile and a device card are the same surface, and a paging widget
 reserves that inset above and below plus its page-control row and the gap under it
@@ -485,12 +498,17 @@ so the control stays keyboard- and touch-operable at the ported height.
 Each card resolves its composition from the box it is given, so a taller box
 composes a richer form rather than inflating the smaller one, and a card's
 `layout` and `collapsible_controls` options are honoured without reflowing the card
-into a different one. On the wall a device card still presents no favorite toggle,
+into a different one. The smallest form is **slim**: a single inline line — the
+leading icon, the device's name, and its state — drawn only in a one-row read-only
+cell, with the whole cell as the actuation target where the primary action is a
+toggle and no observation indicator. Every read-only-capable card composes it, not
+`entity` alone, so a read-only `lock`, `climate`, or `fan` reads the same as an
+`entity` at one row. On the wall a device card still presents no favorite toggle,
 no hide/unhide toggle, and no explicit open-detail affordance, and the observation
 is demoted to a glyph-only non-textual indicator (its label and polled age stay in
-`title`/`aria-label`). A device card inside a widget frame — including each tile of
-a device grid, which renders the card of **its own** device class — draws one
-surface, never a surface inside another.
+`title`/`aria-label`) — or omitted entirely at one row. A device card inside a widget
+frame — including each tile of a device grid, which renders the card of **its own**
+device class — draws one surface, never a surface inside another.
 
 ### Cross-wall navigation
 
@@ -500,7 +518,12 @@ so the URL changes, the browser's own back button works, and an always-on panel
 restored at that address opens exactly that wall (design.md D11). It renders the
 ported labelled control — the same treatment a room's command row and the wall's
 own Back and editor affordances draw — at the ported control height and corner
-radius, carrying the configured label or the target profile's name. A wall
+radius, carrying the configured label or the target profile's name. At its **one-row
+minimum** (`2 × 1`) the frame draws no surface and the route draws **flush** — no
+border, no raised background, no inset — so the whole cell is the link's touch
+target, at or above the wall's 42 px floor; at two rows or more the framed labelled
+route returns, and the shared route keeps its pill for the framed case and for the
+wall's own Back affordance. A wall
 **opened from a link** presents an on-screen **Back** affordance at the foot of the
 panel, so the hierarchy is walkable by touch as well as by the browser; a
 wall reached by a deep link offers none, because there is nowhere in-app to return
@@ -538,7 +561,10 @@ widget's bound device (offering only the devices whose capabilities can drive th
 widget's class) together with the card's layout and inactive-controls setting, and
 presents the draft at the wall's target panel aspect ratio (1920 × 1080) with a fit
 verdict and a device grid's page count — refusing to save a draft the resolver
-reports as unfittable. The editor reads and writes the current profile version
+reports as unfittable. The editor's placement clamp and the save validation share the
+wall's **device-aware minimum**, so a control-less device widget can be authored at
+one row while a control-bearing one cannot. The editor reads and writes the current
+profile version
 (**2**); a profile stored at version 1 is migrated on load — a widget that named one
 device becomes that device's typed widget at the same placement, and a widget that
 named a set of devices keeps its selection — so no saved wall is lost. When a

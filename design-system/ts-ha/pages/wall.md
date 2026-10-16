@@ -227,7 +227,10 @@ each zone band) drawn at the cell box its configuration declares.
   it; `wall-grid.test.ts` asserts the derivation against the card's real compact
   height, the gutter floor, and the typed device widget's minimum span. The ported
   card is smaller than the scale it replaced, so the floor drops with it and an
-  authored composition that fit the panel before is still able to fit.
+  authored composition that fit the panel before is still able to fit. A one-row
+  `link` or read-only device cell does not feed this derivation: it draws no frame
+  surface, so its single-line content holds the 42 px floor within one row unit
+  without moving it.
 - **The width floor is derived the same way** — a typed device widget's minimum
   (and default) *column* span is the fewest columns whose cell, at the wall's
   floors, is at least the widest control row a card draws at its minimum span: the
@@ -326,14 +329,17 @@ the composition tier and the legal spans cannot drift:
 - **`compact`** — the placement's area is no larger than the midpoint between the
   type's `min` and `defaults` areas. A type whose default *is* its minimum (every
   typed device widget) therefore always receives the compact composition at its
-  smallest legal card; a `scene`, whose `default` (`2 × 2`) is now larger than its
-  `2 × 1` minimum, is compact at one row and regular at its default.
+  smallest legal card above one row; a `scene`, whose `default` (`2 × 2`) is now
+  larger than its `2 × 1` minimum, is compact at one row and regular at its default.
 - **`roomy`** — the area is at or above the midpoint between `defaults` and `max`.
 - **`regular`** — everything between, which includes the type's default placement.
 
 This is a discrete, build-time guarantee rather than a render-time
 measure-and-shrink: there is no per-card `ResizeObserver` and no feedback loop with
-the grid's own measurement.
+the grid's own measurement. The tier is derived from the type's **static** spans, so
+a type's tier does not become device-aware: a one-row read-only device cell resolves
+the `slim` card *form* below `compact` (see "Wall device cards") without changing
+which tier its span implies.
 
 Two rules ride the same tier choice:
 
@@ -409,11 +415,20 @@ frame draws a surface:
   `--hearth-hairline`) at the ported card surface — `--hearth-card-radius` **12 px**
   and `--hearth-card-padding` **10 px** — with a head (icon + title), a reading, and
   the actions row. A **typed device widget's** frame is chrome-less, so its card
-  owns the surface and draws on the ported metrics; a `scene` placed at its one-row
-  minimum is chrome-less too, so the whole cell is the scene's touch target and its
-  compact composition draws flush, while at two rows or more the framed tile returns;
+  owns the surface and draws on the ported metrics; a `scene` or a `link` placed at
+  its one-row minimum is chrome-less too, so the whole cell is its touch target and
+  its composition draws flush, while at two rows or more the framed tile returns;
   the `devices` widget's frame draws the surface and its tiles draw none, so a grid
   of tiles is still a single surface.
+
+Each widget type declares its one-row behaviour **once**, in the registry
+descriptor's `slim?: { min, when }` rule, and both the frame's surface decision and
+the effective-minimum resolver read that one declaration. `scene` and `link` are slim
+`when: "always"` — a link's slim minimum is `2 × 1` — while a typed device widget
+is slim `when: "read-only"`, its slim minimum `3 × 1` admitted only when the bound
+device's card draws no control of its own (an `entity`, or a device whose only
+writable state is its on/off toggle); a control-bearing device therefore keeps its
+`3 × 2` minimum even though its type declares a slim rule.
 
 ### Widget catalog and spans
 
@@ -431,7 +446,7 @@ same three spans.
 | `temperature` | ambient | 2 × 2 | 3 × 2 | 6 × 4 |
 | `status` | ambient | 3 × 2 | 4 × 3 | 8 × 6 |
 | `scene` | control | 2 × 1 | 2 × 2 | 6 × 4 |
-| `link` | control | 2 × 2 | 3 × 2 | 6 × 4 |
+| `link` | control | 2 × 1 | 3 × 2 | 6 × 4 |
 | `devices` | control | 6 × 4 | 6 × 4 | 12 × 12 |
 | `light` | control | 3 × 2 | 3 × 2 | 6 × 6 |
 | `cover` | control | 3 × 2 | 3 × 2 | 6 × 6 |
@@ -443,13 +458,19 @@ same three spans.
 | `entity` | control | 3 × 2 | 3 × 2 | 6 × 6 |
 
 The eight typed device widgets share one `{ qualifiedId, layout?, collapsible_controls? }`
-config: their `3 × 2` minimum and default is the smallest legal placement — three
-columns, the width derived from the widest bounded control row a card draws, by two
-rows, the cell the row unit is derived to hold a compact device card in with nothing
-to spare — and `6 × 6` lets a card be enlarged to the roomiest composition the wall
-draws (see "Grid rhythm and panel fit" and "Wall device cards"). The `devices`
-widget's `6 × 4` minimum is two three-column tile cells by two tile rows, so a
-device grid can never be placed too small to page.
+config: their `3 × 2` minimum and default is the smallest legal placement for a
+control-bearing device — three columns, the width derived from the widest bounded
+control row a card draws, by two rows, the cell the row unit is derived to hold a
+compact device card in with nothing to spare — and `6 × 6` lets a card be enlarged
+to the roomiest composition the wall draws (see "Grid rhythm and panel fit" and
+"Wall device cards"). Their minimum is **device-aware**: a widget whose bound
+device's card draws no control of its own — an `entity`, or a device whose only
+writable state is its on/off toggle — is authorable at **3 × 1**, one row the cell
+holds as a chrome-less single-line card (see "Wall device cards"); a widget whose
+card draws one keeps its `3 × 2` minimum. A `link` is authorable at its **2 × 1**
+minimum by the frame's one-row rule, and the `devices` widget's `6 × 4` minimum is
+two three-column tile cells by two tile rows, so a device grid can never be placed
+too small to page.
 
 ### Redesigned widgets
 
@@ -480,7 +501,11 @@ device grid can never be placed too small to page.
   typed `entity` card's read-prominent composition (see "Wall device cards"): the
   reading is the card's dominant content on the wall's own group-readout tier, the
   name takes the quiet ported secondary line, and no control surface competes with
-  the reading. There is no separate readout card type.
+  the reading. Placed at one row, every read-only-capable card composes the shared
+  **slim** form instead — a single inline line, the whole cell as the actuation
+  target where the primary action is a toggle, and no observation — so a read-only
+  `lock`/`climate`/`fan` reads the same as an `entity` at that span. There is no
+  separate readout card type.
 - **Scene tile** — a leading scene glyph at the wall's 42 px touch target at its
   minimum span, with the whole tile as the trigger affordance. At the type's one-row
   minimum the frame draws no surface and the button draws no inset, so the whole cell
@@ -488,9 +513,12 @@ device grid can never be placed too small to page.
   composition fills it flush; at two rows or more the framed tile returns, with its
   12 px inset and the glyph **beside** the label at the default placement's anatomy;
   a scene card with room centres a larger glyph **over** the label rather than
-  repeating the minimum-span row. Pressed and busy are paint-only states (background,
-  elevation, and a spinner in place of the glyph), so the tile does not shift while
-  it is operated; a failed trigger is surfaced on the tile itself.
+  repeating the minimum-span row. The one-row rule is the registry's own `slim`
+  declaration (`when: "always"`), shared with the link and read by the frame's
+  surface decision; it is not a scene-specific branch. Pressed and busy are paint-only
+  states (background, elevation, and a spinner in place of the glyph), so the tile
+  does not shift while it is operated; a failed trigger is surfaced on the tile
+  itself.
 - **Link** — opens another named wall profile; see below.
 - **Device grid** — an explicitly selected device set, paged; see below.
 - **Device cards** — one typed card per device class, ported from
@@ -507,6 +535,11 @@ always-on panel restored at that address opens exactly that wall.
   and the label, or the target profile's name when no label is configured — at the
   ported control height and corner radius, and both its sides meet the wall's
   minimum touch target.
+- At its **one-row minimum** (`2 × 1`) the frame draws no surface and the route draws
+  **flush** — no border, no raised background, no inset — so the whole cell is the
+  link's touch target, at or above the wall's 42 px floor; at two rows or more the
+  framed labelled route above returns. The flush variant is the link's own; the
+  shared route keeps its pill for the framed case and for the wall's Back affordance.
 - Its label is set on the label tier at a compact span and the title tier otherwise,
   so a large link does not repeat its smallest composition.
 - A link whose target names no saved profile is not a separate error path: the
@@ -738,12 +771,17 @@ reports no colour falls back to the wall's own accent (`--hearth-accent`, and
   where the device has no actuatable property the reading becomes the card's dominant
   content, with no control and no navigation affordance.
 
-Each card composes its *form* — `compact`, `regular`, or `full` — from the box its
-widget actually gives it (`wall/cards/card-composition.ts`), so a taller box composes
-a richer form rather than inflating the smaller one, and a `horizontal` layout is
-composed only where the box is wide enough for it. A card whose controls are hidden
-keeps the composition of its non-control content rather than reflowing into a
-different card. Every control actuates through the shared optimistic channel
+Each card composes its *form* — `slim`, `compact`, `regular`, or `full` — from the
+box its widget actually gives it (`wall/cards/card-composition.ts`), so a taller box
+composes a richer form rather than inflating the smaller one, and a `horizontal`
+layout is composed only where the box is wide enough for it. The **slim** form is the
+smallest: a single inline line — the leading icon, the device's name, and its
+state — drawn only in a one-row read-only cell, with the whole cell as the actuation
+target where the primary action is a toggle and **no observation indicator**. Every
+read-only-capable card composes it, not `entity` alone, so a read-only
+`lock`/`climate`/`fan` reads the same as an `entity` at one row. A card whose controls
+are hidden keeps the composition of its non-control content rather than reflowing
+into a different card. Every control actuates through the shared optimistic channel
 (`reflect → reconcile → revert`), reverting and surfacing the failure inline on the
 affordance that issued it.
 
@@ -751,10 +789,11 @@ affordance that issued it.
 
 On the wall a device card presents no favorite toggle, no hide/unhide toggle, and
 no explicit open-detail affordance, and the observation is demoted to a glyph-only
-non-textual indicator (the label and polled age stay in `title`/`aria-label`). A
-pure toggle's whole card is its actuation target; a card with an embedded value
-control is actuated through that control. A device card inside a widget frame draws
-one surface, never a surface inside another — including each tile of a device grid.
+non-textual indicator (the label and polled age stay in `title`/`aria-label`) — or
+omitted entirely in a one-row **slim** card. A pure toggle's whole card is its
+actuation target; a card with an embedded value control is actuated through that
+control. A device card inside a widget frame draws one surface, never a surface
+inside another — including each tile of a device grid.
 
 ### Attribution — the ported card system
 
