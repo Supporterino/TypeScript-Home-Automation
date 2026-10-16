@@ -51,26 +51,8 @@ import { wallTileCardBox } from "../src/app/wall/widgets/DeviceWidget.js";
 import { deviceGridIds } from "../src/app/wall/widgets/device-grid-model.js";
 
 /**
- * The harness walk, done programmatically (task 9.4; design.md D2, D5, D7;
- * specs/wall-display "Wall Device Presentation" — "A light card fits its minimum
- * span" — "Span-Aware Card Presentation" — "A card's content fits its span" —
- * "Touch Operation", "Wall Visual Language").
- *
- * The literal walk this task asks for is a hand check: there is no browser and no
- * DOM test kit here, so nothing can *render* a card. What this file can do is the
- * strongest reachable equivalent — it drives the wall's own functions (the same
- * chain `computed.ts` shows in the panel: `wallGridMetrics` → `cardHeightPx` →
- * `rendererBoxHeightPx` → `placedDeviceCardBox` → `resolveDeviceCardComposition`)
- * for every typed card at its type's minimum span on both panels, and asserts the
- * card's own ported rows fit the box the renderer is actually handed. It changes
- * no wall behaviour; it pins what the change promises.
- *
- * The horizontal axis is asserted too, on the wall's own geometry: a typed
- * widget's minimum column span is derived from the widest control row a card
- * draws (`WALL_CARD_CONTROL_ROW_MIN_WIDTH_PX`), and the drawn cell on each panel
- * holds it — so a minimum-span card never clips a control horizontally. What
- * stays a human walk is the rendered pixel result in the browser: colour,
- * legibility at distance, and the scheme's contrast.
+ * The harness walk, done programmatically: it drives the wall's own functions for
+ * every typed card at its minimum span on both panels, and asserts the box fits.
  */
 const PANELS: readonly HarnessPanel[] = ["landscape", "portrait"];
 const HARNESS_DIR = join(import.meta.dir, "..", "src/app/wall/harness");
@@ -102,11 +84,8 @@ function minimumSpanWidget(deviceClass: WallDeviceClass): WallWidget {
 }
 
 /**
- * Whether a card of `deviceClass` draws an actions row for `capabilities` —
- * resolved through each card's own model, exactly as the card resolves it, so the
- * test cannot disagree with the card about which controls it presents. The entity
- * card is the card's own control (a whole-surface toggle), so it never draws an
- * actions row.
+ * Whether a card of `deviceClass` draws an actions row for `capabilities`,
+ * resolved through each card's own model.
  */
 const CARD_HAS_CONTROLS: Readonly<Record<WallDeviceClass, (c: Capability[]) => boolean>> = {
   light: (capabilities) => lightCardControls(capabilities).length > 0,
@@ -139,9 +118,8 @@ describe("the harness draft reaches every typed card", () => {
         const widget = widgets.find((candidate) => candidate.type === deviceClass);
         expect(widget, `${panel}: a ${deviceClass} widget`).toBeDefined();
 
-        // The placed widget binds a roster device its class can actually drive,
-        // so a walk of the stage renders the card rather than the contained
-        // "cannot be driven" explanation.
+        // The placed widget binds a roster device its class can actually drive, so a
+        // walk of the stage renders the card rather than the "cannot be driven" message.
         const device = deviceFor(deviceClass);
         expect(widget?.config.qualifiedId, `${panel}: ${deviceClass} binding`).toBe(
           device.qualifiedId,
@@ -172,9 +150,8 @@ describe("every typed card at its minimum span, on both panels", () => {
           HARNESS_PANEL_SIZES[panel].height,
         );
         const values = widgetValues(widget, rowUnit);
-        // A device widget's frame draws no surface and the widget configures no
-        // title, so the renderer's box is the whole cell — and the wall does not
-        // report the placement as too small.
+        // A device widget's frame draws no surface and the widget configures no title,
+        // so the renderer's box is the whole cell.
         expect(values.framed).toBe(false);
         expect(values.titled).toBe(false);
         expect(values.tooSmall).toBe(false);
@@ -195,9 +172,8 @@ describe("every typed card at its minimum span, on both panels", () => {
           active: true,
         });
 
-        // The box admits exactly one form; the composition is that form, never a
-        // taller one, and — the draft configuring no layout — the card composes
-        // its own (stacked) direction.
+        // The box admits exactly one form; the composition is that form, and the card
+        // composes its own (stacked) direction.
         expect(composition.form).toBe(resolveCardFormForBox(box.heightPx));
         // At the minimum span every card composes its compact form.
         expect(composition.form).toBe("compact");
@@ -236,9 +212,8 @@ describe("a minimum-span card never clips a control horizontally", () => {
   }
 
   it("derives the row width from the wall's own card metrics", () => {
-    // The row is the controls (each bounded by the ported control height), the
-    // ported control spacing between them, and the actions row's own horizontal
-    // padding — the same numbers the ported cards draw with.
+    // The row is the controls, the ported control spacing between them, and the
+    // actions row's own padding — the same numbers the ported cards draw with.
     expect(WALL_CARD_MAX_ROW_CONTROLS).toBe(3);
     expect(WALL_CARD_CONTROL_MAX_WIDTH_PX).toBe(WALL_CARD_METRICS.controlHeight);
     expect(WALL_CARD_CONTROL_ROW_MIN_WIDTH_PX).toBe(
@@ -250,9 +225,8 @@ describe("a minimum-span card never clips a control horizontally", () => {
   });
 
   it("takes its control count from the widest card row the fixture roster draws", () => {
-    // The count is a card fact, not a span literal: a cover's discrete transport
-    // is Open, Stop, Close — the most bounded controls any card row draws (a value
-    // control shrinks out of the bound).
+    // The count is a card fact, not a span literal: a cover's discrete transport is
+    // Open, Stop, Close — the most bounded controls any card row draws.
     const model = coverCardModel(deviceFor("cover").capabilities);
     expect(model.transportProperty).toBeDefined();
     expect(model.stop).not.toBeNull();
@@ -266,9 +240,8 @@ describe("a minimum-span card never clips a control horizontally", () => {
       // A `columns`-wide cell is that many columns plus the gutters between them.
       const cellWidthPx = (columns: number): number => columns * column + (columns - 1) * gutter;
 
-      // The typed widgets' minimum span holds the widest control row a card draws
-      // at its minimum span, so no control is clipped horizontally on either
-      // panel (specs/wall-display "A light card fits its minimum span").
+      // The typed widgets' minimum span holds the widest control row a card draws at
+      // its minimum span, so no control is clipped horizontally on either panel.
       for (const deviceClass of WALL_DEVICE_CLASSES) {
         const { min } = getWidgetDescriptor(deviceClass);
         expect(min.w, `${deviceClass} columns`).toBe(WALL_MIN_DEVICE_COLUMNS);
@@ -281,10 +254,8 @@ describe("a minimum-span card never clips a control horizontally", () => {
   }
 
   it("holds it at every row unit, because a column is never narrower than a row is tall", () => {
-    // The panel-independent form of the same proof: a wall column is never
-    // narrower than a row unit (the wall draws a tile at `span · unit + gutter`),
-    // so the cell at the widget's minimum span holds the widest control row at
-    // both bounds of the row unit.
+    // The panel-independent form of the proof: a wall column is never narrower than
+    // a row unit, so the cell at the minimum span holds the widest control row.
     const cellWidthPx = (columns: number, unit: number): number =>
       columns * unit + (columns - 1) * WALL_GUTTER_MIN_PX;
 
@@ -307,9 +278,8 @@ describe("the same box rule holds for a paged tile", () => {
       const grid = widgets.find((widget) => widget.type === "devices");
       if (!grid) throw new Error(`the ${panel} draft carries no device grid`);
 
-      // The tile hosts hand each tile `wallTileCardBox` — the same
-      // `placedDeviceCardBox` at the tile cell span — so a tile's box is the same
-      // rule as a placed widget's, resolved from the page plan's row height.
+      // The tile hosts hand each tile `wallTileCardBox` — the same rule as a placed
+      // widget's box, resolved from the page plan's row height.
       const page = resolvePagedTiles({
         items: deviceGridIds(grid.config),
         span: grid,

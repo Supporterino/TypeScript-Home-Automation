@@ -11,12 +11,8 @@ import {
 import { resolveDeviceClass } from "../src/app/wall/cards/device-class.js";
 
 /**
- * The wall climate card (task 4.5; design.md D1, D3, D6; specs/wall-display
- * "Widget Catalog" — "a climate"; "Wall Device Presentation"). The pure decisions
- * — the declared setpoint and mode, the setpoint's bounds, whether the thermostat
- * is running, and the reading — are covered directly, and the render is asserted
- * structurally against its source (there is no DOM harness), the same style as
- * `wall-card-anatomy.test.ts`.
+ * The wall climate card: the declared setpoint and mode covered directly; the render
+ * asserted structurally.
  */
 const APP_DIR = join(import.meta.dir, "..", "src/app");
 const CARD = join(APP_DIR, "wall/cards/ClimateCard.tsx");

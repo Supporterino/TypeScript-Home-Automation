@@ -1,8 +1,6 @@
 /**
- * Resolves the wall's current orientation (design.md D4; specs/wall-display "A
- * profile reflows for orientation"). Thin glue over `matchMedia` so `WallGrid`
- * stays a single decision; the grid's actual placement rule is the pure
- * {@link resolveLayout}.
+ * Resolves the wall's current orientation via `matchMedia`, so the grid stays a
+ * single decision.
  */
 import type { WallOrientation } from "@ts-ha/shared";
 import { useEffect, useState } from "react";

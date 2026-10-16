@@ -1,14 +1,6 @@
 /**
- * Optimistic actuation for one device property (design.md D12, D21, D31;
- * task 10.12). Shared by the device tile's primary control and the device
- * detail view's generic controls — both are thin renderers over this hook.
- *
- * The decided behaviour lives in the pure modules this hook wires together:
- * {@link computeRevertDeadlineMs} (design.md D21) for how long an
- * unconfirmed command may stand, and the app-wide `CommandCoalescer`
- * (design.md D31) for collapsing a burst of intermediate values into the
- * one that is actually sent. This hook itself is the manually-verified glue
- * between those and React state (design.md D23).
+ * Optimistic actuation for one device property, shared by the device tile's
+ * primary control and the device detail view's generic controls.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { DeviceObservation } from "../types.js";
@@ -24,7 +16,7 @@ export interface OptimisticProperty<T> {
   pending: boolean;
   /** The error from the most recently rejected/failed command, if any. */
   error: string | null;
-  /** Requests `next` be actuated — reflected immediately, reconciled or reverted per design.md D12/D21/D31. */
+  /** Requests `next` be actuated — reflected immediately, then reconciled or reverted. */
   setValue: (next: T) => void;
 }
 
@@ -45,26 +37,17 @@ export function useOptimisticDeviceProperty<T = unknown>(
   const [error, setError] = useState<string | null>(null);
   const key = coalescingKey(qualifiedId, property);
 
-  // A store-level override (e.g. a room batch command) outranks this
-  // component's own local override, so every mounted control reflects the
-  // room-wide command, not just the view that issued it (design.md D5; task
-  // 10.2).
+  // A store-level override (a room batch command) outranks this component's own,
+  // so every mounted control reflects the room-wide command.
   const storeOverride = optimisticOverrides.get(key);
 
-  // Track the latest observation in a ref so a deadline timer armed against
-  // an earlier render's observation object still reads current data if it
-  // needs to (it doesn't today, but avoids a stale-closure trap either way).
+  // A ref avoids the deadline timer reading a stale observation from an earlier
+  // render's closure.
   const observationRef = useRef(observation);
   observationRef.current = observation;
 
-  // Reconciliation: a device_state event carries no request token, so the
-  // only thing that can attribute it to a request is the value it carries
-  // (design.md D3). A report confirms the override — and clears it — only
-  // when its value equals the value the newest request asked for; a report
-  // carrying any other value belongs to a superseded or ignored command and
-  // is left to the override's deadline rather than snapping the control
-  // backwards (design.md D31 "A superseded confirmation does not move the
-  // control").
+  // A device_state event carries no request token, so a report confirms the
+  // override only when its value equals the newest request's value.
   useEffect(() => {
     return subscribe((event) => {
       if (event.category !== "device_state") return;
@@ -90,16 +73,13 @@ export function useOptimisticDeviceProperty<T = unknown>(
             setError(message);
             setOverride((current) => (current && current.token === token ? null : current));
           }
-          // "sent" (200 OK) and "superseded" both leave reconciliation to
-          // the device_state listener above or the deadline below — an
-          // accepted response is not itself a confirmation of physical
-          // device state (design.md D21).
+          // "sent" and "superseded" leave reconciliation to the listener above
+          // or the deadline below; a 200 is not a confirmation of device state.
         },
       );
 
       setError(null);
-      // A direct edit supersedes any room-level optimistic value for this
-      // key — the user's newest intent wins (task 10.2).
+      // A direct edit supersedes any room-level optimistic value for this key.
       revertOptimisticOverride(qualifiedId, property);
       setOverride({ value: next, token });
 

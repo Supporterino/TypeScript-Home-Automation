@@ -1,12 +1,6 @@
 /**
- * The operator HomeKit view — bridge status, pairing information, and the
- * accessories currently bridged, reading the same `/api/homekit/status`
- * endpoint as before (design.md D12; specs/web-ui "Operator Views"; task 6.2).
- *
- * Where `HomekitService` is not registered the store's `homekit` is `null` and
- * the view reports the feature as unconfigured rather than as an empty bridge.
- *
- * Rebuilt on the Lumen primitive layer (`ui/*`) and `lucide-react`.
+ * The operator HomeKit view — bridge status, pairing information, and bridged
+ * accessories; reports the feature as unconfigured when the service is absent.
  */
 import { CircleCheck, CircleX, HousePlug } from "lucide-react";
 import type { ReactNode } from "react";

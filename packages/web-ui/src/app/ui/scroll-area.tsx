@@ -7,7 +7,7 @@ export const ScrollAreaRoot = ScrollAreaPrimitive.Root;
 export interface ScrollAreaProps
   extends ComponentPropsWithoutRef<typeof ScrollAreaPrimitive.Root> {}
 
-/** A thin, token-styled scroll container (design.md D5). */
+/** A thin, token-styled scroll container. */
 export function ScrollArea({ className, children, ...props }: ScrollAreaProps) {
   return (
     <ScrollAreaPrimitive.Root className={cn("relative overflow-hidden", className)} {...props}>

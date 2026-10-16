@@ -1,16 +1,6 @@
 /**
- * History-API routing glue over the pure matcher in `router.ts` (design.md
- * D7; task 10.1; wall-zones-and-fit D11). Deliberately thin — the only logic
- * here is wiring `popstate`/`pushState` to React state; route matching itself
- * lives in `router.ts` where it is reachable by `bun test` without a DOM
- * (design.md D23). This file is verified by hand.
- *
- * Each in-app navigation records the path it was pushed from in the history
- * entry's state, so a surface can ask how it was reached — the wall's back
- * affordance is the one consumer (a wall opened from another wall offers a way
- * back; a deep link does not). The record rides the browser's own history, so it
- * survives a reload of that entry, and going back restores the earlier entry's
- * own origin.
+ * History-API routing glue over the pure matcher in `router.ts`; the only
+ * logic here is wiring `popstate`/`pushState` to React state.
  */
 import { createContext, type ReactNode, useContext, useEffect, useMemo, useState } from "react";
 import { type RouteMatch, resolveRoute } from "./router.js";
@@ -21,9 +11,8 @@ interface RouterContextValue {
   route: RouteMatch;
   navigate: (path: string) => void;
   /**
-   * The pathname this entry was navigated from within the app, or `null` when the
-   * entry was loaded directly (a deep link, a reload of a deep entry, or an
-   * external navigation). Read from the entry's own history state.
+   * The pathname this entry was navigated from within the app, or `null` when
+   * the entry was loaded directly.
    */
   origin: string | null;
 }
@@ -81,7 +70,7 @@ export function useRouter(): RouterContextValue {
   return ctx;
 }
 
-/** Renders an `<a>` that navigates via the History API on a plain left click, letting every other click behave natively (open in new tab, etc). */
+/** Renders an `<a>` that navigates via the History API on a plain left click. */
 export function Link({
   to,
   children,

@@ -1,7 +1,6 @@
 /**
- * The shared text-input treatment. Every form text field composes it so the
- * height and focus ring stay consistent; the 40px default is the standard
- * control height and the 32px compact variant is for dense filter rows.
+ * The shared text-input treatment: `BASE_INPUT_CLASSES` plus a height variant, so
+ * the focus ring stays consistent across text fields.
  */
 
 const BASE_INPUT_CLASSES =

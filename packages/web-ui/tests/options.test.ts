@@ -1,8 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { DEFAULT_WEB_UI_PATH, parseWebUiOptions } from "../src/index.js";
 
-// design.md D3, D8; specs/web-ui "Enabling", "URL Path", "No token parsing in
-// the UI package". The parser reads only `WEB_UI_ENABLED` / `WEB_UI_PATH`.
+// The parser reads only `WEB_UI_ENABLED` / `WEB_UI_PATH`.
 
 describe("parseWebUiOptions", () => {
   it("returns null when WEB_UI_ENABLED is unset", () => {

@@ -21,17 +21,8 @@ import {
 } from "../src/app/wall/widgets/scene-model.js";
 
 /**
- * Structural assertions for the wall scene button (design.md D11, D14;
- * specs/wall-display "Scene Buttons Trigger Automations"). There is no DOM
- * harness here, so the render decisions — the full-bleed pressable tile, the
- * leading scene glyph + label anatomy, the explicit pressed/busy states, and the
- * unchanged trigger and error-surfacing path — are asserted against the
- * widget's source, the same style as `wall-card-archetypes.test.ts` /
- * `cover-transport.test.ts`. The pure trigger-request decision stays covered by
- * `wall-scene.test.ts`.
- *
- * Re-pointed at the shared Hearth card vocabulary (design.md D11, D14); each
- * assertion's intent is unchanged.
+ * Structural assertions for the wall scene button: the pressable tile, its glyph
+ * and label anatomy, and its explicit pressed/busy states.
  */
 const APP_DIR = join(import.meta.dir, "..", "src/app");
 const SCENE = join(APP_DIR, "wall/widgets/SceneWidget.tsx");
@@ -128,11 +119,8 @@ describe("the scene button is the wall's ported control", () => {
   it("draws the ported control height and radius rather than a treatment of its own", async () => {
     const source = await sceneSource();
 
-    // The tile's button is the vocabulary's labelled control (design.md W1;
-    // specs/wall-display "A control is the ported control"): the ported control
-    // height — the wall's touch target — and the ported control radius, drawn from
-    // the ported table rather than a radius the widget declares for itself, so a
-    // scene control and a card's control cannot differ.
+    // The tile's button is the vocabulary's labelled control: the ported control height
+    // — the wall's touch target — and the ported control radius, from the ported table.
     expect(source).toContain("minHeight: WALL_CARD_METRICS.controlHeight");
     expect(source).toContain("borderRadius: WALL_CARD_METRICS.controlRadius");
     expect(source).not.toContain("--hearth-radius-md");
@@ -143,9 +131,8 @@ describe("the scene button is the wall's ported control", () => {
     const source = await sceneSource();
     const anatomy = await readSource(ANATOMY);
 
-    // The label is the same line of type a device card's name is (design.md W1, W2;
-    // specs/wall-display "Supporting text is drawn at the ported sizes"): the
-    // vocabulary's label part, which falls back to the ported primary size.
+    // The label is the same line of type a device card's name is: the vocabulary's
+    // label part, which falls back to the ported primary size.
     expect(source).toContain("<WallCardLabel>");
     expect(anatomy).toContain("size ?? WALL_CARD_PRIMARY_FONT_SIZE");
   });
@@ -167,10 +154,8 @@ describe("scene button keeps its trigger and error path", () => {
 
 describe("scene tile composes for its space (wall-zones-and-fit D3, D4, 4.2)", () => {
   it("owns both its compositions' budgets, derived from the parts they draw", () => {
-    // The scene's budgets are the scene's *own* — the ~72 px glyph, the label's
-    // one line, and the button's inset — not the wall light card's full form
-    // (346 px), which the scene needs nowhere near. One budget per composition,
-    // each measured against what it actually needs.
+    // The scene's budgets are its *own* — the glyph, the label's one line, and the
+    // button's inset — not the wall light card's full form, which the scene does not need.
     expect(SCENE_ROW_HEIGHT_PX).toBe(
       2 * SCENE_INSET_PX + Math.max(wallTileMetrics("wall").control, SCENE_LABEL_LINE_PX),
     );
@@ -208,11 +193,8 @@ describe("scene tile composes for its space (wall-zones-and-fit D3, D4, 4.2)", (
   });
 
   it("draws the row in every box the frame lets through", () => {
-    // The frame only renders a card whose box holds the box a minimum-span card
-    // gets (`frame.ts`'s `minimumRendererBoxHeightPx`), and that floor — the scene
-    // is a `control` widget, so its cell minus the frame's inset — already holds
-    // the row's own budget. The tile therefore needs no sub-budget case: whatever
-    // the frame passes composes without clipping.
+    // The frame only renders a card whose box holds the box a minimum-span card gets,
+    // and that floor already holds the row's own budget.
     for (const rowUnit of [ROW_UNIT_MIN, ROW_UNIT_MAX]) {
       const floor = minimumRendererBoxHeightPx({
         descriptor: WALL_WIDGET_REGISTRY.scene,
@@ -231,11 +213,8 @@ describe("scene tile composes for its space (wall-zones-and-fit D3, D4, 4.2)", (
   });
 
   it("keeps the type's minimum span off the stacked composition", () => {
-    // The scene's own minimum span is the second gate: even where the box affords
-    // the stacked budget, the minimum-span card composes the row, so a box-only
-    // rule could not draw the type's *minimum* composition identically to every
-    // larger span — which the "a card at a larger span MUST NOT repeat the
-    // composition it renders at a smaller span" requirement forbids.
+    // The scene's own minimum span is the second gate: even where the box affords the
+    // stacked budget, a minimum-span card composes the row.
     const largeBox = rendererBoxHeightPx({
       cellHeightPx: cardHeightPx({ rows: SCENE_MIN_SPAN.h + 2, rowUnit: ROW_UNIT_MAX }),
       framed: true,
@@ -259,10 +238,8 @@ describe("scene tile composes for its space (wall-zones-and-fit D3, D4, 4.2)", (
   });
 
   it("keeps the row where the box cannot hold the taller composition", () => {
-    // A two-row cell at the floors gives the renderer 96 px — the row, not the
-    // stacked composition — however wide it is. A wide-but-short cell is
-    // `regular` by area while still only two rows tall, and centring the large
-    // glyph there would clip it.
+    // A two-row cell at the floors gives the renderer 96 px — the row, not the stacked
+    // composition — however wide it is.
     for (const columns of [2, 4, 6]) {
       const box = rendererBoxHeightPx({
         cellHeightPx: cardHeightPx({ rows: 2, rowUnit: ROW_UNIT_MIN }),
@@ -277,11 +254,8 @@ describe("scene tile composes for its space (wall-zones-and-fit D3, D4, 4.2)", (
   });
 
   it("composes differently at a larger span than at its minimum", () => {
-    // specs/wall-display "Span-Aware Card Presentation": a card at a larger span
-    // MUST NOT repeat the composition it renders at a smaller span. The type's
-    // minimum keeps the row at every row unit; a larger span composes the stack
-    // wherever its box affords it — the 3–5 row band and a genuinely large card at
-    // both bounds, and a wider two-row card at the taller one.
+    // A card at a larger span MUST NOT repeat the composition it renders at a smaller
+    // span: the type's minimum keeps the row, a larger span composes the stack.
     const descriptor = WALL_WIDGET_REGISTRY.scene;
     expect(descriptor.min.h).toBe(2);
 
@@ -314,9 +288,8 @@ describe("scene tile composes for its space (wall-zones-and-fit D3, D4, 4.2)", (
       }
     }
 
-    // The crux: on a box that affords the stacked budget the scene's *own minimum
-    // span* is what keeps the minimum card's composition distinct from a larger
-    // card's.
+    // The crux: on a box that affords the stacked budget, the scene's *own minimum
+    // span* is what keeps the minimum card's composition distinct from a larger card's.
     const topBox = rendererBoxHeightPx({
       cellHeightPx: cardHeightPx({ rows: 4, rowUnit: ROW_UNIT_MAX }),
       framed: true,
@@ -333,12 +306,8 @@ describe("scene tile composes for its space (wall-zones-and-fit D3, D4, 4.2)", (
   });
 
   it("composes a composition that fits the box, for every card the frame renders", () => {
-    // Every legal placement, both row-unit bounds, titled and untitled, at the
-    // type's minimum span and above it. A card only reaches the tile when the
-    // frame's guard passes it — its box holds the box a minimum-span card gets
-    // (`frame.ts`'s `minimumRendererBoxHeightPx`); the ones the guard rejects are
-    // the frame's to explain, not the tile's (wall-frame.test.ts). For every card
-    // that does reach it, the composition it resolves fits the box.
+    // Every legal placement, both row-unit bounds, titled and untitled, at the type's
+    // minimum span and above: the composition it resolves fits the box.
     const descriptor = WALL_WIDGET_REGISTRY.scene;
 
     for (const rowUnit of [ROW_UNIT_MIN, ROW_UNIT_MAX]) {
@@ -375,8 +344,7 @@ describe("scene tile composes for its space (wall-zones-and-fit D3, D4, 4.2)", (
     const source = await sceneSource();
 
     // The tile has no explanation path of its own: the frame's guard is the single
-    // place the wall explains a card it cannot render (specs/wall-display
-    // "Panel Fit"), and the guard's floor is above the row's own budget.
+    // place the wall explains a card it cannot render.
     expect(source).not.toContain("WallCardMessage");
     expect(source).not.toContain("WALL_TOO_SMALL_MESSAGE");
     expect(source).not.toContain('layout === "none"');
@@ -399,13 +367,8 @@ describe("scene tile composes for its space (wall-zones-and-fit D3, D4, 4.2)", (
   });
 
   it("audits every wall renderer that reads the area tier", async () => {
-    // The area tier answers "how much room the placement has", not "what fits the
-    // box" — a type whose `min` and `defaults` coincide is `regular` at any
-    // wider-but-short placement. Every widget-layer module that reads the tier must
-    // therefore use it for type scale only (or pass it through to the shared tile);
-    // a composition decision must consume the height-resolved renderer box and its
-    // own budget instead. A new module that reaches for the tier, or that selects a
-    // composition from the light card's form, fails here until it is classified.
+    // The area tier answers "how much room the placement has", not "what fits the box":
+    // every module that reads it must use it for type scale only.
     const TYPE_SCALE_ONLY: Record<string, readonly string[]> = {
       "TemperatureWidget.tsx": ["wallReadoutFontSize(tier)"],
       "LinkWidget.tsx": ["linkLabelFontSize(tier)"],

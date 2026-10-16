@@ -1,19 +1,6 @@
 /**
- * The per-type config form a wall widget exposes in the editor (design.md D13;
- * wall-zones-and-fit D1, D11, D12; specs/wall-display "Wall Configuration
- * Editor"). Every wall widget carries a zone label (the band it groups into) and
- * its own configuration: a room widget picks a room, a typed device widget binds
- * one device its class can drive and carries that card's layout and
- * inactive-controls setting, the temperature widget picks a device, a scene widget
- * picks an automation and a label, a link picks the wall profile it opens, a device
- * grid selects the devices it shows, and the rest take an optional title. The
- * values written here are validated by the type's descriptor schema in `model.ts`
- * before a save, so a blank required field surfaces inline rather than reaching the
- * server.
- *
- * Rebuilt on the Lumen primitive layer (`ui/*`); the text fields use that
- * layer's shared input treatment, and the
- * device grid's selection reuses the Lumen toggle group.
+ * The per-type config form a wall widget exposes in the editor: a zone label plus the
+ * widget's own configuration.
  */
 import { WALL_DEVICE_LAYOUTS, WALL_ZONE_MAX_LENGTH, type WallWidget } from "@ts-ha/shared";
 import { useDataStore } from "../../lib/data-store.js";
@@ -43,9 +30,8 @@ export interface WidgetConfigFieldsProps {
    */
   onZoneChange: (zone: string) => void;
   /**
-   * Sets a link widget's target profile. The target is normalised by the model
-   * (`setLinkTarget`) rather than written as a raw config patch, so the editor
-   * holds one rule for how a profile name is stored.
+   * Sets a link widget's target profile, normalised by the model rather than written
+   * as a raw config patch.
    */
   onLinkTarget: (target: string) => void;
 }
@@ -114,10 +100,7 @@ function TextField({
 }
 
 /**
- * A widget's optional zone label (wall-zones-and-fit D1; specs/wall-display "Wall
- * Zones"): the widgets sharing a label render inside one band. The field is
- * bounded by the shared contract's own limit, and clearing it leaves the widget
- * unzoned.
+ * A widget's optional zone label: the widgets sharing a label render inside one band.
  */
 function ZoneField({ zone, onChange }: { zone: string; onChange: (zone: string) => void }) {
   return (
@@ -147,10 +130,8 @@ function deviceOptions(devices: Iterable<DeviceDescriptor>): SelectOption[] {
 }
 
 /**
- * The card layouts a typed device widget offers (design.md D6; specs/wall-display
- * "A typed device widget is configured"). Built from the shared contract's own
- * list, so the three options the editor shows are exactly the three the schema
- * accepts.
+ * The card layouts a typed device widget offers, built from the shared contract's own
+ * list.
  */
 const LAYOUT_OPTIONS: SelectOption[] = WALL_DEVICE_LAYOUTS.map((layout) => ({
   value: layout,
@@ -158,8 +139,7 @@ const LAYOUT_OPTIONS: SelectOption[] = WALL_DEVICE_LAYOUTS.map((layout) => ({
 }));
 
 /**
- * A labelled on/off field for a widget option (design.md D6) — the card's
- * inactive-controls setting. The switch carries the accessible name.
+ * A labelled on/off field for a widget option — the card's inactive-controls setting.
  */
 function SwitchField({
   label,
@@ -179,10 +159,7 @@ function SwitchField({
 }
 
 /**
- * A device grid's explicit selection (wall-zones-and-fit D12; specs/wall-display
- * "A device grid's devices are selected"): every available device as a touch-
- * sized toggle, so the author's selection is the grid's device set — never an
- * enumeration of the inventory.
+ * A device grid's explicit selection: every available device as a touch-sized toggle.
  */
 function DeviceSelectionField({
   selected,
@@ -232,9 +209,7 @@ export function WidgetConfigFields({
   const text = (key: string): string =>
     typeof widget.config[key] === "string" ? (widget.config[key] as string) : "";
   const zone = typeof widget.zone === "string" ? widget.zone : "";
-  // A typed device card's options (design.md D6): its layout, defaulting to the
-  // card's own natural composition, and whether it hides its controls while the
-  // device is inactive.
+  // A typed device card's options: its layout and its inactive-controls setting.
   const layout =
     typeof widget.config.layout === "string" ? (widget.config.layout as string) : "default";
   const collapsibleControls = widget.config.collapsible_controls === true;
@@ -268,13 +243,7 @@ export function WidgetConfigFields({
       case "number":
       case "select":
       case "entity":
-        // A typed device widget binds one device, and only the devices whose
-        // capabilities can drive the widget's class are offered (design.md D3,
-        // D6; specs/wall-display "A device its class cannot drive is not
-        // offered", "A typed device widget is configured"). The offer rule is the
-        // wall's own resolver, so it is single-sourced with the explanation a
-        // widget draws for a mis-bound device. The card's layout and its
-        // inactive-controls setting ride in the same config.
+        // Only devices whose capabilities can drive the widget's class are offered.
         return (
           <>
             <SelectField

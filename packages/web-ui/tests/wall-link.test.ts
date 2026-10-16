@@ -9,10 +9,8 @@ import { WALL_TITLE_FONT_SIZE, WALL_TYPE_RAMP } from "../src/app/wall/type-ramp.
 import { linkLabel, linkLabelFontSize, linkTarget } from "../src/app/wall/widgets/link-model.js";
 
 /**
- * The wall link widget (wall-zones-and-fit D11; specs/wall-display "Wall
- * Navigation", "Widget Catalog"). The label rules are pure, so they are asserted
- * directly; the affordance's wiring — the route it opens and its touch target —
- * is asserted structurally, since there is no DOM harness.
+ * The wall link widget: the label rules are pure; the affordance's wiring — the route
+ * it opens and its touch target — is asserted structurally.
  */
 const RENDERER = join(import.meta.dir, "..", "src/app/wall/widgets/LinkWidget.tsx");
 
@@ -61,10 +59,8 @@ describe("linkLabel", () => {
 
 describe("linkLabelFontSize", () => {
   it("sets a compact link's label at the ported primary size", () => {
-    // A link's label is supporting text, so its minimum-span composition draws it at
-    // the ported card system's own primary size rather than the wall's retired label
-    // tier (design.md W1, W2; specs/wall-display "Supporting text is drawn at the
-    // ported sizes").
+    // A link's label is supporting text, so its minimum-span composition draws it at the
+    // ported card system's own primary size rather than the wall's retired label tier.
     expect(linkLabelFontSize("compact")).toBe(WALL_CARD_PRIMARY_FONT_SIZE);
     expect(WALL_CARD_PRIMARY_FONT_SIZE).toBe(`${WALL_CARD_METRICS.primarySize}px`);
   });
@@ -125,8 +121,7 @@ describe("the link renderer", () => {
 
     expect(source).toContain("wallPath(basePath, target)");
     expect(source).toContain('from "../../lib/router-context.js"');
-    // The route affordance is the vocabulary's own part, which draws the shared
-    // router's link (design.md W1) — the widget composes it, never a bare anchor.
+    // The route affordance is the vocabulary's own part, not a bare anchor.
     expect(source).toContain("<WallCardRoute");
     expect(source).not.toContain("window.location");
   });
@@ -134,9 +129,8 @@ describe("the link renderer", () => {
   it("renders a touch-sized affordance that needs no hover", async () => {
     const source = await rendererSource();
 
-    // The ported control treatment is the wall's touch target in both directions and
-    // is declared once, in the vocabulary (asserted by `wall-card-anatomy.test.ts`):
-    // the route draws the ported control height and radius, never a pill of its own.
+    // The ported control treatment is the wall's touch target in both directions and is
+    // declared once, in the vocabulary.
     expect(source).toContain("<WallCardRoute");
     expect(WALL_CARD_METRICS.controlHeight).toBeGreaterThanOrEqual(42);
     expect(source).not.toContain("onMouseEnter");

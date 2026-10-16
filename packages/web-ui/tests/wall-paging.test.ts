@@ -36,11 +36,8 @@ import {
 } from "../src/app/wall/span.js";
 
 /**
- * Wall pagination (wall-zones-and-fit D5, D12; specs/wall-display "Panel Fit").
- * A widget whose own content cannot fit its span pages rather than overflowing or
- * scrolling, so no wall widget scrolls. The page plan is pure, so it is asserted
- * directly; the widgets' wiring is asserted structurally — the same style as
- * `wall-read-only.test.ts` — because there is no DOM harness.
+ * Wall pagination: a widget whose content cannot fit its span pages rather than
+ * scrolling. The page plan is pure; the widgets' wiring is asserted structurally.
  */
 const APP_DIR = join(import.meta.dir, "..", "src/app");
 
@@ -229,7 +226,7 @@ describe("resolvePagedTiles", () => {
 
   it("holds one tile per tile cell at the type's minimum span", () => {
     // A three-column favorites card holds a single tile across — the tile is the
-    // device card's own minimum span (wall-zones-and-fit D4, D12).
+    // device card's own minimum span.
     const plan = resolvePagedTiles({
       items: items(6),
       span: FAVORITES_MIN,
@@ -270,10 +267,8 @@ describe("the paged tiles compose for the box the grid hands them", () => {
     for (const path of [ROOM, FAVORITES, DEVICES]) {
       const widget = await source(path);
 
-      // A paged tile is handed the tile's own cell — the page plan's row height
-      // and the tile's cell width at the resolved row unit — so the same device
-      // composes for the box it is actually drawn in rather than for the widget
-      // around it (design.md D2, D9; specs/wall-display "Paged Tile Sizing").
+      // A paged tile is handed the tile's own cell — the plan's row height and the
+      // tile's cell width — so it composes for the box it is drawn in.
       expect(widget, path).toContain("WallDeviceCard");
       expect(widget, path).toContain("wallTileCardBox(rowUnit, box.heightPx)");
       expect(widget, path).not.toContain("tier={tier}");
@@ -282,9 +277,8 @@ describe("the paged tiles compose for the box the grid hands them", () => {
   });
 
   it("composes the ported compact card for a paged tile at any legal row unit", () => {
-    // The plan bounds a tile row at 1.25× the tile's own cell, and the tile's cell
-    // at the floors is exactly the ported card's compact budget — so a paged tile
-    // composes the compact card, never a richer form the row cannot hold.
+    // The plan bounds a tile row at 1.25× the tile's cell, and the cell at the floors
+    // is exactly the compact budget — so a paged tile always composes the compact card.
     const short = resolvePages({
       span: WALL_WIDGET_REGISTRY.devices.min,
       count: 1,
@@ -308,14 +302,8 @@ describe("the paged tiles compose for the box the grid hands them", () => {
   });
 
   it("composes a lighter form in a short host-tile box than the same card in a tall box", () => {
-    // The SAME card, given the box a paging host hands its tile — the plan's row
-    // height, bounded at 1.25× the tile's own cell — and the box a placed widget
-    // hands its renderer at a taller span. The host-tile box is bounded by the
-    // 1.25× cap, so a tile always composes the card's smallest form; a placed box
-    // admits a richer one, so the box a card is handed — not the widget around it
-    // — is what decides its composition (design.md D9; specs/wall-display "Paged
-    // Tile Sizing", "Span-Aware Card Presentation"). This is the box comparison,
-    // never an assertion that a host tile composes a richer form: it cannot.
+    // The same card in the box a paging host hands its tile versus the box a placed
+    // widget gets: the box, not the widget, decides the composition.
     const widthPx = WALL_TILE_CELL_COLUMNS * ROW_UNIT_MIN;
     const hostTilePx = resolvePages({
       span: WALL_WIDGET_REGISTRY.devices.min,
@@ -351,11 +339,8 @@ describe("the paged tiles compose for the box the grid hands them", () => {
 
 describe("the bounded row leaves the page count alone", () => {
   it("still reports five pages for the harness's five-device room card", () => {
-    // The bound acts on the resolved row height alone: the pitch the rows are
-    // packed by — and so the rows packed, the tiles a page holds, and the page
-    // count — is unchanged by the bound itself (design.md D4; specs/wall-display
-    // "Paged Tile Sizing"). The harness stage renders a 1920×1080 panel: the row
-    // unit's ceiling, a 21.6 px gutter, and the room card's three header rows.
+    // The bound acts on the resolved row height alone; the pitch, the rows packed,
+    // and the page count are unchanged. The harness stage renders a 1920×1080 panel.
     const paged = resolvePagedTiles({
       items: Array.from({ length: 5 }, (_, index) => `device.${index}`),
       span: { w: 4, h: 6 },
@@ -401,11 +386,8 @@ describe("the room grid", () => {
   it("draws the command's outcome over the card so it cannot eat a tile row", async () => {
     const widget = await source(ROOM);
 
-    // The card's chrome — the glyph, the count, the command row — is what the page
-    // plan reserves. The command's own outcome is *not* part of it: it is drawn
-    // over the card's foot, so reporting a command on a minimum-span room card
-    // cannot push a tile row under the compact budget, and cannot reflow (and so
-    // re-page) the tiles that command just actuated.
+    // The card's chrome is what the page plan reserves; the command's outcome is
+    // drawn over the card's foot so it cannot push a tile row under the budget.
     expect(widget).toContain("reservedRows={ROOM_HEADER_ROWS}");
     expect(widget).toContain('position: "relative"');
     expect(widget).toContain('role="alert"');
@@ -423,10 +405,8 @@ describe("the room grid", () => {
 
 describe("the wall's paging chrome", () => {
   it("gives every paged tile the minimum-span tile's tier and form", () => {
-    // The page plan models every tile as the device card at its minimum span
-    // (`WALL_TILE_CELL_COLUMNS` columns by `WALL_TILE_CELL_ROWS` rows), so that
-    // cell's tier and form are what a paged tile must compose — derived, not
-    // assumed, from the registry and the cell height.
+    // The page plan models every tile as the device card at its minimum span, so
+    // that cell's tier and form are what a paged tile must compose.
     const cell = { w: WALL_TILE_CELL_COLUMNS, h: WALL_TILE_CELL_ROWS };
     const descriptor = WALL_WIDGET_REGISTRY.light;
 
@@ -439,9 +419,7 @@ describe("the wall's paging chrome", () => {
 
   it("tells the plan when the card carries a title", async () => {
     // The frame draws a configured title inside the card's own cell, so every grid
-    // that pages through the shared layer reports it — otherwise a titled card's
-    // tile rows would be squeezed under the compact budget the minimum spans are
-    // derived against (wall-zones-and-fit D3, D4).
+    // that pages through the shared layer reports it to the plan.
     for (const path of [ROOM, FAVORITES, DEVICES]) {
       const widget = await source(path);
       expect(widget, path).toContain("titled={widgetTitle(widget) !== null}");
@@ -465,19 +443,16 @@ describe("the wall's paging chrome", () => {
     const paged = await source(join(WIDGETS, "PagedTileGrid.tsx"));
     const anatomy = await source(join(APP_DIR, "wall/cards/card-anatomy.tsx"));
 
-    // The chrome's controls are the vocabulary's own parts (design.md W1; specs/
-    // wall-display "A control is the ported control"): the ported control height and
-    // radius, declared once in the anatomy, with the page caption on the vocabulary's
-    // primary line — so the chrome declares no treatment of its own.
+    // The chrome's controls are the vocabulary's own parts: the ported control height
+    // and radius, declared once in the anatomy.
     expect(paged).toContain("<WallCardIconButton");
     expect(paged).toContain("<WallCardLabel>");
     expect(anatomy).toContain("width: WALL_CARD_METRICS.controlHeight");
     expect(anatomy).toContain("borderRadius: WALL_CARD_METRICS.controlRadius");
     expect(WALL_CARD_METRICS.controlHeight).toBe(WALL_MIN_TOUCH_TARGET);
 
-    // The treatment is not a plan input: the page count is the plan's — the content,
-    // the span, the row unit and the reserved rows alone (specs/wall-display "Paged
-    // Tile Sizing") — so the chrome moving onto the ported control cannot move it.
+    // The treatment is not a plan input: the page count is the content, the span, the
+    // row unit, and the reserved rows alone.
     const items = Array.from({ length: 40 }, (_, index) => `device.${index}`);
     const plan = resolvePagedTiles({
       items,
@@ -492,11 +467,8 @@ describe("the wall's paging chrome", () => {
 
 describe("the paged types' minimum spans", () => {
   it("reserves the frame inset in every plan, paging or not", () => {
-    // The frame always pads, so both plans hold its inset back — a widget that
-    // fits one page must not claim the frame's own room for its tiles. The inset is
-    // the ported card surface's own padding, read from the card table rather than
-    // restated, so the frame's reservation and the card it frames cannot drift
-    // (design.md W3).
+    // The frame always pads, so both plans hold its inset back. The inset is the ported
+    // card surface's padding, read from the card table rather than restated.
     expect(WALL_FRAME_INSET_PX).toBe(WALL_CARD_METRICS.padding);
     expect(WALL_FRAME_RESERVED_PX).toBe(2 * WALL_CARD_METRICS.padding);
 
@@ -517,10 +489,8 @@ describe("the paged types' minimum spans", () => {
   });
 
   it("promises no tile row shorter than the tile's own cell", () => {
-    // The pitch is the tile's own cell, so even the row a *minimum-span* paged
-    // card presents is at least as tall as the compact card it holds — the value
-    // row inside it keeps the wall's touch target. Asserted for the non-paging
-    // plan, the paging plan and the shared paged contract.
+    // The pitch is the tile's own cell, so even a minimum-span paged card's row is at
+    // least as tall as the compact card it holds.
     const floors = (rows: number): number => rows * ROW_UNIT_MIN + (rows - 1) * WALL_GUTTER_MIN_PX;
 
     for (const [type, headerRows] of [
@@ -568,10 +538,8 @@ describe("the paged types' minimum spans", () => {
   });
 
   it("models the same gutter the wall draws, so the plan and the draw agree", () => {
-    // The wall draws `clamp(16px, 2vmin, 24px)`; the plan cannot see the viewport,
-    // so it models the *floor* — the smallest cell the wall can draw — exactly as
-    // `span.ts`'s card geometry does. Modelling the ceiling would promise a row the
-    // drawn cell cannot hold.
+    // The wall draws `clamp(16px, 2vmin, 24px)`; the plan cannot see the viewport, so
+    // it models the *floor* — the smallest cell the wall can draw.
     const span = { w: 6, h: 6 };
     const input = { span, count: 40, rowUnit: ROW_UNIT_MIN };
     const floored = resolvePages({ ...input, gutterPx: WALL_GUTTER_MIN_PX });
@@ -583,14 +551,8 @@ describe("the paged types' minimum spans", () => {
   });
 
   it("promises a row the *drawn* cell holds on any viewport, titled or not", () => {
-    // Both halves of the guarantee share one geometry: whatever gutter the viewport
-    // resolves, the drawn tile area is at least the modelled one, so the plan's row
-    // height is a lower bound for the row the wall actually draws — and that row
-    // holds the compact card (wall-zones-and-fit D5; specs/wall-display "A
-    // selection too large pages rather than scrolls"). A configured title is part of
-    // that geometry: the frame draws it out of the same cell, so the plan reserves
-    // it and the drawn box loses it — the one reservation the drawn row would
-    // otherwise be short by exactly `WALL_TITLE_BLOCK_PX`.
+    // Whatever gutter the viewport resolves, the drawn tile area is at least the
+    // modelled one, so the plan's row height is a lower bound for the drawn row.
     const gapPx = WALL_TILE_GAP_PX;
     const extent = (rows: number, unit: number, gutterPx: number): number =>
       rows * unit + (rows - 1) * gutterPx;
@@ -632,10 +594,8 @@ describe("the paged types' minimum spans", () => {
   });
 
   it("reserves the frame's title, so a titled plan stays above the compact budget", () => {
-    // The title is drawn inside the widget's cell, so a titled plan packs one row
-    // less. It is the same allowance `span.ts` gives the type's minimum span and the
-    // editor gives a titled widget's height floor — one row of the wall's shortest
-    // cell — so the page math and the editor cannot drift.
+    // The title is drawn inside the widget's cell, so a titled plan packs one row less
+    // — the same allowance `span.ts` and the editor give a titled widget.
     expect(WALL_FRAME_TITLE_ROWS).toBe(WALL_TITLE_ROWS);
     expect(WALL_FRAME_TITLE_ROWS * ROW_UNIT_MIN).toBeGreaterThanOrEqual(WALL_TITLE_BLOCK_PX);
 

@@ -1,13 +1,6 @@
 /**
- * The operator log view — level and free-text (message + automation) filtering,
- * appending new entries live without discarding an active filter (design.md
- * D12; specs/web-ui "Operator Views"; task 6.2).
- *
- * Filtering itself is the pure `log-filter.ts` module — this component only
- * wires filter state to it and renders the result, so a newly streamed entry is
- * filtered the same way an existing one is and the active filter stays applied.
- *
- * Rebuilt on the Lumen primitive layer (`ui/*`) and `lucide-react`.
+ * The operator log view: level and free-text filtering, appending new entries
+ * live without discarding an active filter.
  */
 import { ChevronRight, ScrollText } from "lucide-react";
 import { useMemo, useState } from "react";

@@ -1,24 +1,6 @@
 /**
- * The wall climate card (design.md D1, D3, D6; specs/wall-display "Widget Catalog"
- * — "a climate"; "Wall Device Presentation" — "A card presents the ported
- * anatomy", "A value device keeps its embedded control").
- *
- * The card composes the ported anatomy in order: the leading circular icon
- * affordance, the device's name over its temperature reading, and one actions row
- * carrying the setpoint as a slider with the thermostat's mode beside it, drawn by
- * the shared {@link WallCardEnumControl} as touch-sized options where they fit the
- * box or as one single affordance where they do not. A control the device does not
- * declare is never rendered — the setpoint and the mode are each offered only for
- * a writable capability the device reports — so a thermostat that only reports its
- * temperature presents a reading and no inert control.
- *
- * Every control actuates through the shared optimistic channel, so a setpoint or
- * a mode change is reflected immediately, reconciled against reported state, and
- * reverted with the failure surfaced inline.
- *
- * The pure decisions — which controls are declared, the setpoint's bounds, the
- * mode options, whether the thermostat is running, and what the reading says — are
- * exported so they are reachable by `bun test`. Wall-chunk only (design.md D10).
+ * The wall climate card: a leading icon, the device's name over its temperature
+ * reading, and a slider for the setpoint with the mode beside it.
  */
 import type { Capability, CapabilityRange } from "@ts-ha/shared";
 import { Thermometer } from "lucide-react";
@@ -48,9 +30,7 @@ import type { WallDeviceCardProps } from "./types.js";
 
 /**
  * The setpoint property names a climate declares, mirroring the wall's own class
- * resolver and the capability ranking (`device-class.ts`,
- * `lib/capability-ranking.ts`): a climate announces itself by its `kind` too, and
- * this catches a source that exposes a setpoint without a climate container.
+ * resolver and capability ranking.
  */
 const SETPOINT_PROPERTIES: ReadonlySet<string> = new Set([
   "occupied_heating_setpoint",
@@ -69,7 +49,7 @@ const TEMPERATURE_PROPERTIES: ReadonlySet<string> = new Set([
   "temperature",
 ]);
 
-/** A climate card's resolved model (design.md D3): its setpoint, mode, and reading. */
+/** A climate card's resolved model: its setpoint, mode, and reading. */
 export interface WallClimateCardModel {
   /** The writable bounded setpoint the slider drives, or `undefined`. */
   setpoint: FlatCapability | undefined;
@@ -82,10 +62,8 @@ export interface WallClimateCardModel {
 }
 
 /**
- * Resolves a climate's model (design.md D3; specs/wall-display "Widget Catalog").
- * The setpoint is offered for a writable numeric the device declares as a setpoint
- * or exposes beneath a climate container, and the mode for a writable enum with
- * permitted values, so an undeclared control is never rendered inert.
+ * Resolves a climate's model: the setpoint and mode for a writable capability the
+ * device declares, so an undeclared control is never rendered inert.
  */
 export function climateCardModel(capabilities: Capability[]): WallClimateCardModel {
   const flat = flattenCapabilities(capabilities);
@@ -125,9 +103,8 @@ export function climateSetpointRange(setpoint: FlatCapability): CapabilityRange 
 }
 
 /**
- * Whether a thermostat is running: a climate whose declared mode reads as "off"
- * is inactive, so `collapsible_controls` hides its controls; a climate that
- * declares no mode has no inactive state and is always running.
+ * Whether a thermostat is running: a declared mode reading as "off" is inactive; a
+ * climate with no mode is always running.
  */
 export function climateCardActive(modeValue: unknown): boolean {
   if (typeof modeValue !== "string") return true;
@@ -135,10 +112,8 @@ export function climateCardActive(modeValue: unknown): boolean {
 }
 
 /**
- * The card's reading: the measured temperature with its unit where the device
- * reports one, else the setpoint with its unit, else an em dash. The value and
- * unit stay one non-breaking unit (specs/wall-display "A value stays with its
- * unit").
+ * The card's reading: the measured temperature with its unit, else the setpoint with
+ * its unit, else an em dash.
  */
 export function climateCardReading(input: {
   readout: FlatCapability | undefined;
@@ -154,8 +129,7 @@ export function ClimateCard({ device, config, box, contained }: WallDeviceCardPr
   const range = model.setpoint ? climateSetpointRange(model.setpoint) : undefined;
   const disabled = !device.reachable;
 
-  // One optimistic channel per property, called unconditionally with an absent
-  // property when the device declares none, so hook order is stable (design.md D12).
+  // One optimistic channel per property, called unconditionally so hook order is stable.
   const setpointControl = useOptimisticDeviceProperty(
     device.qualifiedId,
     model.setpoint?.property ?? "",

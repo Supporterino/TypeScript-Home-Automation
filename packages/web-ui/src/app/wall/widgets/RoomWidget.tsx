@@ -1,27 +1,6 @@
 /**
- * The wall room widget (design.md D11, D13; wall-zones-and-fit D5;
- * specs/wall-display "Widget Catalog", "A room widget commands the room", "Panel
- * Fit"). Shows a configured room's devices as their own class's ported card, plus
- * room-wide all-on/all-off controls.
- *
- * The batch command reuses the same flow as `RoomView`: capable members are
- * grouped by the on/off property family they declare, every actuatable member
- * is reflected optimistically through the store-level override layer, then
- * the per-member responses are merged and classified — applied is left to the
- * stream or the deadline, failed reverts and is surfaced, skipped is reported
- * separately. Report-only members are never commanded.
- *
- * Composed on the wall's single card vocabulary (design.md W1, W2): the ported
- * room affordance with the room's name as the widget's head, the member count
- * beside its label at the ported secondary size — the caption size every widget's
- * supporting figure takes — and the room-wide all-on/all-off commands as ported
- * controls in the vocabulary's actions row, spaced by the ported control spacing.
- * A control widget: the frame draws the surface, so each contained card draws none
- * of its own (specs/wall-display "A card is a single surface").
- *
- * A room larger than the card can show pages its tiles through the wall's shared
- * pagination layer — one page at a time with touch page controls — rather than
- * scrolling its tile area, so the wall never scrolls (wall-zones-and-fit D5).
+ * The wall room widget: shows a configured room's devices as their own class's card,
+ * plus room-wide all-on/all-off controls.
  */
 import { House, Info, Power } from "lucide-react";
 import { useState } from "react";
@@ -51,13 +30,8 @@ import { PagedTileGrid } from "./PagedTileGrid.js";
 import { actuatableRoomMembers, roomTiles } from "./room-model.js";
 
 /**
- * The grid rows the card's own chrome — the room glyph with its name, the member
- * count, and the room-wide command row — consumes above the tiles at the resolved
- * row unit. The page plan reserves it, so a page never promises a tile row the
- * card cannot show. The command's outcome is deliberately *not* part of it: the
- * error and the skipped count are drawn over the card's foot, so reporting a
- * command neither eats a tile row on a card at its minimum span nor reflows (and
- * so re-pages) the tiles that command just actuated.
+ * The grid rows the card's own chrome consumes above the tiles at the resolved row
+ * unit. The command's outcome is drawn over the card's foot, not in the column.
  */
 const ROOM_HEADER_ROWS = 3;
 
@@ -191,11 +165,7 @@ export function RoomWidget({ widget, contained, rowUnit }: WallWidgetProps) {
           keyOf={(tile) => tile.qualifiedId}
           renderTile={(tile, box) =>
             tile.device ? (
-              // A paged tile composes for the box the grid drew it in: the page
-              // plan's row height, which is the tile's own cell bounded against
-              // inflation (design.md D2, D9; specs/wall-display "Paged Tile
-              // Sizing"). Its composition is resolved from that box, so the same
-              // device composes differently in a short room card and a tall one.
+              // The tile composes for the box the grid drew it in.
               <WallDeviceCard
                 device={tile.device}
                 contained={contained}
@@ -213,13 +183,7 @@ export function RoomWidget({ widget, contained, rowUnit }: WallWidgetProps) {
         />
       )}
 
-      {/* The command's outcome is drawn *over* the card's foot rather than in its
-          column, so the card's own layout height — the geometry the page plan
-          reserved for its header and its tile rows — does not change when a
-          command reports. A failure must not reflow, and so re-page, the very
-          tiles it just commanded (wall-zones-and-fit D5; specs/wall-display
-          "Panel Fit"). The notices are informational, so they take no pointer
-          events: the tile row under them stays fully operable by touch. */}
+      {/* The command's outcome is drawn over the card's foot, not in its column. */}
       {hasNotice && (
         <div
           style={{

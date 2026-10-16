@@ -6,12 +6,8 @@ import { resolveBands } from "../src/app/wall/bands.js";
 import { wallBandChrome } from "../src/app/wall/frame.js";
 
 /**
- * The wall's zone band layer (wall-zones-and-fit D2; specs/wall-display "Wall
- * Zones", "Panel Fit"). There is no DOM harness here, so the band layer and the
- * unfittable-composition explanation are asserted structurally against
- * `WallGrid.tsx` — the same style as `wall-read-only.test.ts` — while the pure
- * decisions (which bands resolve, whether a composition fits) are covered by
- * `wall-bands.test.ts` and `wall-grid.test.ts`.
+ * The wall's zone band layer: the band layer and the unfittable-composition
+ * explanation asserted structurally against `WallGrid.tsx`.
  */
 const WALL_GRID = join(import.meta.dir, "..", "src/app/wall/WallGrid.tsx");
 const WIDGET_FRAME = join(import.meta.dir, "..", "src/app/wall/WidgetFrame.tsx");
@@ -26,10 +22,7 @@ async function gridSource(): Promise<string> {
 }
 
 /**
- * The source of one top-level function, so its style object can be asserted on its
- * own — the pattern that made the band's missing radius invisible is a spread of a
- * token-named chrome object, and the assertion has to see the mapping the consumer
- * writes.
+ * The source of one top-level function, so its style object can be asserted on its own.
  */
 function functionSource(source: string, name: string): string {
   const start = source.indexOf(`function ${name}(`);
@@ -76,10 +69,8 @@ describe("the band layer", () => {
     const grid = await gridSource();
     const style = functionSource(grid, "bandStyle");
 
-    // `wallBandChrome` describes the band's surface with token names; `radius` is
-    // not a CSS property, so spreading the chrome would drop it and the band would
-    // render square. The band maps it to a real property, exactly as `WidgetFrame`
-    // maps the frame's chrome (wall-zones-and-fit D2).
+    // `wallBandChrome` describes the band's surface with token names; `radius` is not a CSS
+    // property, so spreading the chrome would drop it and the band would render square.
     expect(style).toContain("background: chrome.background");
     expect(style).toContain("borderRadius: chrome.radius");
     expect(style).not.toContain("...wallBandChrome()");
@@ -97,9 +88,8 @@ describe("the band layer", () => {
     const style = functionSource(grid, "bandStyle");
     const chrome = wallBandChrome();
 
-    // A band and the card standing on it are the same surface: the band maps the
-    // chrome's own radius and padding, and neither is a literal or Hearth's own
-    // radius/spacing scale (design.md W3; specs/wall-display "Wall Zones").
+    // A band and the card standing on it are the same surface: the band maps the chrome's
+    // own radius and padding, neither a literal nor Hearth's own scale.
     expect(style).toContain("padding: chrome.padding");
     expect(style).not.toContain("--hearth-space-4");
     expect(style).not.toContain("--hearth-radius-md");
@@ -121,11 +111,8 @@ describe("the band layer", () => {
     const source = await gridSource();
     const caption = declarationSource(source, "BAND_CAPTION_STYLE");
 
-    // The caption is the wall's chrome, and a container label rather than a
-    // readout: it keeps the wall's label tier and its own quiet colour and adopts
-    // the ported family/weight/tracking — never a card role's semantics and never
-    // the retired vocabulary's uppercase treatment (design.md W4; specs/wall-
-    // display "Wall Zones").
+    // The caption is the wall's chrome, and a container label rather than a readout: it keeps
+    // the wall's label tier and quiet colour and adopts the ported family/weight/tracking.
     expect(caption).toContain("...wallChromeTextStyle()");
     expect(caption).toContain("fontSize: WALL_LABEL_FONT_SIZE");
     expect(caption).toContain("--hearth-text-muted");
@@ -156,11 +143,8 @@ describe("the unfittable-composition explanation", () => {
     const source = await gridSource();
     const heading = declarationSource(source, "TOO_LARGE_HEADING_STYLE");
 
-    // The panel's own explanation is the wall's chrome: its route is the same
-    // ported route affordance the wall's links and the back link draw, and its
-    // heading keeps the wall's title tier with the ported family/weight/tracking
-    // (design.md W4; specs/wall-display "Panel Fit"). No link the panel declares
-    // for itself, and no Lumen `text-info` treatment.
+    // The panel's own explanation is the wall's chrome: its route is the same ported route
+    // affordance the links draw, and its heading keeps the wall's title tier.
     expect(source).toContain("<WallCardRoute to={wallsPath(basePath)}");
     expect(source).toContain("WallCardRoute");
     expect(source).not.toContain("TOO_LARGE_ROUTE_STYLE");

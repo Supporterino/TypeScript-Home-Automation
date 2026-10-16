@@ -26,18 +26,15 @@ import {
 } from "../src/app/wall/span.js";
 
 /**
- * The form a card composes in a cell of `rows` rows. A typed device widget's
- * frame is chrome-less, so its card's box *is* the cell: the render path resolves
- * the form from the renderer's box (`frame.ts`'s `rendererBoxHeightPx`), which for
- * that type is the cell height.
+ * The form a card composes in a cell of `rows` rows. A typed device widget's frame is
+ * chrome-less, so its card's box *is* the cell.
  */
 function formForCell(input: { rows: number; rowUnit: number; gutterPx?: number }): WallCardForm {
   return resolveCardFormForHeight(cardHeightPx(input));
 }
 
-// Pure tier selection — no DOM (design.md D2, D3; specs/wall-display
-// "Span-Aware Card Presentation"). A card composes itself for its declared span,
-// so the tier is derived from the type's own registry spans.
+// Pure tier selection — no DOM. A card composes itself for its declared span, so the
+// tier is derived from the type's own registry spans.
 
 /** The `clock` type's spans: min area 6, default area 18, max area 32. */
 const CLOCK: WallSpanDescriptor = {
@@ -115,9 +112,8 @@ describe("resolveSpanTier", () => {
 
 describe("WALL_FULL_CARD_HEIGHT_PX", () => {
   it("is the ported card's own full-content budget, read from the card module", () => {
-    // The compact card is its state item and one control row; the full form adds a
-    // second control row. Both budgets are the cards' own, so the wall's form
-    // boundary and the cards it ports cannot drift (design.md D2, D5).
+    // The compact card is its state item and one control row; the full form adds a second
+    // control row. Both budgets are the cards' own.
     expect(WALL_FULL_CARD_HEIGHT_PX).toBe(WALL_CARD_FULL_HEIGHT_PX);
     expect(WALL_FULL_CARD_HEIGHT_PX).toBeGreaterThan(WALL_COMPACT_CARD_HEIGHT_PX);
     expect(Number.isInteger(WALL_FULL_CARD_HEIGHT_PX)).toBe(true);
@@ -126,8 +122,7 @@ describe("WALL_FULL_CARD_HEIGHT_PX", () => {
 
 describe("resolveCardFormForHeight", () => {
   it("takes the full form at its threshold and the compact form below", () => {
-    // The ported card's full-content budget is the boundary; everything shorter —
-    // including the compact budget a minimum-span cell guarantees — composes
+    // The ported card's full-content budget is the boundary; everything shorter composes
     // compact, so a card never overflows the box it was given.
     expect(resolveCardFormForHeight(WALL_FULL_CARD_HEIGHT_PX)).toBe("full");
     expect(resolveCardFormForHeight(WALL_FULL_CARD_HEIGHT_PX - 1)).toBe("compact");
@@ -193,9 +188,8 @@ describe("resolveCardFormForHeight over the cell geometry", () => {
 describe("composesMinimumSpan", () => {
   const descriptor = WALL_WIDGET_REGISTRY.favorites;
 
-  // The favorites type is a `control` widget, so its frame draws a surface —
-  // `framed: true` here is the real geometry. The frame's inset cancels on both
-  // sides of the comparison, so the rule answers the same for a chrome-less frame.
+  // The favorites type is a `control` widget, so its frame draws a surface — `framed: true`
+  // here is the real geometry.
   function box(placement: WallWidgetSpan, rowUnit: number, titled = false): number {
     return rendererBoxHeightPx({
       cellHeightPx: cardHeightPx({ rows: placement.h, rowUnit }),
@@ -223,26 +217,22 @@ describe("composesMinimumSpan", () => {
   });
 
   it("rejects a legacy placement below a re-derived minimum", () => {
-    // A profile authored before a minimum was raised — or written through the API —
-    // can still carry a shorter cell; the wall explains it rather than clipping it
-    // (specs/wall-display "Panel Fit": overflow becomes an explanation).
+    // A profile authored before a minimum was raised — or written through the API — can
+    // still carry a shorter cell; the wall explains it rather than clipping it.
     expect(composes({ w: descriptor.min.w, h: descriptor.min.h - 1 }, ROW_UNIT_MIN)).toBe(false);
   });
 
   it("rejects a placement narrower than the type's minimum", () => {
-    // Width matters as much as height: a cell one column narrow reflows the
-    // card's control or tile row — a page-control row that wraps loses a whole
-    // touch-target row — so a sub-minimum width is explained too.
+    // Width matters as much as height: a cell one column narrow reflows the card's control
+    // or tile row, so a sub-minimum width is explained too.
     const legacy = { w: descriptor.min.w - 1, h: descriptor.min.h };
     expect(composes(legacy, ROW_UNIT_MIN)).toBe(false);
     expect(legacy.h).toBe(descriptor.min.h);
   });
 
   it("explains a titled card at the type's minimum span, and renders it one row taller", () => {
-    // The title is drawn above the renderer inside the *same* cell, so the cell
-    // must be taller than the type's minimum by the title block before the card
-    // can render what that minimum guarantees — otherwise the frame's overflow
-    // would take the card's bottom row.
+    // The title is drawn above the renderer inside the *same* cell, so the cell must be
+    // taller than the type's minimum by the title block.
     const atMinimum = { w: descriptor.min.w, h: descriptor.min.h };
     expect(composes(atMinimum, ROW_UNIT_MIN, true)).toBe(false);
     expect(composes({ w: atMinimum.w, h: atMinimum.h + WALL_TITLE_ROWS }, ROW_UNIT_MIN, true)).toBe(
@@ -257,9 +247,8 @@ describe("composesMinimumSpan", () => {
   });
 
   it("accepts every untitled legal placement of every type on both axes", () => {
-    // The rule can only ever explain a placement the editor would not author (or a
-    // titled card's cell, which the editor's floor now raises): each type's own
-    // minimum, default, and maximum all compose.
+    // The rule can only ever explain a placement the editor would not author: each type's
+    // own minimum, default, and maximum all compose.
     for (const [type, entry] of Object.entries(WALL_WIDGET_REGISTRY)) {
       for (const rowUnit of [ROW_UNIT_MIN, ROW_UNIT_MAX]) {
         for (const placement of [entry.min, entry.defaults, entry.max]) {
@@ -304,19 +293,15 @@ describe("WALL_TITLE_ROWS", () => {
   });
 
   it("stays one row when the frame's inset is re-derived from the ported padding", () => {
-    // The row floor reads the title block and the row unit — the ported card's own
-    // compact budget — and never the frame's inset, so the inset's re-derivation
-    // (design.md W3) leaves the editor's span floors where they were: 1 row.
+    // The row floor reads the title block and the row unit — the ported card's own compact
+    // budget — and never the frame's inset.
     expect(WALL_TITLE_ROWS).toBe(1);
     expect(WALL_TITLE_BLOCK_PX).toBeLessThanOrEqual(ROW_UNIT_MIN * WALL_TITLE_ROWS);
   });
 
   it("is the row form of the render guard, at every type and row unit", () => {
-    // The editor floors a titled widget at `min.h + WALL_TITLE_ROWS`; the wall
-    // explains a titled card whose box is below the box a minimum-span card gets.
-    // They agree exactly — a titled card one row above the minimum always renders,
-    // and one at the minimum never does — so the editor can neither admit a
-    // placement the wall explains nor refuse one it renders.
+    // The editor floors a titled widget at `min.h + WALL_TITLE_ROWS`; the wall explains a
+    // titled card whose box is below the box a minimum-span card gets.
     for (const [type, entry] of Object.entries(WALL_WIDGET_REGISTRY)) {
       const boxOf = (rows: number, rowUnit: number, titled: boolean): number =>
         rendererBoxHeightPx({

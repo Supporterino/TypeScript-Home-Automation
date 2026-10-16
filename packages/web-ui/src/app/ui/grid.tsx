@@ -51,7 +51,7 @@ export interface GridProps extends ComponentPropsWithoutRef<"div"> {
   gap?: RhythmGap;
 }
 
-/** A responsive CSS grid on the spacing rhythm (design.md D5). */
+/** A responsive CSS grid on the spacing rhythm. */
 export function Grid({ className, columns = 1, md, lg, gap = 3, ...props }: GridProps) {
   return (
     <div

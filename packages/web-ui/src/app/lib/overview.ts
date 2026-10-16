@@ -1,11 +1,6 @@
 /**
- * Overview summary derivation (design.md D4; specs/web-ui "Overview
- * Landing").
- *
- * Recomputed from the live device descriptors the store already holds, in
- * the client, so a streamed `device_state`/`device_reachability` event
- * updates the summary without a manual refresh. Pure and DOM-free, so it is
- * reachable by `bun test`.
+ * Overview summary derivation, recomputed from the live device descriptors the
+ * store already holds.
  */
 
 import { readBooleanCapabilityValue } from "@ts-ha/shared";

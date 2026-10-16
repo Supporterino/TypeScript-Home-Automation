@@ -24,9 +24,8 @@ import {
   WALL_TITLE_ROWS,
 } from "../src/app/wall/span.js";
 
-// Pure frame decisions — no DOM. The ambient/control grammar and the opt-in
-// title rule are the whole frame's behaviour (design.md D2, D3; specs/wall-
-// display "Wall Glanceability").
+// Pure frame decisions — no DOM. The ambient/control grammar and the opt-in title
+// rule are the whole frame's behaviour.
 
 const APP_DIR = join(import.meta.dir, "..", "src/app");
 
@@ -41,8 +40,7 @@ async function source(relative: string): Promise<string> {
 
 /**
  * A Lumen design token — a Tailwind class or a `var(--…)` outside the Hearth
- * namespace. The wall's own chrome and the frame that draws it name Hearth tokens
- * only (design.md W3, W4; specs/wall-display "Wall Visual Language").
+ * namespace.
  */
 const LUMEN_TOKEN =
   /(?<!hearth-)(?:text-(?:muted|danger|info|stale|ink)\b|font-display|font-semibold|font-bold|uppercase|tracking-wide|rounded-(?:tile|pill|input)|var\(--(?:text|bg|font|radius|space|e[0-9]|motion)\b)/;
@@ -71,10 +69,8 @@ describe("wallFrameChrome", () => {
   });
 
   it("draws the *ported card surface*, not Hearth's own radius scale", () => {
-    // A control widget's tile is a device card's surface: the ported card radius
-    // and padding, so a panel cannot show two different cards (design.md W3;
-    // specs/wall-display "A widget's surface is a card's surface"). The wall's own
-    // `--hearth-radius-md` / `--hearth-space-4` are not this surface's.
+    // A control widget's tile is a device card's surface: the ported card radius and
+    // padding, so a panel cannot show two different cards.
     const chrome = wallFrameChrome("control");
 
     expect(chrome.radius).toBe("var(--hearth-card-radius)");
@@ -96,8 +92,7 @@ describe("wallBandChrome", () => {
     const chrome = wallBandChrome();
     expect(chrome.background).toBe("var(--hearth-band)");
     expect(chrome.radius).toBe("var(--hearth-card-radius)");
-    // A band and the card standing on it are the same surface: the ported card
-    // radius *and* its padding (design.md W3; specs/wall-display "Wall Zones").
+    // A band and the card standing on it are the same surface: the ported radius and padding.
     expect(chrome.padding).toBe("var(--hearth-card-padding)");
   });
 
@@ -126,9 +121,8 @@ describe("the wall chrome's ported text treatment", () => {
   });
 
   it("carries no size and no colour, so a caller keeps the wall's own tier", () => {
-    // The chrome's *sizes* are the wall's (title / label tiers, W2) and its role is
-    // its own — the treatment is the ported table's family/weight/tracking alone, so
-    // a container label is never given a card's semantics (design.md W4).
+    // The chrome's *sizes* are the wall's and its role is its own — the treatment is the
+    // ported table's family/weight/tracking alone.
     expect(Object.keys(wallChromeTextStyle()).sort()).toEqual([
       "fontFamily",
       "fontWeight",
@@ -160,8 +154,8 @@ describe("the span tier the frame hands its renderer", () => {
   it("derives the tier from the widget's own registry spans", () => {
     for (const type of WALL_WIDGET_TYPES) {
       const descriptor = WALL_WIDGET_REGISTRY[type];
-      // The frame resolves with the same spans the editor's size rule enforces,
-      // so a renderer's composition and the legal spans cannot drift (D3).
+      // The frame resolves with the same spans the editor's size rule enforces, so a
+      // renderer's composition and the legal spans cannot drift.
       expect(resolveSpanTier(descriptor.min, descriptor)).toBe("compact");
       expect(resolveSpanTier(descriptor.max, descriptor)).toBe("roomy");
     }
@@ -185,9 +179,8 @@ describe("the span tier the frame hands its renderer", () => {
   it("resolves the form against the renderer's own box, not the whole cell", async () => {
     const widgetFrame = await source("wall/WidgetFrame.tsx");
 
-    // The frame spends part of the cell on its inset (when it draws a surface) and
-    // on the title it renders above the renderer, so the form must be resolved
-    // from what is left (wall-zones-and-fit D3, D4).
+    // The frame spends part of the cell on its inset and on the title above the renderer,
+    // so the form is resolved from what is left.
     expect(widgetFrame).toContain("rendererBoxHeightPx(");
     expect(widgetFrame).toContain("cellHeightPx: cardHeightPx({ rows: widget.h, rowUnit })");
     expect(widgetFrame).toContain("framed: drawsSurface");
@@ -198,10 +191,8 @@ describe("the span tier the frame hands its renderer", () => {
   it("explains a placement below the type's minimum on either axis, or below the box its minimum needs", async () => {
     const widgetFrame = await source("wall/WidgetFrame.tsx");
 
-    // The wall's convention for something that cannot be shown: a contained
-    // explanation in its own vocabulary, never a clipped card (specs/wall-display
-    // "Panel Fit"). The rule covers every type and every legacy profile, in both
-    // axes — and a configured title, because it compares the cards' *boxes*.
+    // The wall's convention for something that cannot be shown: a contained explanation
+    // in its own vocabulary, never a clipped card.
     expect(widgetFrame).toContain("placement: widget,");
     expect(widgetFrame).toContain("rendererHeightPx,");
     expect(widgetFrame).toContain("minimumRendererHeightPx: minimumRendererBoxHeightPx({");
@@ -216,8 +207,7 @@ describe("the span tier the frame hands its renderer", () => {
   it("hands the renderer the box it actually gets, beside the form", async () => {
     const widgetFrame = await source("wall/WidgetFrame.tsx");
 
-    // A renderer whose own multi-form composition has its own budget resolves
-    // against the box, not the light card's global form (wall-zones-and-fit D3).
+    // A renderer with its own multi-form composition resolves against the box, not a global form.
     expect(widgetFrame).toContain("const rendererHeightPx = rendererBoxHeightPx({");
     expect(widgetFrame).toContain("rendererHeightPx={rendererHeightPx}");
     expect(widgetFrame).toContain("resolveCardFormForHeight(rendererHeightPx)");
@@ -256,9 +246,8 @@ describe("the minimum box a card's guard compares against", () => {
   });
 
   it("still renders an untitled card at the type's minimum span", () => {
-    // The confirmation the minimum spans are derived against: a two-row device
-    // cell at the floors is the ported compact card's own budget, and the
-    // untitled card passes the guard.
+    // The confirmation the minimum spans are derived against: a two-row device cell at
+    // the floors is the ported compact card's own budget.
     for (const rowUnit of [ROW_UNIT_MIN, ROW_UNIT_MAX]) {
       const box = deviceBox(DEVICE.min.h, rowUnit, false);
       expect(box).toBeGreaterThanOrEqual(WALL_COMPACT_CARD_HEIGHT_PX);
@@ -267,10 +256,8 @@ describe("the minimum box a card's guard compares against", () => {
   });
 
   it("explains a *titled* card at the type's minimum span instead of clipping it", () => {
-    // A configured title is drawn above the renderer inside the same cell, so a
-    // titled two-row device card's box is the compact budget minus the title block
-    // — below it — and the frame presents the wall's explanation rather than
-    // letting `overflow: hidden` take the card's value-control row.
+    // A configured title is drawn above the renderer inside the same cell, so a titled
+    // two-row card's box is below the compact budget — the frame explains it.
     const box = deviceBox(DEVICE.min.h, ROW_UNIT_MIN, true);
     expect(box).toBe(WALL_COMPACT_CARD_HEIGHT_PX - WALL_TITLE_BLOCK_PX);
     expect(box).toBeLessThan(WALL_COMPACT_CARD_HEIGHT_PX);
@@ -311,8 +298,7 @@ describe("rendererBoxHeightPx", () => {
   });
 
   it("reserves the ported card surface's own padding, not Hearth's spacing scale", () => {
-    // The frame's inset *is* the ported card padding, so the box a renderer gets is
-    // the cell minus the same inset a device card's surface draws (design.md W3).
+    // The frame's inset *is* the ported card padding, so the box is the cell minus that inset.
     expect(WALL_FRAME_INSET_PX).toBe(WALL_CARD_METRICS.padding);
     expect(WALL_FRAME_RESERVED_PX).toBe(2 * WALL_CARD_METRICS.padding);
     expect(rendererBoxHeightPx({ cellHeightPx: CELL, framed: true, titled: false })).toBe(
@@ -332,10 +318,8 @@ describe("rendererBoxHeightPx", () => {
   });
 
   it("makes a titled card compose the compact form where the bare cell would not", () => {
-    // The band a cell enters the full form in: tall enough to hold the full
-    // composition, not tall enough to hold it *and* the title the frame draws
-    // above the renderer. The title is a first-class `device` option, so a titled
-    // card there must compose compactly rather than clip.
+    // The band a cell enters the full form in: tall enough to hold the full composition,
+    // not tall enough to hold it *and* the title the frame draws above the renderer.
     const cellHeightPx = WALL_FULL_CARD_HEIGHT_PX + WALL_TITLE_BLOCK_PX - 1;
     const untitled = rendererBoxHeightPx({ cellHeightPx, framed: false, titled: false });
     const titled = rendererBoxHeightPx({ cellHeightPx, framed: false, titled: true });
@@ -351,8 +335,7 @@ describe("the frame's surface and the wall's own chrome", () => {
     const widgetFrame = await source("wall/WidgetFrame.tsx");
 
     // The surface's radius and padding are the pure chrome's, mapped to real CSS
-    // properties — so a control widget's tile is a device card's surface
-    // (design.md W3; specs/wall-display "A widget's surface is a card's surface").
+    // properties — so a control widget's tile is a device card's surface.
     expect(widgetFrame).toContain("padding: chrome.padding ?? undefined");
     expect(widgetFrame).toContain("borderRadius: chrome.radius ?? undefined");
     expect(widgetFrame).not.toContain("--hearth-space-4");
@@ -362,9 +345,8 @@ describe("the frame's surface and the wall's own chrome", () => {
   it("draws the opt-in title with the ported treatment and the wall's own title tier", async () => {
     const widgetFrame = await source("wall/WidgetFrame.tsx");
 
-    // The title is the wall's chrome, not widget content: the ported family/weight/
-    // tracking, the wall's title tier, and its own quiet colour — never a card role's
-    // semantics, never an uppercase treatment of the retired vocabulary (W4).
+    // The title is the wall's chrome, not widget content: the ported family/weight/tracking,
+    // the wall's title tier, and its own quiet colour.
     expect(widgetFrame).toContain("...wallChromeTextStyle()");
     expect(widgetFrame).toContain("fontSize: WALL_TITLE_FONT_SIZE");
     expect(widgetFrame).not.toContain("uppercase");
@@ -383,9 +365,8 @@ describe("the frame's surface and the wall's own chrome", () => {
   it("reads the chrome's treatment from the ported table, not from a literal pair", async () => {
     const frameModule = await source("wall/frame.ts");
 
-    // A chrome caption cannot drift from the card surface beside it: the treatment
-    // is read from `WALL_CARD_METRICS` rather than written as a second table
-    // (design.md W4; specs/wall-display "A ported token table is declared once").
+    // A chrome caption cannot drift from the card surface beside it: the treatment is read
+    // from `WALL_CARD_METRICS` rather than written as a second table.
     expect(frameModule).toContain("fontWeight: WALL_CARD_METRICS.primaryWeight");
     expect(frameModule).toMatch(/letterSpacing: `\$\{WALL_CARD_METRICS\.primaryTracking\}px`/);
   });

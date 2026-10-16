@@ -1,9 +1,4 @@
-/**
- * The not-found view — an unmatched path resolves here rather than guessing at
- * a route (design.md D12; specs/web-ui "Navigation and Information
- * Architecture"; task 6.4). Rebuilt on the Lumen primitive layer (`ui/*`) and
- * `lucide-react`.
- */
+/** The not-found view; an unmatched path resolves here rather than guessing. */
 import { Compass } from "lucide-react";
 import { overviewPath } from "../lib/router.js";
 import { Link, useRouter } from "../lib/router-context.js";

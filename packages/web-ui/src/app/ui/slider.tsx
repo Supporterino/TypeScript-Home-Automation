@@ -6,9 +6,7 @@ export type SliderProps = ComponentPropsWithoutRef<typeof SliderPrimitive.Root>;
 
 /**
  * A range control with keyboard support and a visible focus ring (Radix). The
- * `aria-label` names the *thumb* — the element carrying `role="slider"` — as
- * well as the root, since Radix exposes the accessible name on the thumb
- * (design.md D9).
+ * `aria-label` names the thumb carrying `role="slider"` as well as the root.
  */
 export function Slider({ className, "aria-label": ariaLabel, ...props }: SliderProps) {
   return (

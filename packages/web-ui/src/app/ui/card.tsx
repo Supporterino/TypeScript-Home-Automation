@@ -1,7 +1,7 @@
 import type { ComponentPropsWithoutRef } from "react";
 import { cn } from "./cn.js";
 
-/** Elevation levels a card may sit at (design.md D3). */
+/** Elevation levels a card may sit at. */
 export type CardElevation = "flat" | "raised";
 
 const ELEVATION: Record<CardElevation, string> = {
@@ -17,8 +17,7 @@ export interface CardProps extends ComponentPropsWithoutRef<"div"> {
 }
 
 /**
- * A token-driven surface (design.md D5): `--surface` with a hairline border and
- * the tile radius, never a component library's default card.
+ * A token-driven surface: `--surface` with a hairline border and the tile radius.
  */
 export function Card({ className, elevation = "flat", padding = true, ...props }: CardProps) {
   return (

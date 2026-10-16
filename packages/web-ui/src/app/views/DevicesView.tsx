@@ -1,15 +1,6 @@
 /**
- * The device list view over the unified endpoint — shows source,
- * reachability, and observation freshness (design.md D2; specs/web-ui
- * "Device Tiles", "Hidden Devices Are Filtered By Default And Revealable";
- * task 5.3). Reused for both "all devices" and the "unassigned" entry via the
- * `filter` prop.
- *
- * The reveal and operable-only filters are session-scoped viewing preferences
- * (never persisted, never a device change), and the count beside the title is
- * derived from exactly the list rendered beneath it, so the two never disagree.
- *
- * Rebuilt on the Lumen primitive layer (`ui/*`) and `lucide-react` (task 5.3).
+ * The device list view over the unified endpoint, showing source, reachability,
+ * and observation freshness. Reused for "all devices" and "unassigned".
  */
 import { LayoutList, PlugZap } from "lucide-react";
 import { useState } from "react";

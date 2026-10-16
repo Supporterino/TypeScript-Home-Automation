@@ -3,11 +3,8 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 
 /**
- * Structural assertions for device-name presentation (task 6.2; design.md D8;
- * specs/web-ui "Device Name Presentation"). There is no DOM harness here, so —
- * like `wall-read-only.test.ts` and `wall-card-archetypes.test.ts` — the render
- * decisions are asserted against the source while the humanisation rule itself
- * is covered by `humanize-name.test.ts`.
+ * Structural assertions for device-name presentation; the humanisation rule
+ * itself is covered by `humanize-name.test.ts`.
  */
 const APP_DIR = join(import.meta.dir, "..", "src/app");
 

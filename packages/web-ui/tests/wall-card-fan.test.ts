@@ -6,11 +6,8 @@ import { resolveDeviceClass } from "../src/app/wall/cards/device-class.js";
 import { fanCardModel, fanCardReading, fanPercentageRange } from "../src/app/wall/cards/FanCard.js";
 
 /**
- * The wall fan card (task 4.5; design.md D1, D3, D6; specs/wall-display "Widget
- * Catalog" — "a fan"; "Wall Device Presentation"). The pure decisions — the
- * declared on/off, percentage, and presets, the slider's bounds, and the reading —
- * are covered directly, and the render is asserted structurally against its source
- * (there is no DOM harness), the same style as `wall-card-anatomy.test.ts`.
+ * The wall fan card: the declared on/off, percentage, and presets covered directly;
+ * the render asserted structurally.
  */
 const APP_DIR = join(import.meta.dir, "..", "src/app");
 const CARD = join(APP_DIR, "wall/cards/FanCard.tsx");

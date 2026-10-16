@@ -1,25 +1,6 @@
 /**
  * The wall's typed device widget and the card dispatcher every device surface
- * shares (design.md D1, D3, D9, D10; specs/wall-display "Widget Catalog" — "A
- * card is selected by the device's class", "A class the device cannot drive is
- * explained" — and "Device Grid Widget"). One widget type per device class points
- * at one device; the widget's own type selects its card, and the bound device is
- * resolved from the data store.
- *
- * Two contained explanations live here, never a throw that would take down the
- * profile: a device that is not (or no longer) known, and a device whose
- * capabilities cannot drive the widget's class — the second is what a pending
- * class behaves as, and what a `light` widget bound to a sensor reports
- * (`deviceCanDriveClass`). The frame draws no surface for a device widget, so the
- * card owns it; the explanation uses the shared Hearth card vocabulary.
- *
- * {@link WallDeviceCard} is the same dispatcher keyed by the *device's* resolved
- * class instead of a widget's own type — the path the room, favorites, and device
- * grid tiles take, so a tile renders the card of its device's class exactly as a
- * placed widget does (design.md D9). It reads the device's class from the same
- * pure resolver, so the catalogue and the tiles cannot drift.
- *
- * Wall-chunk only (design.md D10).
+ * shares: one widget type per device class points at one device.
  */
 import { WALL_DEVICE_LAYOUTS, type WallTypedDeviceWidgetConfig } from "@ts-ha/shared";
 import type { ComponentType, ReactNode } from "react";
@@ -48,9 +29,7 @@ import { WALL_TILE_CELL_COLUMNS } from "../pages.js";
 import type { WallWidgetProps } from "../registry.js";
 
 /**
- * The one card per device class (design.md D1). Typed as a total record so a
- * class in the catalogue without a card — or a card without a catalogue entry —
- * is a compile error, and frozen so it cannot be mutated at runtime.
+ * The one card per device class, typed as a total record and frozen.
  */
 const DEVICE_CLASS_CARDS: Readonly<Record<WallDeviceClass, ComponentType<WallDeviceCardProps>>> =
   Object.freeze({
@@ -66,14 +45,13 @@ const DEVICE_CLASS_CARDS: Readonly<Record<WallDeviceClass, ComponentType<WallDev
 
 /**
  * The card of one device class — the single place the catalogue's types and the
- * card modules are joined, so the registry, a widget, and a tile all resolve the
- * same component.
+ * card modules are joined.
  */
 export function wallDeviceCard(deviceClass: WallDeviceClass): ComponentType<WallDeviceCardProps> {
   return DEVICE_CLASS_CARDS[deviceClass];
 }
 
-/** The widget config a typed device card reads, narrowed from the wire's raw config (design.md D6). */
+/** The widget config a typed device card reads, narrowed from the wire's raw config. */
 function typedDeviceConfig(
   qualifiedId: string,
   raw: Record<string, unknown>,
@@ -89,7 +67,7 @@ function typedDeviceConfig(
   };
 }
 
-/** The contained-explanation wrapper every device surface uses (design.md D3). */
+/** The contained-explanation wrapper every device surface uses. */
 function ContainedExplanation({ children }: { children: ReactNode }): ReactNode {
   return (
     <div
@@ -106,10 +84,8 @@ function ContainedExplanation({ children }: { children: ReactNode }): ReactNode 
 }
 
 /**
- * The wall typed device widget (design.md D1, D3; specs/wall-display "Widget
- * Catalog"). Its type names the class and therefore the card; the bound device is
- * resolved from the store. A widget whose bound device cannot drive its class
- * reports that inside its own area rather than presenting an inert card.
+ * The wall typed device widget: its type names the class and therefore the card; the
+ * bound device is resolved from the store.
  */
 export function DeviceWidget({
   widget,
@@ -130,9 +106,7 @@ export function DeviceWidget({
     );
   }
 
-  // The registry renders only a typed device widget through this component, so a
-  // non-device type here would be a registry wiring mistake; the fallback keeps
-  // the surface contained rather than throwing from inside the wall.
+  // A non-device type here would be a registry wiring mistake; stay contained.
   if (!isWallDeviceClass(widget.type)) {
     return <ContainedExplanation>This widget is not a device widget.</ContainedExplanation>;
   }
@@ -164,11 +138,8 @@ export function DeviceWidget({
 }
 
 /**
- * The card of a device's own class, resolved from the device rather than a
- * widget's declared type (design.md D9; specs/wall-display "Device Grid Widget" —
- * "each presenting the card of its own device class"). A room's tiles, the
- * favorites grid, and the device grid all render through it, so a tile on the wall
- * is the same card a placed widget would draw.
+ * The card of a device's own class, resolved from the device rather than a widget's
+ * declared type.
  */
 export function WallDeviceCard({
   device,
@@ -185,22 +156,16 @@ export function WallDeviceCard({
 }
 
 /**
- * The box a *paged tile* is composed into — the tile's own cell width
- * (`wall/pages.ts`'s {@link WALL_TILE_CELL_COLUMNS} columns) at the panel's row unit,
- * and the height the page plan resolved for the tile's row. Every paging host —
- * a room's tiles, the favorites grid, the device grid — hands its cards this, so a
- * tile composes for the cell it is drawn in rather than for the widget around it
- * (specs/wall-display "Paged Tile Sizing").
+ * The box a paged tile is composed into: the tile's own cell width at the panel's row
+ * unit, and the height the page plan resolved.
  */
 export function wallTileCardBox(rowUnit: number, heightPx: number): WallCardBox {
   return placedDeviceCardBox({ columns: WALL_TILE_CELL_COLUMNS, rowUnit, heightPx });
 }
 
 /**
- * The wall's unavailable member (design.md D1; specs/wall-display "A card is a
- * single surface"). A tile whose device is not (or no longer) in the store draws
- * the wall's mute Hearth treatment rather than the dashboard's Lumen tile, and
- * carries no control: no live descriptor exists to actuate.
+ * The wall's unavailable member: a tile whose device is not in the store, carrying no
+ * control.
  */
 export function WallDeviceUnavailable({
   qualifiedId,

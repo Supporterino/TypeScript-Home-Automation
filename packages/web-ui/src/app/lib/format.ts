@@ -1,4 +1,4 @@
-/** Pure display-formatting helpers, reachable by `bun test` without a DOM (design.md D23). */
+/** Pure display-formatting helpers, reachable by `bun test` without a DOM. */
 
 /** Formats an elapsed duration as a compact age string: "8s", "2m", "1h", "3d". */
 export function formatAge(elapsedMs: number): string {
@@ -13,7 +13,7 @@ export function formatAge(elapsedMs: number): string {
   return `${days}d`;
 }
 
-/** Whether a polled observation is older than its own refresh interval — presented as stale rather than current (design.md "Stale data is labelled"). */
+/** Whether a polled observation is older than its own refresh interval. */
 export function isObservationStale(
   observedAt: number,
   refreshIntervalMs: number | undefined,

@@ -8,9 +8,8 @@ import {
   wallViewState,
 } from "../src/app/wall/live.js";
 
-// Pure live-update decisions for the wall (tasks 7.1, 7.2; design.md D9;
-// specs/wall-display "Profile Changes Reach Open Walls"). No DOM, no React —
-// `WallView` is a thin wrapper over these.
+// Pure live-update decisions for the wall. No DOM, no React — `WallView` is a
+// thin wrapper over these.
 
 const KINDS: readonly WallChangeKind[] = ["created", "updated", "deleted"];
 

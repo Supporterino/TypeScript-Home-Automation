@@ -1,7 +1,6 @@
 /**
- * Pure presentation model for the wall energy widget (specs/wall-display
- * "Widget Catalog"; specs/energy-monitoring; design.md D6, D11). Extracted so
- * the display mapping is reachable by `bun test` without a DOM.
+ * Pure presentation model for the wall energy widget: maps the `/api/energy`
+ * response to display strings.
  */
 import type { EnergyData } from "@ts-ha/shared";
 import { formatKwh, formatWatts } from "../../lib/energy.js";

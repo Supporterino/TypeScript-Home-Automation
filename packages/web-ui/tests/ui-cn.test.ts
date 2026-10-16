@@ -1,10 +1,8 @@
 import { describe, expect, it } from "bun:test";
 import { cn } from "../src/app/ui/cn.js";
 
-// Pure test — no DOM. `cn` must resolve the Lumen radius utilities (design.md
-// D3, D5): without registering the custom radius scale, `rounded-tile` and a
-// caller's `rounded-*` override would both survive and stylesheet order would
-// decide. These assert the caller (last) wins deterministically.
+// Pure test — no DOM. `cn` must resolve the Lumen radius utilities: the caller's
+// (last) override wins deterministically over the custom radius scale.
 
 describe("cn custom radius merging", () => {
   it("lets a rounded override replace the custom tile radius", () => {

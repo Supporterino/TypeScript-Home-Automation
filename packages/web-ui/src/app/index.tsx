@@ -1,5 +1,5 @@
-// Lumen — the design system (the Tailwind entry). The single stylesheet: its
-// tokens and utilities are the app's source of colour, spacing, and radius.
+// The single stylesheet: its tokens and utilities are the app's source of
+// colour, spacing, and radius.
 import "./styles/app.css";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";

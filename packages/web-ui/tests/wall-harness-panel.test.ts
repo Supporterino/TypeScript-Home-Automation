@@ -31,15 +31,8 @@ import { cardHeightPx, resolveCardFormForHeight, resolveSpanTier } from "../src/
 import { deviceGridIds, resolveDeviceGridPage } from "../src/app/wall/widgets/device-grid-model.js";
 
 /**
- * The harness panel and bench (tasks 5.1-5.3, 6.1, 6.2; design.md D2, D7).
- *
- * Everything the panel shows or sets is asserted against the wall's own
- * functions — the helpers are imported here a second time and compared, so a
- * harness module that starts doing its own arithmetic fails rather than quietly
- * disagreeing with the wall. What no test here can show is a browser rendering a
- * control's effect, the scheme flipping Hearth's tokens, a card crossing the
- * compact/full boundary on screen, or the unreachable marking appearing: those
- * are hand-verified (design.md D7; change Non-Goals).
+ * The harness panel and bench: everything the panel shows or sets is asserted against
+ * the wall's own functions.
  */
 const HARNESS_DIR = join(import.meta.dir, "..", "src/app/wall/harness");
 const PANELS: readonly HarnessPanel[] = ["landscape", "portrait"];
@@ -114,9 +107,8 @@ describe("the panel's Stage-computed values", () => {
         expect(actual.tooSmall, `${panel} ${widget.id}`).toBe(false);
       }
 
-      // The type-specific checks the three widgets stand for: the `device` widget's
-      // frame is chrome-less, the titled clock spends rows on its title, and the
-      // grid's selection genuinely pages at this panel's row unit.
+      // The type-specific checks the three widgets stand for: the `device` widget's frame is
+      // chrome-less, the titled clock spends rows on its title, and the grid pages.
       expect(widgetValues(device, rowUnit).framed).toBe(false);
       expect(widgetValues(titled, rowUnit).rendererHeightPx).toBeLessThan(
         widgetValues(clock, rowUnit).rendererHeightPx,
@@ -232,12 +224,8 @@ describe("the bench", () => {
     const bench = await source("Bench.tsx");
     const stage = await source("stage.tsx");
 
-    // Hearth declares every `--hearth-*` token under `[data-wall-chunk]` and
-    // nowhere else, and in bench mode the wall grid — whose root carries that
-    // scope — is not rendered. So the bench surface must carry it itself, or
-    // every token it and its renderer paint with resolves to nothing (surfaces
-    // go transparent, colours fall back) and the scheme toggle has nothing to
-    // switch. Stage mode is unaffected: there the wall's own root is the scope.
+    // Hearth declares every `--hearth-*` token under `[data-wall-chunk]` and nowhere else,
+    // and in bench mode the wall grid that carries that scope is not rendered.
     expect(stage).toContain("<Bench widget={update.bench.widget} controls={update.bench} />");
     expect(bench).toContain('data-wall-chunk=""');
     // A scope, not a marker: the wall grid's `data-wall-chunk` value is the wall
@@ -359,9 +347,8 @@ describe("the scheme toggle", () => {
     const stage = await source("stage.tsx");
     const panel = await source("HarnessPanel.tsx");
 
-    // Hearth's light palette is scoped `[data-theme="light"] [data-wall-chunk]`, so
-    // the attribute goes on the stage document's root — the panel's own document
-    // is a different one.
+    // Hearth's light palette is scoped `[data-theme="light"] [data-wall-chunk]`, so the
+    // attribute goes on the stage document's root — the panel's document is a different one.
     expect(stage).toContain("document.documentElement.dataset.theme = update.theme");
     // The panel only sends its choice; it applies no scheme mechanism of its own.
     expect(panel).not.toContain("dataset");

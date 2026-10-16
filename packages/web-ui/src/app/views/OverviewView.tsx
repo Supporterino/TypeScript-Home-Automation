@@ -1,16 +1,6 @@
 /**
- * The Overview landing view (design.md D4; specs/web-ui "Overview Landing").
- * A control surface that summarizes the home before listing it: live summary
- * metrics, the user's favorites, and each room as a navigable zone. Every value
- * is derived from the store, so a streamed device event updates the surface
- * without a manual refresh.
- *
- * Hidden devices are shown per the existing default (filtered out) but the
- * overview deliberately offers no filter controls — those belong to the
- * device/room listings, not the consumer surface (MASTER anti-pattern).
- *
- * Rebuilt on the Lumen primitive layer (`ui/*`) and `lucide-react` (task 5.1);
- * the derivation (`lib/overview.ts`) and the store it reads are unchanged.
+ * The Overview landing view: live summary metrics, the user's favorites, and
+ * each room as a navigable zone.
  */
 import {
   Activity,
@@ -34,8 +24,7 @@ import type { DeviceDescriptor } from "../types.js";
 import { Badge, Card, EmptyState, Grid, Row, Stack, Stat } from "../ui/index.js";
 
 /**
- * A quiet uppercase section label, optionally a link into the section. The
- * icon is decorative; the label carries the meaning (design.md D9).
+ * A quiet uppercase section label, optionally a link into the section.
  */
 function SectionHeading({ icon, label, to }: { icon: ReactNode; label: ReactNode; to?: string }) {
   const heading = (
@@ -64,9 +53,8 @@ export function OverviewView() {
   const { basePath } = useRouter();
   const now = useNow();
 
-  // Overview presentation filters hidden devices out (the devices/room
-  // listings own the reveal control), so metrics and zones agree with what
-  // is actually shown.
+  // Hidden devices are filtered out here; the devices/room listings own the
+  // reveal control.
   const visibleDevices = useMemo(() => devices.filter((d) => !d.hidden), [devices]);
   const summary = useMemo(() => summarizeDevices(visibleDevices, now), [visibleDevices, now]);
 
@@ -92,8 +80,7 @@ export function OverviewView() {
   );
 
   const ready = status?.status === "ready";
-  // "No devices known" is about the home, not the presentation filter: an
-  // all-hidden home must not read as an empty one.
+  // About the home, not the presentation filter: an all-hidden home is not empty.
   const emptyHome = devices.length === 0;
 
   return (

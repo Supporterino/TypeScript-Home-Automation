@@ -1,12 +1,6 @@
 /**
- * The pure, DOM-injected plumbing behind `useTheme()` (design.md D4;
- * specs/web-ui "Theme Selection").
- *
- * Reading the persisted preference, applying the resolved scheme, and writing
- * the choice are given the `Storage`/document root to act on — defaulting to
- * the live globals — so the rules are unit-testable without a DOM, mirroring
- * the no-flash bootstrap in `src/components/theme-bootstrap.ts`, whose
- * {@link THEME_STORAGE_KEY} stays the single source of the storage key.
+ * The pure, DOM-injected plumbing behind `useTheme()`: reading, writing, and
+ * applying the persisted theme preference.
  */
 import {
   type ResolvedTheme,
@@ -52,7 +46,7 @@ export function readStoredPreference(
   return "system";
 }
 
-/** Persists an explicit preference; best-effort (design.md D4). */
+/** Persists an explicit preference; best-effort. */
 export function writeStoredPreference(
   preference: ThemePreference,
   storage: ThemeStorage | null = currentStorage(),

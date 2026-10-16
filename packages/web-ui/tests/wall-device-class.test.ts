@@ -10,14 +10,8 @@ import {
 } from "../src/app/wall/cards/device-class.js";
 
 /**
- * The device-class resolver (design.md D1, D3; specs/wall-display "A card is
- * selected by the device's class", "A class the device cannot drive is
- * explained"). The resolver is keyed by the source-neutral capability profile,
- * never by a Home Assistant domain, and returns exactly one class — with `entity`
- * for a device of no class. The fixtures below are the shapes the real sources
- * produce: a Zigbee2MQTT `light`/`cover`/`fan`/`climate`/`lock` container mapped
- * to its own `kind`, Shelly's authored cover/switch schemas, Nanoleaf's
- * switch-plus-brightness light.
+ * The device-class resolver: keyed by the source-neutral capability profile and
+ * returning exactly one class, with `entity` for a device of no class.
  */
 
 /** A Zigbee2MQTT light: a `light` container carrying on/off and brightness. */
@@ -203,7 +197,7 @@ const TEMPERATURE_SENSOR: Capability[] = [
   },
 ];
 
-/** A writable numeric with no declared range — not a `number`, per the design's own wording. */
+/** A writable numeric with no declared range — not a `number`. */
 const UNBOUNDED_NUMERIC: Capability[] = [
   {
     kind: "numeric",
@@ -302,17 +296,15 @@ describe("deviceCanDriveClass", () => {
   });
 
   it("refuses a class the device's capabilities cannot drive", () => {
-    // The gap the spec makes visible rather than inert (design.md D3; specs/
-    // wall-display "A class the device cannot drive is explained").
+    // The gap is made visible rather than drawn inert.
     expect(deviceCanDriveClass(ZIGBEE_LIGHT, "cover")).toBe(false);
     expect(deviceCanDriveClass(SHELLY_COVER, "light")).toBe(false);
     expect(deviceCanDriveClass(BOUNDED_NUMERIC, "light")).toBe(false);
   });
 
   it("lets every device drive the typed entity fallback", () => {
-    // `entity` is the wall's equivalent of Mushroom's own generic card, so a
-    // switch, a read-only sensor, and a device with no capability at all all
-    // present through it (design.md D3).
+    // `entity` is the typed fallback: a switch, a read-only sensor, and a device
+    // with no capability at all all present through it.
     for (const profile of [SHELLY_SWITCH, TEMPERATURE_SENSOR, UNBOUNDED_NUMERIC, []]) {
       expect(resolveDeviceClass(profile)).toBe("entity");
       expect(deviceCanDriveClass(profile, "entity")).toBe(true);

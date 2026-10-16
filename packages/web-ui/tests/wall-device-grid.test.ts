@@ -31,10 +31,8 @@ import { deviceGridIds, resolveDeviceGridPage } from "../src/app/wall/widgets/de
 import { PagedTileGrid } from "../src/app/wall/widgets/PagedTileGrid.js";
 
 /**
- * The wall device grid (wall-zones-and-fit D12; specs/wall-display "Device Grid
- * Widget", "Panel Fit"). The selection and page plan are pure, so they are
- * asserted directly; the renderer's wiring is asserted structurally — the same
- * style as `wall-read-only.test.ts` — because there is no DOM harness.
+ * The wall device grid: the selection and page plan are pure; the renderer's
+ * wiring is asserted structurally.
  */
 const APP_DIR = join(import.meta.dir, "..", "src/app");
 const RENDERER = join(APP_DIR, "wall/widgets/DeviceGridWidget.tsx");
@@ -162,11 +160,8 @@ describe("resolveDeviceGridPage", () => {
     });
 
     expect(paging.tilesDown).toBeLessThan(onePage.tilesDown);
-    // Neither plan promises a row shorter than a tile's own cell — the guarantee
-    // the minimum spans are derived against. The cell is the *drawn* one: the
-    // plan and the wall share the gutter floor, which is what the wall's
-    // `clamp(16px, 2vmin, 24px)` resolves to wherever the plan cannot see the
-    // viewport.
+    // Neither plan promises a row shorter than a tile's own cell. The cell is the
+    // *drawn* one: the plan and the wall share the gutter floor.
     const tileCellPx = WALL_TILE_CELL_ROWS * ROW_UNIT_MIN + WALL_GUTTER_MIN_PX;
     expect(tileCellPx).toBeGreaterThanOrEqual(WALL_COMPACT_CARD_HEIGHT_PX);
     for (const plan of [onePage, paging]) {
@@ -233,9 +228,8 @@ describe("the devices descriptor", () => {
     // must physically hold a tile row once the page controls are accounted for.
     expect(MIN.w).toBeGreaterThanOrEqual(WALL_TILE_CELL_COLUMNS);
     expect(MIN.h).toBeGreaterThanOrEqual(WALL_TILE_CELL_ROWS);
-    // Two tile columns wide — the smallest span that presents a page's first row
-    // of minimum-span tiles two across, so a device grid is never placed too
-    // narrow to show the grid it pages.
+    // Two tile columns wide — the smallest span that presents a page's first row of
+    // minimum-span tiles two across.
     expect(MIN.w).toBe(2 * WALL_TILE_CELL_COLUMNS);
 
     const cell = WALL_TILE_CELL_ROWS * ROW_UNIT_MIN;
@@ -253,8 +247,7 @@ describe("the devices descriptor", () => {
 
   it("reserves the frame inset, one control row, and the control gap", () => {
     // The reservation is the frame's ported inset, read from the card table rather
-    // than restated, one page-control row at the wall's touch target, and the wall's
-    // control gap between them (design.md W3; specs/wall-display "Panel Fit").
+    // than restated, one page-control row at the wall's touch target, and the gap.
     expect(WALL_FRAME_INSET_PX).toBe(WALL_CARD_METRICS.padding);
     expect(WALL_PAGE_RESERVED_PX).toBe(
       2 * WALL_FRAME_INSET_PX + WALL_MIN_TOUCH_TARGET + WALL_MIN_CONTROL_GAP,
@@ -263,8 +256,7 @@ describe("the devices descriptor", () => {
   });
 
   it("mirrors the frame inset the stylesheet declares", async () => {
-    // The frame pads a control card with `--hearth-card-padding`; the reservation
-    // must agree with the token Hearth actually declares (design.md W3).
+    // The frame pads a control card with `--hearth-card-padding`; the reservation must agree.
     const tokens = await hearthTokens();
     expect(tokens["--hearth-card-padding"]).toBe(`${WALL_FRAME_INSET_PX}px`);
   });
@@ -276,7 +268,7 @@ describe("the device grid renderer", () => {
     const paged = await pagedTileGridSource();
 
     // The grid hands the shared paged tile grid its selection; that grid draws the
-    // page through the shared pagination layer (wall-zones-and-fit D5).
+    // page through the shared pagination layer.
     expect(source).toContain("deviceGridIds(widget.config)");
     expect(source).toContain("items={ids}");
     expect(source).toContain("<PagedTileGrid");
@@ -317,10 +309,8 @@ describe("the device grid renderer", () => {
     const paged = await pagedTileGridSource();
     const anatomy = stripComments(await readFile(ANATOMY, "utf8"));
 
-    // The chrome's page controls are the vocabulary's own parts (design.md W1;
-    // specs/wall-display "A control is the ported control"): the ported control
-    // height and radius, declared once in the anatomy, with the page caption on the
-    // vocabulary's primary line — so the chrome draws no treatment of its own.
+    // The chrome's page controls are the vocabulary's own parts: the ported control
+    // height and radius, declared once in the anatomy.
     expect(paged).toContain("<WallCardActions");
     expect(paged).toContain("<WallCardIconButton");
     expect(paged).toContain("<WallCardLabel>");
@@ -344,15 +334,8 @@ describe("the paged tile grid's drawn rows", () => {
   }
 
   /**
-   * Renders one page of {@link PagedTileGrid} to static markup. The plan the grid
-   * resolves is computed here with the same inputs, so the drawn row height can be
-   * compared against `plan.rowHeightPx` rather than against a repeated literal.
-   *
-   * `PagedTileGrid` composes the wall's single card vocabulary, which draws its
-   * metrics from `wall/cards/metrics.ts` and imports no part of the widget registry
-   * — so a static render of this module reaches a fully initialised vocabulary with
-   * no import cycle to order (design.md W1). This module's own
-   * `WALL_WIDGET_REGISTRY` import above is what the geometry assertions below read.
+   * Renders one page of {@link PagedTileGrid} to static markup, comparing the drawn
+   * row height against `plan.rowHeightPx` rather than a repeated literal.
    */
   function renderPage(input: { span: { w: number; h: number }; rowUnit: number; count: number }): {
     html: string;
@@ -379,8 +362,7 @@ describe("the paged tile grid's drawn rows", () => {
 
   it("draws each row at the plan's resolved height for a one-row page", () => {
     // A device grid at its minimum span on the harness panel: its one tile row is
-    // drawn at the height the plan resolved rather than stretched to fill the
-    // widget (design.md D4; specs/wall-display "Paged Tile Sizing").
+    // drawn at the height the plan resolved rather than stretched to fill the widget.
     const { html, plan } = renderPage({ span: MIN, rowUnit: ROW_UNIT_MIN, count: 2 });
 
     expect(plan.rows).toBe(1);
@@ -398,10 +380,8 @@ describe("the paged tile grid's drawn rows", () => {
   });
 
   it("reserves one control gap plus one control row — the plan's page-control chrome", () => {
-    // `wall/pages.ts` reserves the gap above the page-control row and the row
-    // itself (its `WALL_PAGE_CONTROL_RESERVED_PX`). The row is the wall's touch
-    // target, which is the ported control height — so the reservation and the
-    // ported control agree, and the drawn chrome can be exactly the reservation.
+    // `wall/pages.ts` reserves the gap above the page-control row and the row itself.
+    // The row is the wall's touch target, the ported control height.
     expect(WALL_CONTROL_GAP_PX + WALL_CARD_METRICS.controlHeight).toBe(
       WALL_PAGE_CONTROL_RESERVED_PX,
     );
@@ -410,11 +390,8 @@ describe("the paged tile grid's drawn rows", () => {
   });
 
   it("draws those gaps and that row, with no inset the plan does not reserve", () => {
-    // The regression this guards: task 3.3's recompose drew the layout gaps at
-    // the ported *control spacing* (12) and wrapped the page row in a padded
-    // actions row, so the drawn chrome (12 + 42 + 12 = 66) exceeded the plan's
-    // reservation (8 + 42 = 50) and the tiles grid clipped top and bottom. The
-    // draw now reads the plan's own gaps and the row draws no inset.
+    // The regression this guards: the drawn chrome once exceeded the plan's reservation,
+    // so the tiles grid clipped. The draw now reads the plan's own gaps.
     const { html, plan } = renderPage({ span: MIN, rowUnit: ROW_UNIT_MIN, count: 40 });
     expect(plan.pageCount).toBeGreaterThan(1);
 

@@ -1,13 +1,5 @@
 /**
- * Pure device-map reduction for the realtime stream (design.md D1, D11;
- * specs/web-ui "Data Sources").
- *
- * The five device categories all mutate the same `qualifiedId → descriptor`
- * map, so the data layer delegates every one of them here. Extracted from
- * `data-store.tsx` as a pure module (design.md D23) so each case — including
- * the no-op cases that must not grow the map — is reachable by `bun test`
- * without a DOM. Behaviour-preserving: what `applyEvent` did inline before,
- * it now does through this function.
+ * Pure device-map reduction for the realtime stream, applied by the data layer.
  */
 
 import type { DeviceDescriptor } from "@ts-ha/shared";
@@ -26,12 +18,7 @@ export type DeviceMapEvent = Extract<NormalizedStreamEvent, { category: DeviceMa
 
 /**
  * Applies one device-map event, returning the next map. Returns `devices`
- * unchanged when the event cannot change it — a delta for a device the client
- * has not seen, or a departure already applied — so React's referential-
- * equality bailout still applies and a no-op event triggers no re-render.
- *
- * A `device_appeared` always yields a new map: it is the one category that can
- * genuinely introduce a device.
+ * unchanged when the event cannot change it, so a no-op triggers no re-render.
  */
 export function reduceDeviceEvent(
   devices: Map<string, DeviceDescriptor>,
@@ -79,15 +66,7 @@ export function reduceDeviceEvent(
 
 /**
  * Returns the qualified id of a delta event the client cannot apply because it
- * does not hold the device, or `null` when no recovery is needed (design.md D7;
- * specs/web-ui "A delta for an unknown device recovers it").
- *
- * Only `device_state`, `device_reachability`, and `device_visibility` carry no
- * full descriptor, so only they can be lost to an unknown id and must trigger a
- * refetch. `device_appeared` carries the descriptor itself and
- * `device_disappeared` only ever applies to a known device, so both return
- * `null`. Pure and separate from {@link reduceDeviceEvent} so the recovery
- * decision — which fires a network refetch — is reachable by `bun test`.
+ * does not hold the device, or `null` when no recovery is needed.
  */
 export function unknownDeviceDeltaId(
   devices: Map<string, DeviceDescriptor>,

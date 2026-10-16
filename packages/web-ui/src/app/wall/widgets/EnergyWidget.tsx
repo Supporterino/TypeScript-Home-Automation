@@ -1,17 +1,6 @@
 /**
- * The wall energy widget (design.md D11; specs/wall-display "Widget Catalog";
- * specs/energy-monitoring). Reads `GET /api/energy` and refetches, debounced,
- * on every device event that can change the aggregated totals, so the totals
- * update live without a manual refresh. A caller-supplied fixture reading from
- * the data layer is preferred over that fetch (design.md D5; specs/web-ui "A
- * widget that sources its own reading prefers the fixture"), so a
- * fixture-backed render reaches this composition with no engine and no device
- * event can re-trigger a request.
- *
- * Composed on the wall's single card vocabulary (design.md W1): one state item
- * per reading (instantaneous power and accumulated consumption), each with the
- * ported circular affordance, its label, and its value on the wall's own metric
- * tier (design.md W2). Ambient — chrome-less, its readings on the panel.
+ * The wall energy widget: reads `GET /api/energy` and refetches, debounced, on
+ * relevant device events (or a fixture).
  */
 import type { EnergyData } from "@ts-ha/shared";
 import { Database, Zap } from "lucide-react";
@@ -56,10 +45,7 @@ export function EnergyWidget() {
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    // A supplied fixture reading is the widget's data, so every path that would
-    // fetch — the mount load, the reconnect refetch, and the debounced
-    // device-event refetch, all of which call this — issues no request for it
-    // (design.md D5). Without one the widget is byte-for-byte unchanged.
+    // A supplied fixture is the widget's data, so this path issues no request.
     if (!sourcesOwnReading(fixtureEnergy)) return;
     try {
       setData(await fetchEnergy());

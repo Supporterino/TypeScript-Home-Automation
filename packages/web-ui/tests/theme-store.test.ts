@@ -6,10 +6,8 @@ import {
 } from "../src/app/lib/theme-storage.js";
 import { resolveTheme, THEME_STORAGE_KEY } from "../src/components/theme-bootstrap.js";
 
-// Pure test — no DOM harness. The theme hook itself needs a renderer, but the
-// read/apply/persist rules it is built from default to the live `localStorage`/
-// document globals, so stubbing those exercises the real default behaviour
-// (design.md D4; specs/web-ui "Theme Selection").
+// Pure test — no DOM harness. The read/apply/persist rules default to the live
+// `localStorage`/document globals, so stubbing those exercises the real behaviour.
 
 const globalObject = globalThis as Record<string, unknown>;
 const ORIGINAL_LOCAL_STORAGE = globalObject.localStorage;

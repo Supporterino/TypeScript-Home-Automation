@@ -1,46 +1,13 @@
 /**
- * Hearth — the wall's own visual language (design.md D1, D2; specs/wall-display
- * "Wall Visual Language", "On-Demand Wall Stylesheet").
- *
- * The full-bleed wall (`/wall/:name`) does not consume Lumen (`styles/app.css`):
- * it declares its own `--hearth-*` colour, type, spacing, radius, elevation, and
- * motion tokens here, so the dashboard system is not the wall's transitive
- * dependency. No value below aliases a Lumen token — every token is a literal
- * (or a scheme-independent scale), and dark is the authoritative scheme.
- *
- * Scope: the wall surface root carries `data-wall-chunk` (see
- * `wall/WallGrid.tsx` / `wall/registry.ts`), which is this stylesheet's wall
- * root scope. It is imported only by the wall surface modules, so the tokens
- * reach the wall chunk and never the dashboard's first paint (design.md D5).
- *
- * Scheme: dark is authoritative and lives on the wall root; light is a designed
- * scheme under the global `[data-theme="light"]` attribute (set on `<html>` by
- * the theme bootstrap), not an inversion of dark. Every colour token is
- * declared in both schemes.
- *
- * The type ramp re-derives the wall's body floor from the ramp itself: no wall
- * body text may render below `--hearth-text-body`; the floor is the ported card
- * system's secondary text size (12 px) and the label tier its primary size
- * (14 px), so a widget's supporting text and a device card's are the same type
- * (mushroom-wall-widgets W2). The former compact status-chip exception is
- * retired with `--hearth-text-chip`, because nothing is left below the floor to
- * except. A band-readout tier (`--hearth-text-band`) sits between the label and
- * metric tiers for grouped readouts (wall-zones-and-fit D6). The component scale
- * is reduced from the original table (wall-zones-and-fit D10): the hero, metric,
- * title, and label tiers and their `vmin` coefficients are lowered, while the
- * readout tiers that carry a value read from across a room are untouched. Every
- * numeric bound here mirrors `wall/type-ramp.ts`, which
- * `tests/wall-type-ramp.test.ts` asserts.
+ * Hearth — the wall's own visual language: its own `--hearth-*` colour, type, spacing,
+ * radius, elevation, and motion tokens, so Lumen is not the wall's dependency.
  */
 
 [data-wall-chunk] {
   color-scheme: dark;
 
-  /* The wall root is the wall's own surface: it paints Hearth's canvas and
-     foreground here, from the tokens below, so no wall component repeats a
-     `--hearth-*` colour (the `--hearth-canvas` marker stays stylesheet-only —
-     see `tests/web-ui-assets.test.ts`). Both schemes resolve from the token
-     values, so light needs no restatement. */
+  /* The wall root paints Hearth's canvas and foreground, so no wall component
+     repeats a `--hearth-*` colour. */
   background: var(--hearth-canvas);
   color: var(--hearth-text);
 
@@ -49,9 +16,8 @@
   --hearth-surface: #0c0c0e;
   --hearth-surface-raised: #16161a;
   --hearth-surface-sunken: #050506;
-  /* A zone band's field: slightly lifted from the canvas, below a member
-     tile's surface, so a band groups without nesting one surface in another
-     (wall-zones-and-fit D2; specs/wall-display "Wall Zones"). */
+  /* A zone band's field: slightly lifted from the canvas, below a member tile's
+     surface. */
   --hearth-band: #070709;
   --hearth-hairline: rgba(255, 255, 255, 0.1);
   --hearth-text: #f5f5f7;
@@ -62,16 +28,14 @@
   --hearth-danger: #f0716f;
   --hearth-info: #74b6ff;
   --hearth-accent: #f0a35e;
-  /* A 20 %-alpha field of the accent: a device card's slider bottom when the
-     device reports no colour of its own (design.md D7). */
+  /* A 20 %-alpha field of the accent: a card's slider bottom with no device colour. */
   --hearth-accent-faint: rgba(240, 163, 94, 0.2);
   --hearth-accent-fg: #1b1103;
   --hearth-focus: #ffca8a;
   --hearth-scrim: rgba(0, 0, 0, 0.72);
 
   /* ── Typography — the distance ramp (scheme-independent) ─────────────────── */
-  /* Reuses the self-hosted display face declared in `styles/app.css`; Hearth
-     sets its own ramp on top of it rather than adding a second download. */
+  /* Reuses the display face declared in `styles/app.css`, so no second download. */
   --hearth-font-display: "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
 
   --hearth-text-hero: clamp(36px, 5vmin, 76px);
@@ -104,17 +68,8 @@
   --hearth-radius-lg: 24px;
   --hearth-radius-pill: 999px;
 
-  /* ── Device cards — ported from Lovelace Mushroom (design.md D2, D4, D7;
-     specs/wall-display "Wall Device Presentation", "Touch Operation", "Wall
-     Visual Language") ────────────────────────────────────────────────────────
-     The wall's device-card metrics are ported from `piitaya/lovelace-mushroom`
-     (Apache-2.0), re-implemented here under this repository's GPL-3.0 Hearth
-     language — Hearth names win, and the Mushroom source is recorded per line.
-     Mushroom's `src/utils/theme.ts` declares the control/type/icon tokens and
-     `src/shared/{state-item,shape-icon,slider,card}.ts` the anatomy.
-     `wall/cards/metrics.ts` mirrors these values and
-     `tests/wall-tokens.test.ts` asserts the two agree, so a card cannot drift
-     from the table. None of these values aliases a Lumen token. */
+  /* ── Device cards — ported from Lovelace Mushroom (Apache-2.0) ──────────────
+     `wall/cards/metrics.ts` mirrors these values; Hearth names win. */
   --hearth-card-icon-size: 36px; /* Mushroom --icon-size */
   --hearth-card-icon-symbol: 0.667em; /* Mushroom --icon-symbol-size (glyph 24px) */
   --hearth-card-icon-shape: 50%; /* Mushroom --icon-border-radius: circle */
@@ -140,10 +95,8 @@
   --hearth-card-slider-thumb: 10px; /* Mushroom slider .slider-track-indicator width: the bar thumb */
   --hearth-card-slider-thumb-radius: 3px; /* Mushroom slider .slider-track-indicator border-radius */
 
-  /* The slider's own colour: its thumb, which the wall's foreground draws. The
-     fill and the unfilled track are the control's device colour, or the wall's
-     accent at 20 %-alpha when the device reports none (design.md D7); a card
-     sets both inline from its resolved colour. */
+  /* The slider's thumb colour, drawn by the wall's foreground. The fill and track
+     are set inline from the control's device colour. */
   --hearth-card-slider-thumb-color: var(--hearth-text);
 
   /* ── Elevation — dark shadows for a true-black panel ─────────────────────── */
@@ -158,8 +111,7 @@
   --hearth-motion-ease: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* Light — designed for its own contrast on warm paper, not a mechanical
-   inversion of the true-black dark scheme. Every colour token is restated. */
+/* Light — designed for its own contrast on warm paper. Every colour token is restated. */
 [data-theme="light"] [data-wall-chunk] {
   color-scheme: light;
 
@@ -167,8 +119,7 @@
   --hearth-surface: #fffdf9;
   --hearth-surface-raised: #faf3ea;
   --hearth-surface-sunken: #ece4d9;
-  /* The zone band's light field, between the canvas and a member tile's
-     surface (wall-zones-and-fit D2). */
+  /* The zone band's light field, between the canvas and a member tile's surface. */
   --hearth-band: #f8f4ee;
   --hearth-hairline: #ded3c4;
   --hearth-text: #1c1815;
@@ -179,7 +130,7 @@
   --hearth-danger: #b3261e;
   --hearth-info: #1f5fbf;
   --hearth-accent: #b45309;
-  /* The accent's 20 %-alpha field in the light scheme (design.md D7). */
+  /* The accent's 20 %-alpha field in the light scheme. */
   --hearth-accent-faint: rgba(180, 83, 9, 0.2);
   --hearth-accent-fg: #fff8ef;
   --hearth-focus: #8a4a08;
@@ -191,16 +142,8 @@
   --hearth-e2: 0 18px 44px rgba(28, 24, 21, 0.2);
 }
 
-/* The ported slider chrome (design.md D2, D7; specs/wall-display "Wall Device
-   Presentation"; Mushroom `src/shared/slider.ts`). Mushroom draws a bar rather
-   than the browser's default range chrome: a track at the control radius with a
-   bar thumb, the fill over a 20 %-alpha field of the same colour. The wall keeps
-   a native `<input type="range">` for touch and keyboard operation and redraws
-   only its chrome, from the card tokens above — so the control keeps the wall's
-   42 px touch target without a bespoke pointer implementation. The card paints
-   the track (its own colour, or the wall's accent) behind the input; the input's
-   own track is transparent so that fill shows through, leaving only the bar
-   thumb, which the wall's foreground draws. */
+/* The ported slider chrome (Mushroom `src/shared/slider.ts`): the wall keeps a
+   native `<input type="range">` and redraws only its chrome. */
 [data-wall-chunk] .hearth-card-slider {
   -webkit-appearance: none;
   appearance: none;
@@ -240,13 +183,8 @@
   background-color: var(--hearth-card-slider-thumb-color);
 }
 
-/* The enumerated control's single affordance (design.md D2, D6; specs/wall-display
-   "Touch Operation"). A card draws this native `<select>` in place of a row of
-   option controls when its permitted values do not fit the box at the wall's touch
-   target. Its height, radius, border, and colours all come from the card's own
-   `--hearth-card-*` tokens and its inline style; only its overflow behaviour is
-   owned here, so the browser keeps the select's native, touch- and
-   keyboard-operable dropdown list. */
+/* The enumerated control's single affordance: only the native `<select>`'s overflow
+   behaviour is owned here. */
 [data-wall-chunk] .hearth-card-select {
   text-overflow: ellipsis;
 }

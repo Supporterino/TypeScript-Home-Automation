@@ -1,11 +1,6 @@
 /**
- * The declarative widget registry (design.md D6; specs/wall-display "Widget
- * Catalog"). Every widget type is described once — its label, default and
- * min/max grid dimensions, its config schema, and its renderer — and the grid
- * and editor both resolve a type through {@link getWidgetDescriptor}.
- *
- * Loaded only inside the lazy `wall` chunk (the wall grid and the editor are
- * its sole consumers), so nothing here reaches first paint.
+ * The declarative widget registry: every widget type's label, grid dimensions,
+ * config schema, and renderer, resolved by the grid and editor.
  */
 import type { WallWidget, WallWidgetType } from "@ts-ha/shared";
 import { WALL_WIDGET_CONFIG_SCHEMAS } from "@ts-ha/shared/wall-schema";
@@ -34,49 +29,27 @@ export interface WallWidgetProps {
   widget: WallWidget;
   /**
    * Whether the frame draws the widget's own surface, so a nested device card
-   * draws none of its own and a card stays a single surface (design.md D2;
-   * specs/wall-display "A card is a single surface"). Every typed device widget's
-   * frame is chrome-less, so it passes `false` and its card owns the surface.
+   * draws none of its own.
    */
   contained?: boolean;
   /**
-   * The widget's presentation tier for the span it was placed at, resolved from
-   * its type's registry spans by `resolveSpanTier` (wall-zones-and-fit D3;
-   * specs/wall-display "Span-Aware Card Presentation"). A renderer uses it for
-   * its *scale* detail — a readout's font tier, a link's label size — never to
-   * select a composition: the area tier answers how much room the placement has,
-   * not what fits the box, and a type whose `min` and `defaults` coincide is
-   * `regular` at every placement above its minimum however short the cell is. A
-   * composition follows the resolved form below, or the renderer's own budget.
+   * The widget's presentation tier for the span it was placed at, for a renderer's
+   * scale detail only — never to select a composition.
    */
   tier: WallWidgetTier;
   /**
    * The form the card must compose at this placement, resolved from the box the
-   * renderer actually gets — the cell minus the frame's inset and title — by
-   * `resolveCardFormForHeight` over `frame.ts`'s `rendererBoxHeightPx`
-   * (wall-zones-and-fit D3, D4). A card whose full form does not fit composes its
-   * compact form instead, so a card can never overflow or clip at any legal
-   * placement — the area tier above cannot answer this, because a type whose `min`
-   * and `defaults` coincide is `regular` at every placement above its minimum
-   * however short the cell is.
+   * renderer gets.
    */
   cardForm: WallCardForm;
   /**
-   * The height, in CSS pixels, the renderer's own box gets at this placement —
-   * the cell minus the frame's inset and its opt-in title, by `frame.ts`'s
-   * `rendererBoxHeightPx` (wall-zones-and-fit D3, D4). The form above is this
-   * number resolved against the wall light card's own budget; a renderer whose
-   * multi-form composition has its *own* budget (the scene tile's row and stacked
-   * forms) resolves against this number instead, so each composition is measured
-   * against what it actually needs rather than one global card budget.
+   * The height, in CSS pixels, the renderer's own box gets at this placement — the
+   * cell minus the frame's inset and its opt-in title.
    */
   rendererHeightPx: number;
   /**
-   * The panel's resolved row unit, in CSS pixels — the same value the grid
-   * places the widget with (wall-zones-and-fit D5, D12). A widget whose own
-   * content is span-derived geometry rather than content (the device grid's
-   * pages) resolves it against this, so the renderer and the panel agree without
-   * the widget measuring itself.
+   * The panel's resolved row unit, in CSS pixels — the same value the grid places
+   * the widget with.
    */
   rowUnit: number;
 }
@@ -88,50 +61,34 @@ export interface WallWidgetSpan {
 }
 
 /**
- * A widget's card grammar (design.md D2). `ambient` readouts render chrome-less
- * directly on the background; `control` widgets render as a surface tile whose
- * whole card is the touch target.
+ * A widget's card grammar: `ambient` readouts render chrome-less, `control`
+ * widgets as a surface tile whose whole card is the touch target.
  */
 export type WallWidgetGrammar = "ambient" | "control";
 
-/** One widget type's declarative description, resolved by the grid and editor (design.md D6). */
+/** One widget type's declarative description, resolved by the grid and editor. */
 export interface WallWidgetDescriptor {
   type: WallWidgetType;
   label: string;
-  /** Whether the type renders as an ambient readout or a control surface (design.md D2). */
+  /** Whether the type renders as an ambient readout or a control surface. */
   grammar: WallWidgetGrammar;
   /** The default `{w, h}` a newly added widget of this type gets. */
   defaults: WallWidgetSpan;
-  /** The smallest `{w, h}` the editor may place this type at (specs/wall-display "A widget cannot be under-sized"). */
+  /** The smallest `{w, h}` the editor may place this type at. */
   min: WallWidgetSpan;
   /** The largest `{w, h}` the editor may place this type at. */
   max: WallWidgetSpan;
   /**
    * The type's config schema — the same shared per-type schema the server
-   * validates against (design.md D10), so the editor and the write boundary
-   * can never drift.
+   * validates against.
    */
   configSchema: ZodTypeAny;
   renderer: ComponentType<WallWidgetProps>;
 }
 
 /**
- * One typed device widget's descriptor (design.md D1, D3; specs/wall-display
- * "Widget Catalog"). Each device class the capability model can drive gets its
- * own type, sharing the one typed device config (`WallTypedDeviceWidgetConfig`) and
- * the one renderer, so the difference between them is *which card* the type names
- * — the renderer resolves its class from the widget's own type.
- *
- * The spans start from the ported card's own size. The minimum width is *derived*
- * from the widest control row a card draws (`wall/grid.ts`'s
- * `WALL_MIN_DEVICE_COLUMNS`), so a card at the type's minimum span never clips a
- * control horizontally on either panel; the minimum height is the cell the wall's
- * row unit is derived to hold a compact device card in with nothing to spare
- * (`WALL_MIN_DEVICE_ROWS`). They are both the default — the smallest legal
- * placement — and `6×6` is the maximum, so a device card can be enlarged to the
- * roomiest composition the wall draws. A minimum that *is* the default makes the
- * smallest legal placement `compact` (`resolveSpanTier`), which is the
- * composition the ported card's budget fits.
+ * One typed device widget's descriptor: the class's label, minimum span, and the
+ * shared typed-device renderer.
  */
 function typedDeviceDescriptor(type: WallDeviceClass): WallWidgetDescriptor {
   return {
@@ -147,36 +104,22 @@ function typedDeviceDescriptor(type: WallDeviceClass): WallWidgetDescriptor {
 }
 
 /**
- * The minimum interactive-control size, in CSS pixels, a wall widget must meet
- * (design.md D2, D4; specs/wall-display "Touch Operation"). It is the ported card
- * system's own control height — the value the ported device cards draw their
- * controls at — so the wall's floor and the cards it ports cannot disagree.
+ * The minimum interactive-control size, in CSS pixels, a wall widget must meet —
+ * the ported card system's own control height.
  */
 export const WALL_MIN_TOUCH_TARGET = 42;
 
 /**
  * The minimum space, in CSS pixels, the wall keeps between two adjacent
- * interactive controls, so a touch intended for one cannot plausibly activate
- * its neighbour (design.md D4; specs/wall-display "Adjacent controls are
- * separated"). It is the wall's own floor, matching the Hearth spacing rhythm's
- * `--hearth-space-2` (8 px) the wall's control rows and the wall gutter draw
- * with, and is a minimum — a control row may space its controls further.
+ * interactive controls.
  */
 export const WALL_MIN_CONTROL_GAP = 8;
 
-/**
- * A unique marker carried by the lazy `wall` chunk and not by first paint
- * (task 5.12). The wall grid renders it onto its root element and the asset
- * test asserts the string appears in no first-paint asset, so a regression
- * that pulls the wall (and its editor dependency) into the entry bundle fails
- * the build gate rather than silently blowing the first-paint budget.
- */
+/** A unique marker carried by the lazy `wall` chunk and not by first paint. */
 export const WALL_CHUNK_MARKER = "ts-ha-wall-chunk";
 
 /**
- * Every widget type's descriptor. Typed as a total record so adding a
- * `WALL_WIDGET_TYPES` entry without a descriptor is a compile error, and
- * frozen so it cannot be mutated at runtime.
+ * Every widget type's descriptor, typed as a total record and frozen.
  */
 export const WALL_WIDGET_REGISTRY: Readonly<Record<WallWidgetType, WallWidgetDescriptor>> =
   Object.freeze({
@@ -216,11 +159,8 @@ export const WALL_WIDGET_REGISTRY: Readonly<Record<WallWidgetType, WallWidgetDes
       grammar: "control",
       defaults: { w: 6, h: 6 },
       /**
-       * Six rows: the smallest span that holds the card's own chrome — its frame
-       * inset, the room glyph with its name, the member count, and the room-wide
-       * command row — plus one tile row and the page-control row at the wall's
-       * floors, so a paged room card never clips a tile below the touch target
-       * (wall-zones-and-fit D5). `wall-registry.test.ts` asserts the derivation.
+       * Six rows: the smallest span that holds the card's chrome plus one tile row
+       * and the page-control row.
        */
       min: { w: 4, h: 6 },
       max: { w: 12, h: 10 },
@@ -233,11 +173,8 @@ export const WALL_WIDGET_REGISTRY: Readonly<Record<WallWidgetType, WallWidgetDes
       grammar: "control",
       defaults: { w: 6, h: 6 },
       /**
-       * Five rows: the smallest span that holds the card's own chrome — its frame
-       * inset, the favorites glyph with its title, and the favorite count — plus
-       * one tile row and the page-control row at the wall's floors, so a paged
-       * favorites card never clips a tile below the touch target
-       * (wall-zones-and-fit D5). `wall-registry.test.ts` asserts the derivation.
+       * Five rows: the smallest span that holds the card's chrome plus one tile row
+       * and the page-control row.
        */
       min: { w: 3, h: 5 },
       max: { w: 12, h: 8 },
@@ -298,14 +235,8 @@ export const WALL_WIDGET_REGISTRY: Readonly<Record<WallWidgetType, WallWidgetDes
       grammar: "control",
       defaults: { w: 6, h: 4 },
       /**
-       * Two tile columns by two tile rows — the smallest span that holds a
-       * page's first row of device tiles at the wall's floors, so a device grid
-       * can never be placed too small to page (wall-zones-and-fit D12;
-       * specs/wall-display "Device Grid Widget"). A tile is a typed device
-       * widget's minimum span (`WALL_MIN_DEVICE_COLUMNS` columns wide), so two
-       * tile columns are `2 · WALL_MIN_DEVICE_COLUMNS`; the row count is
-       * `WALL_MIN_DEVICE_ROWS` tiles plus the page chrome.
-       * `wall-device-grid.test.ts` asserts it against the tile cell.
+       * Two tile columns by two tile rows — the smallest span that holds a page's
+       * first row of device tiles.
        */
       min: { w: 2 * WALL_MIN_DEVICE_COLUMNS, h: 4 },
       max: { w: 12, h: 12 },
@@ -314,7 +245,7 @@ export const WALL_WIDGET_REGISTRY: Readonly<Record<WallWidgetType, WallWidgetDes
     },
   });
 
-/** Resolves a widget type to its descriptor (design.md D6). */
+/** Resolves a widget type to its descriptor. */
 export function getWidgetDescriptor(type: WallWidgetType): WallWidgetDescriptor {
   return WALL_WIDGET_REGISTRY[type];
 }

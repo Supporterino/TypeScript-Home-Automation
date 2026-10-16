@@ -3,21 +3,8 @@ import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 
 /**
- * Read-only guard for the wall surface (task 6.3; specs/wall-display "The wall
- * cannot be edited in place"). The wall render path — `WallView`, the grid, and
- * every widget renderer — must expose no add/remove/edit control. Since there
- * is no DOM harness here, this asserts it structurally: none of those modules
- * may import the `wall/editor/**` chunk or the profile-mutation API
- * (`createWall`/`updateWall`/`deleteWall`). The editor module is separately
- * asserted to be the mutation site, so the guard is not vacuous.
- *
- * `wall/harness/**` is excluded alongside the editor. It is a development-only
- * surface in its own documents (`add-wall-harness` D1, D2), it is unreachable
- * from the application entrypoint — the harness guard asserts that — and its
- * control panel deliberately drives the editor's own pure mutations (D2, task
- * 5.1) rather than a second copy of the clamping and refusal rules. None of that
- * reaches a wall a user is watching: the invariant here is about the render
- * path, which this walk still covers in full.
+ * Read-only guard for the wall surface: the render path exposes no add/remove/edit
+ * control — no `wall/editor/**` import and no profile-mutation API.
  */
 const APP_DIR = join(import.meta.dir, "..", "src/app");
 const WALL_DIR = join(APP_DIR, "wall");

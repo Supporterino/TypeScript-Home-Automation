@@ -1,18 +1,6 @@
 /**
- * Pure helpers for the room-level batch command (design.md D5; specs/web-ui
- * "Room-Level Command"; tasks 10.1–10.3).
- *
- * A room command is best-effort: the batch endpoint dispatches one command
- * body to every capable member and classifies each as applied, skipped
- * (declares no writable on/off), or failed. Because a source may declare its
- * on/off property as either the source-neutral `on` or Zigbee2MQTT's `state` —
- * and the endpoint rejects a property a member does not declare — a room whose
- * members span both families is commanded with one request per property
- * family, each composed through the shared boolean encoder so a
- * string-encoded family (`"ON"`/`"OFF"`) is addressed correctly. A homogeneous
- * room still yields exactly one request. This module owns that grouping and
- * classification, so the view stays a thin renderer over testable logic
- * (design.md D23).
+ * Pure helpers for the room-level batch command: groups members by on/off
+ * property family and classifies the per-family batch responses.
  */
 import {
   type Capability,
@@ -27,8 +15,7 @@ import {
 
 /**
  * The declared writable boolean on/off capability a room command can target,
- * resolved through the shared canonical preference (canonical `on` over
- * Zigbee2MQTT's `state`) so it agrees with the tile's ranked primary action.
+ * resolved through the same canonical preference as the tile's primary action.
  */
 export function findOnOffCapability(capabilities: Capability[]): FlatCapability | undefined {
   return pickOnOffCapability(flattenCapabilities(capabilities), "writable");
@@ -36,9 +23,7 @@ export function findOnOffCapability(capabilities: Capability[]): FlatCapability 
 
 /**
  * Whether a device declares any writable boolean on/off capability — exactly
- * the members the batch endpoint will attempt to actuate. Members that merely
- * report are skipped by the endpoint and must not be optimistically commanded
- * locally.
+ * the members the batch endpoint will attempt to actuate.
  */
 export function supportsOnOffCommand(capabilities: Capability[]): boolean {
   return findOnOffCapability(capabilities) !== undefined;
@@ -61,12 +46,8 @@ export interface RoomCommandGroup {
 }
 
 /**
- * Groups capable members by the on/off property they declare — one group per
- * distinct property name, each carrying the value composed through the
- * declaring capability's encoding. Members declaring no writable on/off are
- * dropped; a homogeneous room produces exactly one group, preserving the
- * "single request" guarantee (task 10.1), while a mixed room produces one per
- * family.
+ * Groups capable members by the on/off property they declare, one group per
+ * distinct property, each encoded through its declaring capability.
  */
 export function groupOnOffCommand(members: RoomCommandMember[], on: boolean): RoomCommandGroup[] {
   const groups = new Map<string, RoomCommandGroup>();
@@ -97,12 +78,8 @@ export interface RoomCommandClassification {
 }
 
 /**
- * Merges the per-family batch responses into one result per member. Every
- * request reports all room members, so a member capable of one family is
- * reported `skipped` by the other families' requests; its own family's
- * non-skipped outcome wins. Members no family can address stay `skipped`, so
- * {@link classifyRoomCommandResults} still separates a genuinely
- * non-actuatable member from a failed one (task 10.3).
+ * Merges the per-family batch responses into one result per member: a member's
+ * own family's non-skipped outcome wins over the other families' `skipped`.
  */
 export function mergeRoomCommandResults(responses: RoomCommandResult[][]): RoomCommandResult[] {
   const byMember = new Map<string, RoomCommandResult>();
@@ -115,7 +92,7 @@ export function mergeRoomCommandResults(responses: RoomCommandResult[][]): RoomC
   return [...byMember.values()];
 }
 
-/** Splits a batch response into applied, skipped, and failed qualified identifiers, preserving order. */
+/** Splits a batch response into applied, skipped, and failed identifiers, in order. */
 export function classifyRoomCommandResults(
   results: RoomCommandResult[],
 ): RoomCommandClassification {

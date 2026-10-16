@@ -10,12 +10,8 @@ import { cardArchetype } from "../src/app/lib/card-archetype.js";
 import { WALL_MIN_CONTROL_GAP } from "../src/app/wall/registry.js";
 
 /**
- * The cover transport decisions (design.md D15; specs/wall-display "Cover
- * Transport Controls"). The control set, the optimistic wiring, and the drawing
- * now live in the wall's own `CoverCard` (`wall-card-cover.test.ts` covers the
- * card); what stays here is the pure detection and value resolution the card
- * drives — which device is a cover, which values Open/Close command, and whether
- * a stop command exists.
+ * The cover transport decisions: which device is a cover, which values Open/Close
+ * command, and whether a stop command exists.
  */
 const rw = { readable: true, writable: true };
 const ro = { readable: true, writable: false };
@@ -40,7 +36,7 @@ function zigbeeCover(): Capability[] {
   ];
 }
 
-/** A Shelly cover: a write-only `action` transport enum beside a writable position and a read-only state. */
+/** A Shelly cover: a write-only `action` transport enum beside a writable position. */
 function shellyCover(): Capability[] {
   return [
     numeric("position"),
@@ -74,7 +70,7 @@ function positionOnlyCover(): Capability[] {
   ];
 }
 
-/** The labels a cover card renders — Stop is present exactly when the pure helper finds a command. */
+/** The labels a cover card renders — Stop exactly when the pure helper finds a command. */
 function transportLabels(capabilities: Capability[]): string[] {
   return ["Open", "Close", ...(coverStopCommand(capabilities) ? ["Stop"] : [])];
 }

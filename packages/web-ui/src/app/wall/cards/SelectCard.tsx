@@ -1,24 +1,6 @@
 /**
- * The wall select card (design.md D1, D3, D6; specs/wall-display "Widget Catalog"
- * — "an enumerated control"; "Wall Device Presentation" — "A card presents the
- * ported anatomy", "A value device keeps its embedded control").
- *
- * The card composes the ported anatomy in order: the leading circular icon
- * affordance, the device's name over its current value, and one actions row
- * carrying the enumerated control — its permitted values, drawn by the shared
- * {@link WallCardEnumControl} as a touch-sized option per value where they fit the
- * box, or as one single affordance where they do not — as the sole action, because
- * a select card drives exactly one property. Selecting a value is the property's
- * actuation target, so the card is never whole-card actuated.
- *
- * An enumerated control with no permitted values cannot be expressed as options,
- * so no control is presented: the card composes its reading alone rather than
- * rendering an inert control (specs/wall-display "A control the device cannot
- * express MUST NOT be presented").
- *
- * The pure decisions — which control is declared, its permitted values, and what
- * the reading says — are exported so they are reachable by `bun test`. Wall-chunk
- * only (design.md D10).
+ * The wall select card: a leading icon, the device's name over its current value, and
+ * one actions row carrying the enumerated control.
  */
 import type { Capability } from "@ts-ha/shared";
 import { ListChecks } from "lucide-react";
@@ -43,17 +25,15 @@ import {
 import { WALL_CARD_GLYPH_SIZE, WALL_CARD_METRICS } from "./metrics.js";
 import type { WallDeviceCardProps } from "./types.js";
 
-/** A select card's resolved control (design.md D3): its property and permitted values. */
+/** A select card's resolved control: its property and permitted values. */
 export interface WallSelectCardModel {
   control: FlatCapability | undefined;
   values: (string | number)[];
 }
 
 /**
- * The enumerated control a select card drives (design.md D3), or `undefined` when
- * the device declares none. Only a writable enum with permitted values qualifies:
- * an enum that enumerates nothing declares no option the card could present, so
- * the card offers no control rather than inventing one.
+ * The enumerated control a select card drives, or `undefined` when the device
+ * declares none.
  */
 export function selectCardModel(capabilities: Capability[]): WallSelectCardModel {
   const control = flattenCapabilities(capabilities).find(
@@ -64,8 +44,7 @@ export function selectCardModel(capabilities: Capability[]): WallSelectCardModel
 
 /**
  * The enumerated capability the card's reading reads: the control when the device
- * declares one, else the first readable enum — so a device whose permitted values
- * are absent still presents its current value rather than an empty line.
+ * declares one, else the first readable enum.
  */
 export function selectCardReadout(capabilities: Capability[]): FlatCapability | undefined {
   return (
@@ -86,8 +65,7 @@ export function SelectCard({ device, config, box, contained }: WallDeviceCardPro
   const readout = selectCardReadout(device.capabilities);
   const disabled = !device.reachable;
 
-  // One optimistic channel, called unconditionally with an absent property when
-  // the device declares no control, so hook order is stable (design.md D12).
+  // Called unconditionally so hook order is stable.
   const value = useOptimisticDeviceProperty(
     device.qualifiedId,
     model.control?.property ?? "",
@@ -95,8 +73,7 @@ export function SelectCard({ device, config, box, contained }: WallDeviceCardPro
     device.observation,
   );
 
-  // An enumerated control carries no on/off state to be measured against, so the
-  // device is always active and collapsible_controls has nothing to hide.
+  // An enumerated control carries no on/off state, so the device is always active.
   const composition = resolveDeviceCardComposition({
     box: box ?? DEFAULT_WALL_CARD_BOX,
     layout: config?.layout,

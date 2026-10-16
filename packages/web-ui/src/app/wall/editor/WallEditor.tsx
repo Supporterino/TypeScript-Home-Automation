@@ -1,24 +1,6 @@
 /**
- * The wall-profile editor (design.md D5, D9, D13; wall-zones-and-fit D7;
- * specs/wall-display "Wall Configuration Editor"). A full-screen overlay within
- * `/walls` — the wall is not a route the editor lives under — that composes a
- * profile's base layout: add a widget of any registered type, configure it, give
- * it a zone, and move/resize it with cell/span controls that are
- * keyboard-accessible and need no drag. Every mutation is delegated to the pure
- * `model.ts` functions, and saving funnels through `submitProfileDraft`, so an
- * invalid or unfittable draft is rejected inline and never reaches the API. The
- * widget list is a responsive grid (two columns on a wide viewport, one narrow)
- * so a long profile stays scannable without horizontal scrolling; each widget
- * stays a self-contained card.
- *
- * The draft preview (design.md D7) shows the composition at the wall's target
- * panel aspect ratio — the zones, the fit verdict, and how many pages each device
- * grid would present — as a wireframe drawn with the editor's own Lumen tokens.
- * It renders no wall widget and reaches no Hearth, so the wall's stylesheet stays
- * on demand.
- *
- * Loaded only inside the lazy `wall` chunk; imported only from `WallsView`.
- * Rebuilt on the Lumen primitive layer (`ui/*`) and `lucide-react`.
+ * The wall-profile editor: a full-screen overlay within `/walls` that composes a
+ * profile's base layout.
  */
 import {
   WALL_GRID_COLUMNS,
@@ -87,9 +69,7 @@ export function WallEditor({ profile, onClose, onSaved }: WallEditorProps) {
   const [errors, setErrors] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
 
-  // The draft's preview at the wall's target panel (design.md D7): the zones, the
-  // fit verdict, and each device grid's page count — the same pure resolver the
-  // wall renders through.
+  // The draft's preview at the wall's target panel, via the same pure resolver.
   const preview = resolveDraftPreview(config);
   const unfittable = preview.fit === "tooLarge";
 
@@ -231,11 +211,8 @@ function boxStyle(box: WallPreviewBox, panel: WallDraftPreview["panel"]) {
 }
 
 /**
- * The draft's wireframe: the panel's own pixel geometry, drawn with the editor's
- * Lumen tokens. It renders no wall widget and reaches no Hearth, so the wall's
- * stylesheet stays on demand (design.md D7) — a wireframe, not the Hearth paint.
- * A composition taller than the panel is clipped by the panel's own edge, which
- * is what the fit verdict beside it reports.
+ * The draft's wireframe: the panel's own pixel geometry, drawn with the editor's Lumen
+ * tokens. It renders no wall widget and reaches no Hearth.
  */
 function DraftWireframe({ preview }: { preview: WallDraftPreview }) {
   return (
@@ -271,10 +248,8 @@ function DraftWireframe({ preview }: { preview: WallDraftPreview }) {
 }
 
 /**
- * The draft preview panel (design.md D7; specs/wall-display "The draft is
- * presented at panel size", "An unfittable draft is refused"): the composition at
- * the wall's target panel aspect ratio, the fit verdict, and each device grid's
- * page count, so an author authors against the panel rather than the viewport.
+ * The draft preview panel: the composition at the wall's target panel aspect ratio,
+ * the fit verdict, and each device grid's page count.
  */
 function DraftPreviewCard({
   preview,
@@ -358,9 +333,7 @@ function WidgetRow({
   onRemove,
 }: WidgetRowProps) {
   const descriptor = getWidgetDescriptor(widget.type);
-  // A configured title is drawn inside the same cell, so a titled card's own
-  // height floor is a row above the type's minimum (the field's `min` matches the
-  // clamp and the draft validator, both of which enforce the same floor).
+  // A titled card's height floor is a row above the type's minimum.
   const minHeight = descriptor.min.h + (widgetTitle(widget) !== null ? WALL_TITLE_ROWS : 0);
 
   return (

@@ -3,34 +3,14 @@ import { join } from "node:path";
 import { appPath, collectAppModules, isInside, listAppModules } from "./import-graph.js";
 
 /**
- * The render harness must stay unreachable from the application entrypoint
- * (design.md D9; task 7.2; specs/web-ui "A development-only module does not
- * reach the shipped build").
- *
- * D9 needs two guards rather than trust. This one walks the app's *real* module
- * graph from `src/app/index.tsx` — static imports, side-effect imports,
- * re-exports, and dynamic `import()` — so a lazily loaded path counts exactly as
- * a static one, and it fails on any reachable route to `wall/harness/**`,
- * including a re-export. The asset test's marker assertion is the other guard: it
- * catches a regression in the build's own entrypoint list, which a walk of the
- * source graph cannot see.
- *
- * There is no DOM harness here and this is a source-level fact, so a source walk
- * is the reachable check — the same style as `wall-read-only.test.ts`.
+ * The render harness must stay unreachable from the application entrypoint: it
+ * fails on any route to `wall/harness/**`, including a re-export.
  */
 const HARNESS_DIR = join(import.meta.dirname, "..", "src/app/wall/harness");
 
 /**
- * App modules the shipped graph deliberately no longer reaches beyond the
- * harness. `lib/card-archetype.ts` is intentionally retained: the change's
- * proposal (Non-Goals) states "the shared device tile, `lib/card-archetype.ts`
- * and the dashboard's device views keep their current presentation and ranking",
- * so only the wall's *use* of it is retired (task 5.2) — the module and its own
- * unit tests stay in the tree. No app module imports it now (the wall selects a
- * card through `wall/cards/device-class.ts`, and the shared tile ranks through
- * `lib/capability-ranking.ts`), which is why it has no consumer. Naming it here
- * keeps the walker's completeness check honest: a *new* edge to it, or any other
- * unreached module, still fails.
+ * App modules the shipped graph deliberately no longer reaches: `lib/card-archetype.ts`
+ * is retained but has no app consumer.
  */
 const RETIRED_APP_MODULES: ReadonlySet<string> = new Set(["lib/card-archetype.ts"]);
 
@@ -38,9 +18,8 @@ describe("wall harness guard", () => {
   it("walks the app's module graph from the entrypoint (guard is not vacuous)", async () => {
     const graph = await collectAppModules();
 
-    // A healthy app graph: every module is the package's own frontend source —
-    // a bare specifier names another package, so the walk stops there rather
-    // than wandering into `@ts-ha/shared` or `node_modules`.
+    // A healthy app graph: every module is the package's own frontend source — a bare
+    // specifier names another package, so the walk stops there.
     expect(graph.files.length).toBeGreaterThan(100);
     expect(graph.entry.endsWith("src/app/index.tsx")).toBe(true);
     const srcDir = join(import.meta.dirname, "..", "src");
@@ -64,11 +43,8 @@ describe("wall harness guard", () => {
     const reached = new Set(graph.files);
     const unreached = (await listAppModules()).filter((file) => !reached.has(file));
 
-    // The only modules the entrypoint cannot reach are the harness itself, the
-    // ambient declaration files, and the retired wall archetype module named
-    // above. Anything else unreached would mean this walker had missed an edge —
-    // and the guard's silence would mean nothing — so the assertion makes the
-    // walker's completeness part of the guard.
+    // The only modules the entrypoint cannot reach are the harness itself, the ambient
+    // declaration files, and the retired module above.
     const offenders = unreached
       .filter(
         (file) =>

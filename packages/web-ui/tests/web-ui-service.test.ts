@@ -5,8 +5,7 @@ import { Hono } from "hono";
 import pino from "pino";
 import { createWebUiService, WebUiService } from "../src/index.js";
 
-// design.md D7; task 3.3: the plugin declares its own structural shape and
-// mounts on a bare Hono app with no `@ts-ha/core` import.
+// The plugin declares its own structural shape and mounts on a bare Hono app.
 
 const logger = pino({ level: "silent" });
 

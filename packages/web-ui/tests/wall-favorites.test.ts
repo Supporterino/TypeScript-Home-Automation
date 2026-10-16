@@ -6,8 +6,7 @@ import { WALL_CARD_METRICS, WALL_CARD_SECONDARY_FONT_SIZE } from "../src/app/wal
 import { favoriteDevices } from "../src/app/wall/widgets/favorites-model.js";
 
 // Pure selection for the wall favorites widget — no DOM. The displayed set is
-// derived from the favorites list and live device map on every render, so a
-// change streamed from another client is reflected (design.md D7; task 5.6).
+// derived from the favorites list and live device map on every render.
 
 function device(qualifiedId: string): DeviceDescriptor {
   return {
@@ -61,11 +60,8 @@ describe("favoriteDevices", () => {
   });
 });
 
-// The card's own chrome, composed from the wall's single card vocabulary
-// (design.md W1, W2; specs/wall-display "Wall Visual Language", "Supporting text
-// is drawn at the ported sizes"). There is no DOM harness here, so the
-// composition is asserted structurally — the same style as the wall's other
-// widget tests.
+// The card's own chrome, composed from the wall's single card vocabulary. There
+// is no DOM harness here, so the composition is asserted structurally.
 const APP_DIR = join(import.meta.dir, "..", "src/app");
 const FAVORITES_WIDGET = join(APP_DIR, "wall/widgets/FavoritesWidget.tsx");
 const ANATOMY = join(APP_DIR, "wall/cards/card-anatomy.tsx");
@@ -93,9 +89,8 @@ describe("the favorites card's own chrome", () => {
     const widget = await readSource(FAVORITES_WIDGET);
     const anatomy = await readSource(ANATOMY);
 
-    // The count is the widget's caption (design.md W2), so it is handed to the
-    // vocabulary's own reading part with no tier of its own — the part falls back to
-    // the ported secondary size, the smallest the ported table declares.
+    // The count is the widget's caption, so it is handed to the vocabulary's own
+    // reading part with no tier of its own.
     expect(widget).toContain("<WallCardReading>{devices.length}</WallCardReading>");
     expect(anatomy).toContain("size = WALL_CARD_SECONDARY_FONT_SIZE");
     expect(WALL_CARD_SECONDARY_FONT_SIZE).toBe(`${WALL_CARD_METRICS.secondarySize}px`);

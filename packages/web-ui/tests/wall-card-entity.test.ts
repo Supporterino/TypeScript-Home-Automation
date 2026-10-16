@@ -9,13 +9,8 @@ import {
 } from "../src/app/wall/cards/EntityCard.js";
 
 /**
- * The wall entity card — the typed fallback (task 4.3; design.md D1, D3;
- * specs/wall-display "Widget Catalog", "Wall Device Presentation" — "The whole
- * tile actuates a toggle", "A sensor is read-only"). The pure decisions are
- * covered directly: a switch has a toggle the whole card actuates, a read-only
- * sensor has none, and a device of no class is still presented with its reading.
- * The render is asserted structurally against its source (there is no DOM
- * harness), the same style as `wall-card-anatomy.test.ts`.
+ * The wall entity card — the typed fallback: a switch has a toggle the whole card
+ * actuates, a read-only sensor has none; the render asserted structurally.
  */
 const APP_DIR = join(import.meta.dir, "..", "src/app");
 const CARD = join(APP_DIR, "wall/cards/EntityCard.tsx");

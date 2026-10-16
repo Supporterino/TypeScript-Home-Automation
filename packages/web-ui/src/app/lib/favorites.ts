@@ -1,15 +1,9 @@
 /**
- * Favorites over an ordinary state key (design.md D9; specs/web-ui
- * "Favorites").
- *
- * Favorites are a JSON array of qualified identifiers stored under one
- * ordinary state key, so they persist and propagate to every connected
- * client through the state snapshot and stream that already exist — no
- * parallel API, no device change. This module is the pure list logic only;
- * the data store owns the optimistic write and stream reconciliation.
+ * Favorites over an ordinary state key: pure list logic only; the data store
+ * owns the optimistic write and stream reconciliation.
  */
 
-/** The ordinary state key favorites are stored under (design.md D9). */
+/** The ordinary state key favorites are stored under. */
 export const FAVORITES_STATE_KEY = "favorites";
 
 /** Coerces any stored value into a de-duplicated list of qualified identifiers. */

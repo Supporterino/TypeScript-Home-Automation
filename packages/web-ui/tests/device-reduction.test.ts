@@ -6,10 +6,8 @@ import {
 } from "../src/app/lib/device-reduction.js";
 import type { DeviceDescriptor } from "../src/app/types.js";
 
-// Client-side reconciliation of the stream's per-connection device snapshot
-// (task 5.1; design.md D7; specs/web-ui "The stream's device snapshot is
-// reconciled by identifier" and "A delta for an unknown device recovers it").
-// Both seams are pure, so recovery is reachable here without a DOM.
+// Client-side reconciliation of the stream's per-connection device snapshot. Both
+// seams are pure, so recovery is reachable here without a DOM.
 
 function device(qualifiedId: string, overrides: Partial<DeviceDescriptor> = {}): DeviceDescriptor {
   return {

@@ -1,4 +1,4 @@
-/** Shared log-display utilities used by LogsView (design.md D23; task 10.21). */
+/** Shared log-display utilities used by LogsView. */
 
 import type { LogEntry } from "../types.js";
 

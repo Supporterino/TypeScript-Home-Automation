@@ -3,21 +3,8 @@ import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 
 /**
- * Reconnect guard for the wall (task 7.3; design.md D11; specs/wall-display
- * "Always-On Operation" "A wall recovers from a network drop").
- *
- * The wall inherits the data layer's existing reconnect-then-resnapshot rather
- * than owning a connection: the single `EventSource` is opened in
- * `lib/data-store.tsx` (the positive control below), which on a network drop
- * marks the transport degraded and falls back to periodic polling, then on
- * reopen re-reads the snapshot so events missed while disconnected are not
- * lost — all without a page reload. The wall's clock widget is derived from
- * the client clock, so it is unaffected by the connection state.
- *
- * This asserts the inheritance structurally: no module in the wall render
- * path may reference `EventSource` or `openEventStream`. Since there is no DOM
- * harness here and the transport wiring is the store's (not the wall's), a
- * source scan is the reachable check.
+ * Reconnect guard for the wall: no module in the wall render path may reference
+ * `EventSource` or `openEventStream` — the data layer owns the connection.
  */
 const APP_DIR = join(import.meta.dir, "..", "src/app");
 const WALL_DIR = join(APP_DIR, "wall");
@@ -26,7 +13,7 @@ const DATA_STORE = join(APP_DIR, "lib/data-store.tsx");
 
 const CONNECTION_TOKEN = /\b(?:EventSource|openEventStream)\b/;
 
-/** Removes block and line comments so documentation about the connection is not mistaken for a reference. */
+/** Removes block and line comments so prose about a connection is not mistaken for a reference. */
 function stripComments(content: string): string {
   return content.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
 }

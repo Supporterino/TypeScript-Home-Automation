@@ -1,15 +1,6 @@
 /**
- * Rooms index — the room management surface: every room as a navigable entry
- * alongside its rename and delete actions, plus the unassigned and all-devices
- * entries (design.md D13, D14; specs/web-ui "Room Management Interface"; task
- * 5.2).
- *
- * Creating, renaming, and deleting live here, next to the list they act on; the
- * room's own view owns membership and the room-level command. Deleting a room
- * is non-destructive and the confirmation says so — its devices become
- * unassigned rather than being deleted.
- *
- * Rebuilt on the Lumen primitive layer (`ui/*`) and `lucide-react` (task 5.2).
+ * Rooms index — every room as a navigable entry with rename and delete actions,
+ * plus the unassigned and all-devices entries.
  */
 import { CircleHelp, DoorOpen, LayoutList, Pencil, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";

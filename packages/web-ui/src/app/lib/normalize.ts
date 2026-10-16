@@ -1,16 +1,6 @@
 /**
- * Pure payload normalisation.
- *
- * API and event-stream payloads are coerced through here before they reach
- * any component, so an unfamiliar shape — `null`, a missing field, or a
- * field of the wrong type — produces a well-formed, renderable value
- * instead of reaching a component and throwing (design.md D23). This is
- * what the error boundary (task 1.0) is a backstop for, not a substitute
- * for.
- *
- * Every function here is a pure coercion: given anything, it returns
- * something safe to render (or, for the event stream, `null` to mean
- * "ignore this event"). None of them throw.
+ * Pure payload normalisation: API and event-stream payloads are coerced into
+ * well-formed, renderable values instead of reaching a component and throwing.
  */
 
 import type {
@@ -130,15 +120,13 @@ export function normalizeHomekitStatus(value: unknown): HomekitStatus | null {
   };
 }
 
-// ── Capability vocabulary (design.md D22) ───────────────────────────────────
+// ── Capability vocabulary ───────────────────────────────────────────────────
 
 const VALUE_TYPES = new Set(["boolean", "numeric", "enum", "text", "composite", "list", "unknown"]);
 
 /**
- * Whether a declared on/off value is usable as a boolean capability's
- * encoding. A malformed declaration degrades to absent, so a reader falls back
- * to the `?? true` / `?? false` default (`@ts-ha/shared` `capabilities.ts`)
- * exactly as for a capability that declares nothing.
+ * Whether a declared on/off value is usable as a boolean capability's encoding;
+ * a malformed declaration degrades to absent.
  */
 function isBooleanEncodingValue(value: unknown): value is string | number | boolean {
   return typeof value === "string" || typeof value === "number" || typeof value === "boolean";
@@ -175,8 +163,7 @@ export function normalizeCapability(value: unknown): Capability {
       (v): v is string | number => typeof v === "string" || typeof v === "number",
     );
   }
-  // The declared boolean encoding is part of the contract a control reads and
-  // composes through (design.md D1); ingestion must not narrow it away.
+  // Ingestion must not narrow away the declared boolean encoding.
   if (isBooleanEncodingValue(rec.valueOn)) capability.valueOn = rec.valueOn;
   if (isBooleanEncodingValue(rec.valueOff)) capability.valueOff = rec.valueOff;
   if (Array.isArray(rec.features)) {
@@ -190,15 +177,9 @@ export function normalizeCapabilities(value: unknown): Capability[] {
   return asArray<unknown>(value).map(normalizeCapability);
 }
 
-// ── Capability contract drift pin (design.md D1) ─────────────────────────────
-//
-// `normalizeCapability` rebuilds a `Capability` from an explicit field list, so
-// the contract is declared a second time here and can drift from
-// `@ts-ha/shared`'s `Capability`. This module is compiled by
-// `tsc -p src/app/tsconfig.json` — the test tree is not — so the pin lives here,
-// not in a test: adding a field to the contract, or dropping one, makes one of
-// the aliases below non-`never` and fails the typecheck gate rather than
-// silently dropping the field. Type-only; it emits no runtime code.
+// ── Capability contract drift pin ───────────────────────────────────────────
+// `normalizeCapability` re-declares `Capability`'s fields, so the aliases below
+// fail typecheck if the shared contract gains or loses a field.
 
 type CapabilityContractKey =
   | "kind"
@@ -225,7 +206,7 @@ type _CapabilityContractPin = CapabilityContractPinned<
   _CapabilityContractKeyDropped
 >;
 
-// ── Device descriptors (design.md D2) ───────────────────────────────────────
+// ── Device descriptors ──────────────────────────────────────────────────────
 
 export function normalizeDeviceDescriptor(value: unknown): DeviceDescriptor {
   const rec = asRecord(value);
@@ -259,7 +240,7 @@ export function normalizeDeviceDescriptors(value: unknown): DeviceDescriptor[] {
   return asArray<unknown>(value).map(normalizeDeviceDescriptor);
 }
 
-// ── Rooms (design.md D14) ────────────────────────────────────────────────────
+// ── Rooms ───────────────────────────────────────────────────────────────────
 
 export function normalizeRoom(value: unknown): Room {
   const rec = asRecord(value);
@@ -287,7 +268,7 @@ export function normalizeRoomsWithMembers(value: unknown): RoomWithMembers[] {
   return asArray<unknown>(value).map(normalizeRoomWithMembers);
 }
 
-// ── Automation observability (design.md D11) ────────────────────────────────
+// ── Automation observability ────────────────────────────────────────────────
 
 export function normalizeExecutionRecord(value: unknown): ExecutionRecord {
   const rec = asRecord(value);
@@ -349,10 +330,8 @@ function normalizeObservation(value: unknown): DeviceObservation {
 }
 
 /**
- * Normalises one decoded SSE payload. An unrecognised or malformed category
- * — a future server version, a corrupt frame — degrades to `{category:
- * "unknown"}` rather than throwing (design.md D23), so the data layer can
- * unconditionally ignore anything it does not recognise.
+ * Normalises one decoded SSE payload; an unrecognised category degrades to
+ * `{category: "unknown"}` rather than throwing.
  */
 export function normalizeStreamEvent(value: unknown): NormalizedStreamEvent {
   const rec = asRecord(value);

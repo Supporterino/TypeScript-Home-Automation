@@ -5,16 +5,7 @@ import { sourcesOwnReading } from "../src/app/lib/data-store.js";
 
 /**
  * The two wall widgets that source their own ambient reading prefer a
- * caller-supplied fixture (task 1.4; design.md D5; specs/web-ui "Data Sources"
- * — "A widget that sources its own reading prefers the fixture", "A component
- * that sources a reading outside the data layer MUST render a caller-supplied
- * fixture for that reading when one is present, and MUST source it exactly as
- * it does today when none is supplied").
- *
- * The decision is pure and is called directly; the wiring — that each widget's
- * only fetch site sits behind it, and that every reload path routes through
- * that site — is asserted structurally, since this suite has no DOM, in the
- * style `wall-reconnect.test.ts` and `wall-single-surface.test.ts` established.
+ * caller-supplied fixture.
  */
 const APP_DIR = join(import.meta.dir, "..", "src/app");
 const WEATHER_WIDGET = join(APP_DIR, "wall/widgets/WeatherWidget.tsx");
@@ -30,8 +21,8 @@ async function source(path: string): Promise<string> {
 }
 
 /**
- * The widget's loader callback — the only place in either module that can issue
- * a request, so the gate's position inside it is what every path depends on.
+ * The widget's loader callback — the only place in either module that can issue a
+ * request.
  */
 function loaderBody(content: string): string {
   const start = content.indexOf("const load = useCallback(");
@@ -97,9 +88,8 @@ describe("the energy widget's fixture reading", () => {
   it("keeps the debounced device-event reload behind that one gated fetch site", async () => {
     const energy = await source(ENERGY_WIDGET);
 
-    // The mount load, the reconnect refetch, and the debounced device-event
-    // refetch all call `load` — the only fetch site — so a supplied reading
-    // silences the reload too, not just the mount load.
+    // The mount load, the reconnect refetch, and the debounced device-event refetch all
+    // call `load` — the only fetch site — so a supplied reading silences the reload too.
     expect(loadCalls(energy)).toBe(3);
     expect(energy).toContain("return subscribe((event) => {");
   });

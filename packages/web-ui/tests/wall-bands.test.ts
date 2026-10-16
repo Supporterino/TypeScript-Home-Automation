@@ -2,9 +2,8 @@ import { describe, expect, it } from "bun:test";
 import type { WallWidget } from "@ts-ha/shared";
 import { resolveBands } from "../src/app/wall/bands.js";
 
-// Pure zone grouping — no DOM (wall-zones-and-fit D2; specs/wall-display "Wall
-// Zones"). A zone is an additive label on the flat grid: the widgets sharing it
-// render inside one band, and no widget's authored placement changes.
+// Pure zone grouping — no DOM. A zone is an additive label on the flat grid: the
+// widgets sharing it render inside one band, and no widget's placement changes.
 
 function widget(id: string, x: number, y: number, w: number, h: number, zone?: string): WallWidget {
   return { id, type: "clock", config: {}, x, y, w, h, zone };

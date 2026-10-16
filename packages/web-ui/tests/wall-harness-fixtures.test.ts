@@ -41,12 +41,8 @@ import { temperatureWidgetState } from "../src/app/wall/widgets/temperature-mode
 import { weatherWidgetState } from "../src/app/wall/widgets/weather-model.js";
 
 /**
- * The harness roster's own contract (task 2.1; design.md D5, D6). The fixtures
- * are typed as the store's `DataStoreFixtures`, so typecheck catches a contract
- * change; what it cannot catch is a roster that still compiles while no longer
- * covering a wall device class — which is exactly the "fixture drift" risk
- * design.md names. Every claim D6 makes is therefore resolved through the same
- * pure functions the wall itself uses, not by inspection.
+ * The harness roster's own contract: each fixture resolves, through the wall's pure
+ * functions, to a device class its card can drive.
  */
 
 const DEVICES_BY_ID = new Map(
@@ -90,9 +86,8 @@ describe("the fixture roster", () => {
   });
 
   it("backs the number, select, climate and lock classes with a control each card drives", () => {
-    // The classes whose card has its own pure model are asserted through it, so a
-    // fixture that resolves to a class but declares nothing that class's card can
-    // drive fails here rather than reaching the harness as an inert card.
+    // The classes whose card has its own pure model are asserted through it, so a fixture
+    // that resolves to a class but declares nothing that card can drive fails here.
     const number = fixtureDevice(DEVICE_CLASS_DEVICE_IDS.number);
     expect(numberCardControl(number.capabilities)?.property).toBe("value");
 
@@ -124,9 +119,8 @@ describe("the fixture roster", () => {
   it("gives the read-only sensor a temperature and a humidity the temperature widget reads", () => {
     const sensor = fixtureDevice(DEVICE_CLASS_DEVICE_IDS.entity);
 
-    // The sensor this home runs declares its humidity on the same device, so the
-    // widget bound to it presents both readings (design.md W5; specs/wall-display
-    // "A temperature widget shows its sensor's humidity").
+    // The sensor this home runs declares its humidity on the same device, so the widget
+    // bound to it presents both readings.
     expect(temperatureWidgetState(sensor, sensor.qualifiedId)).toEqual({
       status: "reading",
       value: 21.5,
@@ -138,9 +132,8 @@ describe("the fixture roster", () => {
   it("keeps a second sensor that declares no humidity, so the other case is walked", () => {
     const temperatureOnly = fixtureDevice(HARNESS_TEMPERATURE_ONLY_SENSOR_ID);
 
-    // The other half of the reading rule: a sensor with a temperature and no
-    // humidity presents only its temperature, never a placeholder (design.md W5;
-    // specs/wall-display "A sensor without humidity shows only its temperature").
+    // The other half of the reading rule: a sensor with a temperature and no humidity
+    // presents only its temperature, never a placeholder.
     expect(temperatureWidgetState(temperatureOnly, temperatureOnly.qualifiedId)).toEqual({
       status: "reading",
       value: 16.2,
@@ -157,9 +150,8 @@ describe("the fixture roster", () => {
     const values = climateCardModel(climate.capabilities).modeValues;
     expect(values.length).toBeGreaterThan(4);
 
-    // At the widget's minimum span the option row cannot fit beside the setpoint
-    // slider at the wall's touch target, so the enumerated control resolves to
-    // one affordance rather than an option squeezed below the target.
+    // At the widget's minimum span the option row cannot fit beside the setpoint slider,
+    // so the enumerated control resolves to one affordance.
     const box = placedDeviceCardBox({
       columns: WALL_MIN_DEVICE_COLUMNS,
       rowUnit: ROW_UNIT_MIN,
@@ -187,15 +179,8 @@ describe("the fixture selection and rooms", () => {
   });
 
   it("carries more devices than the most tiles any legal placement presents", () => {
-    // The roster's size is a derivation, not a number: the most tiles one page can
-    // hold is `devices` at its largest span, the wall's smallest row unit and the
-    // gutter's floor, with the chrome a *one-page* placement reserves held back —
-    // which is the frame's ported inset alone (design.md W3; specs/wall-display
-    // "Panel Fit"). A placement whose content fits one page draws no page-control
-    // row, so it reserves no room for one and keeps that cell for tiles; only a
-    // placement that pages pays `WALL_PAGE_CONTROL_RESERVED_PX` (resolvePagedTiles
-    // resolves the larger plan only once the content pages). A larger row unit fits
-    // no more rows, so an untitled placement at the floors is the ceiling.
+    // The roster's size is a derivation, not a number: the most tiles one page can hold is
+    // `devices` at its largest span, the smallest row unit, and the gutter's floor.
     const mostTiles = resolvePages({
       span: WALL_WIDGET_REGISTRY.devices.max,
       count: 1,
@@ -204,9 +189,8 @@ describe("the fixture selection and rooms", () => {
       reservedPx: WALL_FRAME_RESERVED_PX,
     }).tilesPerPage;
 
-    // The ceiling is exact: that many devices still fit the one page the frame-only
-    // plan promises, and the next one pages — so any roster above this ceiling
-    // necessarily resolves to more than one page, the property `fixtures.ts` claims.
+    // The ceiling is exact: that many devices still fit the one page the frame-only plan
+    // promises, and the next one pages.
     const span = WALL_WIDGET_REGISTRY.devices.max;
     expect(
       resolveDeviceGridPage({

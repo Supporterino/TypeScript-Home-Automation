@@ -1,18 +1,6 @@
 /**
  * A single room's detail and control view — assign, unassign, filters, and the
- * room-level command (design.md D14, D6, D7; specs/web-ui "Room Management
- * Interface", "Room-Level Command"; task 5.2).
- *
- * Members are presented in the same grid every other device collection uses,
- * through the same {@link DeviceTile} component — an unavailable member renders
- * through its unavailable variant rather than a parallel layout, and never
- * shows its stale state as current. Removing a member is not always-present
- * chrome: it lives behind a room-level manage mode, reachable by keyboard or
- * tap so it works on the PWA's primary input.
- *
- * Room creation/rename/delete live on the rooms index; this view owns
- * membership and the batch command. Rebuilt on the Lumen primitive layer
- * (`ui/*`) and `lucide-react` (task 5.2).
+ * room-level command.
  */
 import { Check, CircleHelp, ListChecks, Plus, Power, TriangleAlert, X } from "lucide-react";
 import { useState } from "react";
@@ -55,16 +43,13 @@ export function RoomView({ roomId }: { roomId: string }) {
   const [assignTarget, setAssignTarget] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  // Local, discarded on navigation — nothing about edit mode is worth
-  // persisting (design.md D7).
+  // Local, discarded on navigation.
   const [editMode, setEditMode] = useState(false);
-  // Session-scoped filter (design.md D5), same predicate as every other
-  // device collection (design.md D4).
+  // Session-scoped filter, same predicate as every other device collection.
   const [operableOnly, setOperableOnly] = useState(false);
-  // Session-scoped reveal (design.md D12): a viewing preference, never a
-  // change to any device's hidden flag — resets on reload.
+  // Session-scoped reveal: a viewing preference, never a device change.
   const [showHidden, setShowHidden] = useState(false);
-  // Room-command outcome, surfaced per task 10.2/10.3.
+  // Room-command outcome.
   const [commandBusy, setCommandBusy] = useState(false);
   const [commandError, setCommandError] = useState<string | null>(null);
   const [skippedCount, setSkippedCount] = useState(0);
@@ -113,18 +98,8 @@ export function RoomView({ roomId }: { roomId: string }) {
   }
 
   /**
-   * Issues the room batch command (design.md D5; specs/web-ui "Room-Level
-   * Command"; task 10.1). Members are grouped by the on/off property they
-   * declare — one request per distinct family, since the endpoint rejects a
-   * property a member does not declare, so a single `{ on }` body could never
-   * address a Zigbee `state` light. A homogeneous room still issues exactly
-   * one request. Every actuatable member is reflected optimistically through
-   * the store-level override layer — so every mounted tile updates, not just
-   * this view — using the value actually sent for its family, then the
-   * per-member responses are merged: `applied` is left to the stream or the
-   * override deadline, `failed` reverts and is surfaced as an error, and
-   * `skipped` is reported separately as an informational count (tasks 10.2,
-   * 10.3).
+   * Issues the room batch command: members are grouped by the on/off property
+   * they declare, one request per family, each reflected optimistically.
    */
   async function handleRoomCommand(on: boolean) {
     const capableMembers = room!.members
@@ -180,8 +155,7 @@ export function RoomView({ roomId }: { roomId: string }) {
         );
       }
     } catch (err) {
-      // The request itself failed: no member's outcome is known, so revert
-      // every optimistic override and surface the failure.
+      // The request itself failed: revert every optimistic override.
       for (const { qualifiedId, property, token } of overrides) {
         revertOptimisticOverride(qualifiedId, property, token);
       }

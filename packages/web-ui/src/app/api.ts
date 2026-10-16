@@ -40,10 +40,8 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
 }
 
 /**
- * Performs an authenticated request and applies only the shared 401
- * redirect, leaving status handling to the caller. Lets a wrapper inspect a
- * non-2xx response (e.g. `/api/weather`'s unconfigured markers) without the
- * generic error thrown by {@link apiFetch}.
+ * Performs an authenticated request and applies only the shared 401 redirect,
+ * leaving status handling to the caller.
  */
 async function apiFetchResponse(path: string, options: RequestInit = {}): Promise<Response> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
@@ -112,7 +110,7 @@ export async function triggerAutomation(
   });
 }
 
-/** Builds a minimal manual-trigger body for {@link triggerAutomation} from an automation's declared trigger types. */
+/** Builds a minimal manual-trigger body for {@link triggerAutomation}. */
 export function manualTriggerContext(type: TriggerContext["type"]): Record<string, unknown> {
   return { type };
 }
@@ -213,10 +211,8 @@ export async function deleteRoom(id: string): Promise<void> {
 }
 
 /**
- * Issues one property command to every capable member of a room (design.md
- * D5; specs/http-server "Room Batch Command Endpoint"). Best-effort: the
- * response reports each member's outcome so the caller can reconcile them
- * independently.
+ * Issues one property command to every capable member of a room; the response
+ * reports each member's outcome so the caller can reconcile them independently.
  */
 export function sendRoomCommand(
   roomId: string,
@@ -236,11 +232,8 @@ export async function fetchWalls(): Promise<WallProfile[]> {
 }
 
 /**
- * Fetches a wall profile, resolving `null` when the profile does not exist
- * (the endpoint answers `404`). Mirrors {@link fetchHomekitStatus}'s
- * null-on-404 pattern, but only a 404 means "absent" — every other failure
- * still throws, so a transport error is never mistaken for a missing profile
- * (design.md D9; specs/wall-display "An unknown profile explains itself").
+ * Fetches a wall profile, resolving `null` only on a `404`; every other failure
+ * still throws, so a transport error is never mistaken for a missing profile.
  */
 export async function fetchWallOrNull(name: string): Promise<WallProfile | null> {
   const res = await apiFetchResponse(`/api/walls/${encodeURIComponent(name)}`);
@@ -293,10 +286,8 @@ export function fetchEnergy(): Promise<EnergyData> {
 // ── Weather ─────────────────────────────────────────────────────────────
 
 /**
- * Fetches current conditions and forecast. The engine answers `404` when no
- * weather service is registered and `400` when no location is resolvable
- * (design.md D8); both are the feature being unconfigured, not an error, so
- * they resolve to a {@link WeatherUnavailable} marker rather than throwing.
+ * Fetches current conditions and forecast. The engine's `404` (no service) and
+ * `400` (no location) resolve to a {@link WeatherUnavailable} marker.
  */
 export async function fetchWeather(): Promise<WeatherData | WeatherUnavailable> {
   const res = await apiFetchResponse("/api/weather");
@@ -312,11 +303,8 @@ export async function fetchWeather(): Promise<WeatherData | WeatherUnavailable> 
 // ── Realtime event stream ───────────────────────────────────────────────
 
 /**
- * Opens the realtime event stream (design.md D9; specs/web-ui "Data
- * Sources"). Cookie-based session auth travels automatically with an
- * `EventSource` request — there is no way to attach an `Authorization`
- * header to one — so this relies entirely on the session cookie set at
- * login, exactly like every other same-origin browser navigation here.
+ * Opens the realtime event stream. Auth relies entirely on the session cookie,
+ * since an `EventSource` request cannot carry an `Authorization` header.
  */
 export function openEventStream(): EventSource {
   return new EventSource("/api/events");

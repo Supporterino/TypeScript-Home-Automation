@@ -1,21 +1,6 @@
 /**
- * The harness control panel (design.md D2, D3, D7; tasks 5.1-5.3, 6.1, 6.2).
- *
- * The harness owns exactly two things beyond the wall itself (D2): this panel and
- * the stage's viewport geometry. Every composition decision the panel shows or
- * makes is the wall's own — the draft mutations are `wall/editor/model.ts`'s
- * (its clamping, its free-position search, its refusal rules), and the values it
- * displays are the wall's pure resolvers' (see `computed.ts`) — so the panel can
- * never disagree with the wall it drives.
- *
- * The panel edits whichever widget list the panel in front of it renders: the
- * base layout, or the current panel's orientation override when the draft
- * carries one. Both are edited by the same operations (see `draft.ts`'s
- * `editActiveList`), and the header says which list is live.
- *
- * Both stylesheets are exercised here on purpose (task 3.2): this chrome is Lumen
- * utilities from `styles/app.css`, and the stage's mat is painted from the Hearth
- * tokens `wall/hearth.css` declares for a wall root.
+ * The harness control panel: the harness's only own surface beyond the wall, driving
+ * the stage document.
  */
 import {
   WALL_WIDGET_TYPES,
@@ -110,8 +95,8 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 }
 
 /**
- * A field row whose control is not a single labelable element — a segmented
- * control, say — so the label text does not activate the first of its buttons.
+ * A field row whose control is not a single labelable element, so the label text does not
+ * activate the first of its buttons.
  */
 function FieldRow({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -238,15 +223,10 @@ function Slider({
   );
 }
 
-// ── The stage frame (task 4.2, unchanged) ───────────────────────────────────
+// ── The stage frame ─────────────────────────────────────────────────────────
 
 /**
  * The stage frame: the panel-sized iframe, scaled to fit the space available.
- *
- * The iframe's layout size is always the panel's, so the wall inside measures
- * the panel — the scale is a paint-time transform on top, never a resize. That
- * distinction is the whole point of D3: a `transform`ed `<div>` in this document
- * would report this window's viewport and the type ramp's floor instead.
  */
 function StageFrame({
   panel,
@@ -287,9 +267,7 @@ function StageFrame({
       style={{ background: "var(--hearth-canvas)" }}
     >
       <iframe
-        // Reloaded for a panel change — the panel's size *is* the stage's
-        // viewport, so a different panel is a different document (D3). A config,
-        // fixture, mode, or scheme change reaches the stage as a message.
+        // Reloaded for a panel change; everything else reaches the stage as a message.
         key={panel}
         ref={iframeRef}
         title={`Wall stage, ${panel} panel`}
@@ -323,8 +301,7 @@ export function HarnessPanel() {
   const [controls, setControls] = useState<HarnessFixtureControls>(DEFAULT_FIXTURE_CONTROLS);
   const [overrides, setOverrides] = useState<HarnessBenchOverrides>(NO_BENCH_OVERRIDES);
   const [selectedId, setSelectedId] = useState(DEFAULT_DRAFT.widgets[0]?.id ?? "");
-  // Bumped by every readiness announcement, so the draft is (re)sent to a stage
-  // document that has just mounted — including after a panel change reloads it.
+  // Bumped by every readiness announcement, so the draft is (re)sent to a fresh stage.
   const [readyAt, setReadyAt] = useState(0);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
@@ -385,8 +362,7 @@ export function HarnessPanel() {
   }
 
   function handlePlacement(widget: WallWidget, patch: Partial<WallWidget>): void {
-    // The editor's own resize: it clamps the span to the type's min/max (with the
-    // raised floor a configured title costs) and the position to the grid.
+    // The editor's own resize, which clamps the span and the grid position.
     edit((config) =>
       updateWidgetPlacement(config, widget.id, {
         x: patch.x ?? widget.x,
@@ -398,9 +374,7 @@ export function HarnessPanel() {
   }
 
   return (
-    // `data-harness` carries WALL_HARNESS_MARKER, the string the asset test
-    // asserts appears in no shipped asset (design.md D9) — so this document is
-    // only guarded while this root keeps rendering it.
+    // `data-harness` carries WALL_HARNESS_MARKER, the string the asset test asserts.
     <div data-harness={WALL_HARNESS_MARKER} className="flex h-dvh flex-col bg-canvas text-ink">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-hairline bg-surface px-4 py-3">
         <div className="flex items-baseline gap-2">

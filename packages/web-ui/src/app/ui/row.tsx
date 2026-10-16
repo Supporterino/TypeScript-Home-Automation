@@ -39,7 +39,7 @@ export interface RowProps extends ComponentPropsWithoutRef<"div"> {
   wrap?: boolean;
 }
 
-/** A horizontal flex row on the spacing rhythm (design.md D5). */
+/** A horizontal flex row on the spacing rhythm. */
 export function Row({
   className,
   gap = 2,

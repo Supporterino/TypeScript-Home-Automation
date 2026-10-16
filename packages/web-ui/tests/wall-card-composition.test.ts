@@ -19,17 +19,8 @@ import {
 import { WALL_CARD_METRICS } from "../src/app/wall/cards/metrics.js";
 
 /**
- * The per-card options and box-resolved composition (task 4.6; design.md D6;
- * specs/wall-display "Wall Device Presentation" — "A control's layout is
- * configured" — and "Span-Aware Card Presentation" — "A taller box is composed,
- * not inflated", "The composition follows the box"). There is no DOM harness, so
- * the composition is covered through the pure resolver and the root-layout helper
- * it drives, and each card's use of it is asserted structurally against its
- * source — the same style as `wall-card-anatomy.test.ts`.
- *
- * The three cases the task names are here: each layout's composition, that hidden
- * controls keep the non-control composition, and that a taller box composes a
- * richer form rather than inflating the smaller one.
+ * The per-card options and box-resolved composition: the pure resolver and the
+ * root-layout helper it drives.
  */
 const APP_DIR = join(import.meta.dir, "..", "src/app");
 const CARDS = join(APP_DIR, "wall/cards");
@@ -45,7 +36,7 @@ const EVERY_CARD = [
   "LockCard.tsx",
 ] as const;
 
-/** The cards whose actions row carries a value control and the device's other controls beside it. */
+/** The cards whose actions row carries a value control beside the device's other controls. */
 const SIBLING_CARDS = ["LightCard.tsx", "FanCard.tsx", "ClimateCard.tsx"] as const;
 
 /** The cards whose actions row exists only where the device has controls. */
@@ -113,11 +104,8 @@ describe("resolveCardFormForBox", () => {
   });
 
   it("derives the widest control row from the ported control geometry", () => {
-    // The widest row a card draws at its minimum span is its controls (each
-    // bounded by the ported control height), the ported control spacing between
-    // them, and the actions row's own horizontal padding — the same numbers
-    // `card-anatomy.tsx` draws with. `wall/grid.ts`'s minimum device column span
-    // is derived from it, so a minimum-span card never clips a control.
+    // The widest row a card draws at its minimum span is its controls, the ported control
+    // spacing between them, and the row's own padding.
     expect(WALL_CARD_CONTROL_MAX_WIDTH_PX).toBe(WALL_CARD_METRICS.controlHeight);
     expect(WALL_CARD_MAX_ROW_CONTROLS).toBe(3);
     expect(WALL_CARD_CONTROL_ROW_MIN_WIDTH_PX).toBe(
@@ -205,9 +193,8 @@ describe("resolveDeviceCardComposition", () => {
       active: false,
     });
 
-    // Hiding the controls changes nothing but the actions row: the form, the
-    // orientation, and the sibling rule are the composition of the non-control
-    // content, so the card does not reflow into a different one.
+    // Hiding the controls changes nothing but the actions row: the form, the orientation,
+    // and the sibling rule are the composition of the non-control content.
     expect(hidden.controls).toBe(false);
     expect(hidden.form).toBe(withoutControls.form);
     expect(hidden.orientation).toBe(withoutControls.orientation);

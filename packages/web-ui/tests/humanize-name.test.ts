@@ -5,13 +5,7 @@ import {
   shortDeviceName,
 } from "../src/app/lib/humanize-name.js";
 
-/**
- * Pure rules for device-name humanisation (task 6.1; design.md D8;
- * specs/web-ui "Device Name Presentation") and for the wall's shortened name
- * form (wall-zones-and-fit D6; specs/wall-display "A name is shortened, not
- * truncated"). No DOM — the helpers are dependency-free, so the contract is
- * asserted directly.
- */
+/** Pure rules for device-name humanisation and the wall's shortened name form. */
 describe("humanizeDeviceName", () => {
   it("splits an underscore identifier on separators and title-cases each word", () => {
     expect(humanizeDeviceName("livingroom_couch")).toBe("Livingroom Couch");

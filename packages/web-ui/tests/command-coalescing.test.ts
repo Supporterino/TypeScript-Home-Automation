@@ -55,9 +55,8 @@ describe("CommandCoalescer", () => {
     coalescer.request("dev:brightness", 30, (o) => outcomes[2]?.push(o));
     coalescer.request("dev:brightness", 40, (o) => outcomes[3]?.push(o));
 
-    // Only the first call actually issued a send synchronously; requests 2
-    // and 3 were superseded before ever being sent, and request 4 is the
-    // one queued behind the outstanding call.
+    // Only the first call issued a send synchronously; requests 2 and 3 were superseded
+    // before ever being sent, and request 4 is queued behind the outstanding call.
     expect(callCount).toBe(1);
     expect(sentValues).toEqual([10]);
     expect(outcomes[1]).toEqual([{ status: "superseded" }]);

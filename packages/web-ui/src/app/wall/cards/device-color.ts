@@ -1,34 +1,16 @@
 /**
- * The wall light card's device colour, derived from the device's own state
- * (design.md D7; specs/wall-display "Wall Visual Language" — "A device colour is
- * an accent, not a surface", "A device without a colour falls back to the wall's
- * accent").
- *
- * Mushroom draws a light's colour from Home Assistant's `rgb_color` attribute;
- * this codebase's device model has no such attribute. What a colour light
- * reports is a numeric `hue` (and `saturation`) — top-level, or beneath its
- * `color` composite — and what a white-spectrum light reports is `color_temp`
- * in mireds. This module is the one place that reads those shapes: hue and
- * saturation are converted to RGB through Home Assistant's own HSV converter
- * ({@link hsvToRgb}), a colour temperature through the standard black-body
- * approximation ({@link colorTemperatureToRgb}), and the result is contrast-
- * improved with {@link improveColorContrast} before it becomes the icon glyph's
- * fill or the slider's field. Mushroom treats a light that reports neither as
- * having no colour, and so does this: `undefined` is returned and the card falls
- * back to the wall's own accent.
- *
- * Deliberately dependency-free — no React, no DOM — so the derivation is
- * reachable by `bun test`.
+ * The wall light card's device colour, derived from the device's own state: a
+ * reported hue/saturation or colour temperature, contrast-improved.
  */
 import { hsvToRgb, improveColorContrast, type Rgb } from "./color.js";
 
-/** The saturation a colour channel is assumed to carry when the device declares none — fully saturated. */
+/** The saturation assumed when the device declares none — fully saturated. */
 const DEFAULT_SATURATION_PERCENT = 100;
 
-/** The HSV value a bare hue/saturation pair is lit at — full brightness (Mushroom's own `hsv` reads colour at value 255). */
+/** The HSV value a bare hue/saturation pair is lit at — full brightness (255). */
 const FULL_VALUE = 255;
 
-/** The white balance of a fully colour-temperature-driven colour, in mireds at either end of the reported range. */
+/** The white balance, in mireds, at either end of the reported range. */
 const KELVIN_AT_MIN_MIRED = 1000;
 const KELVIN_AT_MAX_MIRED = 40000;
 
@@ -55,9 +37,8 @@ function clampChannel(channel: number): number {
 }
 
 /**
- * The `{hue, saturation}` pair a colour light reports, whether it carries them
- * top-level or beneath its `color` composite. Saturation is optional — a source
- * may report a bare hue — and is read in Home Assistant's 0–100 range.
+ * The `{hue, saturation}` pair a colour light reports, top-level or beneath its
+ * `color` composite. Saturation is optional, in HA's 0–100 range.
  */
 function readHueSaturation(
   state: Record<string, unknown>,
@@ -72,11 +53,8 @@ function readHueSaturation(
 }
 
 /**
- * Approximates the RGB of a black-body radiator at `mired` — Home Assistant's
- * own colour-temperature treatment, Tanner Helland's algorithm, so a
- * white-spectrum light reads warm or cool rather than falling back to the wall's
- * accent. A mired outside the physically meaningful range is clamped to it, and
- * the result is left unrounded for {@link toCssColor} to round.
+ * Approximates the RGB of a black-body radiator at `mired` (Tanner Helland's
+ * algorithm), clamping a mired outside the meaningful range.
  */
 export function colorTemperatureToRgb(mired: number): Rgb {
   const kelvin = Math.min(KELVIN_AT_MAX_MIRED, Math.max(KELVIN_AT_MIN_MIRED, 1_000_000 / mired));
@@ -93,11 +71,7 @@ export function colorTemperatureToRgb(mired: number): Rgb {
 
 /**
  * The contrast-improved colour a device reports in its own state, or `undefined`
- * when it reports none. A reported hue is converted through Home Assistant's HSV
- * (saturation defaults to fully saturated when the source names only a hue), and
- * a reported colour temperature through the black-body approximation; either way
- * the result passes through {@link improveColorContrast}, so the caller draws it
- * as a glyph fill or a slider field exactly as Mushroom does.
+ * when it reports none.
  */
 export function deviceColorRgb(state: Record<string, unknown>): Rgb | undefined {
   const hueSaturation = readHueSaturation(state);

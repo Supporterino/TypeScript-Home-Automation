@@ -12,18 +12,6 @@ interface ErrorBoundaryState {
 
 /**
  * Contains a render failure so it does not take down the whole dashboard.
- *
- * Placed structurally at the single point where view content is swapped — the
- * route outlet in `App.tsx` — never per view, so there is one place for it to
- * be wrong.
- *
- * Recovery on navigating away and back is achieved by the caller remounting
- * this component (keying it by the active view) rather than by any internal
- * retry logic here — a fresh mount clears `state.error` for free. The Retry
- * button re-renders the same children without a navigation.
- *
- * Rebuilt on the Lumen primitive layer (`ui/*`); its view-failure isolation and
- * recovery-on-navigation contract are preserved (task 4.3).
  */
 export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   override state: ErrorBoundaryState = { error: null };

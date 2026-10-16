@@ -5,10 +5,8 @@ import type { Capability, DeviceDescriptor, RoomMember } from "@ts-ha/shared";
 import { WALL_CARD_METRICS, WALL_CARD_SECONDARY_FONT_SIZE } from "../src/app/wall/cards/metrics.js";
 import { actuatableRoomMembers, roomTiles } from "../src/app/wall/widgets/room-model.js";
 
-// Pure member selection for the wall room widget — no DOM. An all-off/all-on
-// command must include every actuatable member and exclude report-only (and
-// unavailable) members, exactly as the batch endpoint will (design.md D5,
-// D7; specs/wall-display "A room widget commands the room"; task 5.7).
+// Pure member selection for the wall room widget — no DOM. An all-off/all-on command
+// must include every actuatable member and exclude report-only (and unavailable) members.
 
 const rw = { readable: true, writable: true };
 const ro = { readable: true, writable: false };
@@ -105,8 +103,7 @@ describe("roomTiles", () => {
   });
 
   it("draws the available members first, then the unavailable ones", () => {
-    // The order the card has always drawn: live tiles, then the members whose
-    // device is gone (design.md D13; specs/wall-display "Widget Catalog").
+    // The order the card has always drawn: live tiles, then the members whose device is gone.
     const members: RoomMember[] = [
       member("zigbee:gone", null),
       member("zigbee:lamp", descriptor("zigbee:lamp", [writableOnOff()])),
@@ -133,11 +130,8 @@ describe("roomTiles", () => {
   });
 });
 
-// The card's own chrome, composed from the wall's single card vocabulary
-// (design.md W1, W2; specs/wall-display "Wall Visual Language", "Supporting text
-// is drawn at the ported sizes"). There is no DOM harness here, so the
-// composition is asserted structurally — the same style as the wall's other
-// widget tests.
+// The card's own chrome, composed from the wall's single card vocabulary. There is no
+// DOM harness here, so the composition is asserted structurally.
 const APP_DIR = join(import.meta.dir, "..", "src/app");
 const ROOM_WIDGET = join(APP_DIR, "wall/widgets/RoomWidget.tsx");
 const ANATOMY = join(APP_DIR, "wall/cards/card-anatomy.tsx");
@@ -165,9 +159,8 @@ describe("the room card's own chrome", () => {
     const widget = await readSource(ROOM_WIDGET);
     const anatomy = await readSource(ANATOMY);
 
-    // The count is the widget's caption (design.md W2), so it is handed to the
-    // vocabulary's own reading part with no tier of its own — the part falls back to
-    // the ported secondary size, the smallest the ported table declares.
+    // The count is the widget's caption, handed to the vocabulary's own reading part with no
+    // tier of its own.
     expect(widget).toContain("<WallCardReading>{memberCount}</WallCardReading>");
     expect(anatomy).toContain("size = WALL_CARD_SECONDARY_FONT_SIZE");
     expect(WALL_CARD_SECONDARY_FONT_SIZE).toBe(`${WALL_CARD_METRICS.secondarySize}px`);
@@ -176,9 +169,8 @@ describe("the room card's own chrome", () => {
   it("draws the room-wide commands as the ported control in the actions row", async () => {
     const widget = await readSource(ROOM_WIDGET);
 
-    // The batch command row is the vocabulary's own actions row at the ported control
-    // spacing, carrying the vocabulary's labelled controls (design.md W1;
-    // specs/wall-display "A control is the ported control").
+    // The batch command row is the vocabulary's own actions row at the ported control spacing,
+    // carrying the vocabulary's labelled controls.
     expect(widget).toContain("<WallCardActions>");
     expect(widget).toContain("<WallCardControl");
     expect(widget).toContain('label="All on"');

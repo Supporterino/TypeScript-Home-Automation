@@ -629,17 +629,8 @@ describe("normalizeStreamEvent", () => {
 
 // ── Capability contract drift guard ────────────────────────────────────────
 //
-// The normaliser rebuilds a capability from a fixed field list, so the shape is
-// declared a second time in the client. The compile-time half of the guard — an
-// exhaustive pin of `Capability`'s key set — lives in `src/app/lib/normalize.ts`:
-// that is the module the drift would occur in, and the one `tsc -p
-// src/app/tsconfig.json` actually compiles (this file is not typechecked). The
-// runtime half below asserts that every declared field `normalizeCapability`
-// carries survives a stream-ingested descriptor, including inside nested
-// `features` (design.md D1, D5). `raw` is deliberately not carried by
-// `normalizeCapability` — it is the opaque, untouched source entry a
-// consumer may fall back to, and no client view reads it — so it is excluded
-// here rather than ingested.
+// The normaliser rebuilds a capability from a fixed field list, so the shape is declared
+// a second time in the client. `raw` is deliberately not carried.
 
 const REQUIRED_CAPABILITY_FIELDS = [
   "kind",

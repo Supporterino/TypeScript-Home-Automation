@@ -1,25 +1,6 @@
 /**
- * The wall light card (design.md D1, D2, D7, D12; specs/wall-display "Wall
- * Device Presentation" — "A light card presents both a toggle and a value
- * control", "A light card can be turned on from its affordances", "Colour
- * controls appear only when supported", "A light card fits its minimum span").
- *
- * The card composes the ported anatomy in order: the leading circular icon
- * affordance is the light's on/off control, whose glyph states the state by its
- * fill as well as by its colour and whose shape carries the light's own
- * contrast-improved colour; the name sits over the brightness reading; and one
- * actions row carries the active control as a slider with the device's other
- * declared controls beside it as icon buttons. A control the device does not
- * declare is never rendered — brightness, colour temperature, and colour are
- * each offered only for a writable capability the device reports — and every
- * control actuates through the shared optimistic channel, so a command is
- * reflected immediately, reconciled against reported state, and reverted with
- * the failure surfaced inline.
- *
- * The pure decisions — which controls are declared, which is active by default,
- * what the reading says, and the on/off command that turns an off light on — are
- * exported so they are reachable by `bun test` (design.md D23). Wall-chunk only
- * (design.md D10).
+ * The wall light card: the icon affordance is the on/off control, the name over the
+ * brightness, and a slider with the other declared controls beside it.
  */
 import type { Capability, CapabilityRange } from "@ts-ha/shared";
 import { Lightbulb, Palette, Sun, Thermometer } from "lucide-react";
@@ -58,7 +39,7 @@ import { deviceColorRgb } from "./device-color.js";
 import { WALL_CARD_GLYPH_SIZE, WALL_CARD_METRICS } from "./metrics.js";
 import type { WallDeviceCardProps } from "./types.js";
 
-/** Which value control a light card can present (Mushroom's own brightness/temperature/colour controls). */
+/** Which value control a light card can present. */
 export type WallLightControlKind = "brightness" | "color_temp" | "color";
 
 /** One declared value control of a light card. */
@@ -68,10 +49,8 @@ export interface WallLightControl {
 }
 
 /**
- * The value controls a light declares, in the card's own order — brightness,
- * colour temperature, colour (design.md D12; specs/wall-display "Colour controls
- * appear only when supported"). Each is offered only for a writable capability,
- * so an undeclared or read-only control is never rendered inert.
+ * The value controls a light declares, in the card's own order — brightness, colour
+ * temperature, colour.
  */
 export function lightCardControls(capabilities: Capability[]): WallLightControl[] {
   const controls: WallLightControl[] = [];
@@ -85,9 +64,8 @@ export function lightCardControls(capabilities: Capability[]): WallLightControl[
 }
 
 /**
- * The control the actions row expands by default: the first declared control in
- * the card's own order, so a light with a brightness always opens on it (design.md
- * D2). `undefined` when the device declares no value control.
+ * The control the actions row expands by default: the first declared control in the
+ * card's own order.
  */
 export function defaultLightControlKind(
   controls: WallLightControl[],
@@ -96,12 +74,8 @@ export function defaultLightControlKind(
 }
 
 /**
- * The on/off command that turns a light on from its resolved on/off value, or
- * `undefined` when it is already on (or has no on/off capability). A value
- * control activated while the light is off issues this first, so the light is
- * commanded on exactly as its icon affordance commands it — the same encoding
- * rule, never a second one (specs/wall-display "A light card can be turned on
- * from its affordances").
+ * The on/off command that turns a light on, or `undefined` when it is already on or
+ * has no on/off capability.
  */
 export function lightTurnOnCommand(input: {
   isOn: boolean;
@@ -113,9 +87,8 @@ export function lightTurnOnCommand(input: {
 }
 
 /**
- * The card's reading line: the brightness as a percentage of its own range while
- * the light is on, the light's plain on state when it declares no brightness,
- * and "Off" when it is off (design.md D12; "A value stays with its unit").
+ * The card's reading line: the brightness as a percentage while the light is on, its
+ * plain on state without one, and "Off" when it is off.
  */
 export function lightCardReading(input: {
   isOn: boolean;
@@ -156,9 +129,7 @@ export function LightCard({ device, config, box, contained }: WallDeviceCardProp
   const colorTemperature = controls.find((control) => control.kind === "color_temp")?.capability;
   const color = controls.find((control) => control.kind === "color")?.capability;
 
-  // One optimistic channel per property, called unconditionally with an absent
-  // property when the device declares none, so hook order is stable across
-  // renders (design.md D12, D31).
+  // One optimistic channel per property, called unconditionally so hook order is stable.
   const onOffControl = useOptimisticDeviceProperty(
     device.qualifiedId,
     onOffCapability?.property ?? "",
@@ -189,8 +160,7 @@ export function LightCard({ device, config, box, contained }: WallDeviceCardProp
     color: colorControl,
   } as const;
 
-  // The expanded control is UI state, but never a control the device does not
-  // declare: a stale request falls back to the default (design.md D2).
+  // The expanded control is UI state, never a control the device does not declare.
   const [requestedKind, setRequestedKind] = useState<WallLightControlKind | null>(null);
   const activeKind = controls.some((control) => control.kind === requestedKind)
     ? (requestedKind as WallLightControlKind)
@@ -213,11 +183,7 @@ export function LightCard({ device, config, box, contained }: WallDeviceCardProp
     ? {}
     : { background: "var(--hearth-surface-raised)", borderRadius: WALL_CARD_METRICS.radius };
 
-  // The card's own options (design.md D6; specs/wall-display "A control's layout is
-  // configured"): its layout, its inactive-controls setting, and the box it was
-  // given. A light with no declared value control has no controls to hide, and a
-  // light that is off is inactive, so `collapsible_controls` hides its actions row
-  // until it is on again — without changing the composition around it.
+  // A light that is off is inactive, so collapsible controls hide its actions row.
   const composition = resolveDeviceCardComposition({
     box: box ?? DEFAULT_WALL_CARD_BOX,
     layout: config?.layout,

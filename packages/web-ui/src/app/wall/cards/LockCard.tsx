@@ -1,22 +1,6 @@
 /**
- * The wall lock card (design.md D1, D3, D6; specs/wall-display "Widget Catalog" —
- * "a lock"; "Wall Device Presentation" — "A card presents the ported anatomy").
- *
- * A lock is presented as discrete, touch-friendly actuation rather than a value: the
- * card composes the ported anatomy in order — the leading circular icon affordance,
- * the device's name over its locked/unlocked reading — and one actions row carrying
- * Lock and Unlock as touch-sized options, the one that matches the reported state
- * marked active. A lock that cannot express a command is not offered it: Lock/Unlock
- * are presented only for a writable property the device declares, and the exact
- * authored values are commanded so a device expecting `"LOCK"` is not sent `"lock"`.
- *
- * A lock is not idle the way a light is off — it is either locked or unlocked, and
- * both are states the user acts from — so its controls are always present and
- * `collapsible_controls` has nothing to hide.
- *
- * The pure decisions — the writable property, the exact lock/unlock values, the
- * state property, and what the reading says — are exported so they are reachable
- * by `bun test`. Wall-chunk only (design.md D10).
+ * The wall lock card: the ported anatomy with an actions row carrying Lock and Unlock
+ * as touch-sized options.
  */
 import type { Capability } from "@ts-ha/shared";
 import { Lock } from "lucide-react";
@@ -47,7 +31,7 @@ const LOCK_TOKENS: ReadonlySet<string> = new Set(["lock", "locked"]);
 /** The unlocked-like permitted values a lock's state can name (Zigbee2MQTT's own `UNLOCK`). */
 const UNLOCK_TOKENS: ReadonlySet<string> = new Set(["unlock", "unlocked"]);
 
-/** A lock card's resolved model (design.md D3): the property to drive and its two commands. */
+/** A lock card's resolved model: the property to drive and its two commands. */
 export interface WallLockCardModel {
   /** The writable property the lock is driven on, or `undefined` when nothing is writable. */
   property: string | undefined;
@@ -75,11 +59,8 @@ function isStateProperty(property: string): boolean {
 }
 
 /**
- * Resolves a lock's model (design.md D3; specs/wall-display "Widget Catalog"). The
- * lock is driven on the first writable property that can express both commands — a
- * `state` enum naming lock-like and unlock-like values, or a boolean `locked` whose
- * on/off encoding carries them. A lock with nothing writable reports no property,
- * so the card presents its reading alone rather than rendering inert controls.
+ * Resolves a lock's model: the first writable property that can express both
+ * commands. A lock with nothing writable reports no property.
  */
 export function lockCardModel(capabilities: Capability[]): WallLockCardModel {
   const flat = flattenCapabilities(capabilities);
@@ -113,9 +94,8 @@ export function lockCardModel(capabilities: Capability[]): WallLockCardModel {
 }
 
 /**
- * Whether a lock's reported state reads as locked: `true` for a lock-like value,
- * `false` for an unlock-like one, and `undefined` for a state neither token
- * matches — so the reading never guesses.
+ * Whether a lock's reported state reads as locked: `true`, `false`, or `undefined`
+ * for a state neither token matches.
  */
 export function lockCardLocked(stateValue: unknown): boolean | undefined {
   if (typeof stateValue !== "string") return undefined;
@@ -126,8 +106,8 @@ export function lockCardLocked(stateValue: unknown): boolean | undefined {
 }
 
 /**
- * The card's reading: "Locked" or "Unlocked" for a recognised state, the state as
- * reported when it matches neither, and an em dash when the device reports none.
+ * The card's reading: "Locked" or "Unlocked" for a recognised state, else the state
+ * as reported, or an em dash.
  */
 export function lockCardReading(stateValue: unknown): string {
   const locked = lockCardLocked(stateValue);
@@ -142,9 +122,7 @@ export function LockCard({ device, config, box, contained }: WallDeviceCardProps
   const model = lockCardModel(device.capabilities);
   const disabled = !device.reachable;
 
-  // One optimistic channel on the property the lock is driven on, called
-  // unconditionally with an absent property when nothing is writable, so hook
-  // order is stable (design.md D12).
+  // Called unconditionally so hook order is stable.
   const control = useOptimisticDeviceProperty(
     device.qualifiedId,
     model.property ?? "",

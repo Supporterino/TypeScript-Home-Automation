@@ -1,15 +1,6 @@
 /**
- * Automation list — shows each automation's enabled state and allows it to be
- * toggled, reverting and surfacing the reported error on failure (design.md
- * D12; specs/web-ui "Automation Management Interface"; task 6.1).
- *
- * The switch is controlled by the store's `automation.enabled`, never by local
- * optimistic state: a failed toggle therefore leaves the displayed state at its
- * previous value, which is the "failure reverts" behaviour the spec requires.
- * The error is surfaced both for assistive technology (`role="alert"`) and
- * visually, never by colour alone.
- *
- * Rebuilt on the Lumen primitive layer (`ui/*`) and `lucide-react`.
+ * Automation list — each automation's enabled state, toggleable, with a failed
+ * toggle leaving the previous state and surfacing the error.
  */
 import { Workflow } from "lucide-react";
 import { useState } from "react";

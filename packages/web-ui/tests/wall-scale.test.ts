@@ -7,12 +7,8 @@ import {
   WALL_TYPE_RAMP,
 } from "../src/app/wall/type-ramp.js";
 
-// Pure size-token logic — no DOM. The wall's own affordances must meet the wall
-// minimum, and its readout tier must stay above the wall's body floor; the
-// default token must not change any existing desktop rendering (design.md D2,
-// D7). The device tile this module once scaled has retired to the ported cards
-// under `wall/cards/` (design.md D1), so only the wall's affordance size and the
-// readout tier remain here.
+// Pure size-token logic — no DOM. The wall's affordances must meet the wall minimum, and
+// its readout tier must stay above the body floor.
 
 describe("wallTileMetrics", () => {
   it("sizes the wall token's control to the ported card's control height", () => {

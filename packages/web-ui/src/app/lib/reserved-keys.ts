@@ -1,18 +1,6 @@
 /**
- * Client-side reserved-state-key predicate (design.md D20; task 10.16b).
- *
- * The server already refuses to serve, write, or delete a reserved internal
- * key through the public state API (`isReservedStateKey()` in
- * `packages/core/src/state/state-manager.ts`, tasks 2.12–2.13) — this is not a second
- * line of defence against that. It exists so the state *view* itself never
- * renders a row for one, and offers no free-text key field that could even
- * be used to attempt writing one: rooms cannot be destroyed and enabled
- * flags cannot be flipped from the state view, because there is nothing
- * there to click.
- *
- * The prefix is the shared `INTERNAL_STATE_PREFIX` contract constant
- * (design.md D9), so the browser bundle and the server's guard derive from
- * one literal rather than two hand-synchronised copies.
+ * Client-side reserved-state-key predicate, so the state view never renders or
+ * edits a reserved internal key.
  */
 
 import { INTERNAL_STATE_PREFIX } from "@ts-ha/shared";

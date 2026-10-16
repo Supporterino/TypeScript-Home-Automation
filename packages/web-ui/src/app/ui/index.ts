@@ -1,17 +1,16 @@
 /**
- * The Lumen primitive layer (design.md D5). Views compose these token-driven
- * components rather than a UI library's defaults; explicit named re-exports
- * only — never `export *`.
+ * The primitive layer: token-driven components composed by the views. Explicit
+ * named re-exports only — never `export *`.
  */
 
-// Layout & display (task 2.1)
+// Layout & display
 export { Badge, type BadgeTone } from "./badge.js";
-// Actions & navigation (task 2.2)
+// Actions & navigation
 export { Button } from "./button.js";
 export { Card } from "./card.js";
 export { Chip } from "./chip.js";
 export { cn } from "./cn.js";
-// Interactive, Radix-backed (task 2.3)
+// Interactive, Radix-backed
 export { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./collapsible.js";
 export {
   Dialog,

@@ -2,7 +2,7 @@ import { Slot } from "@radix-ui/react-slot";
 import type { ButtonHTMLAttributes } from "react";
 import { cn } from "./cn.js";
 
-/** The visual weight of a button (design.md D5). */
+/** The visual weight of a button. */
 export type ButtonVariant = "solid" | "soft" | "ghost" | "danger";
 export type ButtonSize = "sm" | "md" | "lg";
 

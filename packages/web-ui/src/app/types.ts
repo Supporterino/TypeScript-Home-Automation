@@ -1,10 +1,6 @@
 /**
- * Web UI type surface.
- *
- * Domain and wire contracts are imported from `@ts-ha/shared` — the single
- * definition site (design.md D1, D5) — rather than mirrored locally. Only
- * genuinely client-private state (connection state, the normaliser's
- * "unknown" sentinel, the generic state-map alias) is declared here.
+ * Web UI type surface: re-exports the shared contracts and declares only the
+ * genuinely client-private types.
  */
 
 import type { StreamEvent } from "@ts-ha/shared";
@@ -37,12 +33,11 @@ export type {
 
 export type StateMap = Record<string, unknown>;
 
-/** The connection state of the realtime data layer (design.md "Data Sources"; task 10.2). */
+/** The connection state of the realtime data layer. */
 export type TransportState = "connecting" | "live" | "degraded";
 
 /**
- * The normaliser's output: a server event, or its own `unknown` sentinel for
- * a malformed/unrecognised frame. The sentinel is client-private — a real
- * server event never carries it.
+ * The normaliser's output: a server event, or its own `unknown` sentinel for a
+ * malformed or unrecognised frame.
  */
 export type NormalizedStreamEvent = StreamEvent | { category: "unknown" };

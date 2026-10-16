@@ -1,17 +1,6 @@
 /**
- * The harness's default draft composition (design.md D2; task 4.1).
- *
- * A hand-authored profile, not a layout algorithm: the harness re-implements no
- * wall layout (D2), so this is data a panel control (group 5) may edit, and the
- * grid, the row unit, the gutter, the centering rule, the fit verdict, and the
- * zone bands are all the wall's own once it reaches `WallGrid`.
- *
- * It is a legal profile — `tests/wall-harness.test.ts` validates it with the
- * shared `wallProfileConfigSchema` and checks every widget against the widget
- * registry's `min`/`max` — that spans the widget catalogue the fixture roster
- * covers, groups widgets into two zone bands so the bands are visible at all,
- * and reflows through a hand-authored portrait override, so the answer
- * `useOrientation()` gives inside the stage is observable (D4; task 4.2).
+ * The harness's default draft composition: a hand-authored profile, not a layout
+ * algorithm.
  */
 import type { WallProfileConfig, WallWidget } from "@ts-ha/shared";
 import type { WallDeviceClass } from "../cards/device-class.js";
@@ -26,13 +15,8 @@ import {
 import type { HarnessPanel } from "./messages.js";
 
 /**
- * A typed device widget for one device class the fixture roster backs, at the
- * type's minimum span ({@link WALL_MIN_DEVICE_COLUMNS}×{@link WALL_MIN_DEVICE_ROWS})
- * — the cell every typed card's composition is derived for, so the draft places
- * the class rather than only reaching it through a tile or a paged device grid. A
- * harness walk therefore reaches every typed card directly;
- * `tests/wall-harness-walk.test.ts` asserts the coverage and that each card fits
- * its minimum-span box on both panels.
+ * A typed device widget for one device class the fixture roster backs, at the type's
+ * minimum span.
  */
 function deviceClassWidget(
   deviceClass: WallDeviceClass,
@@ -50,11 +34,8 @@ function deviceClassWidget(
 }
 
 /**
- * The landscape composition: a home band across the top (the clock hero, the
- * weather and energy readings), a living-room band below it, and the device
- * cards and grids that fill the rest. Every widget is placed at or above its
- * registry minimum, so each renders its real composition rather than the frame's
- * too-small explanation.
+ * The landscape composition: a home band across the top, a living-room band below it,
+ * and the device cards and grids that fill the rest.
  */
 const LANDSCAPE: readonly WallWidget[] = [
   { id: "clock-hero", type: "clock", config: {}, x: 0, y: 0, w: 6, h: 3, zone: "Home" },
@@ -109,9 +90,7 @@ const LANDSCAPE: readonly WallWidget[] = [
     h: 2,
     zone: "Living Room",
   },
-  // The widget's other reading case beside the hall sensor's: the attic sensor
-  // declares no humidity, so this placement presents its temperature alone
-  // (design.md W5; task 5.3).
+  // The attic sensor declares no humidity, so it presents its temperature alone.
   {
     id: "temperature-attic",
     type: "temperature",
@@ -139,12 +118,8 @@ const LANDSCAPE: readonly WallWidget[] = [
 ];
 
 /**
- * The portrait composition: the same widgets in a taller, two-column
- * arrangement. A hand-authored override rather than a transformation of the
- * landscape layout — recomposing would be harness-local layout code, which D2
- * forbids — and a visibly different composition, so switching the panel to
- * portrait shows that `useOrientation()` reported portrait and the profile's
- * override applied.
+ * The portrait composition: the same widgets in a taller, two-column arrangement, a
+ * hand-authored override rather than a transformation.
  */
 const PORTRAIT: readonly WallWidget[] = [
   { id: "clock-hero", type: "clock", config: {}, x: 0, y: 0, w: 8, h: 4, zone: "Home" },
@@ -170,8 +145,7 @@ const PORTRAIT: readonly WallWidget[] = [
     h: 2,
     zone: "Living Room",
   },
-  // The same second reading case the landscape list carries, placed in this
-  // layout's own free cells (design.md W5; task 5.3).
+  // The same second reading case the landscape list carries.
   {
     id: "temperature-attic",
     type: "temperature",
@@ -226,14 +200,12 @@ export const DEFAULT_DRAFT: WallProfileConfig = {
 };
 
 /**
- * Which widget list the panel is editing (task 5.1). A panel whose orientation
- * carries an override renders that list, so editing the base list would be
- * invisible there — the panel edits whichever list the panel in front of it
- * actually renders, and says which.
+ * Which widget list the panel is editing. A panel whose orientation carries an override
+ * renders that list.
  */
 export type HarnessListTarget = "base" | "override";
 
-/** The widget list a panel renders — the wall's own `resolveLayout` rule (design.md D4). */
+/** The widget list a panel renders — the wall's own `resolveLayout` rule. */
 export function shownWidgets(
   config: WallProfileConfig,
   panel: HarnessPanel,
@@ -248,12 +220,6 @@ export function activeTarget(config: WallProfileConfig, panel: HarnessPanel): Ha
 
 /**
  * Runs one of the editor's own mutations over the list the panel is editing.
- *
- * The editor's mutations operate on a config's base `widgets`, so the edit is
- * applied to a config whose base list *is* the panel's override and the result is
- * written back to `orientations`. That is how the override list gets the editor's
- * own clamping, footer floor, free-position search, and id rule — the very same
- * functions the base layout gets — without a second copy of any of them.
  */
 export function editActiveList(
   config: WallProfileConfig,
@@ -266,8 +232,8 @@ export function editActiveList(
 }
 
 /**
- * Drops the panel's orientation override, so the base layout renders in every
- * panel again (task 5.1). The other orientation's list, if any, is untouched.
+ * Drops the panel's orientation override, so the base layout renders in every panel
+ * again.
  */
 export function clearOrientationOverride(
   config: WallProfileConfig,

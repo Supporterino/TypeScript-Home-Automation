@@ -1,23 +1,6 @@
 /**
- * The wall number card (design.md D1, D3, D6; specs/wall-display "Widget Catalog"
- * — "a numeric control"; "Wall Device Presentation" — "A value device keeps its
- * embedded control", "A card presents the ported anatomy").
- *
- * The card composes the ported anatomy in order: the leading circular icon
- * affordance, the device's name over its value with its unit, and one actions row
- * carrying the bounded numeric control as a slider — the sole action, because a
- * number card drives exactly one value. The slider is the value's actuation
- * target (a bare card activation cannot express the value to set), so the card is
- * never whole-card actuated.
- *
- * A writable numeric with no declared range cannot be driven by a slider whose
- * bounds the card would have to invent, so it is not presented: the card then
- * composes its reading alone rather than rendering an inert control (specs/
- * wall-display "A control the device cannot express MUST NOT be presented").
- *
- * The pure decisions — which control is declared, which property the reading
- * reads, the slider's bounds, and what the reading says — are exported so they
- * are reachable by `bun test`. Wall-chunk only (design.md D10).
+ * The wall number card: a leading icon, the device's name over its value, and one
+ * actions row carrying the bounded numeric control as a slider.
  */
 import type { Capability, CapabilityRange } from "@ts-ha/shared";
 import { SlidersHorizontal } from "lucide-react";
@@ -44,10 +27,8 @@ import { WALL_CARD_GLYPH_SIZE, WALL_CARD_METRICS } from "./metrics.js";
 import type { WallDeviceCardProps } from "./types.js";
 
 /**
- * The bounded numeric control a number card drives (design.md D3), or `undefined`
- * when the device declares none. Only a writable numeric with a declared range
- * qualifies: a numeric with no bounds declares no range the slider could honour,
- * so the card offers no control rather than inventing one.
+ * The bounded numeric control a number card drives, or `undefined` when the device
+ * declares none.
  */
 export function numberCardControl(capabilities: Capability[]): FlatCapability | undefined {
   return flattenCapabilities(capabilities).find(
@@ -57,8 +38,7 @@ export function numberCardControl(capabilities: Capability[]): FlatCapability | 
 
 /**
  * The numeric capability the card's reading reads: the control when the device
- * declares one, else the first readable numeric — so a device whose range is
- * absent still presents its value rather than an empty line.
+ * declares one, else the first readable numeric.
  */
 export function numberCardReadout(capabilities: Capability[]): FlatCapability | undefined {
   return (
@@ -85,8 +65,7 @@ export function NumberCard({ device, config, box, contained }: WallDeviceCardPro
   const range = control ? numberCardRange(control) : undefined;
   const disabled = !device.reachable;
 
-  // One optimistic channel, called unconditionally with an absent property when
-  // the device declares no control, so hook order is stable (design.md D12).
+  // Called unconditionally so hook order is stable.
   const value = useOptimisticDeviceProperty(
     device.qualifiedId,
     control?.property ?? "",
@@ -94,8 +73,7 @@ export function NumberCard({ device, config, box, contained }: WallDeviceCardPro
     device.observation,
   );
 
-  // A numeric control carries no on/off state to be measured against, so the
-  // device is always active and collapsible_controls has nothing to hide.
+  // A numeric control carries no on/off state, so the device is always active.
   const composition = resolveDeviceCardComposition({
     box: box ?? DEFAULT_WALL_CARD_BOX,
     layout: config?.layout,

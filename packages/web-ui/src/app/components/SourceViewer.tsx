@@ -1,21 +1,11 @@
 /**
- * Renders an automation's source with syntax highlighting (specs/web-ui
- * "Automation Management Interface").
- *
- * Prism (TypeScript + JavaScript grammars only) is loaded via a dynamic
- * `import()` the first time this component renders — never at first paint —
- * which is also what keeps it, and this module's syntax theme, out of the
- * first-paint budget (`tests/web-ui-assets.test.ts`). No other grammar is
- * imported: an automation's source is TypeScript in development and compiled
- * JavaScript in a built package, and no other language can appear.
- *
- * Rebuilt on the Lumen tokens (task 4.3): the frame follows the design system,
- * while the highlight palette is the syntax theme's own.
+ * Renders an automation's source with syntax highlighting; Prism is loaded via
+ * a dynamic `import()` on first render, keeping it out of first paint.
  */
 import { useEffect, useState } from "react";
 
-// A code-highlight palette (not design-system colour) with a light default and
-// a dark override keyed on the Lumen `data-theme` attribute.
+// A code-highlight palette with a light default and a dark override keyed on the
+// `data-theme` attribute.
 const PRISM_THEME_CSS = `
 .ts-ha-source .token.comment,.ts-ha-source .token.prolog,.ts-ha-source .token.doctype,.ts-ha-source .token.cdata{color:#6a737d}
 .ts-ha-source .token.keyword{color:#d73a49}

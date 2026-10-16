@@ -1,27 +1,6 @@
 /**
- * The wall fan card (design.md D1, D3, D6; specs/wall-display "Widget Catalog" —
- * "a fan"; "Wall Device Presentation" — "A card presents the ported anatomy",
- * "A value device keeps its embedded control").
- *
- * The card composes the ported anatomy in order: the leading circular icon
- * affordance is the fan's on/off control where it declares one, whose glyph
- * states the state by its fill as well as by its colour; the name sits over the
- * fan's percentage reading; and one actions row carries the percentage as a
- * slider with the fan's presets beside it, drawn by the shared
- * {@link WallCardEnumControl} as touch-sized options where they fit the box or as
- * one single affordance where they do not. A control the device does not declare
- * is never rendered — the percentage and the presets are each offered only for a
- * writable capability the device reports.
- *
- * Dragging the percentage while the fan is off commands it on first, exactly as
- * the icon affordance does, so the slider is never a way to set a speed on a fan
- * that stays stopped. Every control actuates through the shared optimistic
- * channel, so a command is reflected immediately, reconciled against reported
- * state, and reverted with the failure surfaced inline.
- *
- * The pure decisions — which controls are declared, and what the reading says —
- * are exported so they are reachable by `bun test`. Wall-chunk only (design.md
- * D10).
+ * The wall fan card: the icon affordance is the on/off control, the name over the
+ * percentage, and a slider with the presets beside it.
  */
 import type { Capability, CapabilityRange } from "@ts-ha/shared";
 import { Fan } from "lucide-react";
@@ -67,7 +46,7 @@ const FAN_PERCENTAGE_PROPERTIES: ReadonlySet<string> = new Set([
 /** The property names a fan reports its presets (its speed steps) under. */
 const FAN_PRESET_PROPERTIES: ReadonlySet<string> = new Set(["preset", "mode", "speed"]);
 
-/** A fan card's resolved model (design.md D3): its on/off, percentage, and presets. */
+/** A fan card's resolved model: its on/off, percentage, and presets. */
 export interface WallFanCardModel {
   /** The writable boolean on/off the card's icon affordance drives, or `null`. */
   onOff: FlatCapability | null;
@@ -87,10 +66,8 @@ function isFanCapability(capability: FlatCapability): boolean {
 }
 
 /**
- * Resolves a fan's model (design.md D3; specs/wall-display "Widget Catalog"). The
- * percentage and the presets are offered only for a writable capability with the
- * bounds or values a control needs, so an undeclared control is never rendered
- * inert.
+ * Resolves a fan's model: the percentage and presets for a writable capability with
+ * the bounds or values a control needs.
  */
 export function fanCardModel(capabilities: Capability[]): WallFanCardModel {
   const flat = flattenCapabilities(capabilities);
@@ -124,9 +101,8 @@ export function fanPercentageRange(percentage: FlatCapability): CapabilityRange 
 }
 
 /**
- * The card's reading: the percentage with its unit while the fan is on, its plain
- * on state when it declares no percentage, and "Off" when it is off (specs/
- * wall-display "A value stays with its unit").
+ * The card's reading: the percentage with its unit while the fan is on, its plain on
+ * state without one, and "Off" when it is off.
  */
 export function fanCardReading(input: {
   hasOnOff: boolean;
@@ -149,8 +125,7 @@ export function FanCard({ device, config, box, contained }: WallDeviceCardProps)
   const range = model.percentage ? fanPercentageRange(model.percentage) : undefined;
   const disabled = !device.reachable;
 
-  // One optimistic channel per property, called unconditionally with an absent
-  // property when the device declares none, so hook order is stable (design.md D12).
+  // One optimistic channel per property, called unconditionally so hook order is stable.
   const onOffControl = useOptimisticDeviceProperty(
     device.qualifiedId,
     model.onOff?.property ?? "",
@@ -253,8 +228,7 @@ export function FanCard({ device, config, box, contained }: WallDeviceCardProps)
             }
             disabled={disabled}
             onChange={(next) => {
-              // A percentage set on a stopped fan commands it on first, exactly
-              // as its icon affordance does.
+              // A percentage set on a stopped fan commands it on first.
               if (!isOn && onOff) {
                 onOffControl.setValue(deviceTileToggledValue(onOff, onOffControl.value));
               }

@@ -3,10 +3,8 @@ import { type DeviceMapEvent, reduceDeviceEvent } from "../src/app/lib/device-re
 import { applyLogRingBuffer, LOG_BUFFER_CAPACITY } from "../src/app/lib/log-ring-buffer.js";
 import type { DeviceDescriptor, LogEntry } from "../src/app/types.js";
 
-// Bounded-memory behaviour of the always-on data layer (task 7.4; design.md
-// D11; specs/wall-display "Always-On Operation" "Memory is bounded over a long
-// session"). Both bounds are pure functions extracted from `data-store.tsx` so
-// a long high-event session is reachable here without a DOM.
+// Bounded-memory behaviour of the always-on data layer. Both bounds are pure
+// functions extracted from `data-store.tsx` so a long session is reachable without a DOM.
 
 function entry(n: number): LogEntry {
   return { level: 30, time: n, msg: `entry-${n}` };

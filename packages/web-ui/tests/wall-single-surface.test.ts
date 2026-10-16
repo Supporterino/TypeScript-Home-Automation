@@ -7,10 +7,8 @@ import { wallFrameDrawsSurface } from "../src/app/wall/frame.js";
 import { WALL_WIDGET_REGISTRY } from "../src/app/wall/registry.js";
 
 /**
- * The single-surface invariant (design.md D2, D9; specs/wall-display "A card is
- * a single surface"). The frame's surface decision is pure, so it is asserted
- * directly; the wiring that passes it through is asserted structurally, since
- * there is no DOM harness — the same style as `wall-read-only.test.ts`.
+ * The single-surface invariant: the frame's surface decision is pure, and the
+ * wiring that passes it through is asserted structurally.
  */
 const APP_DIR = join(import.meta.dir, "..", "src/app");
 

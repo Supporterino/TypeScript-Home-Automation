@@ -23,7 +23,7 @@ export interface StatProps {
   className?: string;
 }
 
-/** A labelled readout (design.md D5) — numeric values use the display face. */
+/** A labelled readout; numeric values use the display face. */
 export function Stat({ label, value, icon, hint, tone = "default", className }: StatProps) {
   return (
     <div className={cn("flex flex-col gap-1", className)}>

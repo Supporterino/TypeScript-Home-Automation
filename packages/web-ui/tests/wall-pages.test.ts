@@ -24,16 +24,13 @@ import {
   WALL_WIDGET_REGISTRY,
 } from "../src/app/wall/registry.js";
 
-// Pure pagination — no DOM (wall-zones-and-fit D12; specs/wall-display "Device
-// Grid Widget", "Panel Fit"). The device grid pages a selection its span cannot
-// present instead of overflowing or scrolling, so the wall never scrolls.
+// Pure pagination — no DOM. The device grid pages a selection its span cannot present
+// instead of overflowing or scrolling, so the wall never scrolls.
 
 describe("the frame inset follows the ported card padding", () => {
   it("derives the inset and both reservations from the ported card's own padding", () => {
-    // One number, read from the card table rather than restated: the frame's inset
-    // *is* the ported card surface's padding, and the two reservations follow from
-    // it — never from Hearth's own spacing scale (design.md W3; specs/wall-display
-    // "A widget's surface is a card's surface", "Panel Fit").
+    // One number, read from the card table rather than restated: the frame's inset *is* the
+    // ported card surface's padding.
     expect(WALL_FRAME_INSET_PX).toBe(WALL_CARD_METRICS.padding);
     expect(WALL_FRAME_RESERVED_PX).toBe(2 * WALL_CARD_METRICS.padding);
     expect(WALL_PAGE_RESERVED_PX).toBe(
@@ -119,10 +116,8 @@ describe("resolvePages", () => {
   });
 });
 
-// The paged tile row's bound (design.md D4; specs/wall-display "Paged Tile
-// Sizing"). A tile row is sized from the tile's own cell and bounded against
-// inflation, so a paged tile renders at a predictable size on every panel instead
-// of at whatever height the widget's leftover space provides.
+// The paged tile row's bound. A tile row is sized from the tile's own cell and bounded
+// against inflation, so a paged tile renders at a predictable size on every panel.
 
 /** The harness stage's geometry: a 1920×1080 panel resolves the row unit's ceiling and a 21.6 px gutter. */
 const HARNESS_ROW_UNIT = ROW_UNIT_MAX;
@@ -131,10 +126,8 @@ const HARNESS_TILE_CELL_PX = WALL_TILE_CELL_ROWS * HARNESS_ROW_UNIT + HARNESS_GU
 
 describe("the paged tile row's bound", () => {
   it("caps a tile row at 1.25× the tile's cell, and never below it", () => {
-    // The capture's geometry: a 4×6 room card on the harness panel — its three
-    // header rows and the frame inset reserved — leaves one tile row the whole
-    // leftover height, 316 px against the tile's own 181.6 px cell (1.74×). The
-    // bound caps it; the floor keeps it at the tile's cell.
+    // The capture's geometry: a 4×6 room card on the harness panel leaves one tile row the
+    // whole leftover height, 316 px against the tile's own 181.6 px cell (1.74×).
     const reservedPx = WALL_FRAME_RESERVED_PX + 3 * HARNESS_ROW_UNIT;
     const plan = resolvePages({
       span: { w: 4, h: 6 },
@@ -193,10 +186,8 @@ describe("the paged tile row's bound", () => {
   });
 
   it("leaves tilesDown and the page count exactly as the pitch resolves them", () => {
-    // The bound acts on the resolved height alone: the pitch the rows are packed
-    // by is untouched, so the page a plan reports is the page it always was. At
-    // the harness's 4×6 room card, its three header rows and the page-control row
-    // resolve one tile row of one column, so five devices page to five.
+    // The bound acts on the resolved height alone: the pitch the rows are packed by is
+    // untouched, so the page a plan reports is the page it always was.
     const reservedRows = 3;
     const pitch = WALL_TILE_CELL_ROWS * HARNESS_ROW_UNIT + HARNESS_GUTTER_PX + WALL_TILE_GAP_PX;
     const alwaysPx = WALL_FRAME_RESERVED_PX + reservedRows * HARNESS_ROW_UNIT;
@@ -251,9 +242,8 @@ describe("the device tile's model", () => {
   });
 
   it("keeps the derived cell tall enough for the ported compact card", () => {
-    // The pitch the page math divides by is the tile's cell at the row unit,
-    // which D5 derives from the ported card:
-    //   WALL_TILE_CELL_ROWS · ROW_UNIT_MIN + WALL_GUTTER_MIN_PX = card height.
+    // The pitch the page math divides by is the tile's cell at the row unit, derived from
+    // the ported card: WALL_TILE_CELL_ROWS · ROW_UNIT_MIN + WALL_GUTTER_MIN_PX = card height.
     expect(WALL_TILE_CELL_ROWS * ROW_UNIT_MIN + WALL_GUTTER_MIN_PX).toBeGreaterThanOrEqual(
       WALL_COMPACT_CARD_HEIGHT_PX,
     );

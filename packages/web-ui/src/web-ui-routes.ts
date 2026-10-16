@@ -7,22 +7,8 @@ import { ICON_SVG } from "./assets/icon-svg.js";
 import { htmlShell, loginShell } from "./components/html-shell.js";
 
 /**
- * Every top-level application view segment the client router can navigate
- * to (design.md D7; specs/web-ui/spec.md "Routes"; task 10.1).
- *
- * Each is registered explicitly below — an exact match and a `/*` nested
- * match, per the spec's `GET {path}/<ui-segment>` and
- * `GET {path}/<ui-segment>/*` rows — rather than a single catch-all beneath
- * the UI path. A catch-all would shadow health probes, webhooks, and the API
- * whenever the UI is mounted at `/`, which is exactly the bug D7 exists to
- * avoid. Adding a new top-level view costs one entry in this array; nothing
- * elsewhere needs to change for it to be served the shell.
- *
- * This array MUST be kept in sync with the client router's registered
- * segments (`packages/web-ui/src/app/lib/router.ts`) — a client-side route with
- * no server entry here would 404 on reload; a server entry with no client
- * route would render a blank shell. `tests/status-page.test.ts` asserts each
- * of these serves the shell and that an unregistered segment does not.
+ * Every top-level application view segment the client router can navigate to.
+ * Must be kept in sync with the client router's registered segments.
  */
 export const UI_VIEW_SEGMENTS = [
   "overview",
@@ -39,19 +25,8 @@ export const UI_VIEW_SEGMENTS = [
 ] as const;
 
 /**
- * Register web UI routes directly on an existing Hono app.
- *
- * Called by `WebUiService.registerRoutes`. It handles:
- *   - The HTML shell (dashboard page)
- *   - Login / logout flow when a token is configured
- *
- * All data API routes (`/api/*`) are served by core's `HttpServer`.
- *
- * `getLogger` is called lazily inside the auth handlers rather than at mount
- * time: the engine mounts routes before it runs `onStart()`, so the logger is
- * not yet available when this function runs (design.md D7).
- *
- * @param getLogger Returns the plugin's logger once `onStart()` has run.
+ * Register the web UI shell and login/logout routes on a Hono app. Data
+ * routes under `/api/*` are served by core's `HttpServer`.
  */
 export function registerWebUiRoutes(
   app: Hono,
@@ -63,11 +38,7 @@ export function registerWebUiRoutes(
 
   // ── Path helper ───────────────────────────────────────────────────────────
 
-  /**
-   * Build a sub-path relative to the UI base path, handling the root case.
-   *   subpath("login") when path="/status" → "/status/login"
-   *   subpath("login") when path="/"       → "/login"
-   */
+  /** Build a sub-path relative to the UI base path, handling the root case. */
   function subpath(suffix: string): string {
     return path === "/" ? `/${suffix}` : `${path}/${suffix}`;
   }
@@ -90,9 +61,8 @@ export function registerWebUiRoutes(
 
   // ── Compiled JS/CSS assets ────────────────────────────────────────────────
 
-  // Unauthenticated, content-addressed, immutably cached (design.md D8, D26).
-  // Registered here — not when WEB_UI_ENABLED is false — so a disabled
-  // instance serves no compiled asset routes at all.
+  // Unauthenticated and immutably cached; registered here so a disabled
+  // instance serves no compiled asset routes.
   registerAssetRoutes(app, path);
 
   // ── PWA assets ────────────────────────────────────────────────────────────
@@ -113,10 +83,8 @@ export function registerWebUiRoutes(
       display: "standalone",
       start_url: path,
       scope: path,
-      // Lumen (design.md D3). The manifest and the document `theme-color` use
-      // the dark scheme's background so the installed app's chrome matches the
-      // authoritative scheme. Keep in sync with `--bg` in
-      // `src/app/styles/app.css`; the brand name itself is unchanged.
+      // Dark-scheme background, so the installed app's chrome matches. Keep in
+      // sync with `--bg` in `src/app/styles/app.css`.
       background_color: "#0B0F17",
       theme_color: "#0B0F17",
       icons: [{ src: iconPath, sizes: "512x512", type: "image/svg+xml", purpose: "any maskable" }],
@@ -126,18 +94,15 @@ export function registerWebUiRoutes(
 
   // ── Dashboard shell ───────────────────────────────────────────────────────
 
-  // Auth is checked inline here rather than via app.use() because
-  // app.use("/", ...) would match ALL routes on the server, breaking health
-  // probes, webhooks, and API endpoints when the UI is mounted at "/".
+  // Auth is checked inline, not via app.use("/", ...), which would match every
+  // route on the server when the UI is mounted at "/".
   // biome-ignore lint/suspicious/noExplicitAny: Hono context type is parameterised; using any here is safe
   function serveShell(c: Context<any>): Response | Promise<Response> {
     if (!isAuthorized(c)) {
       return c.redirect(subpath("login"));
     }
     const html = htmlShell({ basePath: path, hasAuth });
-    // The shell is small and changes with each deploy; never cache it, so a
-    // rebuilt bundle's new hashed asset URLs are always picked up on reload
-    // (design.md D8).
+    // Never cache the shell, so a rebuilt bundle's new asset URLs are picked up.
     return c.html(html, 200, { "Cache-Control": "no-store" });
   }
 
@@ -148,12 +113,8 @@ export function registerWebUiRoutes(
     app.get(`${path}/`, (c) => c.redirect(path));
   }
 
-  // Every registered top-level view segment also serves the shell, both at
-  // its own path and for anything nested beneath it (a detail path such as
-  // a device or automation's own view) — design.md D7; task 10.1. No other
-  // path beneath the UI path is registered, so an unknown sub-path (a typo,
-  // or a segment the client has never had) falls through to Hono's default
-  // 404 rather than the shell.
+  // Each view segment serves the shell, and anything nested beneath it. Other
+  // sub-paths fall through to Hono's default 404.
   for (const segment of UI_VIEW_SEGMENTS) {
     app.get(subpath(segment), serveShell);
     app.get(`${subpath(segment)}/*`, serveShell);
@@ -187,9 +148,7 @@ export function registerWebUiRoutes(
 
     getLogger()?.info("Successful login");
 
-    // Set session cookie and redirect to dashboard.
-    // We build the Response manually so we can attach both the Location header
-    // and the Set-Cookie header in a single response.
+    // Built manually to attach both Location and Set-Cookie in one response.
     const cookieValue = `${SESSION_COOKIE}=${encodeURIComponent(token)}; HttpOnly; SameSite=Strict; Path=/`;
     return new Response(null, {
       status: 302,

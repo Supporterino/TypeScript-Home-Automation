@@ -10,12 +10,8 @@ import {
 } from "../src/app/wall/cards/SelectCard.js";
 
 /**
- * The wall select card (task 4.4; design.md D1, D3, D6; specs/wall-display
- * "Widget Catalog" — "an enumerated control"; "Wall Device Presentation" — "A
- * value device keeps its embedded control"). The pure decisions are covered
- * directly — including a device whose permitted values are absent, which must
- * present no options — and the render is asserted structurally against its source
- * (there is no DOM harness), the same style as `wall-card-anatomy.test.ts`.
+ * The wall select card: the pure decisions — including a device whose permitted values
+ * are absent — covered directly; the render asserted structurally.
  */
 const APP_DIR = join(import.meta.dir, "..", "src/app");
 const CARD = join(APP_DIR, "wall/cards/SelectCard.tsx");

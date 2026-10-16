@@ -1,16 +1,6 @@
 /**
- * The lazy Weather view (design.md D11, D12; specs/weather-services; specs/web-ui
- * "Weather View"; task 6.3).
- *
- * Reads `GET /api/weather`: current conditions and, when the registered service
- * provides one, a daily forecast. No service (or no resolvable location) is a
- * supported state, not an error — the endpoint's 404/400 map to an explicit
- * "not configured" message. Weather changes slowly, so the view refetches on
- * mount and on a stream reconnect only.
- *
- * Condition is conveyed by icon + description text, never colour alone.
- *
- * Rebuilt on the Lumen primitive layer (`ui/*`) and `lucide-react`.
+ * The lazy Weather view: current conditions and, when available, a daily
+ * forecast. An unconfigured service or location is a supported state.
  */
 
 import type { WeatherData, WeatherUnavailable } from "@ts-ha/shared";
@@ -80,8 +70,7 @@ export function WeatherView() {
     void load();
   }, [load]);
 
-  // Weather changes slowly: a reconnect is the only stream signal worth a
-  // refetch (missed samples cannot be reconstructed from device events).
+  // Weather changes slowly: a reconnect is the only stream signal worth a refetch.
   const previousTransport = useRef(transport);
   useEffect(() => {
     const previous = previousTransport.current;

@@ -1,7 +1,7 @@
 import type { ComponentPropsWithoutRef } from "react";
 import { cn } from "./cn.js";
 
-/** The semantic tone a badge communicates (design.md D3). */
+/** The semantic tone a badge communicates. */
 export type BadgeTone = "neutral" | "accent" | "on" | "stale" | "danger" | "info";
 
 const TONE: Record<BadgeTone, string> = {
@@ -17,7 +17,7 @@ export interface BadgeProps extends ComponentPropsWithoutRef<"span"> {
   tone?: BadgeTone;
 }
 
-/** A compact, tone-coded status pill (design.md D5). */
+/** A compact, tone-coded status pill. */
 export function Badge({ className, tone = "neutral", ...props }: BadgeProps) {
   return (
     <span
