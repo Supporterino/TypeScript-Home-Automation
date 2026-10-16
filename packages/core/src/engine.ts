@@ -876,8 +876,7 @@ export function createEngine(options: EngineOptions): Engine {
             mqtt: config.mqtt.host,
             httpPort: httpServerPort > 0 ? httpServerPort : "disabled",
             deviceRegistry: config.deviceRegistry.enabled,
-            statePersistence:
-              stateManager !== null && (options.state?.persist ?? config.state.persist),
+            statePersistence: options.state?.persist ?? config.state.persist,
           },
           "Home Automation Engine is running",
         );
