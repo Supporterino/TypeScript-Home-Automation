@@ -1,7 +1,8 @@
-import { copyFile, mkdir, open, readFile, rename } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import { INTERNAL_STATE_PREFIX } from "@ts-ha/shared";
 import type { Logger } from "pino";
+import { readJsonWithBackup, writeJsonAtomically } from "./json-persistence.js";
 
 /** Callback for state change listeners. */
 export type StateChangeHandler<T = unknown> = (
@@ -91,7 +92,8 @@ export class StateManager {
   /**
    * Chains every `save()` call (scheduled or explicit) so overlapping calls
    * never race on the same file — a scheduled flush and an explicit call from
-   * graceful shutdown can otherwise land inside `atomicWrite()` concurrently.
+   * graceful shutdown can otherwise land inside `writeJsonAtomically()`
+   * concurrently.
    */
   private saveChain: Promise<void> = Promise.resolve();
 
@@ -325,46 +327,9 @@ export class StateManager {
    */
   async load(): Promise<void> {
     if (!this.persist) return;
-
-    let data: string;
-    try {
-      data = await readFile(this.filePath, "utf-8");
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException).code === "ENOENT") {
-        this.logger.debug({ file: this.filePath }, "No persisted state file found, starting fresh");
-      } else {
-        this.logger.error({ err, file: this.filePath }, "Failed to load persisted state");
-      }
-      return;
-    }
-
-    try {
-      this.restore(JSON.parse(data) as Record<string, unknown>, this.filePath);
-    } catch (err) {
-      // Primary file is corrupt/unparseable — attempt recovery from the backup.
-      this.logger.error(
-        { err, file: this.filePath },
-        "Persisted state file is corrupt, attempting backup recovery",
-      );
-      await this.recoverFromBackup();
-    }
-  }
-
-  /**
-   * Attempt to restore state from the backup file (`filePath` + `.bak`).
-   * On failure the in-memory store is left empty and an error is logged.
-   */
-  private async recoverFromBackup(): Promise<void> {
-    const backupPath = `${this.filePath}.bak`;
-    try {
-      const data = await readFile(backupPath, "utf-8");
-      this.restore(JSON.parse(data) as Record<string, unknown>, backupPath);
-    } catch (err) {
-      this.logger.error(
-        { err, file: backupPath },
-        "Backup state file missing or corrupt, starting with an empty store",
-      );
-    }
+    await readJsonWithBackup(this.filePath, this.logger, "state", (parsed, file) =>
+      this.restore(parsed, file),
+    );
   }
 
   /** Load parsed key-value pairs into the store and log success. */
@@ -409,7 +374,7 @@ export class StateManager {
       const contents = JSON.stringify(data, null, 2);
 
       await mkdir(dirname(this.filePath), { recursive: true });
-      await this.atomicWrite(this.filePath, contents);
+      await writeJsonAtomically(this.filePath, contents, this.logger, "state");
 
       this.logger.info(
         { keys: Object.keys(data).length, file: this.filePath },
@@ -460,37 +425,6 @@ export class StateManager {
       this.flushTimer = null;
     }
     await this.save();
-  }
-
-  /**
-   * Durably write `contents` to `filePath` atomically.
-   *
-   * Writes to a temp file, `fsync`s it to disk, preserves any existing file as
-   * a `.bak` backup (best-effort), then atomically renames the temp file over
-   * `filePath`. An interrupted write can never leave `filePath` truncated.
-   */
-  private async atomicWrite(filePath: string, contents: string): Promise<void> {
-    const tmpPath = `${filePath}.tmp`;
-
-    const fh = await open(tmpPath, "w");
-    try {
-      await fh.writeFile(contents, "utf-8");
-      await fh.sync();
-    } finally {
-      await fh.close();
-    }
-
-    // Best-effort backup of the previous good file — a failed backup (e.g. the
-    // file does not exist yet) MUST NOT block the primary save.
-    try {
-      await copyFile(filePath, `${filePath}.bak`);
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
-        this.logger.warn({ err, file: filePath }, "Failed to back up prior state file");
-      }
-    }
-
-    await rename(tmpPath, filePath);
   }
 
   // -------------------------------------------------------------------------
