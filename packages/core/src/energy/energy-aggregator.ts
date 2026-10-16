@@ -1,12 +1,9 @@
 /**
- * Home-wide energy aggregation (design.md D6, D7; specs/energy-monitoring).
- *
- * Samples the aggregate device source on a fixed interval, normalizes each
- * device's declared cumulative-energy reading to watt-hours at this boundary,
- * and retains a bounded, in-memory ring of the home's instantaneous power
- * total. The HTTP surface reads the current snapshot synchronously; nothing
- * here is persisted, because surviving a restart is explicitly out of scope
- * for this capability.
+ * Home-wide energy aggregation. Samples the aggregate device source on a fixed
+ * interval, normalizes each declared cumulative-energy reading to watt-hours, and
+ * retains two bounded in-memory rings: the home's instantaneous power total and
+ * every reachable device's cumulative-energy reading, from which a rolling-window
+ * usage is derived per device.
  */
 import type {
   Capability,
@@ -24,11 +21,21 @@ const POWER_PROPERTY = "power";
 /** The capability property carrying a device's cumulative consumption. */
 const ENERGY_PROPERTY = "energy";
 
+const MILLIS_PER_MINUTE = 60_000;
+
 /**
- * Multipliers converting a device-source's declared energy unit to the
- * canonical watt-hour (design.md D7). A source declares its own truthful unit
- * and the aggregator normalizes here, rather than forcing lossy conversion at
- * the source. An absent unit is read as the canonical `Wh`.
+ * One timestamped sample of every reachable device's cumulative-energy reading,
+ * in watt-hours, keyed by the device's qualified id. A device that is unreachable
+ * or declares no reading is absent from the map rather than recorded as zero.
+ */
+interface CumulativeEnergySample {
+  timestamp: number;
+  readings: Map<string, number>;
+}
+
+/**
+ * Multipliers converting a source's declared energy unit to the canonical
+ * watt-hour; an absent unit is read as the canonical `Wh`.
  */
 const ENERGY_UNIT_TO_WH: Record<string, number> = {
   Wh: 1,
@@ -39,22 +46,22 @@ const ENERGY_UNIT_TO_WH: Record<string, number> = {
 
 /** Options controlling the sampling cadence and the history retention window. */
 export interface EnergyAggregatorOptions {
-  /** Milliseconds between power-history samples. Always positive (config normalizes `0`). */
+  /** Milliseconds between history samples. Always positive (config normalizes `0`). */
   sampleIntervalMs: number;
   /** Rolling history window in minutes. `0` disables history retention. */
   historyMinutes: number;
 }
 
 /**
- * Reads the current snapshot's metering totals plus the retained history.
- *
- * `powerWatts`/`energyWh` are computed live from the device descriptors on
- * every call so the endpoint is useful before the first interval elapses,
- * while `history` is the bounded ring populated by {@link sample}.
+ * Reads the current metering totals and the rolling-window usage, plus the retained
+ * history. Totals are computed live on every call; `history` is the bounded ring
+ * populated by {@link sample}.
  */
 export class EnergyAggregator {
   private readonly history: EnergyHistorySample[] = [];
+  private readonly cumulativeHistory: CumulativeEnergySample[] = [];
   private readonly maxSamples: number;
+  private readonly maxCumulativeSamples: number;
   private timer: ReturnType<typeof setInterval> | null = null;
 
   constructor(
@@ -65,13 +72,16 @@ export class EnergyAggregator {
   ) {
     this.maxSamples =
       options.historyMinutes > 0
-        ? Math.floor((options.historyMinutes * 60_000) / options.sampleIntervalMs)
+        ? Math.floor((options.historyMinutes * MILLIS_PER_MINUTE) / options.sampleIntervalMs)
         : 0;
+    // A window delta is measured between two samples, so the cumulative ring
+    // retains one sample beyond the power ring: a full ring then spans the whole
+    // retention window rather than one interval short of it.
+    this.maxCumulativeSamples = this.maxSamples > 0 ? this.maxSamples + 1 : 0;
   }
 
   /**
-   * Begin sampling: take one sample immediately, then one per configured
-   * interval. Idempotent — a second call is a no-op while the timer runs.
+   * Begin sampling: one sample immediately, then one per interval. Idempotent while running.
    */
   start(): void {
     if (this.timer) return;
@@ -87,52 +97,102 @@ export class EnergyAggregator {
   }
 
   /**
-   * Compute the current energy view: live totals, the per-device breakdown,
-   * and a copy of the retained history (oldest first). Never fails on a
-   * deployment with no metering devices — the totals are zero and the
-   * breakdown is empty.
+   * Compute the current energy view — live totals, per-device breakdown, a copy of the
+   * history, and the rolling-window usage with its window and coverage — defaulting to
+   * zero totals with no metering devices.
+   *
+   * `windowMinutes` is reported whenever history is enabled. `usageWh` and its
+   * `coveredMinutes` are absent when no retained cumulative sample precedes the newest
+   * one, or when no device reports a cumulative reading at both ends of the retained
+   * span: either way the span is uncovered enough to report a change, and a zero would
+   * be a false reading rather than an absent one.
    */
   snapshot(): EnergyData {
     const { powerWatts, energyWh, breakdown } = this.compute();
-    return { powerWatts, energyWh, breakdown, history: [...this.history] };
+    const data: EnergyData = { powerWatts, energyWh, breakdown, history: [...this.history] };
+    if (this.maxSamples > 0) {
+      data.windowMinutes = this.options.historyMinutes;
+      const usage = this.windowUsage();
+      if (usage) {
+        data.usageWh = usage.usageWh;
+        data.coveredMinutes = usage.coveredMinutes;
+      }
+    }
+    return data;
   }
 
   /**
-   * Append one timestamped home-power sample to the bounded ring.
-   *
-   * A no-op beyond computing nothing when history is disabled
-   * (`historyMinutes === 0`); the current totals remain available through
-   * {@link snapshot} regardless.
+   * Append one timestamped home-power sample and one per-device cumulative-energy
+   * sample to the bounded rings; a no-op when history is disabled
+   * (`historyMinutes === 0`). The cumulative ring carries only the devices that are
+   * reachable and declare a reading at that instant, keyed by qualified id, so a
+   * device that is unreachable or silent is absent rather than recorded as zero.
    */
   sample(): void {
     if (this.maxSamples === 0) return;
 
-    const { powerWatts } = this.compute();
-    this.history.push({ timestamp: this.now(), powerWatts });
+    const { powerWatts, energyReadings } = this.compute();
+    const timestamp = this.now();
+    this.history.push({ timestamp, powerWatts });
+    this.cumulativeHistory.push({ timestamp, readings: energyReadings });
     while (this.history.length > this.maxSamples) {
       this.history.shift();
+    }
+    while (this.cumulativeHistory.length > this.maxCumulativeSamples) {
+      this.cumulativeHistory.shift();
     }
   }
 
   /**
-   * Derive the home's totals and per-device breakdown from the current device
-   * descriptors.
+   * The home's usage over the retained span plus the minutes it covers, or `undefined`
+   * when the span has no baseline or no device reports a cumulative reading at both
+   * ends — in either case the caller reports usage as absent rather than as a false
+   * zero.
    *
-   * A device contributes to the breakdown only when it declares a power or
-   * energy capability. Its readings come from the matching state properties
-   * and are summed only when finite and reachable; a missing or non-finite
-   * reading is never treated as zero, and an unreachable device is reported
-   * `available: false` with its readings withheld so an outage cannot silently
-   * reduce the apparent total (specs/energy-monitoring).
+   * Usage is summed per device: only a device present at both ends contributes its
+   * change, so a device that drops out mid-window leaves the window rather than
+   * subtracting its consumption from it.
+   */
+  private windowUsage(): { usageWh: number; coveredMinutes: number } | undefined {
+    const first = this.cumulativeHistory[0];
+    const last = this.cumulativeHistory[this.cumulativeHistory.length - 1];
+    if (first === undefined || last === undefined || last.timestamp <= first.timestamp) {
+      return undefined;
+    }
+
+    let usageWh = 0;
+    let contributed = false;
+    for (const [qualifiedId, lastReading] of last.readings) {
+      const firstReading = first.readings.get(qualifiedId);
+      if (firstReading === undefined) continue;
+      usageWh += lastReading - firstReading;
+      contributed = true;
+    }
+    if (!contributed) return undefined;
+
+    const coveredMinutes = Math.min(
+      this.options.historyMinutes,
+      (last.timestamp - first.timestamp) / MILLIS_PER_MINUTE,
+    );
+    return { usageWh, coveredMinutes };
+  }
+
+  /**
+   * Derive the home's totals and per-device breakdown from the current descriptors, plus
+   * the watt-hour cumulative reading of each reachable device that declares one, keyed by
+   * qualified id. A missing or non-finite reading is never treated as zero; an
+   * unreachable device is reported `available: false` with its readings withheld.
    */
   private compute(): {
     powerWatts: number;
     energyWh: number;
     breakdown: EnergyDeviceBreakdown[];
+    energyReadings: Map<string, number>;
   } {
     let powerWatts = 0;
     let energyWh = 0;
     const breakdown: EnergyDeviceBreakdown[] = [];
+    const energyReadings = new Map<string, number>();
 
     for (const device of this.devices.list()) {
       // Nesting into `features` matters: Zigbee2MQTT exposes power/energy on a
@@ -169,13 +229,14 @@ export class EnergyAggregator {
         if (wattHours !== undefined) {
           entry.energyWh = wattHours;
           energyWh += wattHours;
+          energyReadings.set(device.qualifiedId, wattHours);
         }
       }
 
       breakdown.push(entry);
     }
 
-    return { powerWatts, energyWh, breakdown };
+    return { powerWatts, energyWh, breakdown, energyReadings };
   }
 }
 

@@ -23,8 +23,7 @@ describe("computeRevertDeadlineMs", () => {
   });
 
   it("gives a polled device with a long refresh interval at least that interval", () => {
-    // design.md scenario: "A polled device is given until its next refresh" —
-    // the deadline must be at least the reported interval, never shorter.
+    // The deadline must be at least the reported interval, never shorter.
     const observation: DeviceObservation = {
       mode: "polled",
       observedAt: Date.now(),

@@ -3,8 +3,6 @@ import { getEventListeners } from "node:events";
 import type { StreamEvent } from "@ts-ha/shared";
 import { abortableSleep, isStreamAuthError, readEventStream } from "../src/event-stream.js";
 
-// specs/cli "Engine Communication" / "Realtime Dashboard Updates" (task 2.2).
-
 function calls(fn: ReturnType<typeof mock>): [string, RequestInit][] {
   return fn.mock.calls as [string, RequestInit][];
 }

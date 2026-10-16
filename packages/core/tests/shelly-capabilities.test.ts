@@ -30,7 +30,7 @@ describe("shellyCapabilitiesFor", () => {
     expect(metered).toEqual(["on", "power", "voltage", "current", "energy"]);
   });
 
-  describe("per-channel composition (task 4.1)", () => {
+  describe("per-channel composition", () => {
     it("describes two channels of one device independently: only the metered channel declares energy", () => {
       const metered = shellyCapabilitiesFor("switch", { metered: true });
       const nonMetered = shellyCapabilitiesFor("switch", { metered: false });
@@ -66,16 +66,14 @@ describe("shellyCapabilitiesFor", () => {
     });
   });
 
-  describe("cover transport action (design.md D15)", () => {
+  describe("cover transport action", () => {
     it("declares a write-only transport enum naming open, close and stop", () => {
       const action = shellyCapabilitiesFor("cover").find((c) => c.property === "action");
 
       expect(action).toBeDefined();
       expect(action?.kind).toBe("enum");
       expect(action?.valueType).toBe("enum");
-      // A transport is a command, not a reported value: it is writable so a
-      // source-neutral consumer can express it, and not readable so no consumer
-      // renders a readout for a value `normalize()` never produces (design.md D15).
+      // A transport is a command, not a reported value: writable, but not readable.
       expect(action?.access).toEqual({ readable: false, writable: true });
       expect(action?.permittedValues).toEqual(["open", "close", "stop"]);
     });

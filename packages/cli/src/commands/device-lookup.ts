@@ -1,9 +1,6 @@
 /**
- * Resolve a device command argument against the engine's catalog, reporting
- * the absence or ambiguity and exiting, or returning the matched descriptor.
- *
- * Shared by the `devices` and `rooms` command surfaces so addressing is
- * identical everywhere (specs/cli "Device Addressing"; design.md D1).
+ * Resolve a device command argument against the engine's catalog, exiting on
+ * a missing or ambiguous match.
  */
 
 import type { DeviceDescriptor } from "@ts-ha/shared";

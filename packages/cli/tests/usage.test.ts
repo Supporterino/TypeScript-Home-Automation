@@ -1,8 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { USAGE } from "../src/usage.js";
 
-// specs/cli "Command Surface" (task 2.6) — `ts-ha --help` lists the new surface.
-
 describe("USAGE", () => {
   it("lists the Phase 2 automations subcommands", () => {
     expect(USAGE).toContain("automations history <name>");

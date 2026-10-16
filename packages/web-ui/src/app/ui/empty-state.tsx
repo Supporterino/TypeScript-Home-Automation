@@ -11,7 +11,7 @@ export interface EmptyStateProps {
   className?: string;
 }
 
-/** A centred, explanatory empty state (design.md D5). */
+/** A centred, explanatory empty state. */
 export function EmptyState({ icon, title, description, action, className }: EmptyStateProps) {
   return (
     <div

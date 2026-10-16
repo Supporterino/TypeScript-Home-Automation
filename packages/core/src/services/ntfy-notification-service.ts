@@ -11,19 +11,8 @@ export interface NtfyConfig {
   /** Default topic to publish notifications to when no channel is specified. */
   topic: string;
   /**
-   * Named channel map — logical channel name → ntfy topic string.
-   *
-   * Automations can pass `channel: "alerts"` in `NotificationOptions` to
-   * route a notification to a specific ntfy topic without hard-coding the
-   * topic name in each automation.
-   *
-   * @example
-   * ```ts
-   * channels: {
-   *   alerts: "home-alerts",
-   *   debug:  "home-debug",
-   * }
-   * ```
+   * Named channel map — logical channel name → ntfy topic string, so an automation can
+   * route a notification by channel without hard-coding the topic.
    */
   channels?: Record<string, string>;
   /** Optional: bearer token for access-controlled topics. */

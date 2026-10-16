@@ -1,22 +1,13 @@
 /**
- * Pure selection and pagination for the wall device grid (wall-zones-and-fit
- * D12; specs/wall-display "Device Grid Widget", "Panel Fit"). A device grid's
- * device set is the one the author selected explicitly; this module turns that
- * selection into the page the renderer draws and the page count the editor
- * reports — through the wall's shared pagination layer (`wall/pages.ts`), so the
- * device grid, the favorites grid, and the room grid page by the same rule and
- * the wall and the editor cannot disagree about how many pages a selection
- * implies. Kept dependency-free (no React, no DOM) so it stays reachable by
- * `bun test`.
+ * Pure selection and pagination for the wall device grid, through the wall's shared
+ * pagination layer.
  */
 import { resolvePagedTiles } from "../pages.js";
 import type { WallWidgetSpan } from "../registry.js";
 
 /**
- * The devices a device grid's config selects, in authored order. A value that is
- * not a list of non-empty strings yields no selection, and a repeated identifier
- * is kept once — a device cannot be drawn twice, and a duplicate would collide
- * with a tile's React key.
+ * The devices a device grid's config selects, in authored order: non-empty
+ * identifiers, each kept once.
  */
 export function deviceGridIds(config: Record<string, unknown>): readonly string[] {
   const value: unknown = config.qualifiedIds;
@@ -35,7 +26,7 @@ export function deviceGridIds(config: Record<string, unknown>): readonly string[
   return ids;
 }
 
-/** One rendered page of a device grid (design.md D12). */
+/** One rendered page of a device grid. */
 export interface DeviceGridPage {
   /** The identifiers this page draws, in selection order. */
   readonly ids: readonly string[];
@@ -52,10 +43,7 @@ export interface DeviceGridPage {
 }
 
 /**
- * Resolves the page a device grid draws, through the shared pagination layer
- * (design.md D5, D12; specs/wall-display "Panel Fit"). A device grid draws no
- * chrome above its tiles, so its plan reserves nothing beyond the frame's own —
- * its inset, and its title when the widget configures one.
+ * Resolves the page a device grid draws, through the shared pagination layer.
  */
 export function resolveDeviceGridPage(input: {
   readonly ids: readonly string[];
@@ -63,10 +51,8 @@ export function resolveDeviceGridPage(input: {
   readonly rowUnit: number;
   readonly page: number;
   /**
-   * Whether the widget configures a title. The grid draws no chrome of its own, so
-   * this is the only thing it reserves beyond the shared layer's own frame chrome —
-   * and the editor's preview passes the same flag, so the page count it reports is
-   * the one the wall draws (wall-zones-and-fit D3, D4).
+   * Whether the widget configures a title — the only chrome the grid reserves
+   * beyond the frame's own.
    */
   readonly titled?: boolean;
   readonly gutterPx?: number;

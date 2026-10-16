@@ -1,23 +1,6 @@
 /**
- * The wall favorites widget (design.md D11, D13; specs/wall-display "Widget
- * Catalog", "Panel Fit"). Renders the user's favorited devices as the ported
- * device card of each device's own class — favorites logic is reused, never
- * reimplemented, and a card on the wall carries no management affordance.
- *
- * The displayed set is derived from the store's `favorites` list and live
- * device map on every render, so a favorite change streamed from another
- * client reconciles through the existing `state` handling with no local action.
- *
- * Composed on the wall's single card vocabulary (design.md W1, W2): the ported
- * star affordance with the title as the widget's head, and the favorite count
- * beside its label at the ported secondary size — the caption size every widget's
- * supporting figure takes; the tiles are the card's own content. A control widget:
- * the frame draws the surface, so each contained tile draws none of its own
- * (specs/wall-display "A card is a single surface").
- *
- * A set larger than the card can show pages through the wall's shared pagination
- * layer — one page at a time with touch page controls — rather than scrolling its
- * tile area, so the wall never scrolls (wall-zones-and-fit D5).
+ * The wall favorites widget: renders the user's favorited devices as the ported
+ * device card, paged through the wall's shared pagination layer.
  */
 import { Star } from "lucide-react";
 import { useDataStore } from "../../lib/data-store.js";
@@ -35,9 +18,8 @@ import { favoriteDevices } from "./favorites-model.js";
 import { PagedTileGrid } from "./PagedTileGrid.js";
 
 /**
- * The grid rows the card's own chrome — the star glyph with the title, then the
- * count with its label — consumes above the tiles at the resolved row unit. The
- * page plan reserves it, so a page never promises a tile row the card cannot show.
+ * The grid rows the card's own chrome consumes above the tiles at the resolved row
+ * unit, reserved by the page plan.
  */
 const FAVORITES_HEADER_ROWS = 2;
 
@@ -72,11 +54,7 @@ export function FavoritesWidget({ widget, contained, rowUnit }: WallWidgetProps)
             <WallDeviceCard
               device={device}
               contained={contained}
-              // A paged tile composes for the box the grid drew it in: the page
-              // plan's row height, which is the tile's own cell bounded against
-              // inflation (design.md D2, D9; specs/wall-display "Paged Tile
-              // Sizing"). Its composition resolves from that box, so the same
-              // device composes differently in a short favorites card and a tall one.
+              // The tile composes for the box the grid drew it in.
               box={wallTileCardBox(rowUnit, box.heightPx)}
             />
           )}

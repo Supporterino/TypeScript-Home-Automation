@@ -10,12 +10,8 @@ import { cardArchetype } from "../src/app/lib/card-archetype.js";
 import { WALL_MIN_CONTROL_GAP } from "../src/app/wall/registry.js";
 
 /**
- * The cover transport decisions (design.md D15; specs/wall-display "Cover
- * Transport Controls"). The control set, the optimistic wiring, and the drawing
- * now live in the wall's own `CoverCard` (`wall-card-cover.test.ts` covers the
- * card); what stays here is the pure detection and value resolution the card
- * drives — which device is a cover, which values Open/Close command, and whether
- * a stop command exists.
+ * The cover transport decisions: which device is a cover, which values Open/Close
+ * command, and whether a stop command exists.
  */
 const rw = { readable: true, writable: true };
 const ro = { readable: true, writable: false };
@@ -40,7 +36,7 @@ function zigbeeCover(): Capability[] {
   ];
 }
 
-/** A Shelly cover: a write-only `action` transport enum beside a writable position and a read-only state. */
+/** A Shelly cover: a write-only `action` transport enum beside a writable position. */
 function shellyCover(): Capability[] {
   return [
     numeric("position"),
@@ -74,12 +70,12 @@ function positionOnlyCover(): Capability[] {
   ];
 }
 
-/** The labels a cover card renders — Stop is present exactly when the pure helper finds a command. */
+/** The labels a cover card renders — Stop exactly when the pure helper finds a command. */
 function transportLabels(capabilities: Capability[]): string[] {
   return ["Open", "Close", ...(coverStopCommand(capabilities) ? ["Stop"] : [])];
 }
 
-describe("cover detection — position or a declared transport action (design D15)", () => {
+describe("cover detection — position or a declared transport action", () => {
   it("recognises a cover whose primary action is a position", () => {
     const capabilities = zigbeeCover();
     expect(cardArchetype(rankDeviceTile(capabilities), capabilities)).toBe("cover");
@@ -106,7 +102,7 @@ describe("cover detection — position or a declared transport action (design D1
   });
 });
 
-describe("cover transport values (design D15)", () => {
+describe("cover transport values", () => {
   it("uses the declared transport values for open and close", () => {
     const transport = coverTransportAction(shellyCover());
     expect(transport).toEqual({ property: "action", open: "open", close: "close", stop: "stop" });
@@ -154,7 +150,7 @@ describe("cover transport values (design D15)", () => {
   });
 });
 
-describe("cover transport control set (design D15)", () => {
+describe("cover transport control set", () => {
   it("shows three controls for a stop-capable cover", () => {
     expect(transportLabels(zigbeeCover())).toEqual(["Open", "Close", "Stop"]);
     expect(transportLabels(shellyCover())).toEqual(["Open", "Close", "Stop"]);

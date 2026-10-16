@@ -36,7 +36,7 @@ const DEFAULT_CONFIG: CliConfig = {
 /**
  * Load the CLI config file. Creates the default if it doesn't exist.
  */
-export async function loadCliConfig(): Promise<CliConfig> {
+async function loadCliConfig(): Promise<CliConfig> {
   try {
     const data = await readFile(CONFIG_PATH, "utf-8");
     return JSON.parse(data) as CliConfig;
@@ -52,7 +52,7 @@ export async function loadCliConfig(): Promise<CliConfig> {
 /**
  * Save the CLI config file.
  */
-export async function saveCliConfig(config: CliConfig): Promise<void> {
+async function saveCliConfig(config: CliConfig): Promise<void> {
   await mkdir(dirname(CONFIG_PATH), { recursive: true });
   await writeFile(CONFIG_PATH, JSON.stringify(config, null, 2), "utf-8");
   // Restrict file permissions to owner only (tokens are stored in plaintext)

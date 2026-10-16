@@ -11,12 +11,8 @@ import {
 import { resolveDeviceClass } from "../src/app/wall/cards/device-class.js";
 
 /**
- * The wall climate card (task 4.5; design.md D1, D3, D6; specs/wall-display
- * "Widget Catalog" — "a climate"; "Wall Device Presentation"). The pure decisions
- * — the declared setpoint and mode, the setpoint's bounds, whether the thermostat
- * is running, and the reading — are covered directly, and the render is asserted
- * structurally against its source (there is no DOM harness), the same style as
- * `wall-card-anatomy.test.ts`.
+ * The wall climate card: the declared setpoint and mode covered directly; the render
+ * asserted structurally.
  */
 const APP_DIR = join(import.meta.dir, "..", "src/app");
 const CARD = join(APP_DIR, "wall/cards/ClimateCard.tsx");
@@ -153,7 +149,8 @@ describe("wall climate card source", () => {
 
   it("presents the setpoint as a slider with the mode beside it", async () => {
     const source = await cardSource();
-    expect(source).toContain("<WallCardActions>");
+    // The setpoint slider is flexible, so the row keeps it flexible.
+    expect(source).toContain('<WallCardActions distribution="flexible">');
     expect(source).toContain("<WallCardSlider");
     expect(source).toContain("<WallCardEnumControl");
     expect(source).toContain("composition.siblings");
@@ -161,6 +158,13 @@ describe("wall climate card source", () => {
     // Beside the setpoint slider the enumerated control reserves the slider's own
     // width, so the mode is never a row of options squeezed below the touch target.
     expect(source).toContain("reservedPx={WALL_CARD_ENUM_SIBLING_RESERVE_PX}");
+  });
+
+  it("distributes the mode-only row when the thermostat declares no setpoint", async () => {
+    const source = await cardSource();
+    // The mode-only row is a row of fixed options, so it spreads across the card.
+    expect(source).toContain('<WallCardActions distribution="distributed">');
+    expect(source).toContain("composition.controls && !model.setpoint && model.mode");
   });
 
   it("presents no control for a thermostat that only reports its temperature", async () => {

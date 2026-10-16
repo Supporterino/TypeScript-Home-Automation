@@ -1,16 +1,6 @@
 /**
  * Device detail — controls derived generically from the device's declared
- * capabilities, not a fixed per-model list (design.md D12; specs/web-ui
- * "Device Control Interface", "Zigbee Groups Are Presented As Devices With
- * Their Membership", "Device Name Presentation"; task 5.3).
- *
- * The human-readable label is presented while the raw qualified identifier
- * stays visible, so an operator can still see the value that addresses, routes
- * to, and commands the device. A group links to each member's own detail view,
- * including hidden members, since membership is read-only here.
- *
- * Rebuilt on the Lumen primitive layer (`ui/*`) and `lucide-react` (task 5.3);
- * the capability-driven control path (`CapabilityControl`) is unchanged.
+ * capabilities, with the raw qualified identifier kept visible.
  */
 import { Clock, Eye, EyeOff, TriangleAlert, Unplug, UsersRound, Wifi } from "lucide-react";
 import { useState } from "react";
@@ -92,9 +82,8 @@ export function DeviceDetailView({ qualifiedId }: { qualifiedId: string }) {
             <h2 className="truncate font-display text-2xl font-bold text-ink">
               {humanizeDeviceName(device.displayName)}
             </h2>
-            {/* The raw identifier stays visible so an operator can still see
-                the value that addresses, routes to, and commands the device
-                (design.md D8; specs/web-ui "Device Name Presentation"). */}
+            {/* The raw identifier stays visible so an operator can see the value
+                that addresses the device. */}
             <code className="font-mono text-xs text-muted">{qualifiedId}</code>
           </Stack>
         </Row>

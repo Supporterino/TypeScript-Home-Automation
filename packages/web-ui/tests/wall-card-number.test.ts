@@ -11,12 +11,8 @@ import {
 } from "../src/app/wall/cards/NumberCard.js";
 
 /**
- * The wall number card (task 4.4; design.md D1, D3, D6; specs/wall-display
- * "Widget Catalog" — "a numeric control"; "Wall Device Presentation" — "A value
- * device keeps its embedded control"). The pure decisions are covered directly —
- * including a device whose range is absent, which must present no slider — and
- * the render is asserted structurally against its source (there is no DOM
- * harness), the same style as `wall-card-anatomy.test.ts`.
+ * The wall number card: the pure decisions — including a device whose range is absent —
+ * covered directly; the render asserted structurally.
  */
 const APP_DIR = join(import.meta.dir, "..", "src/app");
 const CARD = join(APP_DIR, "wall/cards/NumberCard.tsx");
@@ -124,7 +120,8 @@ describe("wall number card source", () => {
 
   it("presents the bounded numeric as the sole action in the actions row", async () => {
     const source = await cardSource();
-    expect(source).toContain("<WallCardActions>");
+    // The sole action is the flexible slider, so the row keeps it flexible.
+    expect(source).toContain('<WallCardActions distribution="flexible">');
     expect(source).toContain("<WallCardSlider");
     // The slider is the value's actuation target: the card never actuates whole.
     expect(source).not.toContain("onActivate");

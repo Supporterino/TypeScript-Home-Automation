@@ -1,19 +1,6 @@
 /**
  * Renders a control appropriate to one flattened capability's declared type
- * and constraints (design.md D5, D12; specs/web-ui "Device Control
- * Interface"). Shared by the device tile's primary control and the device
- * detail view's full control list — detail views stay fully generic, tiles
- * apply a curated ranking on top, never a different rendering path underneath.
- *
- * A read-only capability renders a plain readout. A writable one renders the
- * widget matching its `valueType`, constrained to its declared range or
- * permitted values so an out-of-range command cannot be composed — and wired
- * through {@link useOptimisticDeviceProperty} for immediate reflection,
- * reconciliation, and revert. A rejected command surfaces its message inline
- * rather than being swallowed.
- *
- * Rebuilt on the Lumen primitive layer (`ui/*`); its props and behaviour
- * contracts are preserved (task 4.2).
+ * and constraints, shared by the device tile and the device detail view.
  */
 import { composeBooleanCapabilityValue, readBooleanCapabilityValue } from "@ts-ha/shared";
 import type { FlatCapability } from "../lib/capability-ranking.js";
@@ -42,9 +29,7 @@ interface Props {
   size?: "sm" | "md" | "lg";
   /**
    * Controlled optimistic value. When paired with `onChange`, the caller owns
-   * the optimistic state and this component renders it instead of its own —
-   * the tile lifts one hook so its embedded control and on/off chip resolve
-   * from the same value (specs/web-ui "Device Tile Presentation").
+   * the optimistic state and this component renders it instead of its own.
    */
   value?: unknown;
   /** Controlled change handler, paired with `value`. */
@@ -53,7 +38,7 @@ interface Props {
   error?: string | null;
 }
 
-/** Maps a scale token to a Lumen type size (design.md D3). */
+/** Maps a scale token to a type size. */
 function controlFontSize(size: "sm" | "md" | "lg"): string {
   switch (size) {
     case "sm":
@@ -110,10 +95,8 @@ export function CapabilityControl({
 
     switch (capability.valueType) {
       case "boolean":
-        // Reads and writes through the capability's declared on/off encoding
-        // rather than general-purpose truthiness or a raw JSON boolean — some
-        // sources (Zigbee2MQTT) report and accept a string encoding, and both
-        // assumptions silently misread/mis-command those devices.
+        // Reads and writes through the capability's declared on/off encoding: some
+        // sources report and accept a string encoding.
         return (
           <Switch
             checked={readBooleanCapabilityValue(capability, value)}
@@ -126,8 +109,8 @@ export function CapabilityControl({
         );
 
       case "numeric": {
-        // The slider is fixed to the capability's declared range and step, so
-        // an out-of-range command cannot be composed (task 4.2).
+        // Fixed to the declared range and step, so an out-of-range command cannot
+        // be composed.
         const min = capability.range?.min ?? 0;
         const max = capability.range?.max ?? 100;
         const numericValue = typeof value === "number" ? value : min;

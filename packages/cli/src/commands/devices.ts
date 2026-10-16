@@ -49,9 +49,8 @@ export async function getDevice(client: DebugClient, query: string, json: boolea
 }
 
 /**
- * Issue a command for one property. A `400`/`503` from the engine is a
- * refusal (the command was rejected), distinct from an unknown device and
- * from a transport failure.
+ * Issue a command for one property; a `400`/`503` is a refusal, distinct
+ * from an unknown device and from a transport failure.
  */
 export async function sendDeviceCommand(
   client: DebugClient,

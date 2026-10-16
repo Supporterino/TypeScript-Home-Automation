@@ -1,18 +1,6 @@
 /**
- * The lazy Energy view (design.md D11, D12; specs/energy-monitoring; specs/web-ui
- * "Energy View"; task 6.3).
- *
- * Reads `GET /api/energy` — the aggregated instantaneous power, cumulative
- * consumption, per-device breakdown, and bounded history. The endpoint is not
- * part of the store's snapshot (it is not needed for first paint), so the view
- * fetches it itself and re-fetches on the relevant device events and on a
- * stream reconnect, debounced. It stays useful with no metering devices and
- * with history disabled: both render explanatory states, never an error.
- *
- * The trend is a hand-rendered inline SVG polyline — no chart library is added
- * to first paint or to this chunk.
- *
- * Rebuilt on the Lumen primitive layer (`ui/*`) and `lucide-react`.
+ * The lazy Energy view: aggregated power, cumulative consumption, per-device
+ * breakdown, and a hand-rendered inline SVG trend.
  */
 
 import type { EnergyData } from "@ts-ha/shared";
@@ -88,14 +76,12 @@ export function EnergyView() {
     }
   }, []);
 
-  // Mount fetch. The view only mounts when its route matches, and the route is
-  // a lazy chunk, so `/api/energy` is never requested for first paint.
+  // The route is a lazy chunk, so `/api/energy` is never requested for first paint.
   useEffect(() => {
     void load();
   }, [load]);
 
-  // Re-fetch when the stream (re)connects: events may have been missed while
-  // disconnected, exactly as the store re-snapshots (design.md "Data Sources").
+  // Re-fetch when the stream (re)connects: events may have been missed.
   const previousTransport = useRef(transport);
   useEffect(() => {
     const previous = previousTransport.current;
@@ -103,8 +89,8 @@ export function EnergyView() {
     if (previous !== "live" && transport === "live") void load();
   }, [transport, load]);
 
-  // Device events don't carry the aggregated total, so refetch the endpoint —
-  // debounced, because a room command emits one event per member.
+  // Device events carry no aggregated total, so refetch the endpoint — debounced,
+  // because a room command emits one event per member.
   const refetchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     return subscribe((event) => {

@@ -212,7 +212,7 @@ describe("AggregateDeviceSource", () => {
   });
 
   // ---------------------------------------------------------------------------
-  // Visibility stamping (design.md D8, D9; tasks 3.5, 3.6)
+  // Visibility stamping
   // ---------------------------------------------------------------------------
 
   describe("visibility", () => {

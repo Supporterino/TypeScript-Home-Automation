@@ -1,30 +1,6 @@
 /**
- * Regression test for the HomeKit reachability crash (fix-homekit-reachability-crash).
- *
- * `DeviceCatalogSource.addOrUpdate()` used to call
- * `accessory.updateReachability(descriptor.reachable)` before the accessory
- * was bridged. hap-nodejs's `Accessory.prototype.updateReachability` throws
- * `"Cannot update reachability on non-bridged accessory!"` whenever
- * `accessory.bridged` is `false`, which it always is at that point — so this
- * threw for the very first device on every startup, aborting
- * `HomekitService.onStart()` before `bridge.publish()` was ever reached.
- *
- * Unlike `tests/homekit-service.test.ts`, which wholesale-mocks
- * `DeviceCatalogSource` (and never calls the real
- * `createAccessoryFromDescriptor` or a real `hap-nodejs` `Accessory`), this
- * test drives the real `DeviceCatalogSource` — through its public
- * `start(sink)` and change-subscription surface, exactly how
- * `HomekitService` uses it — against the real `createAccessoryFromDescriptor`
- * and a real `hap-nodejs` `Accessory`. That is the exact seam the crash
- * lived in.
- *
- * `hap-nodejs` requires the `chacha20-poly1305` cipher, which Bun does not
- * implement natively, so the crypto polyfill must be imported before
- * `hap-nodejs` (or anything that imports it) is loaded — see
- * `tests/homekit-uuid-characterisation.test.ts` for the same pattern. All
- * imports below are dynamic and sequenced in `beforeAll` to preserve that
- * ordering; a static top-level import would let the bundler hoist
- * `hap-nodejs` ahead of the polyfill.
+ * Regression test for the HomeKit reachability crash: drives the real `DeviceCatalogSource`
+ * against a real `hap-nodejs` `Accessory`, with the crypto polyfill imported first.
  */
 import { beforeAll, describe, expect, it } from "bun:test";
 import pino from "pino";
@@ -48,23 +24,8 @@ let createAccessoryFromDescriptor: (
   onWarn?: (message: string, context: Record<string, unknown>) => void,
 ) => CreatedAccessory | null;
 /**
- * A second, cache-busted binding to the same class, used only by the
- * visibility and group-bridging describes below.
- *
- * Every top-level `mock.module()` call across the whole suite runs during
- * Bun's file-load phase, before any `beforeAll` — and `mock.module()`
- * overwrites a module's exports in place, permanently, for every future
- * plain `import()` of that resolved specifier for the rest of the process.
- * `homekit-service.test.ts` mocks this exact module path with a
- * `hidden`/`listVisible`-unaware test double, so a plain import here would
- * silently receive that mock instead of the real class whenever both files
- * run in the same `bun test` invocation. A cache-busting query string
- * produces a distinct resolved specifier the mock never registered against,
- * forcing a fresh load of the real file. The describes below pair it with a
- * fake accessory factory rather than the real `createAccessoryFromDescriptor`,
- * so they never touch `hap-nodejs` — itself mocked the same way by
- * `homekit-service.test.ts`, with no bare-specifier equivalent of this
- * cache-busting trick available.
+ * A second, cache-busted binding to the same class, used by the describes below so a plain
+ * import does not receive another test file's `mock.module()` replacement for this path.
  */
 let RealDeviceCatalogSource: typeof DeviceCatalogSourceClass;
 
@@ -102,10 +63,8 @@ function makeDescriptor(overrides: Partial<DeviceDescriptor> = {}): DeviceDescri
 }
 
 /**
- * A minimal fake `AggregateDeviceSource`: `list()` reflects whatever
- * `setDevices()` last set, and `subscribe()` hands back a controllable
- * emitter — the same shape `HomekitService`'s real `AggregateDeviceSource`
- * exposes to `DeviceCatalogSource`.
+ * A minimal fake `AggregateDeviceSource`: `list()` reflects `setDevices()` and
+ * `subscribe()` returns a controllable emitter.
  */
 function makeFakeDevices(): AggregateDeviceSource & {
   setDevices: (d: DeviceDescriptor[]) => void;
@@ -198,17 +157,12 @@ describe("DeviceCatalogSource.addOrUpdate() (regression: reachability crash)", (
 });
 
 // ---------------------------------------------------------------------------
-// Visibility filtering (design.md D9, D10; tasks 4.1-4.3)
+// Visibility filtering
 // ---------------------------------------------------------------------------
 
 /**
- * A fake accessory factory standing in for `createAccessoryFromDescriptor`:
- * deterministic UUID per qualified id (so identity across a hide/unhide
- * cycle is checkable), and `null` for a descriptor with no capabilities —
- * standing in for "capabilities map to no HomeKit service" without touching
- * `hap-nodejs`/`capability-detection.ts` (both exercised directly elsewhere:
- * `tests/homekit-descriptor-factory.test.ts` and
- * `tests/device-source-zigbee-group.test.ts`).
+ * A fake accessory factory standing in for `createAccessoryFromDescriptor`: a deterministic
+ * UUID per qualified id, and `null` for a descriptor with no capabilities.
  */
 function makeFakeFactory(): (descriptor: DeviceDescriptor) => CreatedAccessory | null {
   return (descriptor) => {
@@ -223,7 +177,7 @@ function makeFakeFactory(): (descriptor: DeviceDescriptor) => CreatedAccessory |
 }
 
 describe("DeviceCatalogSource visibility", () => {
-  it("never bridges an already-hidden device at startup (task 4.1)", () => {
+  it("never bridges an already-hidden device at startup", () => {
     const stateManager = new StateManager(logger, { persist: false });
     const visibility = new DeviceVisibility(stateManager, logger);
     visibility.hide("shelly:plug");
@@ -238,7 +192,7 @@ describe("DeviceCatalogSource visibility", () => {
     expect(sink.added.size).toBe(0);
   });
 
-  it("removes the accessory when the device is hidden, with no intervening device notification (task 4.2)", () => {
+  it("removes the accessory when the device is hidden, with no intervening device notification", () => {
     const stateManager = new StateManager(logger, { persist: false });
     const visibility = new DeviceVisibility(stateManager, logger);
 
@@ -260,7 +214,7 @@ describe("DeviceCatalogSource visibility", () => {
     expect(sink.added.size).toBe(0);
   });
 
-  it("adds the accessory back when the device is unhidden (task 4.2)", () => {
+  it("adds the accessory back when the device is unhidden", () => {
     const stateManager = new StateManager(logger, { persist: false });
     const visibility = new DeviceVisibility(stateManager, logger);
     visibility.hide("shelly:plug");
@@ -279,7 +233,7 @@ describe("DeviceCatalogSource visibility", () => {
     expect(sink.added.size).toBe(1);
   });
 
-  it("the re-added accessory's derived UUID matches the original — no re-pairing (task 4.3)", () => {
+  it("the re-added accessory's derived UUID matches the original — no re-pairing", () => {
     const stateManager = new StateManager(logger, { persist: false });
     const visibility = new DeviceVisibility(stateManager, logger);
 
@@ -304,7 +258,7 @@ describe("DeviceCatalogSource visibility", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Zigbee groups are bridged like any other device (specs/homekit; task 4.4)
+// Zigbee groups are bridged like any other device
 // ---------------------------------------------------------------------------
 
 describe("DeviceCatalogSource with a Zigbee group descriptor", () => {

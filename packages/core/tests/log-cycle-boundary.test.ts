@@ -6,20 +6,11 @@ import { EventStreamHub } from "../src/http/event-stream.js";
 import { LogBuffer } from "../src/logging/log-buffer.js";
 
 /**
- * Asserts the log-cycle guard as a boundary, not a per-call-site review
- * (design.md D32, R21; task 5.0d).
- *
- * The delivery path — fan-out, per-connection overflow eviction, the
- * fell-behind signal, payload serialisation, failing-client isolation — logs
- * through a stdout-only instance, precisely so that a log it produces can
- * never become another entry in the buffer the log category itself
- * delivers. This test exercises the delivery path's actual overflow-eviction
- * warning (a real, deterministic member of the reachable set R21 names
- * explicitly — "the per-connection overflow eviction and fell-behind
- * signal"), with a counting `LogBuffer` standing in for "assert the buffer
- * received nothing" from that call.
+ * Asserts the log-cycle guard as a boundary, not a per-call-site review: the delivery
+ * path's own logging must never become another entry in the buffer the log category
+ * delivers.
  */
-describe("log-cycle boundary (design.md D32, R21)", () => {
+describe("log-cycle boundary", () => {
   it("the delivery path's own logging never reaches the LogBuffer it would otherwise feed", () => {
     let writeCount = 0;
     class CountingLogBuffer extends LogBuffer {
@@ -33,8 +24,7 @@ describe("log-cycle boundary (design.md D32, R21)", () => {
     // The primary logger writes to the buffer — this is deliberate: it is
     // what the log category (and /api/logs) reads from.
     const primaryLogger = pino({ level: "info" }, logBuffer);
-    // The delivery-path logger is the independently-constructed, stdout-only
-    // instance from engine.ts (task 5.0b) — never a child of primaryLogger.
+    // The delivery-path logger is the stdout-only instance from engine.ts, never a child.
     const deliveryLogger = createStreamOnlyLogger("info");
 
     const bus = new EventBus();

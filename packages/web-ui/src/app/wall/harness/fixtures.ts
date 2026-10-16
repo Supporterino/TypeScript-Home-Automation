@@ -1,27 +1,7 @@
 /**
- * The wall harness's fixture roster (design.md D5, D6; task 2.1).
- *
- * One device per wall device class, so every typed card the wall renders is
- * reachable without an engine: a full light (on/off plus brightness, colour
- * temperature, and colour), a plain switch (the entity class), a cover with
- * position and stop, a read-only sensor (the entity class), a fan, a bounded
- * number, an enumerated select, a climate, and a lock — plus a selection large
- * enough that the device grid must page, one scene automation, one room with
- * members, and the weather and energy readings those two widgets would otherwise
- * fetch. Two read-only sensors carry the temperature widget's two reading cases:
- * the hall sensor declares a humidity beside its temperature and the attic sensor
- * declares a temperature alone (design.md W5). {@link MISSING_DEVICE_ID} is
- * deliberately not a device in the map, so `DeviceWidget`'s "is not available"
- * path renders.
- *
- * The set is typed as the store's own `DataStoreFixtures`, and every device as
- * `DeviceDescriptor`, so a change to either contract is a compile error in
- * `bun run typecheck` rather than silent fixture drift (design.md Risks).
- *
- * Development-only surface: nothing in the shipped app imports this module —
- * the guards that assert the harness is unreachable from the application
- * entrypoint are `tests/wall-harness-guard.test.ts` and the marker assertion in
- * `tests/web-ui-assets.test.ts` (design.md D9).
+ * The wall harness's fixture roster: one device per wall device class, a paging
+ * selection, a scene, a room, four same-named sensors in distinct rooms, and the
+ * weather and energy readings.
  */
 import {
   type Capability,
@@ -45,9 +25,8 @@ import type { HarnessFixtureControls } from "./messages.js";
 const FIXTURE_SOURCE = "fixture";
 
 /**
- * The qualified identifier no fixture device carries, so a `device` or
- * `temperature` widget pointed at it renders its contained "is not available"
- * explanation (design.md D6).
+ * The qualified identifier no fixture device carries, so a widget pointed at it renders
+ * its "is not available" explanation.
  */
 export const MISSING_DEVICE_ID = "fixture:not-connected";
 
@@ -55,10 +34,8 @@ const READ_WRITE = { readable: true, writable: true };
 const READ_ONLY = { readable: true, writable: false };
 
 /**
- * The full light: on/off plus the three controls a wall light card can drive, so
- * the device resolves to the `light` class and its card composes its whole form.
- * Its on/off declares the string encoding Zigbee2MQTT reports, so the
- * declared-value path is exercised rather than a real boolean.
+ * The full light: on/off plus the three controls a wall light card can drive, so the
+ * device resolves to the `light` class.
  */
 function lightCapabilities(): Capability[] {
   return [
@@ -136,11 +113,8 @@ function coverCapabilities(): Capability[] {
 }
 
 /**
- * A read-only sensor: a readable temperature beside a readable humidity on the
- * same device — the sensor this home runs, which reports both — and nothing
- * actuatable, so its entity card is a read-only reading. A temperature widget
- * bound to it presents both readings (design.md W5; specs/wall-display "A
- * temperature widget shows its sensor's humidity").
+ * A read-only sensor: a readable temperature beside a readable humidity on the same
+ * device, and nothing actuatable.
  */
 function sensorCapabilities(): Capability[] {
   return [
@@ -162,11 +136,7 @@ function sensorCapabilities(): Capability[] {
 }
 
 /**
- * A temperature-only sensor: the same read-only shape with no humidity leaf, so
- * the roster carries both halves of a temperature widget's reading rule — a
- * sensor that declares a humidity and one that does not, which presents only its
- * temperature (design.md W5; specs/wall-display "A sensor without humidity shows
- * only its temperature").
+ * A temperature-only sensor: the same read-only shape with no humidity leaf.
  */
 function temperatureOnlySensorCapabilities(): Capability[] {
   return [
@@ -181,8 +151,7 @@ function temperatureOnlySensorCapabilities(): Capability[] {
 }
 
 /**
- * A fan: a declared preset enum beneath a `fan` container, so its card is the
- * fan card (the presets the card presents as its speed steps).
+ * A fan: a declared preset enum beneath a `fan` container, so its card is the fan card.
  */
 function valueCapabilities(): Capability[] {
   return [
@@ -204,8 +173,8 @@ function valueCapabilities(): Capability[] {
 }
 
 /**
- * A bounded numeric control with no specialised on/off card: a writable numeric
- * with a declared range, so its card is the number card.
+ * A bounded numeric control with no specialised on/off card, so its card is the number
+ * card.
  */
 function numberCapabilities(): Capability[] {
   return [
@@ -221,8 +190,7 @@ function numberCapabilities(): Capability[] {
 }
 
 /**
- * An enumerated control with no specialised card: a writable enum with permitted
- * values, so its card is the select card.
+ * An enumerated control with no specialised card, so its card is the select card.
  */
 function selectCapabilities(): Capability[] {
   return [
@@ -238,10 +206,7 @@ function selectCapabilities(): Capability[] {
 
 /**
  * A thermostat: a writable setpoint and mode beneath a climate container with a
- * measured temperature, so its card is the climate card. Its mode declares six
- * permitted values — more than fit one actions row at the wall's touch target —
- * so the harness reaches the enumerated control's single-affordance fallback as
- * well as its segmented form.
+ * measured temperature.
  */
 function climateCapabilities(): Capability[] {
   return [
@@ -278,8 +243,7 @@ function climateCapabilities(): Capability[] {
 }
 
 /**
- * A lock: a writable `state` enum naming its own lock and unlock values, so its
- * card is the lock card.
+ * A lock: a writable `state` enum naming its own lock and unlock values.
  */
 function lockCapabilities(): Capability[] {
   return [
@@ -348,15 +312,47 @@ const SENSOR = fixtureDevice({
 });
 
 /**
- * The temperature-only sensor: bound by a placed `temperature` widget beside the
- * hall sensor's, so a harness walk reaches the widget's other reading case — a
- * sensor that declares no humidity, which presents its temperature alone.
+ * The temperature-only sensor: bound by a placed `temperature` widget so a harness walk
+ * reaches the widget's other reading case.
  */
 const TEMPERATURE_ONLY_SENSOR = fixtureDevice({
   id: "sensor-attic",
   displayName: "Attic sensor",
   state: { temperature: 16.2 },
   capabilities: temperatureOnlySensorCapabilities(),
+});
+
+/**
+ * The four same-named sensors: every name ends in "Sensor" and is longer than a wall
+ * card's shortening budget, so `shortDeviceName` collapses each to the same "Sensor" —
+ * the collision the sensor's room name resolves. Each sits alone in its own room.
+ */
+const ROOM_SENSOR_SPECS = [
+  { id: "sensor-basement", room: "Basement", temperature: 17.4 },
+  { id: "sensor-workshop", room: "Workshop", temperature: 15.8 },
+  { id: "sensor-bathroom", room: "Bathroom", temperature: 22.1 },
+  { id: "sensor-corridor", room: "Corridor", temperature: 19.3 },
+] as const;
+
+/** One same-named sensor per room, paired with the room it sits in. */
+const ROOM_SENSORS: readonly {
+  readonly device: DeviceDescriptor;
+  readonly room: RoomWithMembers;
+}[] = ROOM_SENSOR_SPECS.map((spec) => {
+  const device = fixtureDevice({
+    id: spec.id,
+    displayName: `${spec.room} Sensor`,
+    state: { temperature: spec.temperature },
+    capabilities: temperatureOnlySensorCapabilities(),
+  });
+  return {
+    device,
+    room: {
+      id: `fixture:${spec.id}`,
+      name: spec.room,
+      members: [{ qualifiedId: device.qualifiedId, available: true, device }],
+    },
+  };
 });
 
 const VALUE = fixtureDevice({
@@ -395,17 +391,8 @@ const LOCK = fixtureDevice({
 });
 
 /**
- * How many extra devices the paging selection carries — larger than any one page
- * the wall can draw, so the selection always pages. The bound is a derivation, not
- * the number below: the most tiles any legal placement presents is `devices` at its
- * largest span, the wall's smallest row unit and the gutter's floor, with the chrome
- * a *one-page* placement reserves held back — which is the frame's ported inset
- * alone (`WALL_FRAME_RESERVED_PX`; design.md W3; specs/wall-display "Panel Fit"). A
- * placement whose content fits one page draws no page-control row, so it reserves no
- * room for one and keeps that cell for tiles; only a placement that pages pays
- * `WALL_PAGE_CONTROL_RESERVED_PX`. A row unit above the floor fits fewer rows, so
- * that is the ceiling. `tests/wall-harness-fixtures.test.ts` asserts the roster
- * exceeds it through `resolvePages` rather than trusting this note.
+ * How many extra devices the paging selection carries — larger than any one page the
+ * wall can draw, so the selection always pages.
  */
 const PAGING_DEVICE_COUNT = 36;
 
@@ -427,9 +414,9 @@ const METERING_PLUG = fixtureDevice({
 });
 
 /**
- * Every fixture device: one per wall device class first, so the grid's own first
- * page shows every typed card, then the metering plug, the temperature-only
- * sensor and the paging roster.
+ * Every fixture device: one per wall device class first, then the metering plug, the
+ * two sensors bound by a placed `temperature` widget, the four same-named sensors, and
+ * the paging roster.
  */
 const DEVICES: DeviceDescriptor[] = [
   LIGHT,
@@ -443,14 +430,12 @@ const DEVICES: DeviceDescriptor[] = [
   LOCK,
   METERING_PLUG,
   TEMPERATURE_ONLY_SENSOR,
+  ...ROOM_SENSORS.map(({ device }) => device),
   ...PAGING_DEVICES,
 ];
 
 /**
- * The device the panel points a typed device widget at to reach each wall device
- * class (task 5.2). One device per class, each resolving to exactly that class,
- * so a placed widget of any class and a paged tile of any device both render a
- * real typed card.
+ * The device the panel points a typed device widget at to reach each wall device class.
  */
 export const DEVICE_CLASS_DEVICE_IDS: Readonly<Record<WallDeviceClass, string>> = {
   light: LIGHT.qualifiedId,
@@ -463,22 +448,28 @@ export const DEVICE_CLASS_DEVICE_IDS: Readonly<Record<WallDeviceClass, string>> 
   entity: SENSOR.qualifiedId,
 };
 
-/** The `devices` widget's selection: the whole roster, which always exceeds one page (task 5.2). */
+/** The `devices` widget's selection: the whole roster, which always exceeds one page. */
 export const DEVICE_GRID_SELECTION: readonly string[] = DEVICES.map((device) => device.qualifiedId);
 
 /**
- * The sensor that declares no humidity, which a placed `temperature` widget is
- * bound to beside the hall sensor's — so the walk reaches a temperature widget
- * that presents its temperature alone (design.md W5; task 5.3).
+ * The sensor that declares no humidity, which a placed `temperature` widget is bound to
+ * beside the hall sensor's.
  */
 export const HARNESS_TEMPERATURE_ONLY_SENSOR_ID = TEMPERATURE_ONLY_SENSOR.qualifiedId;
 
+/** The four same-named sensors' qualified ids, in room order. */
+export const HARNESS_ROOM_SENSOR_IDS: readonly string[] = ROOM_SENSORS.map(
+  ({ device }) => device.qualifiedId,
+);
+
+/** The room each of {@link HARNESS_ROOM_SENSOR_IDS} sits in, in the same order. */
+export const HARNESS_ROOM_SENSOR_ROOM_NAMES: readonly string[] = ROOM_SENSORS.map(
+  ({ room }) => room.name,
+);
+
 /**
- * The room the panel points a `room` widget at. Its members span several wall
- * device classes — a light, an on/off entity, a cover, a read-only entity, and a
- * fan — so the panel's device selector and state controls are observable in the
- * stage for every key it offers: the room card renders each member's own typed
- * card, and its command row groups the on/off and positioning members.
+ * The room the panel points a `room` widget at, whose members span several wall device
+ * classes.
  */
 const ROOM: RoomWithMembers = {
   id: "fixture:living-room",
@@ -490,10 +481,13 @@ const ROOM: RoomWithMembers = {
   })),
 };
 
-/** The room id a `room` widget is pointed at (task 5.2). */
+/** The room id a `room` widget is pointed at. */
 export const HARNESS_ROOM_ID = ROOM.id;
 
-/** The automation name a `scene` widget is pointed at (task 5.2). */
+/** Every room the fixture set carries: the multi-class room, then one per same-named sensor. */
+const ROOMS: RoomWithMembers[] = [ROOM, ...ROOM_SENSORS.map(({ room }) => room)];
+
+/** The automation name a `scene` widget is pointed at. */
 export const HARNESS_SCENE_NAME = "evening-scene";
 
 /** The scene the panel points a `scene` widget at. */
@@ -553,10 +547,17 @@ const WEATHER: WeatherData = {
   ],
 };
 
-/** Home totals with two contributing devices, in the shape `GET /api/energy` answers with. */
+/**
+ * Home totals with two contributing devices, in the shape `GET /api/energy` answers
+ * with. The usage covers the whole rolling window, so the wall draws it labelled with
+ * the window rather than as a partial span.
+ */
 const ENERGY: EnergyData = {
   powerWatts: 1_234,
   energyWh: 12_480,
+  usageWh: 4_180,
+  windowMinutes: 1_440,
+  coveredMinutes: 1_440,
   breakdown: [
     {
       qualifiedId: LIGHT.qualifiedId,
@@ -587,15 +588,13 @@ const STATE: StateMap = {
 };
 
 /**
- * The harness's whole fixture set, typed as the store's own contract so the
- * fixtures cannot drift from what the data layer and the wall's widgets consume.
- * `weather` and `energy` are optional on that contract: leaving them off is how
- * the panel reaches those two widgets' own fetch path (task 5.2).
+ * The harness's whole fixture set, typed as the store's own contract so the fixtures
+ * cannot drift.
  */
 export const WALL_HARNESS_FIXTURES: DataStoreFixtures = {
   devices: DEVICES,
   state: STATE,
-  rooms: [ROOM],
+  rooms: ROOMS,
   automations: AUTOMATIONS,
   transport: "live",
   weather: WEATHER,
@@ -610,18 +609,8 @@ function scalePercent(percent: number, range?: { min?: number; max?: number }): 
 }
 
 /**
- * The selected device with the panel's controls applied to it. Each control
- * writes through the device's *declared* capabilities, so a device that
- * declares no brightness never gains a brightness reading — and the on/off
- * writes through the shared `composeBooleanCapabilityValue`, so a light whose
- * capability declares the Zigbee `"ON"`/`"OFF"` strings is driven in its own
- * encoding rather than with a real boolean (design.md D5; specs/web-ui "A
- * device known only from the stream keeps its declared encoding").
- *
- * A device that positions or transports is driven to its own extremes by the
- * same on/off control — its declared transport values, found by the wall's own
- * detector — so a cover's card is controllable from the panel's control set
- * rather than showing a state the controls cannot reach.
+ * The selected device with the panel's controls applied to it. Each control writes
+ * through the device's declared capabilities.
  */
 function withControlState(
   device: DeviceDescriptor,
@@ -662,14 +651,8 @@ function withControlState(
 }
 
 /**
- * The fixture set the stage renders for one set of panel controls (tasks 4.1,
- * 5.2). Pure, so the panel's controls are reachable by `bun test` without a DOM,
- * and derived from the roster above rather than from a second copy of it.
- *
- * The room's members are derived from the resulting device map the same way the
- * store derives them from a snapshot, so turning the selected device's presence
- * off shows an unavailable member in the room card as well as routing a typed
- * device widget pointed at it to its contained explanation.
+ * The fixture set the stage renders for one set of panel controls, derived from the
+ * roster above.
  */
 export function fixtureSetFor(controls: HarnessFixtureControls): DataStoreFixtures {
   const selected = DEVICE_CLASS_DEVICE_IDS[controls.device];
@@ -680,7 +663,7 @@ export function fixtureSetFor(controls: HarnessFixtureControls): DataStoreFixtur
   );
 
   const byId = new Map(devices.map((device) => [device.qualifiedId, device]));
-  const rooms = [ROOM].map((room) => ({
+  const rooms = ROOMS.map((room) => ({
     ...room,
     members: room.members.map((member) => ({
       ...member,
@@ -689,9 +672,7 @@ export function fixtureSetFor(controls: HarnessFixtureControls): DataStoreFixtur
     })),
   }));
 
-  // Built field by field rather than spread over the base set: a reading the
-  // panel switches off must be *absent*, which a spread of the base would
-  // re-supply.
+  // Built field by field so a reading the panel switches off is absent.
   return {
     devices,
     state: STATE,

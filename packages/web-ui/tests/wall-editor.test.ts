@@ -68,10 +68,7 @@ function widgetAt(config: WallProfileConfig, index: number): WallWidget {
 }
 
 /**
- * The minimum type-specific config a widget needs to validate. A room, typed
- * device, temperature, scene, link, or device-grid widget cannot be meaningful
- * without a selection, so the profile validator rejects it until one is made —
- * the editor surfaces exactly that.
+ * The minimum type-specific config a widget needs to validate.
  */
 const REQUIRED_CONFIG: Partial<Record<WallWidgetType, Record<string, unknown>>> = {
   room: { roomId: "kitchen" },
@@ -155,6 +152,20 @@ describe("updateWidgetPlacement", () => {
     const descriptor = getWidgetDescriptor("clock");
     expect(widgetAt(updated, 0).w).toBe(descriptor.min.w);
     expect(widgetAt(updated, 0).h).toBe(descriptor.min.h);
+  });
+
+  it("keeps a scene at one row, its newly authored minimum", () => {
+    // The editor's size rule is the descriptor's own minimum, so a one-row scene is
+    // authorable and survives validation.
+    const descriptor = getWidgetDescriptor("scene");
+    expect(descriptor.min).toEqual({ w: 2, h: 1 });
+
+    const config = withRequiredConfig(single("scene"));
+    const id = widgetAt(config, 0).id;
+    const updated = updateWidgetPlacement(config, id, { x: 0, y: 0, w: 2, h: 1 });
+
+    expect(widgetAt(updated, 0).h).toBe(1);
+    expect(validateProfileDraft("scene", updated).ok).toBe(true);
   });
 
   it("clamps a span above the type maximum down to the maximum", () => {
@@ -257,11 +268,8 @@ describe("validateProfileDraft", () => {
   });
 
   it("normalises a legacy sub-minimum placement when the widget is edited", () => {
-    // A profile authored before a type's minimum was re-derived can still carry a
-    // shorter or narrower cell. The wall explains such a cell rather than clipping
-    // it (`composesMinimumSpan`), and the editor's own clamp is what brings the
-    // widget up to a renderable size on the next edit — deliberate, not
-    // accidental: the draft validator surfaces any resulting overlap or overflow.
+    // A profile authored before a type's minimum was re-derived can still carry a shorter
+    // cell; the editor's own clamp brings the widget up to a renderable size on the next edit.
     const legacy: WallProfileConfig = {
       widgets: [{ id: "fav", type: "favorites", config: {}, x: 0, y: 0, w: 6, h: 3 }],
     };
@@ -282,9 +290,8 @@ describe("validateProfileDraft", () => {
   });
 
   it("floors a titled card one row above the type's minimum", () => {
-    // A configured title is drawn above the renderer inside the same cell, so the
-    // placement control cannot leave a titled card below the box its type's
-    // minimum span needs — the same title block the render guard subtracts.
+    // A configured title is drawn above the renderer inside the same cell, so the placement
+    // control cannot leave a titled card below the box its type's minimum span needs.
     const descriptor = WALL_WIDGET_REGISTRY.light;
     const config = withRequiredConfig(single("light"));
     const id = widgetAt(config, 0).id;
@@ -332,10 +339,8 @@ describe("validateProfileDraft", () => {
   });
 
   it("reports the titled sub-minimum case a resize cannot see", () => {
-    // A title set after the widget was placed never passes through the placement
-    // clamp, so the validator is what refuses to save it — the wall would have to
-    // explain the card instead of rendering it (specs/wall-display "A widget
-    // cannot be under-sized").
+    // A title set after the widget was placed never passes through the placement clamp, so
+    // the validator is what refuses to save it.
     const descriptor = WALL_WIDGET_REGISTRY.light;
     const config = withRequiredConfig(single("light"));
     const id = widgetAt(config, 0).id;
@@ -397,7 +402,7 @@ describe("validateProfileDraft", () => {
   });
 });
 
-describe("widget list layout (task 7.1)", () => {
+describe("widget list layout", () => {
   const EDITOR = join(import.meta.dir, "..", "src/app/wall/editor/WallEditor.tsx");
 
   /** Removes block and line comments so prose is not mistaken for markup. */
@@ -456,7 +461,7 @@ describe("submitProfileDraft", () => {
   });
 });
 
-describe("the zone field (task 6.1)", () => {
+describe("the zone field", () => {
   const ZONED = "Climate";
   /** A draft with one clock widget, whose id the tests address by. */
   function clockDraft(): { config: WallProfileConfig; id: string } {
@@ -516,7 +521,7 @@ describe("the zone field (task 6.1)", () => {
   });
 });
 
-describe("the link and device-grid fields (task 6.3)", () => {
+describe("the link and device-grid fields", () => {
   it("round-trips a link's target profile through save validation", () => {
     const config = addWidget(emptyWallConfig(), "link");
     const id = widgetAt(config, 0).id;
@@ -539,8 +544,7 @@ describe("the link and device-grid fields (task 6.3)", () => {
     const one = toggleDeviceSelection(config, id, "zigbee:a");
     const two = toggleDeviceSelection(one, id, "zigbee:b");
 
-    // The authored order is the selection order: the grid renders exactly this
-    // set (specs/wall-display "A device grid's devices are selected").
+    // The authored order is the selection order: the grid renders exactly this set.
     expect(widgetAt(two, 0).config.qualifiedIds).toEqual(["zigbee:a", "zigbee:b"]);
     expect(validateProfileDraft("kitchen", two).ok).toBe(true);
   });
@@ -585,7 +589,7 @@ describe("the link and device-grid fields (task 6.3)", () => {
   });
 });
 
-describe("the draft preview and its save gate (task 6.2)", () => {
+describe("the draft preview and its save gate", () => {
   /** A draft whose composition is taller than the panel at the wall's floors. */
   function unfittableConfig(): WallProfileConfig {
     return {
@@ -652,7 +656,7 @@ describe("the draft preview and its save gate (task 6.2)", () => {
   });
 });
 
-describe("the typed device widget configuration (task 7.1)", () => {
+describe("the typed device widget configuration", () => {
   const MODEL = join(EDITOR_DIR, "model.ts");
 
   /** A Zigbee/Nanoleaf light: an on/off switch plus a writable brightness. */
@@ -723,9 +727,8 @@ describe("the typed device widget configuration (task 7.1)", () => {
   }
 
   it("offers only the devices whose capabilities can drive the widget's class", () => {
-    // The wall's own resolver decides the offer (design.md D3, D6; specs/
-    // wall-display "A device its class cannot drive is not offered"), so a
-    // `light` widget offers the lamp and never the blind or the sensor.
+    // The wall's own resolver decides the offer, so a `light` widget offers the lamp and
+    // never the blind or the sensor.
     const devices = [
       descriptor("zigbee:lamp", LIGHT_CAPS),
       descriptor("shelly:blind", COVER_CAPS),
@@ -803,13 +806,10 @@ describe("the typed device widget configuration (task 7.1)", () => {
   });
 });
 
-describe("the re-derived editor floors and fit report (task 7.2)", () => {
+describe("the re-derived editor floors and fit report", () => {
   it("derives its height floor from the ported card's row unit, not the retired scale", async () => {
-    // The editor's height floor is `WALL_TITLE_ROWS` — the title block measured in
-    // the wall's shortest row, `ROW_UNIT_MIN`, which is itself derived from the
-    // ported card's own compact budget (design.md D2, D5). The retired 56 px scale
-    // is gone; a titled card is floored one row above its type's minimum by the
-    // clamp, and the form's own height field is bounded by the same value.
+    // The editor's height floor is `WALL_TITLE_ROWS` — the title block measured in the wall's
+    // shortest row, `ROW_UNIT_MIN`.
     expect(ROW_UNIT_MIN).toBe(50);
     expect(ROW_UNIT_MAX).toBe(56);
     expect(WALL_TITLE_ROWS).toBe(Math.ceil(WALL_TITLE_BLOCK_PX / ROW_UNIT_MIN));

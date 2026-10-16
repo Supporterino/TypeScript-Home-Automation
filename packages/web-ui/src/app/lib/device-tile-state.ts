@@ -1,12 +1,6 @@
 /**
- * Pure non-color state encoding for a device tile (MASTER.md "State Encoding
- * Rule"; specs/web-ui "Device Tile Presentation"; task 9.2).
- *
- * Every state the tile can present is described by a label and an icon
- * *shape* in addition to a color token, so color is never the only channel.
- * Icons are named symbolically here and mapped to `lucide-react` components by
- * the renderer — this module stays DOM-free so the encoding itself is unit
- * testable (design.md D23).
+ * Pure non-color state encoding for a device tile: every state also carries a
+ * label and an icon shape, so color is never the only channel.
  */
 
 import type { Capability } from "@ts-ha/shared";
@@ -45,10 +39,8 @@ export interface DeviceTileState {
 }
 
 /**
- * Encodes a device's observation as a distinct icon + label + token (MASTER
- * "never color alone"). Unreachable wins over observation mode; a polled
- * device older than its own refresh interval is stale, otherwise polled with
- * the age of its last reading.
+ * Encodes a device's observation as an icon + label + token. Unreachable wins;
+ * a polled device past its refresh interval is stale.
  */
 export function deviceTileObservation(
   device: DeviceDescriptor,
@@ -85,11 +77,8 @@ export function deviceTileOnOffFromValue(value: boolean): DeviceTileOnOffState {
 }
 
 /**
- * Encodes an arbitrary resolved raw property value against a boolean
- * capability's declared on/off encoding as the tile's non-color state. The
- * tile feeds the same resolved (possibly optimistic) value here that its
- * embedded control renders, so the chip and the control cannot contradict
- * while a command is in flight (specs/web-ui "Device Tile Presentation").
+ * Encodes a resolved raw property value against a boolean capability's declared
+ * on/off encoding, so the chip and its embedded control cannot contradict.
  */
 export function deviceTileOnOffFromCapabilityValue(
   capability: Pick<Capability, "valueOn">,
@@ -100,9 +89,7 @@ export function deviceTileOnOffFromCapabilityValue(
 
 /**
  * The encoded wire value that toggles a boolean capability from its resolved
- * value (design.md D1, D4). The wall tile's whole-card actuation composes its
- * command through this, so it reuses the same on/off encoding rule as the
- * embedded control rather than reimplementing it.
+ * value, reusing the same on/off encoding rule as the embedded control.
  */
 export function deviceTileToggledValue(
   capability: Pick<Capability, "valueOn" | "valueOff">,

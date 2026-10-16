@@ -16,10 +16,7 @@ import { INTERNAL_STATE_PREFIX, type StateManager } from "./state/state-manager.
 
 export type { WallProfile, WallProfileConfig, WallWidget } from "@ts-ha/shared";
 
-/**
- * Reserved-namespace prefix under which each wall profile is stored, keyed by
- * the profile's name (design.md D2, D9).
- */
+/** Reserved-namespace prefix under which each wall profile is stored, keyed by name. */
 export const WALL_PREFIX = `${INTERNAL_STATE_PREFIX}wall:`;
 
 /** Returns the reserved state key storing the profile named `name`. */
@@ -28,25 +25,14 @@ export function wallKey(name: string): string {
 }
 
 /**
- * The widget type a retired version-1 `device` widget migrates to (design.md
- * D3, D8; specs/wall-display "Wall Profile Version and Migration").
- *
- * Migration reads a persisted profile, not a device inventory, so it cannot
- * resolve a bound device's capabilities to its class. The typed `entity` card
- * is the catalogue's fallback for a device of no class and binds the same
- * single device, so it is the faithful target: the migrated widget keeps its
- * placement and zone and references the same `qualifiedId`.
+ * The widget type a retired version-1 `device` widget migrates to: the typed
+ * `entity` card, which binds the same device without needing capabilities.
  */
 const MIGRATED_DEVICE_WIDGET_TYPE = "entity" as const;
 
 /**
- * Migrates one stored version-1 widget to its version-2 form, preserving its
- * id, placement, and zone label (design.md D8).
- *
- * A widget that named a single device (`device`) becomes the typed fallback
- * bound to that device; every other version-1 type still exists in version 2,
- * so a widget that named a set of devices (`devices`) keeps its selection
- * unchanged.
+ * Migrate one stored version-1 widget to its version-2 form, preserving its id,
+ * placement, and zone label. A version-1 `device` widget becomes the typed fallback.
  */
 function migrateV1Widget(widget: WallV1Widget): WallWidget {
   const placement = {
@@ -62,13 +48,8 @@ function migrateV1Widget(widget: WallV1Widget): WallWidget {
     return { ...placement, type: widget.type, config: widget.config };
   }
 
-  // The version-1 schema has already validated the config, so its bound device
-  // is present; re-bind it on the typed fallback. A version-1 `device` widget's
-  // optional `title` is intentionally NOT carried: the version-2 typed config
-  // (`WallTypedDeviceWidgetConfig`) has no title field, and a card always draws
-  // its device's own name (design.md D6), so the drop is inherent to the contract
-  // rather than a bug — the placement, zone, and bound device are what the typed
-  // form preserves.
+  // Re-bind the device on the typed fallback. The optional `title` is not carried:
+  // the version-2 typed config has no title field.
   return {
     ...placement,
     type: MIGRATED_DEVICE_WIDGET_TYPE,
@@ -76,7 +57,7 @@ function migrateV1Widget(widget: WallV1Widget): WallWidget {
   };
 }
 
-/** Migrates each stored version-1 orientation override (design.md D8). */
+/** Migrate each stored version-1 orientation override. */
 function migrateOrientations(
   orientations: Partial<Record<WallOrientation, readonly WallV1Widget[]>>,
 ): Partial<Record<WallOrientation, readonly WallWidget[]>> {
@@ -91,9 +72,8 @@ function migrateOrientations(
 }
 
 /**
- * Migrates a stored version-1 profile to the current version (design.md D8;
- * specs/wall-display "Wall Profile Version and Migration"), preserving every
- * widget's placement, size, and zone label and the devices it references.
+ * Migrate a stored version-1 profile to the current version, preserving every
+ * widget's placement, size, and zone label.
  */
 function migrateV1Profile(profile: WallV1Profile): WallProfile {
   const { config } = profile;
@@ -128,21 +108,8 @@ export type UpdateWallResult =
 export type DeleteWallResult = "ok" | "not_found";
 
 /**
- * Named wall profiles for the full-bleed wall surface (design.md D2, D10;
- * specs/wall-display "Named Wall Profiles", "Wall Configuration Editor").
- *
- * A profile is addressed by its name, which is also its stable identifier —
- * there is no separate id. Definitions live under {@link WALL_PREFIX} inside
- * the reserved internal state namespace (design.md D20), written through
- * `setInternal()`/`deleteInternal()` so they are not writable or enumerable
- * through the public state API, mirroring `RoomManager`. The profile config
- * is validated against the shared `wallProfileSchema` on every write, so a
- * malformed composition is rejected before it can be persisted (design.md D10).
- *
- * A stored profile of an older version is migrated on load rather than rejected
- * (design.md D8; specs/wall-display "Wall Profile Version and Migration"), so a
- * wall that has been authored and saved survives a change to the contract, and
- * every write persists the current version.
+ * Named wall profiles for the full-bleed wall surface. A profile is addressed by
+ * its name and validated against `wallProfileSchema` on every write.
  */
 export class WallManager {
   constructor(
@@ -151,11 +118,8 @@ export class WallManager {
   ) {}
 
   /**
-   * Create a profile with the given name and widget composition.
-   *
-   * @returns `{ status: "duplicate_name" }` if a profile with that name
-   * already exists, or `{ status: "invalid_config" }` if the composition
-   * fails validation — nothing is written in either case.
+   * Create a profile with the given name and widget composition; returns a
+   * `duplicate_name` or `invalid_config` status, writing nothing in either case.
    */
   createWall(name: string, config: WallProfileConfig): CreateWallResult {
     if (this.getWall(name)) {
@@ -172,12 +136,8 @@ export class WallManager {
   }
 
   /**
-   * Every wall profile, in insertion order, each surfaced at the current
-   * version.
-   *
-   * A stored profile that cannot be loaded is reported and skipped, so one
-   * unreadable profile never prevents the wall's other profiles from loading
-   * (specs/wall-display "Wall Profile Version and Migration").
+   * Every wall profile, in insertion order, each surfaced at the current version;
+   * an unreadable stored profile is reported and skipped.
    */
   listWalls(): WallProfile[] {
     const walls: WallProfile[] = [];
@@ -194,13 +154,9 @@ export class WallManager {
   }
 
   /**
-   * Update a profile's config and/or rename it (specs/wall-display "Wall
-   * Configuration Editor"). An omitted field keeps its existing value.
-   *
-   * @returns `{ status: "not_found" }` for an unknown name,
-   * `{ status: "duplicate_name" }` if a new name is already in use by another
-   * profile, or `{ status: "invalid_config" }` if the resulting composition
-   * fails validation — nothing is written in the latter two cases.
+   * Update a profile's config and/or rename it; an omitted field keeps its value.
+   * Returns `not_found`, `duplicate_name`, or `invalid_config` (nothing is written
+   * for the latter two).
    */
   updateWall(name: string, input: { name?: string; config?: WallProfileConfig }): UpdateWallResult {
     const existing = this.getWall(name);
@@ -238,20 +194,9 @@ export class WallManager {
   }
 
   /**
-   * Reads the profile stored under `name` and surfaces it at the current
-   * version (design.md D8; specs/wall-display "Wall Profile Version and
-   * Migration").
-   *
-   * A stored version-1 profile is migrated in memory: its widgets keep their
-   * placement and zone, a widget that named a set of devices keeps its
-   * selection, and a widget that named a single device becomes the typed
-   * fallback bound to that device. The migrated profile is not written back on
-   * read; the next create or update persists the current version.
-   *
-   * A stored value that neither the current schema nor the version-1 schema
-   * accepts cannot be surfaced. It is reported here and treated as unknown — the
-   * value is left in the store rather than deleted — so it never prevents the
-   * wall's other profiles from loading.
+   * Read the profile stored under `name`, surfaced at the current version; a stored
+   * version-1 profile is migrated in memory and not written back. A value neither
+   * schema accepts is reported and treated as unknown, left in the store.
    */
   private loadWall(name: string): WallProfile | null {
     const raw = this.stateManager.get<unknown>(wallKey(name));

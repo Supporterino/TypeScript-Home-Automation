@@ -12,8 +12,6 @@ import {
   unassignRoom,
 } from "../src/commands/rooms.js";
 
-// specs/cli "Command Surface" — `ts-ha rooms` (task 3.3).
-
 const originalLog = console.log;
 const originalError = console.error;
 const originalExit = process.exit;

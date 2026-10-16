@@ -5,10 +5,8 @@ import {
   sceneTriggerRequest,
 } from "../src/app/wall/widgets/scene-model.js";
 
-// Pure trigger-request building for the wall scene button — no DOM. The
-// request must use the bound automation's own trigger type, and a valid
-// default when the automation is unknown, so the manual-trigger endpoint is
-// never sent an unknown type (design.md D8; task 5.10).
+// Pure trigger-request building for the wall scene button — no DOM. The request
+// falls back to a valid default type when the automation is unknown.
 
 function automation(name: string, type: Automation["triggers"][number]["type"]): Automation {
   return { name, enabled: true, triggers: [{ type }] };

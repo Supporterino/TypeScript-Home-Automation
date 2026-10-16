@@ -1,11 +1,6 @@
 /**
- * Pure log-entry filtering (design.md D23; task 10.21).
- *
- * Extracted out of the log view component so the filtering behaviour — level
- * threshold, automation-name substring, and free-text search across the
- * message and the whole entry — is reachable by `bun test` without a DOM,
- * and so new entries arriving from the stream can be filtered the same way
- * new-vs-existing, keeping an active filter applied without special-casing.
+ * Pure log-entry filtering by level threshold, automation substring, and
+ * free-text search.
  */
 
 import type { LogEntry } from "../types.js";
@@ -25,7 +20,7 @@ export function isLogFilterActive(filter: LogFilter): boolean {
   return filter.minLevel > 0 || filter.automation !== "" || filter.text !== "";
 }
 
-/** Whether a single entry matches `filter` — used for both bulk filtering and live-append checks. */
+/** Whether a single entry matches `filter` — for bulk filtering and live appends. */
 export function matchesLogFilter(entry: LogEntry, filter: LogFilter): boolean {
   if (filter.minLevel > 0 && entry.level < filter.minLevel) return false;
 

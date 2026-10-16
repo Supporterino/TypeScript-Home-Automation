@@ -18,8 +18,7 @@ import { shouldHandleGlobalShortcut } from "../keyboard.js";
 
 /**
  * HomeKit, energy, and weather are not carried by the event stream, so they
- * refresh on a slower poll than the streamed domains: this multiple of the
- * configured interval (specs/cli "Realtime Dashboard Updates").
+ * refresh on a slower poll: this multiple of the configured interval.
  */
 const SLOW_POLL_FACTOR = 3;
 
@@ -43,8 +42,7 @@ function Dashboard({
 
   const [activeTab, setActiveTab] = useState(0);
   const [showHelp, setShowHelp] = useState(false);
-  // Set by a tab that is capturing free text; the global handler then stands
-  // down so digits/`q`/`r`/`?` reach the input (see `shouldHandleGlobalShortcut`).
+  // Set by a tab capturing free text; the global handler then stands down.
   const [inputActive, setInputActive] = useState(false);
 
   const [data, setData] = useState<DashboardData>({
@@ -66,29 +64,22 @@ function Dashboard({
     lastRefresh: Date.now(),
   });
 
-  // Kept in a ref so a terminal resize does not tear down and reopen the
-  // stream (which would happen if the snapshot depended on `height`).
+  // A ref, so a terminal resize does not tear down and reopen the stream.
   const heightRef = useRef(height);
   heightRef.current = height;
 
-  // Deltas buffer here while a snapshot is in flight, then replay (see
-  // `runSnapshot`). `createDeltaGate()` is cheap and only the first result is
-  // retained.
+  // Deltas buffer here while a snapshot is in flight, then replay (see `runSnapshot`).
   const gateRef = useRef(createDeltaGate());
   const snapshotBusyRef = useRef(false);
   const snapshotPendingRef = useRef(false);
 
   /**
-   * Full snapshot of every domain — the first stream open, a reconnect,
-   * `fell_behind`, and manual refresh. The gate is closed for the duration and
-   * its buffered deltas are replayed through the reducer once the snapshot
-   * resolves, so a delta that arrives before it is never lost to the
-   * snapshot's wholesale `setData` (specs/cli "Realtime Dashboard Updates").
+   * Full snapshot of every domain — first stream open, reconnect, `fell_behind`,
+   * and manual refresh — with buffered deltas replayed once it resolves.
    */
   const runSnapshot = useCallback(async () => {
     if (snapshotBusyRef.current) {
-      // A snapshot is already in flight; run one more after it so a later
-      // trigger (e.g. `fell_behind`) is never dropped.
+      // A snapshot is already in flight; run one more after it so no trigger is dropped.
       snapshotPendingRef.current = true;
       return;
     }
@@ -131,8 +122,7 @@ function Dashboard({
           setData((prev) => ({ ...prev, error: (err as Error).message }));
         }
 
-        // Open the gate and replay anything buffered during the read, in
-        // arrival order, before live application resumes.
+        // Replay anything buffered during the read before live application resumes.
         const replay = gate.open();
         if (replay.length > 0) {
           setData((prev) => replay.reduce(applyStreamEvent, prev));
@@ -153,9 +143,8 @@ function Dashboard({
     setData((prev) => ({ ...prev, homekit, energy, weather, lastRefresh: Date.now() }));
   }, [client]);
 
-  // Stream + slow poll. The stream is subscribed first; the snapshot is taken
-  // on open, so a change emitted before the subscription is in the snapshot and
-  // one emitted after it arrives as a buffered delta — no gap, no overwrite.
+  // Stream + slow poll: the stream is subscribed first and the snapshot is
+  // taken on open, so a buffered delta closes any gap without overwrite.
   useEffect(() => {
     const slowTimer = setInterval(() => void fetchSlow(), interval * SLOW_POLL_FACTOR * 1000);
 
@@ -168,8 +157,7 @@ function Dashboard({
         signal: controller.signal,
         onEvent: (event) => {
           if (event.category === "fell_behind") {
-            // The stream discarded events we never saw — recover with a full
-            // re-snapshot rather than trust a known-incomplete state.
+            // The stream discarded unseen events — recover with a full re-snapshot.
             void runSnapshot();
             return;
           }
@@ -179,16 +167,14 @@ function Dashboard({
           }
         },
         onOpen: () => {
-          // First open: snapshot now that the subscription exists, closing the
-          // read-vs-subscribe ordering gap. Reconnect: re-snapshot, since
-          // events may have been missed while disconnected.
+          // First open: snapshot now the subscription exists, closing the ordering
+          // gap. Reconnect: re-snapshot, since events may have been missed.
           openedBefore = true;
           void runSnapshot();
           setData((prev) => (prev.error ? { ...prev, error: null } : prev));
         },
         onError: (err) => {
-          // If the stream never opened, still take a snapshot so the dashboard
-          // stays usable rather than empty (specs/cli "Command Surface").
+          // If the stream never opened, still snapshot so the dashboard stays usable.
           if (!openedBefore && !fallbackStarted) {
             fallbackStarted = true;
             void runSnapshot();
@@ -210,8 +196,7 @@ function Dashboard({
 
   // Global keyboard handler
   useKeyboard((key) => {
-    // A tab is capturing free text — do not switch tabs, quit, refresh, or
-    // toggle help from keystrokes meant for the input.
+    // A tab is capturing free text — leave keystrokes meant for its input alone.
     if (!shouldHandleGlobalShortcut(inputActive)) return;
 
     // Help modal toggle

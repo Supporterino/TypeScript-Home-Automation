@@ -5,11 +5,8 @@ import { backToWallPath } from "../src/app/lib/router.js";
 import { wallViewState } from "../src/app/wall/live.js";
 
 /**
- * Wall navigation (wall-zones-and-fit D11; specs/wall-display "Wall
- * Navigation", "Named Wall Profiles"). The rule that decides whether a wall
- * offers a way back is pure, so it is asserted directly; the affordance's wiring
- * is asserted structurally, since there is no DOM harness — the same style as
- * `wall-read-only.test.ts`.
+ * Wall navigation: the rule that decides whether a wall offers a way back is pure;
+ * the affordance's wiring is asserted structurally.
  */
 const APP_DIR = join(import.meta.dir, "..", "src/app");
 const WALL_VIEW = join(APP_DIR, "views/WallView.tsx");
@@ -59,10 +56,8 @@ describe("the wall's back affordance", () => {
 
     expect(view).toContain("backToWallPath(origin, basePath)");
     expect(view).toContain("{backTo !== null && (");
-    // A touch-sized Hearth affordance over the composition, never a hover-only
-    // control (specs/wall-display "Navigation is touch-operable"): the wall's own
-    // route affordance, which draws the ported control treatment and the shared
-    // router's link (design.md W1).
+    // A touch-sized Hearth affordance over the composition, never a hover-only control:
+    // the wall's own route affordance, which draws the shared router's link.
     expect(view).toContain("<WallCardRoute");
     expect(view).toContain("to={backTo}");
     expect(view).not.toContain("onMouseEnter");
@@ -71,9 +66,8 @@ describe("the wall's back affordance", () => {
   it("takes the wall it was opened from out of the shared router's history", async () => {
     const router = await source(ROUTER_CONTEXT);
 
-    // The router records the path each in-app navigation was pushed from, and
-    // exposes it to the surface that asks — no bespoke history layer (design.md
-    // D11).
+    // The router records the path each in-app navigation was pushed from, and exposes it
+    // to the surface that asks.
     expect(router).toContain("pushState({ from: window.location.pathname }");
     expect(router).toContain("origin: string | null");
     expect(router).toContain("originPathname()");

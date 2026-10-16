@@ -15,25 +15,9 @@ type InfoLabels = {
 };
 
 /**
- * Prometheus metrics service exposing device state and process health.
- *
- * Implements `ServicePlugin` so the engine calls `onStart`, `onStop`, and
- * `registerRoutes` automatically.  Enabled simply by passing a (factory)
- * instance under the `"metrics"` key in the `services` map:
- *
- * ```ts
- * import { createEngine, PrometheusMetricsService } from "@ts-ha/core";
- *
- * const engine = createEngine({
- *   automationsDir: "...",
- *   services: {
- *     metrics: (http, logger) => new PrometheusMetricsService(logger),
- *   },
- * });
- * ```
- *
- * When `DEVICE_REGISTRY_ENABLED=false` the service still starts — process and
- * default metrics are exposed, but no per-device gauges are populated.
+ * Prometheus metrics service exposing device state and process health. Implements
+ * `ServicePlugin`; enable it under the `"metrics"` key in the `services` map. With
+ * `DEVICE_REGISTRY_ENABLED=false` no per-device gauges are populated.
  */
 export class PrometheusMetricsService implements ServicePlugin {
   readonly serviceKey = "metrics";
@@ -47,11 +31,10 @@ export class PrometheusMetricsService implements ServicePlugin {
   private onDeviceRemovedCb: ((device: ZigbeeDevice) => void) | null = null;
   private deviceRegistry: DeviceRegistry | null = null;
 
-  // Unsubscribes from the execution recorder's completion broadcasts
-  // (design.md D18; task 8.8), set in onStart() and cleared in onStop().
+  // Unsubscribes from the execution recorder's completion broadcasts; set in onStart().
   private unsubscribeFromExecutions: (() => void) | null = null;
 
-  // ── Automation execution counters (design.md D18; task 8.8) ──────────────
+  // ── Automation execution counters ────────────────────────────────────────
 
   private readonly automationExecutionsCounter: Counter<"automation">;
   private readonly automationFailuresCounter: Counter<"automation">;
@@ -311,10 +294,8 @@ export class PrometheusMetricsService implements ServicePlugin {
       this.triggerCountGauge,
     ];
 
-    // Automation execution counters (design.md D18; task 8.8). Labelled by
-    // automation name only — cardinality is bounded by the number of
-    // registered automations, and no label is ever derived from a trigger
-    // payload, device name, or state value.
+    // Labelled by automation name only — cardinality is bounded by the number of
+    // registered automations, and no label derives from a payload or state value.
     this.automationExecutionsCounter = new Counter({
       name: "automation_executions_total",
       help: "Total number of automation executions",
@@ -332,8 +313,7 @@ export class PrometheusMetricsService implements ServicePlugin {
   // ── Lifecycle ────────────────────────────────────────────────────────────
 
   async onStart(ctx: CoreContext): Promise<void> {
-    // Wired unconditionally — automation execution counters do not depend
-    // on the device registry (design.md D18; task 8.8).
+    // Wired unconditionally — the counters do not depend on the device registry.
     this.unsubscribeFromExecutions = ctx.executionRecorder.onCompletion(
       ({ automation, outcome }) => {
         this.automationExecutionsCounter.inc({ automation });

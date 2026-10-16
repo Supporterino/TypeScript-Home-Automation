@@ -1,21 +1,8 @@
-/**
- * Automation trigger context contract (design.md D1).
- *
- * A trigger context is delivered through the wire — execution history,
- * realtime `automation_execution` events, the web UI detail views — so its
- * definition lives with the other contracts.
- */
+/** Automation trigger context contract, delivered through the wire. */
 
 import type { ZigbeeDevice } from "./types/zigbee/bridge.js";
 
-/**
- * Context passed to an automation's execute method.
- *
- * For MQTT triggers, contains the topic that fired and the parsed payload.
- * For cron triggers, contains the cron expression and the time it fired.
- * For state triggers, contains the key, new value, and old value.
- * For webhook triggers, contains the path, HTTP method, headers, query, and body.
- */
+/** Context passed to an automation's execute method. */
 export type TriggerContext =
   | {
       type: "mqtt";

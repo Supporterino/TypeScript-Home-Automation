@@ -8,9 +8,7 @@ import {
   weatherSummary,
 } from "../src/dashboard-model.js";
 
-// specs/cli "Realtime Dashboard Updates" (task 2.4) and the Overview
-// energy/weather fold (task 2.5). The reducer is pure, so a synthetic event
-// sequence drives it directly.
+// The reducer is pure, so a synthetic event sequence drives it directly.
 
 function descriptor(overrides: Partial<DeviceDescriptor> = {}): DeviceDescriptor {
   return {

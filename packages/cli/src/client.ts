@@ -16,9 +16,8 @@ import type {
 import { type EventStreamOptions, readEventStream } from "./event-stream.js";
 
 /**
- * A plain `Error` carrying the engine's HTTP status, so a caller can
- * distinguish a refusal (400/503) from an unknown resource (404) — neither of
- * which is a transport failure. Plain `Error` (no subclass) per AGENTS.md.
+ * A plain `Error` carrying the engine's HTTP status, letting a caller
+ * distinguish a refusal (400/503) from an unknown resource (404).
  */
 export function httpError(message: string, status: number): Error {
   return Object.assign(new Error(message), { status });
@@ -198,10 +197,8 @@ export class DebugClient {
   // -------------------------------------------------------------------------
 
   /**
-   * List rooms with their current membership.
-   *
-   * The engine exposes no `/api/rooms/:id`; a single room is selected from
-   * this listing by id client-side, exactly as the web UI does.
+   * List rooms with their current membership; a single room is selected from
+   * this listing by id client-side (the engine exposes no `/api/rooms/:id`).
    */
   async getRooms(): Promise<{ rooms: RoomWithMembers[]; count: number }> {
     return this.get("/api/rooms");
@@ -293,12 +290,8 @@ export class DebugClient {
   // -------------------------------------------------------------------------
 
   /**
-   * Fetch current conditions and forecast.
-   *
-   * The engine answers `404` when no weather service is registered and `400`
-   * when no location is resolvable; both mean the feature is unconfigured
-   * rather than errored, so they resolve to a {@link WeatherUnavailable} marker
-   * instead of throwing. A `502` or a transport failure still throws.
+   * Fetch current conditions and forecast; a `404`/`400` resolves to a
+   * {@link WeatherUnavailable} marker, while other failures still throw.
    */
   async getWeather(): Promise<WeatherData | WeatherUnavailable> {
     const response = await this.fetchRaw("/api/weather", { method: "GET" });
@@ -364,9 +357,8 @@ export class DebugClient {
   // -------------------------------------------------------------------------
 
   /**
-   * Read the realtime event stream, carrying this client's host and token.
-   * The token stays encapsulated — an `EventSource` cannot attach it, so the
-   * reader is fetch-based (design.md D3).
+   * Read the realtime event stream, carrying this client's host and token
+   * (an `EventSource` cannot attach an `Authorization` header).
    */
   async streamEvents(options: Omit<EventStreamOptions, "host" | "token">): Promise<void> {
     return readEventStream({ host: this.baseUrl, token: this.token, ...options });

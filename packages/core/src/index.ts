@@ -1,12 +1,6 @@
 /**
- * `@ts-ha/core` — package entry point.
- *
- * Re-exports the engine API and the domain/wire contracts owned by
- * `@ts-ha/shared`, so the public surface is stable:
- *
- * ```ts
- * import { Automation, createEngine, type Trigger } from "@ts-ha/core";
- * ```
+ * `@ts-ha/core` — package entry point. Re-exports the engine API and the domain/wire
+ * contracts owned by `@ts-ha/shared`.
  */
 
 // Source-neutral device capability vocabulary
@@ -149,9 +143,7 @@ export {
 } from "./automation-manager.js";
 // Configuration
 export { type Config, loadConfig } from "./config.js";
-// Unified device sources (design.md D2; task 6.13d) — DeviceSource is
-// exported for inspection and testing; the source set itself is fixed at
-// four and is not a ServiceRegistry registration point.
+// Unified device sources — DeviceSource is exported for inspection and testing.
 export { AggregateDeviceSource, type DeviceSourceStatus } from "./device-sources/aggregate.js";
 export {
   type CommandValidationResult,
@@ -185,7 +177,7 @@ export { ZigbeeDeviceSource } from "./device-sources/zigbee-source.js";
 export { AqaraH1Automation } from "./devices/aqara-h1-automation.js";
 export { IkeaRodretAutomation } from "./devices/ikea-rodret-automation.js";
 export { IkeaStyrbarAutomation } from "./devices/ikea-styrbar-automation.js";
-// Home-wide energy aggregation (design.md D6, D7; specs/energy-monitoring)
+// Home-wide energy aggregation
 export {
   EnergyAggregator,
   type EnergyAggregatorOptions,
@@ -233,7 +225,7 @@ export { HttpServer, type WebhookHandler } from "./http/http-server.js";
 export { LogBuffer, type LogEntry, type LogQuery } from "./logging/log-buffer.js";
 // Core services (exposed for advanced usage)
 export { type MqttMessageHandler, MqttService } from "./mqtt/mqtt-service.js";
-// Automation execution observability (design.md D11; task 8.x)
+// Automation execution observability
 export { currentAutomationName } from "./observability/execution-context.js";
 export {
   type ExecutionCompletionEvent,
@@ -243,7 +235,7 @@ export {
   ExecutionRecorder,
   type ObservedWrites,
 } from "./observability/execution-recorder.js";
-// User-defined rooms spanning every unified device source (design.md D14)
+// User-defined rooms spanning every unified device source
 export {
   type AssignDeviceResult,
   type CreateRoomResult,
@@ -293,7 +285,7 @@ export {
   StateManager,
   type StateManagerOptions,
 } from "./state/state-manager.js";
-// Named wall profiles for the full-bleed wall surface (design.md D2)
+// Named wall profiles for the full-bleed wall surface
 export {
   type CreateWallResult,
   type DeleteWallResult,
@@ -314,5 +306,5 @@ export {
   type DeviceRemovedHandler,
   type DeviceStateChangeHandler,
 } from "./zigbee/device-registry.js";
-// Zigbee2MQTT `exposes` mapper — source-specific, stays in core (design.md D5)
+// Zigbee2MQTT `exposes` mapper — source-specific, stays in core
 export { mapZ2MExpose, mapZ2MExposes } from "./zigbee/z2m-mapper.js";

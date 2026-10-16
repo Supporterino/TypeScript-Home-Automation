@@ -1,31 +1,6 @@
 /**
- * The wall weather widget (design.md D11; specs/wall-display "Widget Catalog",
- * "An unconfigured widget is contained"). Reads `GET /api/weather`; when the
- * service is unconfigured it reports that inside its own area and never throws,
- * so the rest of the profile keeps rendering. A caller-supplied fixture reading
- * from the data layer is preferred over that fetch (design.md D5; specs/web-ui
- * "A widget that sources its own reading prefers the fixture"), so a
- * fixture-backed render reaches this composition with no engine.
- *
- * Composed on the wall's single card vocabulary (design.md W1): the ported
- * circular condition affordance leads, the condition description is the label,
- * and the temperature is the reading on the wall's own metric tier (design.md
- * W2) — what is read at distance. The humidity, the wind and the forecast are
- * the widget's supporting figures, so each is drawn at the ported secondary size
- * with a ported-size glyph (specs/wall-display "Supporting text is drawn at the
- * ported sizes") rather than at a tier of the widget's own. Ambient —
- * chrome-less, condition conveyed by icon shape plus description text, never
- * colour alone.
- *
- * The widget resolves its own composition from the box the frame hands it
- * (specs/wall-display "Span-Aware Card Presentation"; design.md W1): the full
- * composition only where the box holds every part, the condition and its details
- * alone where the forecast does not fit, and the leading affordance with its
- * temperature alone where neither does — so a card at the type's minimum span
- * composes for the space it has rather than clipping. The condition and the
- * temperature reading are drawn in every composition; they are what is read at
- * distance. The budgets are the widget's own (see `weather-model.ts`), so it is
- * measured against its content rather than one global card budget.
+ * The wall weather widget: reads `GET /api/weather` (or a fixture) and composes
+ * for the box the frame gives it.
  */
 import type { WeatherData, WeatherUnavailable } from "@ts-ha/shared";
 import {
@@ -55,7 +30,7 @@ import {
 
 type WeatherCondition = WeatherData["current"]["condition"];
 
-/** Condition is conveyed by icon shape plus description text, never color alone (MASTER "State Encoding Rule"). */
+/** Condition is conveyed by icon shape plus description text, never color alone. */
 function conditionIcon(
   condition: WeatherCondition,
   size: number = WALL_CARD_GLYPH_SIZE,
@@ -107,9 +82,7 @@ export function WeatherWidget({ rendererHeightPx }: WallWidgetProps) {
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    // A supplied fixture reading is the widget's data, so every path that would
-    // fetch — the mount load and the reconnect refetch below — issues no request
-    // for it (design.md D5). Without one the widget is byte-for-byte unchanged.
+    // A supplied fixture is the widget's data, so this path issues no request.
     if (!sourcesOwnReading(fixtureWeather)) return;
     try {
       setValue(await fetchWeather());
@@ -182,11 +155,7 @@ export function WeatherWidget({ rendererHeightPx }: WallWidgetProps) {
 
   const { current } = state.data;
   const forecast = weatherForecastDays(state.data);
-  // The composition the box the frame handed the renderer holds (design.md W1;
-  // specs/wall-display "Span-Aware Card Presentation"): the full composition only
-  // where it fits, the details alone where the forecast does not, and the
-  // condition with its temperature alone where neither does — so a card at the
-  // type's minimum span never clips.
+  // The composition resolves from the box the frame handed the renderer.
   const composition = weatherWidgetComposition(rendererHeightPx);
   const drawsDetails = composition !== "readout";
   const drawsForecast = composition === "full";

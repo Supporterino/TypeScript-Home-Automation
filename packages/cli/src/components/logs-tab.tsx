@@ -1,7 +1,8 @@
 import { useKeyboard, useTerminalDimensions } from "@opentui/react";
 import type { LogEntry } from "@ts-ha/shared";
 import { useMemo, useState } from "react";
-import { COLORS, formatValue, levelColor, levelName, valueColor } from "./theme.js";
+import { levelName } from "../format.js";
+import { COLORS, formatValue, levelColor, valueColor } from "./theme.js";
 import type { LogsData } from "./types.js";
 
 const LEVEL_FILTERS = [
@@ -28,9 +29,8 @@ export function LogsTab({ data }: { data: LogsData }) {
   const [automationFilter, setAutomationFilter] = useState("");
   const [levelFilterIdx, setLevelFilterIdx] = useState(0);
   const [editingFilter, setEditingFilter] = useState(false);
-  // selectedIndex tracks the highlighted row in the filtered list (0-based).
-  // expandedIndex is the currently expanded row; resets on each render cycle
-  // (data refreshes re-render the component, naturally collapsing expansions).
+  // selectedIndex is the highlighted row in the filtered list (0-based);
+  // expandedIndex resets on each render cycle (a data refresh collapses it).
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
 

@@ -1,7 +1,7 @@
 import type { ComponentPropsWithoutRef } from "react";
 import { cn } from "./cn.js";
 
-/** A gap on the design-system spacing rhythm (design.md D3). */
+/** A gap on the design-system spacing rhythm. */
 export type RhythmGap = 0 | 1 | 2 | 3 | 4 | 6 | 8;
 
 const GAP: Record<RhythmGap, string> = {
@@ -29,7 +29,7 @@ export interface StackProps extends ComponentPropsWithoutRef<"div"> {
   align?: StackAlign;
 }
 
-/** A vertical flex column on the spacing rhythm (design.md D5). */
+/** A vertical flex column on the spacing rhythm. */
 export function Stack({ className, gap = 3, align = "stretch", ...props }: StackProps) {
   return <div className={cn("flex flex-col", GAP[gap], ALIGN[align], className)} {...props} />;
 }

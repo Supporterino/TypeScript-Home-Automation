@@ -11,13 +11,8 @@ import {
 } from "../src/app/wall/cards/LightCard.js";
 
 /**
- * The wall light card (task 4.1; design.md D1, D2, D7, D12; specs/wall-display
- * "Wall Device Presentation" — "A light card presents both a toggle and a value
- * control", "A light card can be turned on from its affordances", "Colour
- * controls appear only when supported"). There is no DOM harness here, so the
- * card's composition and control selection are covered through the pure helpers
- * it exports and the render is asserted structurally against its source — the
- * same style as `wall-card-anatomy.test.ts`.
+ * The wall light card: the pure control selection, and the render asserted
+ * structurally against its source.
  */
 const APP_DIR = join(import.meta.dir, "..", "src/app");
 const CARD = join(APP_DIR, "wall/cards/LightCard.tsx");
@@ -212,7 +207,9 @@ describe("wall light card source", () => {
 
   it("presents the active control as a slider with the other declared controls beside it", async () => {
     const source = await cardSource();
-    expect(source).toContain("<WallCardActions>");
+    // The row carries a flexible slider, so the mounted row is the flexible one: the
+    // slider keeps its grow and the trailing icon controls are not stretched.
+    expect(source).toContain('<WallCardActions distribution="flexible">');
     expect(source).toContain("<WallCardSlider");
     expect(source).toContain("<WallCardIconButton");
     // Only a declared control is rendered: the buttons are the declared controls

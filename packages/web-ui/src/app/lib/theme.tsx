@@ -1,12 +1,6 @@
 /**
- * Theme selection (design.md D4; specs/web-ui "Theme Selection").
- *
- * The active scheme is an attribute on `<html>` — `data-theme="dark" |
- * "light"` — set before first paint by the shell's inline bootstrap
- * (`theme-bootstrap.ts`). This hook reads that attribute's source of truth,
- * exposes the preference plus the resolved scheme, and persists an explicit
- * choice to `localStorage["ts-ha-theme"]`; "system" follows
- * `prefers-color-scheme` and reacts to changes while selected.
+ * Theme selection: reads the document's scheme, exposes the preference and
+ * resolved theme, and persists an explicit choice.
  */
 import { useCallback, useEffect, useState } from "react";
 import {

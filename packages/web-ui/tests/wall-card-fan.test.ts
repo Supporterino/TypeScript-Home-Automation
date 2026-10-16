@@ -6,11 +6,8 @@ import { resolveDeviceClass } from "../src/app/wall/cards/device-class.js";
 import { fanCardModel, fanCardReading, fanPercentageRange } from "../src/app/wall/cards/FanCard.js";
 
 /**
- * The wall fan card (task 4.5; design.md D1, D3, D6; specs/wall-display "Widget
- * Catalog" — "a fan"; "Wall Device Presentation"). The pure decisions — the
- * declared on/off, percentage, and presets, the slider's bounds, and the reading —
- * are covered directly, and the render is asserted structurally against its source
- * (there is no DOM harness), the same style as `wall-card-anatomy.test.ts`.
+ * The wall fan card: the declared on/off, percentage, and presets covered directly;
+ * the render asserted structurally.
  */
 const APP_DIR = join(import.meta.dir, "..", "src/app");
 const CARD = join(APP_DIR, "wall/cards/FanCard.tsx");
@@ -155,7 +152,8 @@ describe("wall fan card source", () => {
 
   it("presents the percentage as a slider with the presets beside it", async () => {
     const source = await cardSource();
-    expect(source).toContain("<WallCardActions>");
+    // The slider is flexible, so the row keeps it flexible rather than spreading it.
+    expect(source).toContain('<WallCardActions distribution="flexible">');
     expect(source).toContain("<WallCardSlider");
     expect(source).toContain("<WallCardEnumControl");
     expect(source).toContain("composition.siblings");
@@ -163,6 +161,13 @@ describe("wall fan card source", () => {
     // Beside the percentage slider the enumerated control reserves the slider's own
     // width, so the presets are never a row of options squeezed below the touch target.
     expect(source).toContain("reservedPx={WALL_CARD_ENUM_SIBLING_RESERVE_PX}");
+  });
+
+  it("distributes the presets-only row when the fan declares no percentage", async () => {
+    const source = await cardSource();
+    // The presets-only row is a row of fixed options, so it spreads across the card.
+    expect(source).toContain('<WallCardActions distribution="distributed">');
+    expect(source).toContain("composition.controls && !model.percentage && model.presets");
   });
 
   it("turns the fan on when the percentage is set while it is stopped", async () => {

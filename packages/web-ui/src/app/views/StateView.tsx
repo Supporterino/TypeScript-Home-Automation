@@ -1,16 +1,6 @@
 /**
- * The operator state view — lists ordinary keys with their values and supports
- * inspecting, creating, writing, and deleting them, updating from the stream
- * without a manual refresh (design.md D12; specs/web-ui "Operator Views",
- * "Internal State Keys Are Not Presented"; task 6.2).
- *
- * Rows are derived from `filterReservedKeys`, so the reserved internal
- * namespace (rooms, automation enabled flags, wall profiles) is never listed,
- * inspected, or deleted here. The create control writes a caller-entered key;
- * a reserved key it happened to name is refused by the state API's own
- * reserved-key guard — this view is a pass-through, not the enforcement point.
- *
- * Rebuilt on the Lumen primitive layer (`ui/*`) and `lucide-react`.
+ * The operator state view — ordinary keys with their values, editable from the
+ * stream. Reserved internal keys come from `filterReservedKeys` and never show.
  */
 import { Database, Pencil, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
@@ -28,15 +18,12 @@ import {
   DialogTitle,
   EmptyState,
   IconButton,
+  INPUT_CLASSES,
   Row,
   Stack,
 } from "../ui/index.js";
 
-/** The shared text-input treatment (the `ui/` layer carries no input primitive). */
-const INPUT_CLASSES =
-  "touch-target h-10 w-full rounded-input border border-hairline bg-surface px-3 text-sm text-ink motion-toggle focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus";
-
-/** The shared textarea treatment (the `ui/` layer carries no input primitive). */
+/** The shared textarea treatment. */
 const TEXTAREA_CLASSES =
   "min-h-32 w-full resize-y rounded-input border border-hairline bg-surface px-3 py-2 font-mono text-xs text-ink motion-toggle focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus";
 

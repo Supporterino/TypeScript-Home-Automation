@@ -9,9 +9,8 @@ import {
   writableBrightnessCapability,
 } from "../src/app/lib/card-archetype.js";
 
-// Pure card-archetype selection — no DOM. The archetype is derived from the
-// existing rankDeviceTile result, so these tests pin the mapping from ranked
-// capabilities to the card shape the wall draws (design.md D1; task 1.1).
+// Pure card-archetype selection — no DOM. The archetype is derived from the existing
+// rankDeviceTile result, pinning the mapping from ranked capabilities to card shape.
 
 const rw = { readable: true, writable: true };
 const ro = { readable: true, writable: false };
@@ -58,9 +57,8 @@ describe("cardArchetype", () => {
   });
 
   it("selects the cover archetype for a position-less cover with a declared transport action", () => {
-    // No writable position: the broadened detection recognises the cover by its
-    // transport action rather than falling back to a generic enum control
-    // (design.md D15; specs/wall-display "A position-less cover still gets transport").
+    // No writable position: the broadened detection recognises the cover by its transport
+    // action rather than falling back to a generic enum control.
     const capabilities: Capability[] = [
       {
         kind: "cover",

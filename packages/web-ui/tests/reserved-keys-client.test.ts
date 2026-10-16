@@ -6,10 +6,8 @@ import {
   RESERVED_STATE_KEY_PREFIX,
 } from "../src/app/lib/reserved-keys.js";
 
-// The client-side predicate and the server-side guard both derive from the
-// shared `INTERNAL_STATE_PREFIX` contract constant (design.md D9). This test
-// lives in `@ts-ha/web-ui` and must not import `@ts-ha/core`; core asserts its
-// own guard against the same shared constant (task 3.7).
+// The client-side predicate and the server-side guard both derive from the shared
+// `INTERNAL_STATE_PREFIX` contract constant. This test must not import `@ts-ha/core`.
 
 describe("client-side isReservedStateKey", () => {
   it("rejects a room definition key", () => {

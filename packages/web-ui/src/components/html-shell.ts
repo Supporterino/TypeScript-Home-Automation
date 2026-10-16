@@ -4,29 +4,16 @@ import { themeBootstrapScript } from "./theme-bootstrap.js";
 export interface HtmlShellOptions {
   /** URL path prefix where the web UI is mounted, e.g. "/status". */
   basePath: string;
-  /**
-   * Whether the engine has a token configured.
-   * Reserved for future use (e.g. showing a logout link in the React app).
-   */
+  /** Whether the engine has a token configured. */
   hasAuth: boolean;
 }
 
 /**
- * Returns the full HTML document for the web UI dashboard.
- *
- * The page is a minimal shell — a single <div id="app"> mount point for the
- * React frontend. The compiled JS and CSS bundles are referenced by
- * their content-addressed asset URLs rather than inlined, so they are
- * cacheable across requests and across views (design.md D8). The shell's size
- * is therefore independent of the compiled application's size.
- *
- * The data-base-path attribute is read by the React app to prefix all API
- * calls with the correct path (e.g. /status/api/status).
+ * Returns the full HTML document for the web UI dashboard: a minimal shell
+ * with the content-addressed JS/CSS bundles and the theme bootstrap.
  */
 export function htmlShell({ basePath, hasAuth: _hasAuth }: HtmlShellOptions): string {
-  // The no-flash theme bootstrap (design.md D4): sets data-theme on <html>
-  // before the React bundle loads, from the persisted preference or the system
-  // preference, so no reload flashes the wrong scheme.
+  // No-flash theme bootstrap: sets data-theme on <html> before the bundle loads.
   const themeBootstrap = themeBootstrapScript();
 
   const iconPath = basePath === "/" ? "/icon.svg" : `${basePath}/icon.svg`;

@@ -20,7 +20,7 @@ describe("execution-context", () => {
     });
   });
 
-  it("survives an await inside the context (task 8.1)", async () => {
+  it("survives an await inside the context", async () => {
     await runInAutomationContext("motion-light", async () => {
       await delay(5);
       expect(currentAutomationName()).toBe("motion-light");
@@ -34,7 +34,7 @@ describe("execution-context", () => {
     expect(currentAutomationName()).toBeNull();
   });
 
-  it("does not cross-attribute between two concurrent contexts (task 8.1)", async () => {
+  it("does not cross-attribute between two concurrent contexts", async () => {
     const observedInA: (string | null)[] = [];
     const observedInB: (string | null)[] = [];
 

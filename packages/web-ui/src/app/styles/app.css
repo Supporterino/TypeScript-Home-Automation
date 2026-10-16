@@ -1,14 +1,8 @@
 /**
- * Lumen — the web UI design system (design.md D3).
- *
- * Dark is authoritative and lives on `:root`; light is a designed scheme under
- * `[data-theme="light"]`, never a mechanical inversion. The raw semantic
- * properties are the single declaration site; `@theme`/`@theme inline` exposes
- * them to Tailwind so a view composes utilities (`bg-surface`, `text-muted`,
- * `border-hairline`, `rounded-tile`) rather than literal values. No view may
- * use a literal hex.
- *
- * Imported from `index.tsx`; it is the application's only stylesheet.
+ * Lumen — the web UI design system. Dark is authoritative on `:root`; light is a
+ * designed scheme under `[data-theme="light"]`, never a mechanical inversion. The
+ * raw semantic properties are the single declaration site; `@theme` exposes them
+ * to Tailwind so a view composes utilities rather than literal values.
  */
 @import "tailwindcss";
 
@@ -25,10 +19,8 @@
 }
 
 /* ── Tailwind theme = the utility layer ─────────────────────────────────────
- * Scheme-independent tokens are declared directly (Tailwind emits them to
- * `:root`); scheme-dependent colour/elevation tokens alias the runtime
- * properties through `@theme inline`, so `bg-surface` resolves to
- * `var(--surface)` and switches with `[data-theme]`.
+ * Scheme-independent tokens are declared directly; scheme-dependent ones are
+ * aliased via `@theme inline` so `bg-surface` switches with `[data-theme]`.
  */
 @theme {
   --font-display: "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
@@ -36,7 +28,7 @@
     -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
 
-  /* Type scale (design.md D3): 12.5 / 14 / 16 / 18 / 22 / 28 / 34 px. */
+  /* Type scale: 12.5 / 14 / 16 / 18 / 22 / 28 / 34 px. */
   --text-xs: 12.5px;
   --text-xs--line-height: 1.35;
   --text-sm: 14px;
@@ -156,7 +148,7 @@ body {
   outline-offset: 2px;
 }
 
-/* Touch targets enlarge to the WCAG minimum on coarse pointers (design.md D9). */
+/* Touch targets enlarge to the WCAG minimum on coarse pointers. */
 @media (pointer: coarse) {
   .touch-target {
     min-height: 44px;
@@ -164,7 +156,7 @@ body {
   }
 }
 
-/* ── Motion (design.md D8) ────────────────────────────────────────────────── */
+/* ── Motion ────────────────────────────────────────────────────────────────── */
 
 @keyframes lumen-enter {
   from {

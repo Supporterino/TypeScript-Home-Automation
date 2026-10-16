@@ -8,15 +8,14 @@ import { INTERNAL_STATE_PREFIX, type StateManager } from "./state/state-manager.
 export type { Room, RoomMember, RoomWithMembers } from "@ts-ha/shared";
 
 /**
- * Reserved-namespace prefix under which each room definition is stored,
- * keyed by the room's stable identifier (design.md D14, D20).
+ * Reserved-namespace prefix under which each room definition is stored, keyed by
+ * the room's stable identifier.
  */
 export const ROOM_PREFIX = `${INTERNAL_STATE_PREFIX}room:`;
 
 /**
- * Reserved-namespace prefix under which each device's room assignment is
- * stored, keyed by the device's qualified identifier. The value is the
- * assigned room's id (design.md D14, D29).
+ * Reserved-namespace prefix under which each device's room assignment is stored,
+ * keyed by the device's qualified identifier; the value is the assigned room's id.
  */
 export const ROOM_ASSIGNMENT_PREFIX = `${INTERNAL_STATE_PREFIX}room-assignment:`;
 
@@ -44,20 +43,8 @@ export type DeleteRoomResult = "ok" | "not_found";
 export type AssignDeviceResult = "ok" | "room_not_found";
 
 /**
- * User-defined rooms that group devices across every device source
- * (design.md D14; specs/device-rooms/spec.md).
- *
- * Room definitions live under {@link ROOM_PREFIX} and device assignments
- * under {@link ROOM_ASSIGNMENT_PREFIX}, both inside the reserved internal
- * state namespace (design.md D20) — written through `setInternal()` /
- * `deleteInternal()` so neither is reachable through the public state API,
- * mirroring the automation-enabled-flag pattern in `automation-manager.ts`.
- *
- * A single assignment key per device (rather than a per-room member list)
- * makes reassignment a single write with no intermediate state in which a
- * device belongs to both or neither room, and lets the engine derive a
- * membership-change SSE delta straight from that one key's change event
- * without resending every room's full membership.
+ * User-defined rooms that group devices across every device source; definitions and
+ * assignments live in the reserved internal state namespace, unreachable publicly.
  */
 export class RoomManager {
   constructor(
@@ -67,10 +54,8 @@ export class RoomManager {
   ) {}
 
   /**
-   * Create a room with the given display name.
-   *
-   * @returns `{ status: "duplicate_name" }` if a room with that name already
-   * exists — no room is created.
+   * Create a room with the given display name; returns a `duplicate_name` status if the
+   * name already exists.
    */
   createRoom(name: string): CreateRoomResult {
     if (this.findByName(name, null)) {
@@ -83,10 +68,8 @@ export class RoomManager {
   }
 
   /**
-   * Rename a room, preserving its membership (task 9.1).
-   *
-   * @returns `{ status: "not_found" }` for an unknown room id, or
-   * `{ status: "duplicate_name" }` if another room already has that name.
+   * Rename a room, preserving its membership; returns a `not_found` or
+   * `duplicate_name` status.
    */
   renameRoom(id: string, name: string): RenameRoomResult {
     const existing = this.getRoom(id);
@@ -100,10 +83,7 @@ export class RoomManager {
     return { status: "ok", room };
   }
 
-  /**
-   * Delete a room. Its members are not deleted — they become unassigned
-   * (task 9.1).
-   */
+  /** Delete a room; its members become unassigned. */
   deleteRoom(id: string): DeleteRoomResult {
     if (!this.getRoom(id)) return "not_found";
     this.stateManager.deleteInternal(roomKey(id));
@@ -117,13 +97,8 @@ export class RoomManager {
   }
 
   /**
-   * Assign a device (by qualified identifier) to a room, as a single
-   * atomic write — reassigning a device already in another room moves it,
-   * with no intermediate state (task 9.2). Assigning to the room a device
-   * is already in is idempotent and does not fire a change event, since the
-   * underlying value does not change.
-   *
-   * @returns `{ status: "room_not_found" }` for an unknown room id.
+   * Assign a device (by qualified identifier) to a room as a single atomic write;
+   * assigning to its current room is idempotent.
    */
   assignDevice(qualifiedId: string, roomId: string): AssignDeviceResult {
     if (!this.getRoom(roomId)) return "room_not_found";
@@ -143,7 +118,7 @@ export class RoomManager {
     return this.getRoom(roomId);
   }
 
-  /** Every room, with its current membership including unavailable members (task 9.4). */
+  /** Every room, with its current membership including unavailable members. */
   listRooms(): RoomWithMembers[] {
     const rooms = this.allRooms();
     const membersByRoom = new Map<string, RoomMember[]>();
@@ -151,10 +126,7 @@ export class RoomManager {
 
     for (const [qualifiedId, roomId] of this.allAssignments()) {
       const members = membersByRoom.get(roomId);
-      // An assignment referencing a room that no longer exists should not
-      // occur — deleteRoom() cleans up every assignment it owns — but a
-      // missing entry is skipped rather than surfaced as an error either way
-      // (specs/device-rooms "Unknown assignment does not break reads").
+      // An assignment referencing a deleted room must not break the read.
       if (!members) continue;
       members.push(this.toMember(qualifiedId));
     }
@@ -168,9 +140,8 @@ export class RoomManager {
   }
 
   /**
-   * Every present device that belongs to no room (task 9.4). Absent devices
-   * with no assignment are not meaningful here — they cannot be enumerated
-   * at all outside of a room.
+   * Every present device that belongs to no room. Absent devices with no
+   * assignment cannot be enumerated here at all.
    */
   getUnassignedDevices(): DeviceDescriptor[] {
     const assigned = new Set(this.allAssignments().map(([qualifiedId]) => qualifiedId));

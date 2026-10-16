@@ -5,23 +5,14 @@ import { WALL_CARD_METRICS } from "../src/app/wall/cards/metrics.js";
 import { WALL_MIN_CONTROL_GAP } from "../src/app/wall/registry.js";
 
 /**
- * The wall's single card vocabulary (design.md W1; specs/wall-display "Wall
- * Visual Language" — "Every wall widget MUST be composed from the wall's single
- * card vocabulary" and "the wall MUST NOT carry a second card vocabulary" — and
- * "Touch Operation" — "Adjacent controls are separated").
- *
- * There is no DOM harness here, so every surface is asserted structurally: it
- * composes the ported module, it names no part the wall retired, it declares no
- * part of its own, and it carries no Lumen token — the same style as the wall's
- * other structural tests. The vocabulary's own metrics are asserted where they are
- * declared (`wall-card-anatomy.test.ts`); this file asserts who composes them.
+ * The wall's single card vocabulary: every surface composes the ported module and
+ * carries no vocabulary of its own.
  */
 const APP_DIR = join(import.meta.dir, "..", "src/app");
 
 /**
- * The retired non-device vocabulary's module slug, assembled from its parts rather
- * than written whole: this check exists to prove that no file names it, so a
- * literal here would be the one reference left in the tree.
+ * The retired vocabulary's module slug, assembled from its parts: this check
+ * exists to prove no file names it, so a literal here would be a leftover reference.
  */
 const RETIRED_VOCABULARY = ["card", "vocab"].join("-");
 
@@ -37,7 +28,7 @@ const RETIRED_PARTS = [
   "wallControlGapPx",
 ] as const;
 
-/** The parts the ported module declares for the wall's widgets and its chrome (design.md W1). */
+/** The parts the ported module declares for the wall's widgets and its chrome. */
 const WIDGET_VOCABULARY = [
   "WallCardLabel",
   "WallCardReading",
@@ -67,18 +58,14 @@ const WIDGET_SURFACES = [
 ] as const;
 
 /**
- * The chrome a widget is drawn inside — the framed container and the grid that
- * draws the zone band and the too-large explanation — which composes the same
- * vocabulary.
+ * The chrome a widget is drawn inside — the framed container and the grid —
+ * which composes the same vocabulary.
  */
 const CHROME_SURFACES = ["wall/WidgetFrame.tsx", "wall/WallGrid.tsx"] as const;
 
 /**
  * The wall view draws the wall's own route affordance for a wall reached from a
- * link, so it composes the vocabulary too. It is deliberately outside this file's
- * Lumen half: its not-found and deleted explanations are the dashboard shell
- * explaining a missing profile — a Lumen surface by rule (the change's non-goals) —
- * so only its composition of the ported parts is asserted here.
+ * link, so it composes the vocabulary too.
  */
 const WALL_VIEW = "views/WallView.tsx";
 
@@ -86,8 +73,7 @@ const ALL_SURFACES = [...WIDGET_SURFACES, ...CHROME_SURFACES, WALL_VIEW] as cons
 
 /**
  * A Lumen design token — a Tailwind class or a `var(--…)` outside the Hearth
- * namespace. `(?<!hearth-)` keeps `var(--hearth-text-muted)` / `…-font-display`
- * from tripping the text/font alternatives.
+ * namespace.
  */
 const LUMEN_TOKEN =
   /(?<!hearth-)(?:text-(?:muted|danger|info|stale|ink)\b|font-display|rounded-(?:tile|pill|input)|motion-toggle|var\(--(?:info|on|off|stale|danger|accent|surface|hairline|canvas|text|bg|font|e[0-9]|radius|motion)\b)/;
@@ -129,8 +115,7 @@ describe("no wall surface carries a vocabulary of its own", () => {
       const text = await source(relative);
 
       // The retired vocabulary is gone: neither its module nor any part it declared
-      // may be named by a surface (specs/wall-display "the wall MUST NOT carry a
-      // second card vocabulary").
+      // may be named by a surface.
       expect(text).not.toContain(RETIRED_VOCABULARY);
       for (const part of RETIRED_PARTS) {
         // A whole word: `WallCardStat` is a prefix of the ported `WallCardStateItem`,
@@ -139,8 +124,7 @@ describe("no wall surface carries a vocabulary of its own", () => {
       }
 
       // The parts are declared once, in the ported module: a surface that declared
-      // one would be a second declaration of a treatment the ported table owns. A
-      // surface uses them — it never re-declares a `function`/`const` of its own.
+      // one would be a second declaration of a treatment the ported table owns.
       for (const part of WIDGET_VOCABULARY) {
         expect(text, `${part} is used here, not declared`).not.toContain(`function ${part}`);
         expect(text, `${part} is used here, not declared`).not.toContain(`const ${part} =`);
@@ -175,10 +159,12 @@ describe("a widget's controls are the ported control treatment", () => {
 
   it("draws every widget control from the ported control parts", async () => {
     // The controls repointed onto the ported treatment, and the part each one draws:
-    // a room's batch commands and the page controls in the vocabulary's actions row,
-    // and the link and the wall view's back link through the route affordance.
+    // a room's batch commands, the page controls, and the route affordances.
     const expected: Readonly<Record<string, readonly string[]>> = {
-      "wall/widgets/RoomWidget.tsx": ["<WallCardActions>", "<WallCardControl"],
+      "wall/widgets/RoomWidget.tsx": [
+        '<WallCardActions distribution="distributed">',
+        "<WallCardControl",
+      ],
       "wall/widgets/PagedTileGrid.tsx": ["<WallCardActions", "<WallCardIconButton"],
       "wall/widgets/LinkWidget.tsx": ["<WallCardRoute"],
       "views/WallView.tsx": ["<WallCardRoute"],
@@ -197,11 +183,8 @@ describe("the wall view's own overlay chrome", () => {
   it("carries the wall's Hearth scope, so the ported treatment resolves", async () => {
     const view = await source(WALL_VIEW);
 
-    // The way back and the refetch banner sit *beside* the grid rather than inside
-    // its Hearth scope, so the ready state carries the scope itself: without it the
-    // ported treatment's tokens resolve to nothing and the affordance a link's
-    // target must present would not be drawn at all (design.md W4; specs/wall-display
-    // "A wall reached from a link offers a way back").
+    // The way back and the refetch banner sit *beside* the grid rather than inside its
+    // Hearth scope, so the ready state carries the scope itself.
     expect(view).toContain('data-wall-chunk=""');
     // A scope, not the wall chunk's own identity marker (which the grid renders).
     expect(view).not.toContain("WALL_CHUNK_MARKER");
@@ -215,8 +198,7 @@ describe("the wall view's own overlay chrome", () => {
     );
 
     // The wall's own chrome: the ported control for the dismissal and the wall's
-    // message form for the detail, on the ported card surface — never a Lumen
-    // primitive or a card role's semantics (design.md W1, W4).
+    // message form for the detail, on the ported card surface.
     expect(ready).toContain("<WallCardIconButton");
     expect(ready).toContain("<WallCardMessage>");
     expect(ready).toContain("var(--hearth-card-radius)");
@@ -228,7 +210,7 @@ describe("the wall view's own overlay chrome", () => {
   it("draws the way back as the ported route affordance, in the wall's own scope", async () => {
     const view = await source(WALL_VIEW);
     // The ready state alone: the unknown-profile explanation's own way back is the
-    // dashboard shell's Lumen button, not a wall surface (the change's non-goals).
+    // dashboard shell's Lumen button, not a wall surface.
     const ready = view.slice(
       view.indexOf('state === "ready"'),
       view.indexOf('state === "unknown"'),

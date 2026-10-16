@@ -42,10 +42,8 @@ function makeDescriptor(
 }
 
 /**
- * A fake `DeviceSource` whose device list and availability can be mutated
- * after construction, so tests can simulate a device unpairing, reappearing,
- * or its whole source being disabled — none of which `AggregateDeviceSource`
- * caches, so mutating this in place is visible on the very next call.
+ * A fake `DeviceSource` whose device list and availability can be mutated after
+ * construction, so tests can simulate unpairing, reappearance, or a disabled source.
  */
 function makeMutableSource(id: string, initialDevices: DeviceDescriptor[] = []) {
   const devices: DeviceDescriptor[] = [...initialDevices];
@@ -97,7 +95,7 @@ describe("RoomManager", () => {
     await aggregate.stop();
   });
 
-  describe("room definition (task 9.1)", () => {
+  describe("room definition", () => {
     it("creates a room with no members", () => {
       const result = rooms.createRoom("Living Room");
       expect(result.status).toBe("ok");
@@ -167,7 +165,7 @@ describe("RoomManager", () => {
     });
   });
 
-  describe("single room membership (task 9.2)", () => {
+  describe("single room membership", () => {
     it("reports a device in only its new room after reassignment", () => {
       const a = rooms.createRoom("A");
       const b = rooms.createRoom("B");
@@ -215,7 +213,7 @@ describe("RoomManager", () => {
     });
   });
 
-  describe("rooms span device sources (task 9.5)", () => {
+  describe("rooms span device sources", () => {
     it("holds a Zigbee, a Shelly, and a Nanoleaf device simultaneously", () => {
       const created = rooms.createRoom("Living Room");
       if (created.status !== "ok") throw new Error("unreachable");
@@ -235,7 +233,7 @@ describe("RoomManager", () => {
     });
   });
 
-  describe("absent devices retain their assignment (task 9.3)", () => {
+  describe("absent devices retain their assignment", () => {
     it("marks an unpaired device unavailable but keeps it in the room", () => {
       const created = rooms.createRoom("Living Room");
       if (created.status !== "ok") throw new Error("unreachable");
@@ -291,7 +289,7 @@ describe("RoomManager", () => {
     });
   });
 
-  describe("membership queries (task 9.4)", () => {
+  describe("membership queries", () => {
     it("reports both a present and an absent member of the same room", () => {
       const created = rooms.createRoom("Living Room");
       if (created.status !== "ok") throw new Error("unreachable");
@@ -328,7 +326,7 @@ describe("RoomManager", () => {
     });
   });
 
-  describe("visibility (design.md D9; task 3.8)", () => {
+  describe("visibility", () => {
     it("hiding a device leaves its room membership intact", async () => {
       const realVisibility = new DeviceVisibility(state, logger);
       const visAggregate = new AggregateDeviceSource(
@@ -375,7 +373,7 @@ describe("RoomManager", () => {
     });
   });
 
-  describe("durability (task 9.8)", () => {
+  describe("durability", () => {
     let tmpDir: string;
     let filePath: string;
 
@@ -419,11 +417,8 @@ describe("RoomManager", () => {
     });
 
     it("survives an abrupt termination once the write-behind window has elapsed", async () => {
-      // No flush()/stop() is ever called on s1 below — the assignment reaches
-      // disk only through the coalesced background flush that set()/setInternal()
-      // schedules on its own, exactly like a process killed without a graceful
-      // shutdown after the debounce window has already fired (design.md D6;
-      // specs/device-rooms "Rooms survive abrupt termination").
+      // No flush()/stop() is called on s1 — the assignment reaches disk only through the
+      // coalesced background flush, like a process killed after the debounce window fired.
       const s1 = new StateManager(logger, { persist: true, filePath, flushIntervalMs: 10 });
       const zigbee1 = makeMutableSource("zigbee", [makeDescriptor("zigbee", "0xaaa111")]);
       const agg1 = new AggregateDeviceSource([zigbee1.source], makeVisibility(), logger);

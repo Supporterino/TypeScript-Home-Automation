@@ -1,13 +1,6 @@
 /**
- * Pure dashboard data model (specs/cli "Realtime Dashboard Updates";
- * design.md D4).
- *
- * The dashboard takes a full snapshot, then patches it from the realtime
- * stream, and refreshes the non-streamed domains (HomeKit, energy, weather)
- * on a slower poll. The snapshot/poll fetching is impure and lives in the
- * dashboard component; this module holds the deterministic parts — the
- * event-application reducer and the energy/weather projections — so they are
- * unit-testable without React or a network.
+ * Pure dashboard data model: the deterministic parts — the event-application
+ * reducer and the energy/weather projections — kept free of React and network.
  */
 
 import type {
@@ -24,12 +17,8 @@ import { weatherUnavailableMessage } from "./format.js";
 const LOG_BUFFER_LIMIT = 500;
 
 /**
- * Apply one stream event to the dashboard state, returning a new state.
- *
- * Only the streamed categories mutate state. `fell_behind` is deliberately a
- * no-op here — it carries no delta; the dashboard treats it as a re-snapshot
- * trigger (design.md D28/D4). `automation_execution` and `wall` are not
- * displayed in the terminal.
+ * Apply one stream event to the dashboard state, returning a new state;
+ * `fell_behind`, `automation_execution`, and `wall` are no-ops here.
  */
 export function applyStreamEvent(data: DashboardData, event: StreamEvent): DashboardData {
   switch (event.category) {
@@ -42,11 +31,9 @@ export function applyStreamEvent(data: DashboardData, event: StreamEvent): Dashb
 
     case "log": {
       const entry = event.entry;
-      // A malformed-but-parseable frame may omit `entry`; degrade to a no-op
-      // rather than throwing on the dedupe key below.
+      // A malformed-but-parseable frame may omit `entry`; degrade to a no-op.
       if (!entry) return data;
-      // Idempotent for a replayed delta: a buffered log entry that the
-      // snapshot already contains must not duplicate the line.
+      // Idempotent for replayed deltas: drop an entry the snapshot already has.
       const key = logEntryKey(entry);
       if (data.logs.entries.some((existing) => logEntryKey(existing) === key)) return data;
       const entries = [...data.logs.entries, entry].slice(-LOG_BUFFER_LIMIT);
@@ -72,10 +59,7 @@ export function applyStreamEvent(data: DashboardData, event: StreamEvent): Dashb
         ...data,
         readiness: {
           ...data.readiness,
-          // The event carries only the aggregate `ready` boolean
-          // (`mqtt.isConnected && engineStarted`), which cannot say which
-          // sub-check moved, so mirror the web UI: update `status` and leave
-          // `checks` to the snapshot.
+          // The event is only the aggregate `ready` flag; `checks` stays from the snapshot.
           status: event.ready ? "ready" : "not ready",
         },
       };
@@ -147,8 +131,7 @@ export function applyStreamEvent(data: DashboardData, event: StreamEvent): Dashb
       const rooms = data.rooms.rooms.map((room) => {
         const alreadyMember = room.members.some((member) => member.qualifiedId === qualifiedId);
         const shouldAdd = roomId === room.id;
-        // Idempotent on replay: the member's presence already matches the
-        // event, so leave the room untouched rather than invert the change.
+        // Idempotent on replay: leave the room untouched when membership already matches.
         if (alreadyMember === shouldAdd) return room;
         changed = true;
         return {
@@ -168,29 +151,19 @@ export function applyStreamEvent(data: DashboardData, event: StreamEvent): Dashb
       return data;
 
     default:
-      // An unknown or newly-introduced category (the frame is parsed without
-      // validating `category`) degrades to a no-op rather than storing
-      // `undefined` and crashing the next render.
+      // An unknown category degrades to a no-op rather than storing `undefined`.
       return data;
   }
 }
 
 /**
  * Buffers stream deltas while a snapshot is in flight, then replays them in
- * arrival order before switching to live application (specs/cli "Realtime
- * Dashboard Updates").
- *
- * The dashboard subscribes to the stream before (or atomically with) taking a
- * snapshot. A delta that arrives before the snapshot resolves would otherwise
- * be overwritten by the snapshot's wholesale `setData`; buffering it and
- * replaying it through {@link applyStreamEvent} after the snapshot loses
- * nothing. On a re-snapshot (`fell_behind`, reconnect) the gate is closed again
- * so deltas that arrive during the re-read are replayed the same way.
+ * arrival order before switching to live application.
  */
 export interface DeltaGate {
   /**
-   * Accept an event. While the gate is closed the event is buffered and `[]` is
-   * returned; while open the event is returned for immediate application.
+   * Accept an event: buffered (returning `[]`) while the gate is closed,
+   * returned for immediate application while open.
    */
   accept(event: StreamEvent): StreamEvent[];
   /**

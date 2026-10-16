@@ -1,8 +1,6 @@
 /**
- * Weather view derivation (specs/weather-services; specs/web-ui "Weather
- * View"; design.md D8). Pure and DOM-free so the presentation rules it
- * encodes — the unconfigured marker, compass labels — are reachable by
- * `bun test`.
+ * Weather view derivation: compass labels, unconfigured-state detection, and
+ * forecast formatting.
  */
 
 import type { WeatherData, WeatherUnavailable } from "@ts-ha/shared";
@@ -17,8 +15,7 @@ export function windDirectionLabel(degrees: number): string {
 
 /**
  * Whether the endpoint reported the feature as unconfigured rather than
- * returning conditions. The two cases — no service registered, no resolvable
- * location — are the same user-facing state (design.md D8).
+ * returning conditions.
  */
 export function isWeatherUnavailable(
   value: WeatherData | WeatherUnavailable,
@@ -33,7 +30,7 @@ export function unavailableMessage(reason: WeatherUnavailable["reason"]): string
     : "No weather service is registered. Add a weather service to your engine's services map to show conditions here.";
 }
 
-/** Formats a `YYYY-MM-DD` forecast date as a local weekday label, falling back to the raw string. */
+/** Formats a `YYYY-MM-DD` forecast date as a local weekday label. */
 export function formatForecastDate(date: string): string {
   const [year, month, day] = date.split("-").map(Number);
   if (!year || !month || !day) return date;

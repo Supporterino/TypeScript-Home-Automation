@@ -2,22 +2,14 @@ import type { Hono } from "hono";
 import { clientAcceptsGzip, selectAssetBody } from "./assets/asset-types.js";
 import { ASSETS } from "./assets/manifest.js";
 
-/**
- * Build a sub-path relative to the UI base path, handling the root case.
- *   subpath("/status", "assets/x.js") → "/status/assets/x.js"
- *   subpath("/", "assets/x.js")       → "/assets/x.js"
- */
+/** Build a sub-path relative to the UI base path, handling the root case. */
 function subpath(basePath: string, suffix: string): string {
   return basePath === "/" ? `/${suffix}` : `${basePath}/${suffix}`;
 }
 
 /**
- * Register the content-addressed asset routes beneath the UI path.
- *
- * Assets are unauthenticated (the shell must load before a session exists)
- * and carry no instance data, so this is safe. Each response is served
- * gzip-compressed when the client accepts it, and immutably cached — the
- * URL itself changes whenever the content does (design.md D8, D26).
+ * Register the content-addressed asset routes beneath the UI path. Assets are
+ * unauthenticated and immutably cached; the URL changes with the content.
  */
 export function registerAssetRoutes(app: Hono, basePath: string): void {
   app.get(subpath(basePath, "assets/:fileName"), (c) => {
@@ -34,19 +26,15 @@ export function registerAssetRoutes(app: Hono, basePath: string): void {
     };
     if (contentEncoding) headers["Content-Encoding"] = contentEncoding;
 
-    // Built as a plain Response rather than c.body(): Hono's body helper
-    // narrows to Uint8Array<ArrayBuffer>, which the base64-decoded buffer
-    // does not structurally satisfy.
+    // Plain Response, not c.body(): Hono narrows to Uint8Array<ArrayBuffer>,
+    // which the decoded buffer does not satisfy.
     return new Response(body as BodyInit, { status: 200, headers });
   });
 }
 
 /**
- * URLs of every asset required for first paint, in manifest order.
- *
- * Only scripts and stylesheets are referenced from the document; first-paint
- * fonts are fetched by the stylesheet's own `@font-face` url and must not be
- * emitted as `<script>`/`<link>` tags here.
+ * URLs of every asset required for first paint, in manifest order. Only scripts
+ * and stylesheets; first-paint fonts load via the stylesheet's `@font-face`.
  */
 export function firstPaintAssetUrls(basePath: string): { js: string[]; css: string[] } {
   const js: string[] = [];

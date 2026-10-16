@@ -1,10 +1,7 @@
 /**
- * Unit tests for the unified, descriptor-driven HAP factory (task 6.16).
- *
- * Mirrors `homekit-accessory-factory.test.ts`'s lightweight hap-nodejs mock
- * pattern (chacha20-poly1305 is unavailable under Bun), extended with the
- * Outlet/WindowCovering services and characteristics this factory also
- * projects.
+ * Unit tests for the unified, descriptor-driven HAP factory, mirroring
+ * `homekit-accessory-factory.test.ts`'s hap-nodejs mock pattern (chacha20-poly1305 is
+ * unavailable under Bun) with the Outlet/WindowCovering projections added.
  */
 import { beforeAll, describe, expect, it, mock } from "bun:test";
 import type { Capability } from "@ts-ha/shared";
@@ -404,7 +401,7 @@ describe("createAccessoryFromDescriptor", () => {
     });
   });
 
-  describe("UUID seeding (frozen per source, task 6.15)", () => {
+  describe("UUID seeding (frozen per source)", () => {
     it("seeds a Zigbee accessory from the IEEE address alone", () => {
       const created = factory.createAccessoryFromDescriptor(
         descriptor({
@@ -447,12 +444,10 @@ describe("createAccessoryFromDescriptor", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Multi-channel Shelly fan-out (task 4.2): one accessory per channel, keyed by
-// the descriptor's `shelly:<id>` seed. A rename changes the id and therefore
-// the accessory identity, which forces a re-pair.
+// Multi-channel Shelly fan-out: one accessory per channel, keyed by the descriptor's seed.
 // ---------------------------------------------------------------------------
 
-describe("Shelly multi-channel HomeKit fan-out (task 4.2)", () => {
+describe("Shelly multi-channel HomeKit fan-out", () => {
   const channelIds = [
     "pro4pm_channel_0",
     "pro4pm_channel_1",

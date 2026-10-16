@@ -1,23 +1,6 @@
 /**
- * The wall's paged tile grid (wall-zones-and-fit D5, D12; specs/wall-display
- * "Panel Fit", "Widget Catalog"). A wall widget whose own content can exceed the
- * span it was placed at pages it rather than overflowing or scrolling: one page at
- * a time, on a uniform grid, with touch page controls — so no wall widget ever
- * scrolls. The page plan comes from the shared pure pagination layer
- * (`wall/pages.ts`), which the device grid, the favorites grid, and the room grid
- * all resolve through, so they page by one rule.
- *
- * The tiles themselves are supplied by the caller, so each widget keeps its own
- * single-sourced card (`WallDeviceCard`, the tile's own device class), its own
- * ordering, and its own empty and absent cases.
- *
- * A tile row is drawn at the height the plan resolved — the tile's own cell
- * bounded against inflation ({@link WallPagePlan.rowHeightPx}; design.md D4;
- * specs/wall-display "Paged Tile Sizing") — rather than stretched to the widget's
- * leftover height, so the rows the wall draws are the rows the plan resolved and
- * the widget centres the space it does not need. Each tile is handed that box
- * through `renderTile` (design.md D7), so the caller resolves the card's
- * composition from the box the tile is actually drawn in.
+ * The wall's paged tile grid: draws one page of caller-supplied tiles with touch
+ * page controls, so no wall widget ever scrolls.
  */
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { type ReactNode, useState } from "react";
@@ -27,11 +10,8 @@ import { resolvePagedTiles, WALL_CONTROL_GAP_PX, WALL_TILE_GAP_PX } from "../pag
 import type { WallWidgetSpan } from "../registry.js";
 
 /**
- * The box a paged tile is drawn into (design.md D4, D7; specs/wall-display
- * "Paged Tile Sizing"): the height the page plan resolved for the tile's row,
- * handed to the caller through {@link PagedTileGrid}'s `renderTile` so the tile
- * composes for the box it is drawn in — in every widget that pages — rather than
- * for the widget that surrounds it.
+ * The box a paged tile is drawn into: the height the page plan resolved for the
+ * tile's row.
  */
 export interface WallTileBox {
   /** The tile row's resolved height, in CSS pixels — the plan's `rowHeightPx`. */
@@ -54,23 +34,17 @@ export function PagedTileGrid<T>({
   keyOf: (item: T) => string;
   /**
    * The tile itself; the caller owns the card and resolves its composition from
-   * the box it is handed (design.md D7). The box is the height the plan drew the
-   * tile's row at, so the caller's card composes for the box it is drawn in.
+   * the box it is handed.
    */
   renderTile: (item: T, box: WallTileBox) => ReactNode;
   span: WallWidgetSpan;
   rowUnit: number;
   /**
-   * The grid rows the widget's own chrome — whatever it draws above the tiles,
-   * such as its header and count — consumes at the resolved row unit, so the page
-   * never promises a tile row the card cannot show.
+   * The grid rows the widget's own chrome consumes at the resolved row unit.
    */
   reservedRows?: number;
   /**
-   * Whether the widget configures a title. The frame draws it inside the same cell
-   * above the renderer, so the plan reserves it too — otherwise a titled card's
-   * tile rows would be squeezed under the compact budget the minimum spans are
-   * derived against (wall-zones-and-fit D3, D4).
+   * Whether the widget configures a title, which the plan reserves for.
    */
   titled?: boolean;
   /** What the controls page, for their accessible names — "devices", "favorites". */
@@ -95,27 +69,17 @@ export function PagedTileGrid<T>({
         flex: 1,
         minHeight: 0,
         flexDirection: "column",
-        // The gap above the page-control row, drawn at the value the plan
-        // reserved for it (`WALL_CONTROL_GAP_PX`) rather than one of the
-        // renderer's own, so the drawn chrome is the plan's reservation and a
-        // promised page never clips (`wall/pages.ts`).
+        // The gap above the page-control row, at the value the plan reserved.
         gap: `${WALL_CONTROL_GAP_PX}px`,
       }}
     >
-      {/* One page's tiles, on a uniform grid sized to the plan: each row is drawn
-          at the height the plan resolved for the tile's own cell, and the block is
-          centred in the space the widget's leftover height provides rather than
-          stretched into it (specs/wall-display "Paged Tile Sizing"). The area is
-          clipped rather than scrollable, so the wall never scrolls (specs/
-          wall-display "Panel Fit"). */}
+      {/* One page's tiles, on a uniform grid sized to the plan, clipped not scrollable. */}
       <div
         style={{
           display: "grid",
           gridTemplateColumns: `repeat(${page.tilesAcross}, minmax(0, 1fr))`,
           gridTemplateRows: `repeat(${page.rows}, ${page.rowHeightPx}px)`,
-          // The inter-tile gap the plan packed the rows by, drawn at the same
-          // value (`WALL_TILE_GAP_PX`), so the rows the plan promises are the
-          // rows the wall draws.
+          // The inter-tile gap the plan packed the rows by.
           gap: `${WALL_TILE_GAP_PX}px`,
           alignContent: "center",
           flex: 1,
@@ -133,13 +97,9 @@ export function PagedTileGrid<T>({
         ))}
       </div>
 
-      {/* The page affordance, drawn only while the content pages. Each control is
-          the vocabulary's own ported control — the ported control height and
-          radius, spaced by the ported control spacing — in a row that draws no
-          inset: the plan reserves this row at the ported control height alone, so
-          the row the wall draws is the row the plan promised. */}
+      {/* The page affordance, drawn only while the content pages. */}
       {page.pageCount > 1 && (
-        <WallCardActions inset={false}>
+        <WallCardActions inset={false} distribution="distributed">
           <WallCardIconButton
             label={`Show the previous page of ${label}`}
             disabled={page.page === 0}

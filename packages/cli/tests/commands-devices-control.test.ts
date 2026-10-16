@@ -8,8 +8,6 @@ import {
   unassignDeviceRoom,
 } from "../src/commands/devices.js";
 
-// specs/cli "Command Surface" / "Device Addressing" (task 3.2).
-
 const originalLog = console.log;
 const originalError = console.error;
 const originalExit = process.exit;

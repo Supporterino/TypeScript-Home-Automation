@@ -7,25 +7,19 @@ import type { MqttMessageHandler, MqttService } from "../mqtt/mqtt-service.js";
 import { mapZ2MExposes } from "./z2m-mapper.js";
 
 /**
- * Persistence options for the `DeviceRegistry`.
- *
- * When `persist` is `true`, both the device list and last-known device states
- * are saved to a JSON file on shutdown and restored on startup. Incoming MQTT
- * data always overwrites restored values on arrival, so persisted data is
- * never a source of truth — it is only a cold-start seed.
+ * Persistence options for the `DeviceRegistry`: when `persist` is true, the device list
+ * and last-known states are saved on shutdown and restored as a cold-start seed.
  */
 export interface DeviceRegistryPersistenceOptions {
   /**
-   * Whether to persist the device list and state to disk on shutdown
-   * and restore them on startup.
+   * Whether to persist the device list and state on shutdown and restore on startup.
    *
    * @default true
    */
   persist?: boolean;
 
   /**
-   * Path to the JSON file for device registry persistence.
-   * Only used when `persist` is `true`.
+   * Path to the JSON file for device registry persistence; used when `persist` is true.
    *
    * @default "./device-registry.json"
    */
@@ -40,57 +34,24 @@ export type DeviceStateChangeHandler = (
 export type DeviceAddedHandler = (device: ZigbeeDevice) => void;
 export type DeviceRemovedHandler = (device: ZigbeeDevice) => void;
 
-/** Fired whenever a `bridge/groups` message changes the tracked group set (task 1.5). */
+/** Fired whenever a `bridge/groups` message changes the tracked group set. */
 export type GroupsChangedHandler = () => void;
 
 /**
- * Human-readable name mappings for Zigbee2MQTT devices.
- *
- * Resolution order in `DeviceRegistry.getNiceName()`:
- * 1. Explicit per-device entry in `devices`
- * 2. Result of `transform(friendlyName)` if provided
- * 3. Raw `friendly_name` as-is
- *
- * @example
- * ```ts
- * const engine = createEngine({
- *   automationsDir: "...",
- *   deviceRegistry: {
- *     names: {
- *       devices: {
- *         "kitchen_motion_0x1a2b": "Kitchen Motion Sensor",
- *         "living_room_bulb": "Living Room Lamp",
- *       },
- *       transform: (name) => name.replace(/_/g, " "),
- *     },
- *   },
- * });
- * ```
+ * Human-readable name mappings for Zigbee2MQTT devices: an explicit per-device map plus
+ * a fallback transform.
  */
 export interface DeviceNiceNames {
-  /**
-   * Per-device overrides. Key is the Zigbee2MQTT `friendly_name`,
-   * value is the human-readable display name.
-   */
+  /** Per-device overrides: `friendly_name` → display name. */
   devices?: Record<string, string>;
 
-  /**
-   * Global fallback transform applied when no per-device entry exists.
-   * Receives the raw `friendly_name` and returns a display name.
-   */
+  /** Fallback transform applied when no per-device entry exists. */
   transform?: (friendlyName: string) => string;
 }
 
 /**
- * Discovers Zigbee2MQTT devices and tracks their state.
- *
- * When enabled, this service:
- * 1. Subscribes to `{prefix}/bridge/devices` to build a device list.
- * 2. Subscribes to `{prefix}/bridge/event` to react to join/leave events.
- * 3. Maintains per-device MQTT subscriptions to track live state.
- *
- * Device state updates are **merged** — a partial update (e.g. only `brightness`)
- * is applied on top of the previously-known state, mirroring Zigbee2MQTT behaviour.
+ * Discovers Zigbee2MQTT devices and tracks their state, subscribing to `bridge/devices`
+ * and `bridge/event`. Device state updates are merged onto the previously-known state.
  */
 export class DeviceRegistry {
   /** Keyed by `friendly_name`. */
@@ -99,7 +60,7 @@ export class DeviceRegistry {
   /** Last-known state per device, keyed by `friendly_name`. */
   private readonly deviceStates: Map<string, Record<string, unknown>> = new Map();
 
-  /** Keyed by numeric group id (design.md D2). */
+  /** Keyed by numeric group id. */
   private readonly groups: Map<number, ZigbeeGroup> = new Map();
 
   /** Handlers fired whenever a `bridge/groups` message changes the tracked set. */
@@ -168,10 +129,7 @@ export class DeviceRegistry {
         this.deviceStates.set(name, state);
       }
 
-      // Restore tracked groups. A snapshot written before groups were
-      // persisted has no `groups` key, which loads as an empty list rather
-      // than an error (D6, specs/device-registry "An older snapshot without
-      // groups still loads").
+      // Restore tracked groups; a snapshot without a `groups` key loads as an empty list.
       for (const group of parsed.groups ?? []) {
         this.groups.set(group.id, group);
       }
@@ -340,10 +298,7 @@ export class DeviceRegistry {
     return this.groups.get(id);
   }
 
-  /**
-   * Register a handler that fires once per `bridge/groups` message that
-   * changes the tracked set (task 1.5).
-   */
+  /** Register a handler that fires once per `bridge/groups` message that changes the set. */
   onGroupsChanged(handler: GroupsChangedHandler): void {
     this.groupsChangedHandlers.add(handler);
   }
@@ -354,14 +309,8 @@ export class DeviceRegistry {
   }
 
   /**
-   * Return a human-readable display name for the given `friendly_name`.
-   *
-   * Resolution order:
-   * 1. Explicit per-device entry from `DeviceNiceNames.devices`
-   * 2. Result of `DeviceNiceNames.transform(friendlyName)`
-   * 3. Raw `friendly_name` as-is
-   *
-   * Works even before the device has been seen on the network.
+   * Return a human-readable display name for `friendly_name` (per-device entry, then
+   * transform, else the raw name); works before the device is seen on the network.
    */
   getNiceName(friendlyName: string): string {
     return (
@@ -430,10 +379,9 @@ export class DeviceRegistry {
   // ---------------------------------------------------------------------------
 
   /**
-   * Maps a device's `definition.exposes` from the raw Zigbee2MQTT shape into
-   * the source-neutral capability vocabulary (design.md D22). Returns a new
-   * device object; the incoming object (and its raw `exposes` payload as
-   * published on the wire) is left untouched.
+   * Map a device's `definition.exposes` from the raw Zigbee2MQTT shape into the
+   * source-neutral capability vocabulary, returning a new object and leaving the input
+   * untouched.
    */
   private mapExposes(device: ZigbeeDevice): ZigbeeDevice {
     if (!device.definition) return device;
@@ -487,14 +435,8 @@ export class DeviceRegistry {
   }
 
   /**
-   * Handle a payload from `{prefix}/bridge/groups`.
-   * Diffs the incoming list against the currently tracked groups: additions,
-   * in-place updates (e.g. a rename or membership change), and removals
-   * (task 1.3; specs/zigbee-groups "Group Discovery").
-   *
-   * A malformed payload — not a list, or an entry missing a numeric `id` or
-   * a string `friendly_name` — is skipped with a warning rather than
-   * aborting the update (task 1.4).
+   * Handle a `{prefix}/bridge/groups` payload, diffing it against the tracked groups
+   * (additions, in-place updates, removals); a malformed payload is skipped with a warning.
    */
   private handleBridgeGroups(incoming: ZigbeeGroup[]): void {
     if (!Array.isArray(incoming)) {

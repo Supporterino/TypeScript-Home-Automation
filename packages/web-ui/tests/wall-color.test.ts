@@ -12,11 +12,8 @@ import {
 } from "../src/app/wall/cards/color.js";
 
 /**
- * The ported device-colour handling (design.md D7; specs/wall-display "Wall
- * Visual Language"). `improveColorContrast` is Mushroom's own
- * (`src/cards/light-card/utils.ts`): saturation below 0.4 is raised to 0.4, and a
- * near-grey below 0.1 has its value lifted to 225 instead. The boundaries are
- * asserted exactly, since a card's whole colour treatment hangs off them.
+ * The ported device-colour handling. `improveColorContrast` is Mushroom's own: saturation
+ * below 0.4 is raised to 0.4, and a near-grey below 0.1 has its value lifted to 225.
  */
 
 /** The maximum channel of an RGB triple — the value an HSV round-trip preserves. */

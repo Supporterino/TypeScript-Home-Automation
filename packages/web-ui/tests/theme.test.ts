@@ -2,11 +2,8 @@ import { describe, expect, it } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
-// Pure test — no DOM. It parses the shipped Tailwind entry stylesheet
-// (`styles/app.css`, the single source of the Lumen tokens) and asserts the
-// design-system contract directly against the declared blocks, so a token
-// drift fails here (design.md D3, D4; specs/web-ui "Visual Design System",
-// "Self-Hosted Typography").
+// Pure test — no DOM. It parses the shipped Tailwind entry stylesheet (`styles/app.css`,
+// the single source of the Lumen tokens) and asserts the design-system contract.
 
 const APP_DIR = join(import.meta.dirname, "../src/app");
 const CSS = readFileSync(join(APP_DIR, "styles/app.css"), "utf8");

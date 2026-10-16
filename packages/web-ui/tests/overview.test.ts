@@ -2,9 +2,8 @@ import { describe, expect, it } from "bun:test";
 import { isDeviceOn, isMotionActive, summarizeDevices } from "../src/app/lib/overview.js";
 import type { Capability, DeviceDescriptor } from "../src/app/types.js";
 
-// Pure summary derivation — no DOM. It reads the same descriptors the store
-// holds, so a streamed device event that mutates a descriptor's state/reachability
-// produces a new summary (design.md D4; specs/web-ui "Overview Landing").
+// Pure summary derivation — no DOM. It reads the same descriptors the store holds, so a
+// streamed device event produces a new summary.
 
 function makeDevice(overrides: Partial<DeviceDescriptor> = {}): DeviceDescriptor {
   return {

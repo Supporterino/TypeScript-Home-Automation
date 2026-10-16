@@ -9,9 +9,8 @@ import {
 } from "../src/app/lib/device-tile-state.js";
 import type { DeviceDescriptor } from "../src/app/types.js";
 
-// Pure non-color state encoding — no DOM. Each state must be distinguishable
-// by its label and icon shape as well as its token, so the tile stays usable
-// when color is removed (specs/web-ui "Device Tile Presentation"; task 9.2).
+// Pure non-color state encoding — no DOM. Each state must be distinguishable by its
+// label and icon shape as well as its token, so the tile stays usable without color.
 
 function makeDevice(overrides: Partial<DeviceDescriptor> = {}): DeviceDescriptor {
   return {

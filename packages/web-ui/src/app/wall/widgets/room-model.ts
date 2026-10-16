@@ -1,22 +1,13 @@
 /**
- * Pure member selection for the wall room widget (design.md D7;
- * specs/wall-display "Widget Catalog"; specs/wall-display "A room widget
- * commands the room").
- *
- * A room command is best-effort and must address exactly the members the
- * batch endpoint will attempt to actuate: available devices that declare a
- * writable on/off capability. Report-only members — and members whose device
- * is no longer known — are excluded here, so the widget never optimistically
- * commands something the endpoint would skip. Kept DOM-free so the selection
- * is testable.
+ * Pure member selection for the wall room widget: the available devices a room
+ * command will actuate, and the tiles the card presents.
  */
 
 import { type RoomCommandMember, supportsOnOffCommand } from "../../lib/room-command.js";
 import type { DeviceDescriptor, RoomMember } from "../../types.js";
 
 /**
- * The available, actuatable members of a room, in membership order — exactly
- * the set {@link groupOnOffCommand} should issue commands for.
+ * The available, actuatable members of a room, in membership order.
  */
 export function actuatableRoomMembers(members: readonly RoomMember[]): RoomCommandMember[] {
   const actuatable: RoomCommandMember[] = [];
@@ -39,13 +30,8 @@ export interface RoomTile {
 }
 
 /**
- * The tiles a room card presents, in the order the card has always drawn them
- * (design.md D13; specs/wall-display "Widget Catalog"): every available member —
- * each with its live device — then the members whose device is unavailable.
- *
- * The tile set is kept as data rather than built inline by the renderer, because
- * the card pages it through the wall's shared pagination layer
- * (wall-zones-and-fit D5; specs/wall-display "Panel Fit").
+ * The tiles a room card presents: every available member with its live device,
+ * then the members whose device is unavailable.
  */
 export function roomTiles(members: readonly RoomMember[]): RoomTile[] {
   const tiles: RoomTile[] = [];

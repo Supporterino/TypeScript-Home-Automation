@@ -2,14 +2,8 @@ import type { Logger } from "pino";
 import { INTERNAL_STATE_PREFIX, type StateManager } from "./state/state-manager.js";
 
 /**
- * Reserved-namespace prefix under which each device's hidden flag is
- * stored, keyed by the device's qualified identifier (design.md D7).
- *
- * Modelled on `ROOM_ASSIGNMENT_PREFIX` (`room-manager.ts`): one reserved
- * state key per device, written through `setInternal`/`deleteInternal` so
- * a single change is one atomic write with no intermediate state, and is
- * excluded from the public state API and the state SSE stream the same way
- * every other reserved key is (design.md D20).
+ * Reserved-namespace prefix under which each device's hidden flag is stored,
+ * keyed by the device's qualified identifier.
  */
 export const HIDDEN_PREFIX = `${INTERNAL_STATE_PREFIX}hidden:`;
 
@@ -27,18 +21,8 @@ export interface VisibilityChange {
 export type VisibilityChangeListener = (change: VisibilityChange) => void;
 
 /**
- * A persisted, per-device hidden flag (design.md D7; specs/device-visibility
- * "Per-Device Hidden Flag").
- *
- * Absence of `hiddenKey(qualifiedId)` means visible — unhiding deletes the
- * key rather than writing `false`, so the store holds only what the user
- * changed, and `listHidden()` enumerates exactly the hidden set.
- *
- * Deliberately does not take the device sources: hiding an unknown
- * qualified id is explicitly allowed (a device MAY be hidden before it is
- * known to the system), and staying device-free keeps this constructible
- * from `StateManager` alone, ahead of `AggregateDeviceSource` in
- * `createEngine()` (design.md D8).
+ * A persisted, per-device hidden flag; absence of `hiddenKey(qualifiedId)` means
+ * visible. Takes only `StateManager`, so an unknown id can be hidden.
  */
 export class DeviceVisibility {
   private readonly listeners: Set<VisibilityChangeListener> = new Set();

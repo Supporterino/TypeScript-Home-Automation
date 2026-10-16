@@ -1,23 +1,6 @@
 /**
- * The wall entity card (design.md D1, D3; specs/wall-display "Widget Catalog" —
- * "a name-and-state entity card for a device of no class"; "Wall Device
- * Presentation" — "The whole tile actuates a toggle", "A sensor is read-only").
- *
- * This is the wall's typed fallback — the wall's equivalent of Mushroom's own
- * generic card — so "no generic card" does not mean "no answer for an
- * unclassified device". It composes the ported anatomy in order: the leading
- * circular icon affordance, the device's name over its state.
- *
- * Where the device's primary action is a pure toggle, the whole card is the
- * actuation target and the icon affordance is the accessible control; where the
- * device has no actuatable property at all, the card presents its reading as its
- * dominant content with no control and no navigation affordance. A device whose
- * primary action is a value keeps its own card (never this one), so this card
- * never presents a control a bare activation could not express.
- *
- * The pure decisions — whether the device has a toggle, what the reading says —
- * are exported so they are reachable by `bun test` (design.md D23). Wall-chunk
- * only (design.md D10).
+ * The wall entity card: the typed fallback for a device of no class — a leading icon
+ * and the device's name over its state.
  */
 import type { Capability } from "@ts-ha/shared";
 import { readBooleanCapabilityValue } from "@ts-ha/shared";
@@ -43,9 +26,8 @@ import { WALL_CARD_GLYPH_SIZE, WALL_CARD_METRICS } from "./metrics.js";
 import type { WallDeviceCardProps } from "./types.js";
 
 /**
- * An entity's resolved model (design.md D1, D3). `toggle` is present only when
- * the device's ranked primary action is a pure on/off — the one case the whole
- * card may actuate; `readout` is the capability the state line reads.
+ * An entity's resolved model. `toggle` is present only when the device's ranked
+ * primary action is a pure on/off.
  */
 export interface WallEntityCardModel {
   toggle: FlatCapability | null;
@@ -53,11 +35,8 @@ export interface WallEntityCardModel {
 }
 
 /**
- * Resolves an entity's model from the same ranking the rest of the product uses
- * (design.md D1). A device whose primary action is not a pure toggle — a value,
- * or an unclassifiable writable — has no `toggle`, so the card presents no
- * control it could not drive (specs/wall-display "A control the device cannot
- * express MUST NOT be presented").
+ * Resolves an entity's model from the same ranking the rest of the product uses, so a
+ * non-toggle primary action offers no control.
  */
 export function entityCardModel(capabilities: Capability[]): WallEntityCardModel {
   const ranking = rankDeviceTile(capabilities);
@@ -73,10 +52,8 @@ export function entityCardWholeCardActuates(model: WallEntityCardModel): boolean
 }
 
 /**
- * The card's state line: the primary readout with its unit when the device
- * reports one, else the device's own on/off state ("On"/"Off"), else an em dash.
- * The value and unit stay one non-breaking unit (specs/wall-display "A value
- * stays with its unit").
+ * The card's state line: the primary readout with its unit, else the device's on/off
+ * state ("On"/"Off"), else an em dash.
  */
 export function entityCardReading(input: {
   readout: FlatCapability | undefined;
@@ -96,8 +73,7 @@ export function EntityCard({ device, config, box, contained }: WallDeviceCardPro
   const model = entityCardModel(device.capabilities);
   const disabled = !device.reachable;
 
-  // One optimistic channel for the toggle — called unconditionally with an
-  // absent property when there is none, so hook order is stable (design.md D12).
+  // Called unconditionally so hook order is stable.
   const toggleControl = useOptimisticDeviceProperty(
     device.qualifiedId,
     model.toggle?.property ?? "",
@@ -118,10 +94,7 @@ export function EntityCard({ device, config, box, contained }: WallDeviceCardPro
     ? {}
     : { background: "var(--hearth-surface-raised)", borderRadius: WALL_CARD_METRICS.radius };
 
-  // The card's own options (design.md D6): its layout and the box it was given.
-  // An entity card's control is the card itself — the whole surface actuates a
-  // toggle — so it has no actions row for `collapsible_controls` to hide, and
-  // `hasControls` is always `false`.
+  // An entity card's control is the card itself, so it has no actions row.
   const composition = resolveDeviceCardComposition({
     box: box ?? DEFAULT_WALL_CARD_BOX,
     layout: config?.layout,

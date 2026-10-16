@@ -1,12 +1,4 @@
-/**
- * The bounded in-memory log buffer (design.md D11; specs/wall-display
- * "Always-On Operation"; specs/web-ui "Logs").
- *
- * The data layer accumulates streamed log entries for the whole session, so
- * the buffer must never grow without limit. Extracted from `data-store.tsx`
- * as a pure module (design.md D23) so the bound is reachable by `bun test`
- * without a DOM.
- */
+/** The bounded in-memory log buffer that accumulates streamed log entries. */
 
 import type { LogEntry } from "../types.js";
 
@@ -14,10 +6,8 @@ import type { LogEntry } from "../types.js";
 export const LOG_BUFFER_CAPACITY = 500;
 
 /**
- * Appends `entry` to `logs`, dropping the oldest entries so the result never
- * exceeds `capacity` and always keeps the newest ones. `capacity` defaults to
- * {@link LOG_BUFFER_CAPACITY}; a caller may pass a smaller bound for a
- * deliberately smaller view.
+ * Appends `entry` to `logs`, dropping the oldest so the result never exceeds
+ * `capacity`. Defaults to {@link LOG_BUFFER_CAPACITY}.
  */
 export function applyLogRingBuffer(
   logs: readonly LogEntry[],

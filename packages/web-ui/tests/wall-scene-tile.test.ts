@@ -13,25 +13,18 @@ import {
 } from "../src/app/wall/span.js";
 import { WALL_TYPE_RAMP } from "../src/app/wall/type-ramp.js";
 import {
+  SCENE_COMPACT_HEIGHT_PX,
   SCENE_LARGE_GLYPH_PX,
   SCENE_MIN_SPAN,
   SCENE_ROW_HEIGHT_PX,
   SCENE_STACKED_HEIGHT_PX,
+  sceneTileInset,
   sceneTileLayout,
 } from "../src/app/wall/widgets/scene-model.js";
 
 /**
- * Structural assertions for the wall scene button (design.md D11, D14;
- * specs/wall-display "Scene Buttons Trigger Automations"). There is no DOM
- * harness here, so the render decisions — the full-bleed pressable tile, the
- * leading scene glyph + label anatomy, the explicit pressed/busy states, and the
- * unchanged trigger and error-surfacing path — are asserted against the
- * widget's source, the same style as `wall-card-archetypes.test.ts` /
- * `cover-transport.test.ts`. The pure trigger-request decision stays covered by
- * `wall-scene.test.ts`.
- *
- * Re-pointed at the shared Hearth card vocabulary (design.md D11, D14); each
- * assertion's intent is unchanged.
+ * Structural assertions for the wall scene button: the pressable tile, its glyph
+ * and label anatomy, and its explicit pressed/busy states.
  */
 const APP_DIR = join(import.meta.dir, "..", "src/app");
 const SCENE = join(APP_DIR, "wall/widgets/SceneWidget.tsx");
@@ -128,11 +121,8 @@ describe("the scene button is the wall's ported control", () => {
   it("draws the ported control height and radius rather than a treatment of its own", async () => {
     const source = await sceneSource();
 
-    // The tile's button is the vocabulary's labelled control (design.md W1;
-    // specs/wall-display "A control is the ported control"): the ported control
-    // height — the wall's touch target — and the ported control radius, drawn from
-    // the ported table rather than a radius the widget declares for itself, so a
-    // scene control and a card's control cannot differ.
+    // The tile's button is the vocabulary's labelled control: the ported control height
+    // — the wall's touch target — and the ported control radius, from the ported table.
     expect(source).toContain("minHeight: WALL_CARD_METRICS.controlHeight");
     expect(source).toContain("borderRadius: WALL_CARD_METRICS.controlRadius");
     expect(source).not.toContain("--hearth-radius-md");
@@ -143,9 +133,8 @@ describe("the scene button is the wall's ported control", () => {
     const source = await sceneSource();
     const anatomy = await readSource(ANATOMY);
 
-    // The label is the same line of type a device card's name is (design.md W1, W2;
-    // specs/wall-display "Supporting text is drawn at the ported sizes"): the
-    // vocabulary's label part, which falls back to the ported primary size.
+    // The label is the same line of type a device card's name is: the vocabulary's
+    // label part, which falls back to the ported primary size.
     expect(source).toContain("<WallCardLabel>");
     expect(anatomy).toContain("size ?? WALL_CARD_PRIMARY_FONT_SIZE");
   });
@@ -166,76 +155,111 @@ describe("scene button keeps its trigger and error path", () => {
 });
 
 describe("scene tile composes for its space (wall-zones-and-fit D3, D4, 4.2)", () => {
-  it("owns both its compositions' budgets, derived from the parts they draw", () => {
-    // The scene's budgets are the scene's *own* — the ~72 px glyph, the label's
-    // one line, and the button's inset — not the wall light card's full form
-    // (346 px), which the scene needs nowhere near. One budget per composition,
-    // each measured against what it actually needs.
-    expect(SCENE_ROW_HEIGHT_PX).toBe(
-      2 * SCENE_INSET_PX + Math.max(wallTileMetrics("wall").control, SCENE_LABEL_LINE_PX),
+  it("owns its compositions' budgets, derived from the parts they draw", () => {
+    // The scene's budgets are its *own* — the glyph, the label's one line, and the
+    // button's inset — not the wall light card's full form, which the scene does not need.
+    // The compact one-row form draws flush, so its budget is the parts alone.
+    expect(SCENE_COMPACT_HEIGHT_PX).toBe(
+      Math.max(wallTileMetrics("wall").control, SCENE_LABEL_LINE_PX),
     );
+    expect(SCENE_ROW_HEIGHT_PX).toBe(2 * SCENE_INSET_PX + SCENE_COMPACT_HEIGHT_PX);
     expect(SCENE_STACKED_HEIGHT_PX).toBe(
       2 * SCENE_INSET_PX + SCENE_LARGE_GLYPH_PX + 8 + SCENE_LABEL_LINE_PX,
     );
-    // The stacked composition is the taller one, and both hold the wall's touch
-    // target for the glyph tile they draw.
+    // The stacked composition is the taller one, the compact the shortest, and every
+    // composition holds the wall's touch target for the glyph tile it draws.
     expect(SCENE_STACKED_HEIGHT_PX).toBeGreaterThan(SCENE_ROW_HEIGHT_PX);
-    expect(SCENE_ROW_HEIGHT_PX).toBeGreaterThan(wallTileMetrics("wall").control);
+    expect(SCENE_ROW_HEIGHT_PX).toBeGreaterThan(SCENE_COMPACT_HEIGHT_PX);
+    expect(SCENE_COMPACT_HEIGHT_PX).toBeGreaterThanOrEqual(WALL_MIN_TOUCH_TARGET);
     expect(SCENE_LARGE_GLYPH_PX).toBeGreaterThanOrEqual(WALL_MIN_TOUCH_TARGET);
     // Far below the ported card's full stack, which the scene is never measured
     // against: that budget is what kept this tile on the row at every legal span.
     expect(SCENE_STACKED_HEIGHT_PX).toBeLessThan(WALL_FULL_CARD_HEIGHT_PX);
   });
 
-  it("resolves each composition at its own budget's threshold", () => {
-    // A card larger than the type's minimum span, so the box alone decides.
-    const larger = { w: SCENE_MIN_SPAN.w + 2, h: SCENE_MIN_SPAN.h + 2 };
+  it("resolves the compact form at a one-row placement and the framed forms above it", () => {
+    for (const rowUnit of [ROW_UNIT_MIN, ROW_UNIT_MAX]) {
+      expect(
+        sceneTileLayout({ rendererHeightPx: rowUnit, placement: SCENE_MIN_SPAN }),
+        `${rowUnit}px row unit`,
+      ).toBe("compact");
+    }
+    // The compact one-row form draws flush; the framed row and stack share the button's
+    // inset, so the whole cell is the target only where there is no surface.
+    expect(sceneTileInset("compact")).not.toBe(sceneTileInset("row"));
+    expect(sceneTileInset("row")).toBe(sceneTileInset("column"));
+  });
 
-    expect(sceneTileLayout({ rendererHeightPx: SCENE_STACKED_HEIGHT_PX, placement: larger })).toBe(
+  it("resolves each framed composition at its own budget's threshold", () => {
+    // A placement above the type's one-row minimum, so the box alone decides between
+    // the framed row and the framed stack.
+    const above = { w: SCENE_MIN_SPAN.w, h: SCENE_MIN_SPAN.h + 1 };
+
+    expect(sceneTileLayout({ rendererHeightPx: SCENE_STACKED_HEIGHT_PX, placement: above })).toBe(
       "column",
     );
     expect(
-      sceneTileLayout({ rendererHeightPx: SCENE_STACKED_HEIGHT_PX - 1, placement: larger }),
+      sceneTileLayout({ rendererHeightPx: SCENE_STACKED_HEIGHT_PX - 1, placement: above }),
     ).toBe("row");
-    expect(sceneTileLayout({ rendererHeightPx: SCENE_ROW_HEIGHT_PX, placement: larger })).toBe(
-      "row",
-    );
-    // Below the row's own budget the tile still resolves the row — the frame is
-    // what guarantees such a box never reaches it (the test below).
-    expect(sceneTileLayout({ rendererHeightPx: SCENE_ROW_HEIGHT_PX - 1, placement: larger })).toBe(
+    expect(sceneTileLayout({ rendererHeightPx: SCENE_ROW_HEIGHT_PX, placement: above })).toBe(
       "row",
     );
   });
 
-  it("draws the row in every box the frame lets through", () => {
-    // The frame only renders a card whose box holds the box a minimum-span card
-    // gets (`frame.ts`'s `minimumRendererBoxHeightPx`), and that floor — the scene
-    // is a `control` widget, so its cell minus the frame's inset — already holds
-    // the row's own budget. The tile therefore needs no sub-budget case: whatever
-    // the frame passes composes without clipping.
+  it("keeps a one-row scene within its cell, at or above the wall's touch target", () => {
+    // The chrome-less renderer box is the whole cell, and the compact composition fits
+    // it: the wall's minimum touch target is the floor the row unit holds.
     for (const rowUnit of [ROW_UNIT_MIN, ROW_UNIT_MAX]) {
-      const floor = minimumRendererBoxHeightPx({
+      const box = rendererBoxHeightPx({
+        cellHeightPx: cardHeightPx({ rows: 1, rowUnit }),
+        framed: false,
+        titled: false,
+      });
+      expect(box).toBe(cardHeightPx({ rows: 1, rowUnit }));
+      expect(box).toBeGreaterThanOrEqual(SCENE_COMPACT_HEIGHT_PX);
+      expect(box).toBeGreaterThanOrEqual(WALL_MIN_TOUCH_TARGET);
+      expect(sceneTileLayout({ rendererHeightPx: box, placement: SCENE_MIN_SPAN })).toBe("compact");
+    }
+    // The tight case: the wall's shortest row unit still holds its touch target.
+    expect(cardHeightPx({ rows: 1, rowUnit: ROW_UNIT_MIN })).toBeGreaterThanOrEqual(
+      WALL_MIN_TOUCH_TARGET,
+    );
+  });
+
+  it("explains a titled one-row scene instead of drawing a sub-target control", () => {
+    // A title shrinks the chrome-less renderer box below the box a minimum-span scene
+    // gets, so the frame's contained explanation stands in — never a sub-42px control.
+    for (const rowUnit of [ROW_UNIT_MIN, ROW_UNIT_MAX]) {
+      const minimumBox = minimumRendererBoxHeightPx({
         descriptor: WALL_WIDGET_REGISTRY.scene,
         rowUnit,
-        framed: true,
+        framed: false,
       });
-      expect(floor, `the frame's floor at ${rowUnit}px rows holds the row`).toBeGreaterThanOrEqual(
-        SCENE_ROW_HEIGHT_PX,
-      );
-      expect(sceneTileLayout({ rendererHeightPx: floor, placement: SCENE_MIN_SPAN })).toBe("row");
+      const titledBox = rendererBoxHeightPx({
+        cellHeightPx: cardHeightPx({ rows: 1, rowUnit }),
+        framed: false,
+        titled: true,
+      });
+      expect(titledBox).toBeLessThan(minimumBox);
+      expect(
+        composesMinimumSpan({
+          placement: SCENE_MIN_SPAN,
+          descriptor: WALL_WIDGET_REGISTRY.scene,
+          rendererHeightPx: titledBox,
+          minimumRendererHeightPx: minimumBox,
+        }),
+      ).toBe(false);
     }
   });
 
   it("mirrors the registry's own minimum span for the scene type", () => {
     expect(SCENE_MIN_SPAN).toEqual(WALL_WIDGET_REGISTRY.scene.min);
+    expect(SCENE_MIN_SPAN).toEqual({ w: 2, h: 1 });
   });
 
-  it("keeps the type's minimum span off the stacked composition", () => {
-    // The scene's own minimum span is the second gate: even where the box affords
-    // the stacked budget, the minimum-span card composes the row, so a box-only
-    // rule could not draw the type's *minimum* composition identically to every
-    // larger span — which the "a card at a larger span MUST NOT repeat the
-    // composition it renders at a smaller span" requirement forbids.
+  it("keeps a one-row placement compact even where the box affords the stack", () => {
+    // The scene's own one-row minimum is the first gate: even where the renderer box
+    // affords the stacked budget, a one-row placement composes the compact form.
     const largeBox = rendererBoxHeightPx({
       cellHeightPx: cardHeightPx({ rows: SCENE_MIN_SPAN.h + 2, rowUnit: ROW_UNIT_MAX }),
       framed: true,
@@ -245,24 +269,19 @@ describe("scene tile composes for its space (wall-zones-and-fit D3, D4, 4.2)", (
 
     expect(
       sceneTileLayout({ rendererHeightPx: largeBox, placement: SCENE_MIN_SPAN }),
-      "the minimum span keeps the row even where the box affords the stack",
-    ).toBe("row");
-    for (const placement of [
-      { w: SCENE_MIN_SPAN.w + 1, h: SCENE_MIN_SPAN.h },
-      { w: SCENE_MIN_SPAN.w, h: SCENE_MIN_SPAN.h + 1 },
-    ]) {
-      expect(
-        sceneTileLayout({ rendererHeightPx: largeBox, placement }),
-        `${placement.w}×${placement.h} takes the stack`,
-      ).toBe("column");
-    }
+      "the one-row minimum keeps the compact form even where the box affords the stack",
+    ).toBe("compact");
+    expect(
+      sceneTileLayout({
+        rendererHeightPx: largeBox,
+        placement: { w: SCENE_MIN_SPAN.w, h: SCENE_MIN_SPAN.h + 1 },
+      }),
+    ).toBe("column");
   });
 
   it("keeps the row where the box cannot hold the taller composition", () => {
-    // A two-row cell at the floors gives the renderer 96 px — the row, not the
-    // stacked composition — however wide it is. A wide-but-short cell is
-    // `regular` by area while still only two rows tall, and centring the large
-    // glyph there would clip it.
+    // A two-row cell at the floors gives the renderer 96 px — the row, not the stacked
+    // composition — however wide it is.
     for (const columns of [2, 4, 6]) {
       const box = rendererBoxHeightPx({
         cellHeightPx: cardHeightPx({ rows: 2, rowUnit: ROW_UNIT_MIN }),
@@ -276,14 +295,12 @@ describe("scene tile composes for its space (wall-zones-and-fit D3, D4, 4.2)", (
     }
   });
 
-  it("composes differently at a larger span than at its minimum", () => {
-    // specs/wall-display "Span-Aware Card Presentation": a card at a larger span
-    // MUST NOT repeat the composition it renders at a smaller span. The type's
-    // minimum keeps the row at every row unit; a larger span composes the stack
-    // wherever its box affords it — the 3–5 row band and a genuinely large card at
-    // both bounds, and a wider two-row card at the taller one.
+  it("composes differently at a larger span than at its one-row minimum", () => {
+    // A card at a larger span MUST NOT repeat the composition it renders at its
+    // one-row minimum: the one-row placement is compact, a larger span composes the
+    // framed row or stack.
     const descriptor = WALL_WIDGET_REGISTRY.scene;
-    expect(descriptor.min.h).toBe(2);
+    expect(descriptor.min.h).toBe(1);
 
     for (const rowUnit of [ROW_UNIT_MIN, ROW_UNIT_MAX]) {
       const boxFor = (rows: number): number =>
@@ -292,13 +309,18 @@ describe("scene tile composes for its space (wall-zones-and-fit D3, D4, 4.2)", (
           framed: true,
           titled: false,
         });
-      const affordsStack = boxFor(2) >= SCENE_STACKED_HEIGHT_PX;
 
       for (const columns of [2, 4, 6]) {
+        // The one-row cell is the compact form; the two-row cell is the framed row, its
+        // box too short for the stack at either row unit.
+        expect(
+          sceneTileLayout({ rendererHeightPx: boxFor(1), placement: { w: columns, h: 1 } }),
+          `${columns}×1 at ${rowUnit}px`,
+        ).toBe("compact");
         expect(
           sceneTileLayout({ rendererHeightPx: boxFor(2), placement: { w: columns, h: 2 } }),
           `${columns}×2 at ${rowUnit}px`,
-        ).toBe(columns === 2 ? "row" : affordsStack ? "column" : "row");
+        ).toBe("row");
         for (const rows of [3, 4, 5]) {
           expect(
             sceneTileLayout({ rendererHeightPx: boxFor(rows), placement: { w: columns, h: rows } }),
@@ -314,8 +336,8 @@ describe("scene tile composes for its space (wall-zones-and-fit D3, D4, 4.2)", (
       }
     }
 
-    // The crux: on a box that affords the stacked budget the scene's *own minimum
-    // span* is what keeps the minimum card's composition distinct from a larger
+    // The crux: on a box that affords the stacked budget, the scene's *own one-row
+    // minimum* is what keeps the minimum card's composition distinct from a larger
     // card's.
     const topBox = rendererBoxHeightPx({
       cellHeightPx: cardHeightPx({ rows: 4, rowUnit: ROW_UNIT_MAX }),
@@ -324,48 +346,43 @@ describe("scene tile composes for its space (wall-zones-and-fit D3, D4, 4.2)", (
     });
     expect(topBox).toBeGreaterThanOrEqual(SCENE_STACKED_HEIGHT_PX);
     const minimum = sceneTileLayout({ rendererHeightPx: topBox, placement: SCENE_MIN_SPAN });
-    const wider = sceneTileLayout({
+    const taller = sceneTileLayout({
       rendererHeightPx: topBox,
-      placement: { w: SCENE_MIN_SPAN.w + 2, h: SCENE_MIN_SPAN.h },
+      placement: { w: SCENE_MIN_SPAN.w, h: SCENE_MIN_SPAN.h + 1 },
     });
-    expect(minimum).toBe("row");
-    expect(wider).not.toBe(minimum);
+    expect(minimum).toBe("compact");
+    expect(taller).not.toBe(minimum);
   });
 
-  it("composes a composition that fits the box, for every card the frame renders", () => {
-    // Every legal placement, both row-unit bounds, titled and untitled, at the
-    // type's minimum span and above it. A card only reaches the tile when the
-    // frame's guard passes it — its box holds the box a minimum-span card gets
-    // (`frame.ts`'s `minimumRendererBoxHeightPx`); the ones the guard rejects are
-    // the frame's to explain, not the tile's (wall-frame.test.ts). For every card
-    // that does reach it, the composition it resolves fits the box.
+  it("composes a composition that fits the box, for every framed card the frame renders", () => {
+    // Every reachable framed placement — two rows and above — at both row-unit bounds:
+    // the composition it resolves fits the box. (A scene carries no title: its config
+    // is `{automation, label}`, so there is no titled scene cell to compose.)
     const descriptor = WALL_WIDGET_REGISTRY.scene;
 
     for (const rowUnit of [ROW_UNIT_MIN, ROW_UNIT_MAX]) {
       const minimumBox = minimumRendererBoxHeightPx({ descriptor, rowUnit, framed: true });
 
       for (const rows of [2, 3, 4, 5, 6]) {
-        for (const titled of [false, true]) {
-          for (const columns of [2, 4]) {
-            const where = `${columns}×${rows} at ${rowUnit}px, titled=${titled}`;
-            const placement = { w: columns, h: rows };
-            const box = rendererBoxHeightPx({
-              cellHeightPx: cardHeightPx({ rows, rowUnit }),
-              framed: true,
-              titled,
-            });
-            const renders = composesMinimumSpan({
-              placement,
-              descriptor,
-              rendererHeightPx: box,
-              minimumRendererHeightPx: minimumBox,
-            });
-            if (!renders) continue;
+        for (const columns of [2, 4]) {
+          const where = `${columns}×${rows} at ${rowUnit}px`;
+          const placement = { w: columns, h: rows };
+          const box = rendererBoxHeightPx({
+            cellHeightPx: cardHeightPx({ rows, rowUnit }),
+            framed: true,
+            titled: false,
+          });
+          const renders = composesMinimumSpan({
+            placement,
+            descriptor,
+            rendererHeightPx: box,
+            minimumRendererHeightPx: minimumBox,
+          });
+          if (!renders) continue;
 
-            const layout = sceneTileLayout({ rendererHeightPx: box, placement });
-            const budget = layout === "column" ? SCENE_STACKED_HEIGHT_PX : SCENE_ROW_HEIGHT_PX;
-            expect(budget, `${where} draws the ${layout} within its box`).toBeLessThanOrEqual(box);
-          }
+          const layout = sceneTileLayout({ rendererHeightPx: box, placement });
+          const budget = layout === "column" ? SCENE_STACKED_HEIGHT_PX : SCENE_ROW_HEIGHT_PX;
+          expect(budget, `${where} draws the ${layout} within its box`).toBeLessThanOrEqual(box);
         }
       }
     }
@@ -375,8 +392,7 @@ describe("scene tile composes for its space (wall-zones-and-fit D3, D4, 4.2)", (
     const source = await sceneSource();
 
     // The tile has no explanation path of its own: the frame's guard is the single
-    // place the wall explains a card it cannot render (specs/wall-display
-    // "Panel Fit"), and the guard's floor is above the row's own budget.
+    // place the wall explains a card it cannot render.
     expect(source).not.toContain("WallCardMessage");
     expect(source).not.toContain("WALL_TOO_SMALL_MESSAGE");
     expect(source).not.toContain('layout === "none"');
@@ -395,17 +411,13 @@ describe("scene tile composes for its space (wall-zones-and-fit D3, D4, 4.2)", (
     expect(source).toContain('flexDirection: stacked ? "column" : "row"');
     expect(source).toContain("data-layout={layout}");
     expect(source).toContain("const glyphSide = stacked ?");
+    expect(source).toContain("sceneTileInset(layout)");
     expect(source).toContain("SCENE_LARGE_GLYPH_SIZE");
   });
 
   it("audits every wall renderer that reads the area tier", async () => {
-    // The area tier answers "how much room the placement has", not "what fits the
-    // box" — a type whose `min` and `defaults` coincide is `regular` at any
-    // wider-but-short placement. Every widget-layer module that reads the tier must
-    // therefore use it for type scale only (or pass it through to the shared tile);
-    // a composition decision must consume the height-resolved renderer box and its
-    // own budget instead. A new module that reaches for the tier, or that selects a
-    // composition from the light card's form, fails here until it is classified.
+    // The area tier answers "how much room the placement has", not "what fits the box":
+    // every module that reads it must use it for type scale only.
     const TYPE_SCALE_ONLY: Record<string, readonly string[]> = {
       "TemperatureWidget.tsx": ["wallReadoutFontSize(tier)"],
       "LinkWidget.tsx": ["linkLabelFontSize(tier)"],

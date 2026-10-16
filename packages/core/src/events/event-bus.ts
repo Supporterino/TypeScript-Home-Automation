@@ -18,14 +18,9 @@ export type {
 } from "@ts-ha/shared";
 
 /**
- * A minimal typed publish/subscribe hub for {@link StreamEvent}s.
- *
- * Deliberately dumb: it does not know about connections, buffering, or
- * failure isolation — that belongs to whatever consumes the subscription
- * (the SSE delivery path; see `packages/core/src/http/event-stream.ts` and design.md
- * D32/R21). It exists so every producer (state manager, log buffer,
- * automation manager, engine readiness) can emit through one shared object
- * without depending on the HTTP layer.
+ * A minimal typed publish/subscribe hub for {@link StreamEvent}s. It knows nothing
+ * about connections, buffering, or failure isolation — those belong to the consumer
+ * (`http/event-stream.ts`) — so every producer can emit through one shared object.
  */
 export class EventBus {
   private readonly listeners: Set<StreamEventListener> = new Set();

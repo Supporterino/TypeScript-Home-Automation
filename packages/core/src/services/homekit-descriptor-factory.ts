@@ -1,31 +1,6 @@
 /**
- * Builds HAP accessories directly from the source-neutral `DeviceDescriptor`
- * model (design.md D22; task 6.16).
- *
- * This is the "HAP projection" side of D22's diagram — the single place that
- * turns the shared capability vocabulary into `hap-nodejs` services and
- * characteristics, for every device family at once, with no reference to
- * `ZigbeeDevice`, `ShellyDevice`, MQTT, or Shelly RPC. It reuses the
- * value-application helpers already exported by `homekit-accessory-factory.ts`
- * (`applyLightState`, `applyMotionState`, …) — those functions already take a
- * plain `Service` and `Record<string, unknown>` state, so nothing about them
- * was ever Zigbee-specific; only the old `createAccessory(device: ZigbeeDevice, …)`
- * entry point was, and that entry point is not used by this factory.
- *
- * Two conventions are unavoidably source-specific and are resolved once,
- * here, rather than left implicit:
- *
- * - **On/off encoding.** Zigbee2MQTT's on/off property is conventionally
- *   named `"state"` and takes the strings `"ON"`/`"OFF"`, not a JSON boolean
- *   — a Zigbee2MQTT wire-protocol fact, not a vocabulary one. Every other
- *   source authors its own on/off capability with `property: "on"` and a
- *   real boolean (design.md D22: Shelly and the state-toggle source both
- *   author their own schema). `onOffProperty()`/`readOnOff()`/`writeOnOff()`
- *   below hold this as the one deliberately-named special case.
- * - **UUID seeds.** Frozen per source by the task 6.15 characterisation
- *   test; this factory reuses the exact seed functions each old factory
- *   exported rather than deriving a new seed from `qualifiedId`, so this
- *   refactor changes no existing accessory's UUID and requires no re-pairing.
+ * Build HAP accessories directly from the source-neutral `DeviceDescriptor` model,
+ * turning the shared capability vocabulary into `hap-nodejs` services and characteristics.
  */
 
 import type { Capability } from "@ts-ha/shared";
@@ -65,20 +40,27 @@ export interface CreatedAccessory {
 }
 
 // ---------------------------------------------------------------------------
-// UUID seeding — frozen per source (task 6.15)
+// UUID seeding
 // ---------------------------------------------------------------------------
 
-function uuidSeedFor(descriptor: DeviceDescriptor): string {
+/**
+ * The seed string fed into `uuid.generate()` for an accessory, frozen per source;
+ * exported so the characterisation test can assert it without importing `hap-nodejs`.
+ */
+export function uuidSeedFor(
+  descriptor: Pick<DeviceDescriptor, "source" | "id" | "qualifiedId">,
+): string {
   switch (descriptor.source) {
-    // Matches the frozen `zigbeeAccessoryUuidSeed(device)`, which is exactly
-    // `device.ieee_address` — the Zigbee device source's stable identity,
-    // carried unchanged as `descriptor.id` (see zigbee-source.ts).
+    // Zigbee: the IEEE address is the device's stable identity, carried
+    // unchanged as `descriptor.id` (see zigbee-source.ts), and is the frozen
+    // seed for a paired Zigbee accessory.
     case "zigbee":
       return descriptor.id;
-    // Matches the frozen `shellyAccessoryUuidSeed(device)`.
+    // Shelly: `shelly:<registered name>`, the frozen seed for a paired Shelly
+    // accessory.
     case "shelly":
       return `shelly:${descriptor.id}`;
-    // Matches the frozen `stateToggleUuidSeed(stateKey)`.
+    // State toggle: `state:<state key>`, the frozen seed for a paired toggle.
     case "state":
       return `state:${descriptor.id}`;
     default:
@@ -105,12 +87,8 @@ function findByKind(capabilities: Capability[], kinds: string[]): Capability | u
 }
 
 /**
- * The property name a device's on/off capability is read and written
- * through. Defaults to Zigbee2MQTT's `"state"` convention when the matching
- * capability (light/switch/outlet) declares no `property` of its own — real
- * Zigbee2MQTT `exposes` never do, since `state` is implicit — and otherwise
- * uses whatever the source itself declared (`"on"` for Shelly and the
- * state-toggle source).
+ * The property name a device's on/off capability is read and written through, defaulting
+ * to Zigbee2MQTT's `"state"` convention when the capability declares no property.
  */
 function onOffProperty(capabilities: Capability[]): string {
   const cap = findByKind(capabilities, ["light", "switch", "outlet"]);
@@ -141,18 +119,9 @@ function applyOnOffState(service: Service, property: string, state: Record<strin
 // ---------------------------------------------------------------------------
 
 /**
- * Creates a HAP Accessory for the given device descriptor.
- *
- * Returns `null` when no supported capability is detected — the same
- * behaviour as the old per-family factories, just decided from the shared
- * vocabulary instead of a source-specific schema.
- *
- * @param descriptor The device's source-neutral descriptor.
- * @param onSet      Callback invoked with a property write when HomeKit
- *                    changes a writable characteristic. Wire this to
- *                    `AggregateDeviceSource.command(descriptor.qualifiedId, properties)`.
- * @param onWarn     Optional callback for non-fatal warnings (e.g. an
- *                    uncalibrated cover).
+ * Create a HAP Accessory for the given descriptor, or `null` when no supported
+ * capability is detected. `onSet` is invoked with a property write when HomeKit changes
+ * a writable characteristic.
  */
 export function createAccessoryFromDescriptor(
   descriptor: DeviceDescriptor,

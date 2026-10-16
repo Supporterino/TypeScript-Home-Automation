@@ -1,10 +1,6 @@
 /**
- * Clock/date derivation for the wall clock widget (specs/wall-display "Widget
- * Catalog", "Always-On Operation"; design.md D11).
- *
- * Derived entirely from the client clock with no server data, so the widget
- * keeps showing the correct local time while the engine is unreachable. Pure
- * and DOM-free so it is reachable by `bun test` (design.md D23).
+ * Clock/date derivation for the wall clock widget, from the client clock alone so
+ * it keeps showing local time while the engine is unreachable.
  */
 
 export interface ClockDisplay {
@@ -15,9 +11,8 @@ export interface ClockDisplay {
 }
 
 /**
- * Formats an instant for the wall clock. The hour cycle is pinned to `h23` so
- * every locale renders a stable 24-hour `HH:mm` (never a locale-dependent
- * 12-hour form), matching a glanceable always-on panel.
+ * Formats an instant for the wall clock, pinning the hour cycle to `h23` so every
+ * locale renders a stable 24-hour `HH:mm`.
  */
 export function formatClock(now: number): ClockDisplay {
   const instant = new Date(now);

@@ -1,12 +1,6 @@
 /**
- * The no-flash theme bootstrap (design.md D4; specs/web-ui "Theme Selection").
- *
- * The dashboard shell inlines {@link themeBootstrapScript} in `<head>` so the
- * resolved scheme is applied to `<html>` before the first paint; `useTheme()`
- * in the app persists the preference to the same key. This module is kept free
- * of React and of any `src/app/**` dependency so the server bundle can import
- * it while the app bundle shares one source of truth for the storage key and
- * the script.
+ * The no-flash theme bootstrap: resolves and applies the scheme to `<html>`
+ * before first paint. Kept React-free so the server bundle can import it.
  */
 
 /** The `localStorage` key the theme preference is persisted under. */
@@ -19,24 +13,16 @@ export type ThemePreference = "light" | "dark" | "system";
 export type ResolvedTheme = "light" | "dark";
 
 /**
- * Resolves the scheme applied to the document from the persisted preference:
- * an explicit `"light"`/`"dark"` is used as-is, and `"system"` defers to the
- * caller's current system scheme. Pure, so the resolution rule is unit-testable
- * without a DOM (design.md D4).
+ * Resolves the document scheme from the persisted preference: `"system"`
+ * defers to `system`, anything else is used as-is.
  */
 export function resolveTheme(preference: ThemePreference, system: ResolvedTheme): ResolvedTheme {
   return preference === "system" ? system : preference;
 }
 
 /**
- * Returns the inline script that sets `document.documentElement.dataset.theme`
- * before first paint: it resolves the system preference first, then lets a
- * readable persisted preference override it, and finally applies a concrete
- * `"light"`/`"dark"` value unconditionally. Only the `localStorage` read is
- * guarded by try/catch — a blocked `localStorage` (private mode, Safari
- * "Block All Cookies" raising on the getter) leaves the system fallback in
- * place, so the attribute is still set rather than the page keeping the
- * `:root` default until React corrects it.
+ * Returns the inline script that sets `data-theme` before first paint, from the
+ * persisted preference or the system one; a blocked `localStorage` still falls back.
  */
 export function themeBootstrapScript(): string {
   return (

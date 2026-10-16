@@ -13,8 +13,8 @@ import {
 import { ASSETS } from "../src/assets/manifest.js";
 import { createWebUiService } from "../src/index.js";
 
-// Asset serving is now a `WebUiService` concern, mounted on a bare Hono app.
-// This test must not import `@ts-ha/core` (design.md D2, D7; task 3.7).
+// Asset serving is a `WebUiService` concern, mounted on a bare Hono app. This test
+// must not import `@ts-ha/core`.
 
 const logger = pino({ level: "silent" });
 
@@ -54,9 +54,8 @@ describe("build-web-ui manifest", () => {
   });
 
   it("every entry carries a compressed body smaller than its raw body", () => {
-    // `font/woff2` is already compressed (a woff2 payload *is* a Brotli
-    // stream), so gzip cannot shrink it — and generally grows it slightly.
-    // The assertion is meaningful only for the compressible JS/CSS assets.
+    // `font/woff2` is already compressed, so gzip cannot shrink it — the assertion is
+    // meaningful only for the compressible JS/CSS assets.
     const precompressed = new Set(["font/woff2"]);
     for (const asset of ASSETS) {
       if (precompressed.has(asset.contentType)) continue;
@@ -117,10 +116,8 @@ describe("build-web-ui manifest", () => {
   });
 
   it("emits lazy view code as non-first-paint chunks", () => {
-    // Every route view beyond the landing/theme is behind a dynamic import
-    // (design.md D12), so the built manifest must carry at least one JS chunk
-    // excluded from the budget. Energy and weather are among these chunks:
-    // their code and data are only fetched once the route is opened.
+    // Every route view beyond the landing/theme is behind a dynamic import, so the
+    // manifest must carry at least one JS chunk excluded from the budget.
     const lazyJs = ASSETS.filter(
       (a) => a.contentType === "application/javascript" && !a.firstPaint,
     );
@@ -266,11 +263,8 @@ describe("no development-mode branch", () => {
 
 describe("wall chunk laziness", () => {
   it("keeps the wall chunk marker out of first paint and inside a lazy chunk", () => {
-    // The wall grid and every widget renderer — and the shared widget
-    // registry they resolve through — must load together in one lazy chunk
-    // that is never first paint (design.md D6; task 5.12). The marker is
-    // rendered onto the wall grid's root element, so its presence is a
-    // durable signal of what the build actually shipped.
+    // The wall grid, every widget renderer, and the shared widget registry they resolve
+    // through must load together in one lazy chunk that is never first paint.
     const jsAssets = ASSETS.filter((a) => a.contentType === "application/javascript");
     const decoded = jsAssets.map((asset) => ({
       asset,
@@ -289,32 +283,23 @@ describe("wall chunk laziness", () => {
   });
 
   it("keeps the harness marker out of every shipped asset, while the harness still renders it", async () => {
-    // The render harness is a development-only entrypoint: it is not an
-    // entrypoint of the shipped build and nothing in the app reaches it (the
-    // companion guard in `wall-harness-guard.test.ts` walks the module graph),
-    // so neither the harness nor anything it renders may appear in an emitted
-    // asset (design.md D9; specs/web-ui "Build Process" — "A development-only
-    // module does not reach the shipped build", "adds no first-paint
-    // dependency").
+    // The render harness is a development-only entrypoint, so neither it nor anything it
+    // renders may appear in an emitted asset.
     const decoded = ASSETS.map((asset) => ({
       asset,
       text: Buffer.from(asset.rawBase64, "base64").toString("utf8"),
     }));
 
-    // Imported inside the test: this is the one asset assertion that needs the
-    // harness's own sources, so a tree without them fails this test alone rather
-    // than the whole file.
+    // Imported inside the test: this is the one asset assertion that needs the harness's
+    // own sources.
     const { WALL_HARNESS_MARKER } = await import("../src/app/wall/harness/marker.js");
     expect(WALL_HARNESS_MARKER).toBe("ts-ha-wall-harness");
     for (const { asset, text } of decoded) {
       expect(text, asset.fileName).not.toContain(WALL_HARNESS_MARKER);
     }
 
-    // …and the assertion above is only meaningful while the harness really
-    // carries the marker: it is rendered onto each harness document's root, the
-    // same way `WALL_CHUNK_MARKER` is rendered onto the wall grid's. Renaming or
-    // dropping the constant would otherwise leave this test passing over a
-    // marker nothing uses.
+    // …and the assertion above is only meaningful while the harness really carries the
+    // marker: it is rendered onto each harness document's root.
     const { readFile } = await import("node:fs/promises");
     const harnessDir = join(import.meta.dir, "..", "src/app/wall/harness");
     for (const name of ["HarnessPanel.tsx", "stage.tsx"]) {
@@ -324,9 +309,7 @@ describe("wall chunk laziness", () => {
   });
 
   it("keeps the wall validation schema, and zod, out of first paint", () => {
-    // design.md D6/D24 and proposal.md require the wall-profile schema to be
-    // contained to the wall's lazy chunk. The editor and registry reach it via
-    // `@ts-ha/shared/wall-schema`, never the root barrel, so no first-paint
+    // The wall-profile schema is contained to the wall's lazy chunk, so no first-paint
     // asset may carry zod's runtime or the schema's message strings.
     const markers = ["ZodError", "_zod", "invalid_type"];
     const firstPaintJs = ASSETS.filter(
@@ -342,14 +325,8 @@ describe("wall chunk laziness", () => {
   });
 
   it("keeps the wall stylesheet out of first paint and inside a lazy chunk", () => {
-    // Hearth (`wall/hearth.css`) ships as its own content-hashed stylesheet,
-    // referenced by the wall chunk and fetched only when a wall is opened — the
-    // dashboard's entry document never references it (design.md D5;
-    // specs/wall-display "On-Demand Wall Stylesheet"; specs/web-ui "On-Demand
-    // Feature Stylesheets"). The marker is a Hearth colour token, so a
-    // regression that folds the wall sheet into the entry CSS — or otherwise
-    // reaches it from first paint — fails here rather than silently shipping
-    // Hearth to every dashboard load.
+    // Hearth (`wall/hearth.css`) ships as its own content-hashed stylesheet, referenced
+    // by the wall chunk and fetched only when a wall is opened.
     const marker = "--hearth-canvas";
     const decoded = ASSETS.map((asset) => ({
       asset,
@@ -369,12 +346,8 @@ describe("wall chunk laziness", () => {
   });
 
   it("references the wall stylesheet from the wall chunk and from no other chunk", () => {
-    // The on-demand stylesheet is linked by the wall's lazy route chunk alone
-    // (design.md D5). A stray import from the entry or the editor would have the
-    // emitted stylesheet referenced from another chunk — or its name appear in
-    // one — so asserting the reference is unique to the wall chunk catches a
-    // chunk hoisting that the content marker above might miss. The build's
-    // `wallStylesheetPlugin` excludes `wall/editor/**` for exactly this reason.
+    // The on-demand stylesheet is linked by the wall's lazy route chunk alone, so
+    // asserting the reference is unique to it catches a chunk hoisting.
     const marker = "--hearth-canvas";
     const decoded = ASSETS.map((asset) => ({
       asset,
@@ -390,22 +363,15 @@ describe("wall chunk laziness", () => {
     const jsChunks = decoded.filter(({ asset }) => asset.contentType === "application/javascript");
     const referencing = jsChunks.filter(({ text }) => text.includes(hearthAsset.fileName));
     expect(referencing.length).toBe(1);
-    // The one referencing chunk is the wall's own lazy chunk — it renders the
-    // wall grid — and is never a first-paint asset. The wall chunk marker itself
-    // is reached from a shared chunk, so the grid's `data-wall-chunk` root
-    // identifies this chunk.
+    // The one referencing chunk is the wall's own lazy chunk — it renders the wall grid
+    // — and is never a first-paint asset.
     expect(referencing[0].text).toContain("data-wall-chunk");
     expect(referencing[0].asset.firstPaint).toBe(false);
   });
 
   it("keeps Hearth out of the editor's own sources", async () => {
-    // The editor's draft preview is a wireframe (wall-zones-and-fit D7): it
-    // renders no wall widget and reaches no Hearth, so the wall's stylesheet
-    // stays on demand. The build's `wallStylesheetPlugin` already excludes
-    // `wall/editor/**` when attaching the sheet; this asserts the editor never
-    // reaches for it in the first place — a regression that imported the
-    // renderer or a Hearth token would be caught here before the chunking could
-    // hide it.
+    // The editor's draft preview is a wireframe: it renders no wall widget and reaches
+    // no Hearth, so the wall's stylesheet stays on demand.
     const { readdir, readFile } = await import("node:fs/promises");
     const dir = join(import.meta.dir, "..", "src/app/wall/editor");
     const files = (await readdir(dir)).filter(

@@ -5,8 +5,7 @@ import { join, resolve } from "node:path";
 import type { Engine, EngineOptions } from "@ts-ha/core";
 import { DEFAULT_AUTOMATIONS_DIR, runCommand } from "../src/commands/run.js";
 
-// specs/cli "Run Command" (tasks 5.3–5.5). The engine and the optional web UI
-// package are injected so these run without MQTT or the frontend tree.
+// The engine and web UI package are injected so these run without MQTT or the frontend.
 
 interface FakeEngine {
   engine: Engine;
@@ -168,8 +167,7 @@ describe("runCommand web UI", () => {
   });
 
   // The raw gate must agree with the package's enablement vocabulary
-  // (`true`/`1`/`yes`, trimmed, case-insensitive) — otherwise a value the
-  // package accepts runs headless here (design.md D3).
+  // (`true`/`1`/`yes`, trimmed, case-insensitive).
   it.each([
     "1",
     "TRUE",

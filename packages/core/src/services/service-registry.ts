@@ -2,44 +2,12 @@ import type { Hono } from "hono";
 import type { Logger } from "pino";
 import type { CoreContext, ServicePlugin } from "./service-plugin.js";
 
-/**
- * Per-plugin lifecycle timeout (ms). Generous enough not to kill legitimately
- * slow plugins (e.g. HomeKit mDNS publish) while preventing a hanging plugin
- * from wedging startup or shutdown indefinitely.
- */
+/** Per-plugin lifecycle timeout (ms), bounding a hanging plugin during startup/shutdown. */
 const PLUGIN_LIFECYCLE_TIMEOUT_MS = 15_000;
 
 /**
- * A type-safe, key/value registry for optional services.
- *
- * Services are registered by string key and retrieved with a type parameter.
- * Services that implement `ServicePlugin` additionally receive engine lifecycle
- * hooks (`onStart` / `onStop`) and can mount HTTP routes (`registerRoutes`).
- *
- * The engine creates one `ServiceRegistry` and passes it to automations via
- * `AutomationContext.services`.  Well-known services (`shelly`, `nanoleaf`,
- * `notifications`, `weather`) are registered under their conventional keys.
- * Any additional services registered under custom keys are accessible via
- * `this.services.get<MyService>("my-service")` inside an automation.
- *
- * ## Retrieval options
- *
- * **`get`** — nullable lookup; you handle the absent case yourself:
- * ```ts
- * const shelly = this.services.get<ShellyService>("shelly");
- * if (shelly) await shelly.turnOn("my-plug");
- * ```
- *
- * **`getOrThrow`** — asserts presence; throws at runtime if missing:
- * ```ts
- * const shelly = this.services.getOrThrow<ShellyService>("shelly");
- * await shelly.turnOn("my-plug");
- * ```
- *
- * **`use`** — callback wrapper; no-ops silently when the service is absent:
- * ```ts
- * await this.services.use<ShellyService>("shelly", (s) => s.turnOn("my-plug"));
- * ```
+ * A type-safe, key/value registry for optional services. Services implementing
+ * `ServicePlugin` additionally receive lifecycle hooks and can mount HTTP routes.
  */
 export class ServiceRegistry {
   private readonly store: Map<string, unknown> = new Map();
@@ -80,18 +48,10 @@ export class ServiceRegistry {
   }
 
   /**
-   * Look up a service by key and throw if it is not registered.
-   *
-   * Use this when the service is required for the automation to work at all.
-   * The TypeScript return type is `T` (not `T | null`), so no null-check is needed.
+   * Look up a service by key and throw if it is not registered; the return type is `T`,
+   * so no null-check is needed.
    *
    * @throws {Error} with a descriptive message if the service is not registered.
-   *
-   * @example
-   * ```ts
-   * const shelly = this.services.getOrThrow<ShellyService>("shelly");
-   * await shelly.turnOn("my-plug");
-   * ```
    */
   getOrThrow<T>(key: string): T {
     const val = this.store.get(key);
@@ -104,24 +64,8 @@ export class ServiceRegistry {
   }
 
   /**
-   * Call `fn` with the service if it is registered; otherwise do nothing.
-   *
-   * Returns the result of `fn` (which may be a `Promise`) or `undefined` when
-   * the service is absent. When the callback is async, `await` the whole
-   * expression before applying `??`, because `use()` returns
-   * `Promise<R> | undefined` — not `Promise<R | undefined>`:
-   *
-   * Best suited for one-shot, fire-and-forget calls where the service is
-   * genuinely optional.
-   *
-   * @example
-   * ```ts
-   * // Fire-and-forget — no null-check needed:
-   * await (this.services.use<ShellyService>("shelly", (s) => s.turnOff("tv_plug")) ?? Promise.resolve());
-   *
-   * // With a fallback value — await first, then apply ??:
-   * const isOn = (await this.services.use("shelly", (s) => s.isOn("tv_plug"))) ?? false;
-   * ```
+   * Call `fn` with the service if registered, else return `undefined`. When async,
+   * `await` the whole expression before applying `??`.
    */
   use<T, R>(key: string, fn: (service: T) => R): R | undefined {
     const val = this.store.get(key);

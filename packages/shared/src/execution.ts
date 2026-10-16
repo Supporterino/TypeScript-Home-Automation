@@ -1,7 +1,4 @@
-/**
- * Automation execution observability contracts (design.md D11; tasks 8.3,
- * 8.2b, 8.2c).
- */
+/** Automation execution observability contracts. */
 
 import type { TriggerContext } from "./automation.js";
 
@@ -23,18 +20,10 @@ export interface ExecutionRecord {
   error?: string;
 }
 
-/**
- * An automation's observed writes, bounded and possibly truncated
- * (design.md R15; tasks 8.2b, 8.2c).
- */
+/** An automation's observed writes, bounded and possibly truncated. */
 export interface ObservedWrites {
   /** Distinct state keys observed being written, oldest-retained first. */
   keys: string[];
-  /**
-   * `true` once the retained set has ever exceeded the limit and a
-   * least-recently-written key was evicted — permanently, since the evicted
-   * key's presence in the automation's history cannot be recovered by later
-   * shrinking back under the limit (design.md R12, R15).
-   */
+  /** `true` once a least-recently-written key was evicted; never resets. */
   truncated: boolean;
 }

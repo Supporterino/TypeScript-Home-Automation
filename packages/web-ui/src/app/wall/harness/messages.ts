@@ -1,30 +1,19 @@
 /**
- * The harness's document-to-document contract (design.md D3; tasks 4.1, 4.3,
- * 5.2).
- *
- * The harness is two documents: the control document (the panel) and the stage
- * document, which is the real 1920 x 1080 panel in a same-origin `<iframe>` so
- * every viewport-derived wall value resolves truthfully (D3). Everything the
- * stage needs therefore crosses that boundary as a message — the draft
- * `WallProfileConfig` it renders and the fixture controls behind it — and this
- * module is the one typed place that says so.
- *
- * The boundary is treated as a boundary: an arriving message is validated and a
- * malformed one is ignored, never thrown from inside the stage. Nothing here
- * reads an environment variable, a query parameter, or a configuration key.
+ * The harness's document-to-document contract: the typed messages the panel and stage
+ * exchange across their same-origin boundary.
  */
 import type { WallProfileConfig, WallWidget } from "@ts-ha/shared";
 import { wallProfileConfigSchema, wallWidgetSchema } from "@ts-ha/shared/wall-schema";
 import { WALL_DEVICE_CLASSES, type WallDeviceClass } from "../cards/device-class.js";
 import type { WallCardForm, WallWidgetTier } from "../span.js";
 
-/** The panel the stage is laid out for (design.md D3, D4). */
+/** The panel the stage is laid out for. */
 export type HarnessPanel = "landscape" | "portrait";
 
-/** Which surface the stage document shows (design.md D7; task 6.1). */
+/** Which surface the stage document shows. */
 export type HarnessMode = "stage" | "bench";
 
-/** Which Hearth scheme the wall renders in (design.md D2; task 5.2). */
+/** Which Hearth scheme the wall renders in. */
 export type HarnessTheme = "dark" | "light";
 
 export const HARNESS_MODES: readonly HarnessMode[] = ["stage", "bench"];
@@ -33,9 +22,7 @@ export const HARNESS_TIERS: readonly WallWidgetTier[] = ["compact", "regular", "
 export const HARNESS_CARD_FORMS: readonly WallCardForm[] = ["compact", "full"];
 
 /**
- * Each panel's real layout size, in CSS pixels — the stage `<iframe>`'s own
- * layout size, and therefore the viewport the wall inside it resolves `vmin`,
- * `100dvh`, `window.innerHeight`, and `(orientation: portrait)` against (D3).
+ * Each panel's real layout size, in CSS pixels — the stage `<iframe>`'s own layout size.
  */
 export const HARNESS_PANEL_SIZES: Readonly<
   Record<HarnessPanel, { readonly width: number; readonly height: number }>
@@ -45,19 +32,14 @@ export const HARNESS_PANEL_SIZES: Readonly<
 };
 
 /**
- * The fixture devices the panel can select, by device class — the roster
- * `fixtures.ts` builds one device per wall device class for (design D6). Typed
- * as the device-class union so a value the roster does not carry is a compile
- * error, and keyed by the wall's own classes (not a card archetype) so the
- * harness reaches each typed card the wall renders.
+ * The fixture devices the panel can select, by device class — the roster the fixture set
+ * carries one of per class.
  */
 export const HARNESS_DEVICE_KEYS: readonly WallDeviceClass[] = WALL_DEVICE_CLASSES;
 
 /**
- * The fixture controls the panel exposes (task 5.2). Every field is a plain
- * value so it survives structured cloning, and the panel's only input to the
- * fixture set: the stage turns these into a `DataStoreFixtures` through
- * `fixtureSetFor()`, so no fixture object crosses the boundary.
+ * The fixture controls the panel exposes. Every field is a plain value so it survives
+ * structured cloning.
  */
 export interface HarnessFixtureControls {
   /** Which device-class device the controls below apply to. */
@@ -79,9 +61,8 @@ export interface HarnessFixtureControls {
 }
 
 /**
- * The controls the harness opens with: the full light selected and present,
- * every reading supplied, so the stage shows a real composition rather than a
- * contained explanation (D6).
+ * The controls the harness opens with: the full light selected and present, every
+ * reading supplied.
  */
 export const DEFAULT_FIXTURE_CONTROLS: HarnessFixtureControls = {
   device: "light",
@@ -101,25 +82,22 @@ export const HARNESS_UPDATE = "harness:update";
 export const HARNESS_READY = "harness:ready";
 
 /**
- * The bench's hand-set inputs (design.md D7; tasks 6.1, 6.2). Exactly the props
- * `WidgetFrame` would resolve and pass to the renderer, set by hand instead —
- * which is the point of the bench, and the only place the harness deliberately
- * bypasses production code.
+ * The bench's hand-set inputs, exactly the props `WidgetFrame` would resolve and pass
+ * to the renderer.
  */
 export interface HarnessBenchControls {
   /**
-   * The widget the bench renders directly, or `null` when the draft has no
-   * widget to bench. The panel sends the widget it has selected, so the
-   * renderer gets a real config, title, and placement.
+   * The widget the bench renders directly, or `null` when the draft has no widget to
+   * bench.
    */
   widget: WallWidget | null;
-  /** What the wall would pass as `contained` for this type — `wallFrameDrawsSurface` (D2). */
+  /** What the wall would pass as `contained` for this placement — `wallFrameDrawsSurface`. */
   contained: boolean;
   tier: WallWidgetTier;
   cardForm: WallCardForm;
-  /** The renderer's own box height, hand-set; the Stage-computed value is shown beside it (6.2). */
+  /** The renderer's own box height, hand-set. */
   rendererHeightPx: number;
-  /** The panel's resolved row unit — `wallGridMetrics(panelHeight, widgets).rowUnit` (D2). */
+  /** The panel's resolved row unit — `wallGridMetrics(panelHeight, widgets).rowUnit`. */
   rowUnit: number;
 }
 
@@ -129,10 +107,8 @@ export interface HarnessUpdate {
   mode: HarnessMode;
   theme: HarnessTheme;
   /**
-   * The draft composition the stage renders, or `null` when the panel's draft is
-   * not a profile the shared schema accepts — the stage then keeps the last
-   * composition it accepted rather than rendering an invalid one (design.md D10).
-   * Every other field applies either way.
+   * The draft composition the stage renders, or `null` when the panel's draft is not
+   * a profile the shared schema accepts.
    */
   config: WallProfileConfig | null;
   fixtures: HarnessFixtureControls;
@@ -190,20 +166,8 @@ function parseFixtureControls(value: unknown): HarnessFixtureControls | null {
 }
 
 /**
- * Parses a stage update, returning `null` for anything else — a foreign message,
- * or a `mode`/`theme`/fixtures/bench shape this contract rejects. The stage
- * therefore ignores a malformed message instead of throwing on it.
- *
- * A `config` the shared profile schema refuses is *not* one of those cases. The
- * panel's own controls can author a composition the schema refuses — its `x`/`y`
- * inputs write straight through `updateWidgetPlacement`, which deliberately
- * permits an overlap and leaves the draft validator to report it — and a
- * rejected draft must never reach the stage as a config. It must not take the
- * rest of the message down with it either: a scheme flip, a Stage/Bench switch,
- * or a fixture change has to keep working while the draft is being fixed, or the
- * harness fails silently in exactly the way it exists to prevent. So the update
- * is returned with `config: null`, and the stage keeps the last composition the
- * schema accepted (design.md D10; specs/web-ui "Data Sources").
+ * Parses a stage update, returning `null` for anything else. A `config` the shared
+ * profile schema refuses is returned as `config: null`.
  */
 export function parseHarnessUpdate(data: unknown): HarnessUpdate | null {
   if (typeof data !== "object" || data === null) return null;
@@ -244,8 +208,7 @@ function parseBenchControls(value: unknown): HarnessBenchControls | null {
   if (typeof value !== "object" || value === null) return null;
   const candidate = value as Record<string, unknown>;
 
-  // The bench renders exactly this widget, so it is validated by the shared
-  // widget schema — the same one a profile's widgets are parsed with (D10).
+  // The bench renders exactly this widget, validated by the shared widget schema.
   const widget = candidate.widget === null ? null : wallWidgetSchema.safeParse(candidate.widget);
   if (widget !== null && !widget.success) return null;
 
@@ -276,9 +239,7 @@ export function isHarnessReady(data: unknown): data is HarnessReady {
 
 /** Sends the current draft and fixture controls to the stage document. */
 export function sendHarnessUpdate(target: Window | null | undefined, update: HarnessUpdate): void {
-  // Addressed to this origin and nothing else: the stage is same-origin by
-  // construction (the harness server serves both documents), so a wildcard
-  // target is never needed.
+  // Addressed to this origin only: the stage is same-origin by construction.
   target?.postMessage(update, MESSAGE_ORIGIN());
 }
 
@@ -289,10 +250,8 @@ export function sendHarnessReady(): void {
 }
 
 /**
- * A stable identity for one set of fixture controls. The store resolves its
- * fixture set once, so the stage remounts the provider when this changes — a
- * React remount of the stage document's own tree, never a document reload
- * (design.md D3, D5).
+ * A stable identity for one set of fixture controls, so the stage remounts the provider
+ * when it changes.
  */
 export function fixtureControlsKey(controls: HarnessFixtureControls): string {
   return JSON.stringify(controls);
@@ -309,16 +268,8 @@ export interface StageState {
 export const EMPTY_STAGE_STATE: StageState = { update: null, config: null };
 
 /**
- * Folds one accepted update into the stage's state (design.md D10).
- *
- * Every field of the message applies — the surface, the scheme, the fixture
- * controls, the bench inputs — while the composition only moves when the
- * schema accepted one (`config: null` means it did not). That is the whole
- * point of parsing the config tolerantly: a draft the panel itself can author
- * into an invalid state (an overlap, say) must not reach the stage as a config,
- * and must not take the rest of the panel down with it either.
- *
- * Pure, so the retention rule is reachable by `bun test` without a DOM.
+ * Folds one accepted update into the stage's state. Every field applies while the
+ * composition only moves when the schema accepted one.
  */
 export function applyHarnessUpdate(current: StageState, next: HarnessUpdate): StageState {
   return { update: next, config: next.config ?? current.config };

@@ -18,13 +18,9 @@ export const HOMEKIT_SERVICE_KEY = "homekit";
 const HAP_CATEGORY_BRIDGE = 2;
 
 /**
- * The seed string hashed into the bridge's stable HomeKit UUID — the
- * configured username (MAC address) alone.
- *
- * Extracted as its own named, hap-nodejs-independent function so a
- * characterisation test (task 6.15) can freeze it without importing
- * `hap-nodejs` — a pairing-critical value that must survive any refactor of
- * this service unchanged.
+ * The seed string hashed into the bridge's stable HomeKit UUID — the configured
+ * username (MAC address) alone. A hap-nodejs-independent function so the
+ * characterisation test can freeze this pairing-critical value without importing it.
  */
 export function bridgeUuidSeed(username: string): string {
   return username;
@@ -32,24 +28,7 @@ export function bridgeUuidSeed(username: string): string {
 
 export type { HomekitStatus } from "@ts-ha/shared";
 
-/**
- * Configuration options for the `HomekitService`.
- *
- * @example
- * ```ts
- * const engine = createEngine({
- *   automationsDir: "...",
- *   services: {
- *     homekit: ({ logger, devices, deviceVisibility }) =>
- *       new HomekitService(logger, devices, {
- *         pinCode: "031-45-154",
- *         persistPath: "./homekit-persist",
- *         bridgeName: "My Home Bridge",
- *       }, deviceVisibility),
- *   },
- * });
- * ```
- */
+/** Configuration options for the `HomekitService`. */
 export interface HomekitServiceOptions {
   /**
    * HomeKit pairing PIN in the format "XXX-XX-XXX".
@@ -59,8 +38,7 @@ export interface HomekitServiceOptions {
   pinCode: string;
 
   /**
-   * Path to the directory where HAP pairing data is persisted between restarts.
-   * The directory is created automatically if it does not exist.
+   * Directory where HAP pairing data is persisted between restarts, created if absent.
    *
    * @default "./homekit-persist"
    */
@@ -68,113 +46,45 @@ export interface HomekitServiceOptions {
 
   /**
    * Display name advertised to the Home app.
-   *
    * @default "TS-Home-Automation"
    */
   bridgeName?: string;
 
   /**
-   * TCP port the HAP server listens on.
-   * Each bridge instance must use a unique port on the host.
-   *
+   * TCP port the HAP server listens on; each bridge uses a unique port.
    * @default 47128
    */
   port?: number;
 
   /**
-   * HAP bridge MAC address in the format "XX:XX:XX:XX:XX:XX".
-   *
-   * Every bridge instance on the same network must have a unique username.
-   * If two bridges share the same username, iOS will refuse to pair the second.
-   *
+   * HAP bridge MAC address ("XX:XX:XX:XX:XX:XX"); must be unique on the network.
    * @default "CC:22:3D:E3:CE:F8"
    */
   username?: string;
 
   /**
-   * Network interfaces or IP addresses to advertise mDNS on.
-   *
-   * Passed directly to `hap-nodejs`' `publish({ bind })`. Controls which network
-   * interface the HAP server binds to and advertises mDNS records on.  By default
-   * (undefined), the bridge advertises on all available interfaces.
-   *
-   * Essential for containerized environments where the primary pod/container
-   * network interface is isolated from the LAN:
-   *
-   * - **Docker:** use `network_mode: host` or specify the host-facing interface
-   *   name (e.g. `"eth0"`).
-   * - **Kubernetes (Multus CNI):** add a macvlan secondary interface that has
-   *   a LAN IP and bind to it (e.g. `["net1"]`).  See docs for details.
-   * - **Standalone / host network:** leave undefined.
-   *
-   * Accepts a single interface/IP or an array.  Interface names are preferred
-   * over IPs because they auto-update when the address changes.
-   *
-   * @example
-   * ```ts
-   * // Multus macvlan secondary interface
-   * bind: ["net1"],
-   *
-   * // Specific Docker host-facing interface
-   * bind: "eth0",
-   * ```
+   * Network interfaces or IP addresses to advertise mDNS on, passed to `hap-nodejs`'
+   * `publish({ bind })`; undefined advertises on all interfaces. Accepts one or an array.
    */
   bind?: string | string[];
 
   /**
-   * @deprecated Device refresh no longer runs inside `HomekitService` — each
-   * unified device source (`SHELLY_POLL_MS`, `NANOLEAF_POLL_MS`) owns its own
-   * poll interval (design.md D2; task 6.16). This option has no effect.
+   * @deprecated Device refresh no longer runs inside `HomekitService`; each device
+   * source owns its own poll interval. This option has no effect.
    */
   pollIntervalMs?: number;
 
   /**
-   * @deprecated `stateToggles` is no longer a `HomekitService` option. A
-   * source consumed by two sinks (HomeKit and the web UI) cannot live inside
-   * one of them, so it moved to engine-level configuration (design.md D19):
-   * pass it as `createEngine({ stateToggles: [...] })` instead. Present here
-   * only so a caller upgrading from the old location gets a clear rejection
-   * naming the new one, rather than a silently ignored option.
+   * @deprecated Moved to engine-level configuration: pass it via
+   * `createEngine({ stateToggles: [...] })`. Present here only so a caller upgrading
+   * from the old location gets a clear rejection rather than a silently ignored option.
    */
   stateToggles?: StateToggleConfig[];
 }
 
 /**
- * A `ServicePlugin` that runs a HomeKit bridge inside the automation engine.
- *
- * It uses the `hap-nodejs` library to advertise a HAP bridge accessory, then
- * consumes the engine's shared, unified {@link AggregateDeviceSource} through
- * a single {@link AccessorySource} — `DeviceCatalogSource` — and bridges its
- * devices into HomeKit.
- *
- * `HomekitService` owns the HAP bridge lifecycle (publish/unpublish, persist
- * path, PIN/port/bind, the accessory map, the status endpoint) and narrows to
- * HAP at its own boundary. It holds no reference to `ZigbeeDevice`,
- * Zigbee2MQTT `exposes`, MQTT, or Shelly RPC — device discovery, freshness,
- * and write-back for every family live in the shared device-source layer
- * (design.md D22; task 6.16), reached only through `Engine.devices`.
- *
- * Supported device types (via the shared capability vocabulary):
- * - Lightbulb (on/off, brightness, colour temperature, colour) — Zigbee
- * - Motion / Contact / Water-leak sensors — Zigbee
- * - Temperature / humidity sensors — Zigbee
- * - Switch / Outlet — Zigbee, Shelly, and state toggles
- * - WindowCovering — Shelly covers
- *
- * @example
- * ```ts
- * import { createEngine, HomekitService } from "@ts-ha/core";
- *
- * const engine = createEngine({
- *   automationsDir: "...",
- *   services: {
- *     homekit: ({ logger, devices, deviceVisibility }) =>
- *       new HomekitService(logger, devices, {
- *         pinCode: "031-45-154",
- *       }, deviceVisibility),
- *   },
- * });
- * ```
+ * A `ServicePlugin` that runs a HomeKit bridge: it advertises a HAP bridge via
+ * `hap-nodejs` and bridges the shared `AggregateDeviceSource`'s devices into HomeKit.
  */
 export class HomekitService implements ServicePlugin {
   readonly serviceKey = HOMEKIT_SERVICE_KEY;
@@ -195,10 +105,8 @@ export class HomekitService implements ServicePlugin {
     private readonly options: HomekitServiceOptions,
     private readonly visibility: DeviceVisibility,
   ) {
-    // `stateToggles` moved to engine-level configuration (design.md D19).
-    // Reject the old location explicitly, naming the new one, rather than
-    // silently ignoring it — state toggles configured this way would
-    // otherwise disappear from the web UI whenever HomeKit is disabled.
+    // `stateToggles` moved to engine-level configuration; reject the old location
+    // explicitly rather than silently ignoring it.
     if (this.options.stateToggles !== undefined) {
       throw new Error(
         "HomekitServiceOptions.stateToggles is no longer supported. " +
@@ -272,9 +180,8 @@ export class HomekitService implements ServicePlugin {
     // identity survives renames and remains unique per bridge instance.
     this.bridge = new BridgeCtor(bridgeName, uuidMod.generate(bridgeUuidSeed(username)));
 
-    // Build the single accessory source. The source set behind `this.devices`
-    // is fixed and always present (task 6.13a) — a family with nothing
-    // configured simply contributes no devices, not an absent source.
+    // Build the single accessory source; the set behind `this.devices` is fixed —
+    // a family with nothing configured contributes no devices, not an absent source.
     this.sources = await this.buildSources();
 
     const sink = this.createSink();

@@ -1,11 +1,4 @@
-/**
- * `@ts-ha/shared` — domain and wire contracts for the TypeScript Home
- * Automation workspace.
- *
- * Types, contract constants two or more packages must agree on, and pure
- * helpers that encode such a rule. No engine, HTTP, or framework runtime;
- * safe to import from a browser bundle (design.md D5).
- */
+/** `@ts-ha/shared` — domain and wire contracts, safe to import from a browser bundle. */
 
 export * from "./automation.js";
 export * from "./capabilities.js";

@@ -1,62 +1,6 @@
 /**
- * Wall pagination (wall-zones-and-fit D5, D12; specs/wall-display "Panel Fit",
- * "Device Grid Widget"). A wall widget whose own content can exceed the span it
- * was placed at never overflows or scrolls — the wall never scrolls — it pages:
- * the device grid, the favorites grid, and the room grid all resolve their pages
- * through this one pure layer, so the renderer and the editor's page-count report
- * cannot disagree. Dependency-free (no React, no DOM) so it stays reachable by
- * `bun test`.
- *
- * ## The tile model
- *
- * A wall tile is the shared wall device card at its minimum span:
- * {@link WALL_TILE_CELL_COLUMNS} grid columns wide and {@link WALL_TILE_CELL_ROWS}
- * grid rows tall — the cell {@link ROW_UNIT_MIN} is derived for, and a typed
- * device widget's own minimum span in the widget registry. A paging widget packs
- * such tiles across its cells, and down them at the panel's resolved row unit,
- * keeping {@link WALL_TILE_GAP_PX} between adjacent tiles:
- *
- * ```
- *  across     = max(1, floor(columns / WALL_TILE_CELL_COLUMNS))
- *  pitch      = WALL_TILE_CELL_ROWS · unit + WALL_TILE_GAP_PX
- *  available  = rows · unit + (rows − 1) · gutter − reserved
- *  down       = max(1, floor((available + WALL_TILE_GAP_PX) / pitch))
- * ```
- *
- * The pitch packs the tiles; the row each one is drawn in is then bounded against
- * its own cell — at least `WALL_TILE_CELL_ROWS · unit + gutter` and at most
- * {@link WALL_TILE_ROW_HEIGHT_CAP} times that — so a widget's leftover height is
- * left as panel and centred rather than distributed into its tiles
- * (specs/wall-display "Paged Tile Sizing"). The bound acts on the resolved height
- * alone, so the pitch, the rows packed, and the page count are all unchanged.
- *
- * The column count is taken from the grid's own cells, because the wall's columns
- * are equal: a tile spans {@link WALL_TILE_CELL_COLUMNS} of them, so a twelve-column
- * span presents four tiles across and never more than the panel's own columns can
- * hold — a tile is never narrower than the minimum-span tile this plan models.
- * (Counting in the row unit would over-count: on a landscape panel a column is
- * wider than a row is tall, so the count would promise more tiles across than
- * minimum-width tiles fit.)
- *
- * `reserved` is the vertical space the widget's own chrome consumes — the frame
- * inset, a page-control row, and whatever header the widget draws above its tiles
- * — so a widget that must show an affordance reserves it and the plan still fits
- * the card (wall-zones-and-fit D5; specs/wall-display "Panel Fit"). It is `0` by
- * default, so the bare span math is unchanged.
- *
- * The vertical axis takes a cell as no taller than the row unit plus the gutter —
- * an under-estimate, so a page the plan reports always fits the widget at the
- * wall's floors (specs/wall-display "A selection too large pages rather than
- * scrolls").
- *
- * ## One geometry for the plan and the draw
- *
- * The gutter defaults to its *floor*, exactly as `span.ts`'s card geometry does:
- * the wall draws `clamp(16px, 2vmin, 24px)`, so on any viewport whose `vmin` is
- * at or below 800 the drawn gutter is the floor. Modelling the floor makes both
- * halves agree on the smallest cell the wall can draw — a plan that assumed the
- * ceiling would promise a row the drawn cell cannot hold, which is precisely the
- * clip the tile-row guarantee exists to prevent.
+ * Wall pagination: a paging widget packs minimum-span tiles across and down its
+ * span, resolving pages through one pure layer.
  */
 
 import { WALL_CARD_METRICS } from "./cards/metrics.js";
@@ -70,108 +14,66 @@ import type { WallWidgetSpan } from "./registry.js";
 
 /**
  * The columns one wall tile occupies — a typed device widget's minimum column
- * span (`wall/grid.ts`'s `WALL_MIN_DEVICE_COLUMNS`), asserted by
- * `wall-pages.test.ts` so the page math and the widget registry cannot drift. It
- * is what the tile packing divides the widget's columns by: a twelve-column span
- * presents four minimum-width tiles across, never more than the panel's own
- * columns can hold, so a tile is never narrower than the minimum-span tile this
- * plan models.
+ * span.
  */
 export const WALL_TILE_CELL_COLUMNS = WALL_MIN_DEVICE_COLUMNS;
 
 /**
- * The rows one wall tile occupies — a typed device widget's minimum row span
- * (`wall/grid.ts`'s `WALL_MIN_DEVICE_ROWS`), the axis the vertical cell bound is
- * derived from. It is what {@link tileCellPx} multiplies the row unit by, so the
- * derived cell is exactly the compact card's budget at the floors and the row
- * unit's own derivation is untouched.
+ * The rows one wall tile occupies — a typed device widget's minimum row span.
  */
 export const WALL_TILE_CELL_ROWS = WALL_MIN_DEVICE_ROWS;
 
 /**
- * The separation between two adjacent tiles, in CSS pixels — the wall's control
- * gap (`WALL_MIN_CONTROL_GAP`), declared locally because this module stays free
- * of the widget registry and asserted against it by `wall-pages.test.ts`.
+ * The separation between two adjacent tiles, in CSS pixels.
  */
 export const WALL_TILE_GAP_PX = 8;
 
 /**
- * The most a paged tile row may be inflated beyond the tile's own cell (design.md
- * D4; specs/wall-display "Paged Tile Sizing"). A widget's leftover height is left
- * as panel and centred rather than distributed into its tiles, so a tile renders
- * at a predictable size on every panel instead of at whatever height the widget's
- * leftover happens to provide. One constant, shared by every paging widget — the
- * device grid, a room's tiles, and the favorites grid all page through
- * {@link resolvePages} / {@link resolvePagedTiles}.
+ * The most a paged tile row may be inflated beyond the tile's own cell. A
+ * widget's leftover height is centred rather than distributed into its tiles.
  */
 export const WALL_TILE_ROW_HEIGHT_CAP = 1.25;
 
 /**
  * The surfaced control frame's content inset, in CSS pixels, per side — the
- * **ported card surface's own padding** (`WALL_CARD_METRICS.padding`, mirrored by
- * `--hearth-card-padding`), the inset the frame pads a control card with. Read from
- * the card table rather than restated, so the frame's inset and the card it frames
- * are the same surface and cannot drift (design.md W3; specs/wall-display "A
- * widget's surface is a card's surface"). The card table is dependency-free, so
- * this module stays reachable by `bun test`; `wall-device-grid.test.ts` asserts it
- * against `wall/hearth.css`.
+ * ported card surface's own padding, read from the card table.
  */
 export const WALL_FRAME_INSET_PX = WALL_CARD_METRICS.padding;
 
 /**
  * The wall's minimum touch target, in CSS pixels — the page-control row's height.
- * Declared locally (this module stays free of the widget registry, whose import
- * cycle would make a module-scope read a temporal-dead-zone error);
- * `wall-device-grid.test.ts` asserts it against `WALL_MIN_TOUCH_TARGET`.
  */
 const WALL_TOUCH_TARGET_PX = 42;
 
 /**
- * The wall's minimum control gap, in CSS pixels — the space between the tiles and
- * the page-control row. Declared locally (this module stays free of the widget
- * registry) and asserted against `WALL_MIN_CONTROL_GAP` by
- * `wall-device-grid.test.ts`. Exported so the renderer that *draws* the page
- * chrome reads the gap the plan reserved rather than a value of its own, so the
- * drawn chrome and {@link WALL_PAGE_CONTROL_RESERVED_PX} cannot drift (the "one
- * geometry for the plan and the draw" contract above).
+ * The wall's minimum control gap, in CSS pixels, between the tiles and page-control row.
  */
 export const WALL_CONTROL_GAP_PX = 8;
 
 /**
- * The frame inset above and below a surfaced card, in CSS pixels — the ported card
- * surface's own padding ({@link WALL_FRAME_INSET_PX}) on each side. The frame always
- * pads, so this is reserved in *every* plan, whether the widget pages or not.
+ * The frame inset above and below a surfaced card, in CSS pixels — the ported
+ * card surface's padding on each side.
  */
 export const WALL_FRAME_RESERVED_PX = 2 * WALL_FRAME_INSET_PX;
 
 /**
  * The page-control row and the gap above it, in CSS pixels. Reserved only when a
- * widget actually pages, because a widget that fits one page draws no such row.
+ * widget actually pages.
  */
 export const WALL_PAGE_CONTROL_RESERVED_PX = WALL_TOUCH_TARGET_PX + WALL_CONTROL_GAP_PX;
 
 /**
- * The rows the frame's opt-in title costs a paging widget's plan (wall-zones-and-fit
- * D3, D4; specs/wall-display "Span-Aware Card Presentation"). The frame draws a
- * configured title inside the same cell, above the renderer, so a titled widget's
- * tiles have one row less to pack into — the same allowance `span.ts`'s
- * `WALL_TITLE_ROWS` gives the minimum spans and the editor's height floor, and
- * `wall-paging.test.ts` asserts the two agree. Declared locally because this
- * module stays free of `span.ts`, whose import of this module's own inset would
- * make a module-scope read a temporal-dead-zone error.
+ * The rows the frame's opt-in title costs a paging widget's plan.
  */
 export const WALL_FRAME_TITLE_ROWS = 1;
 
 /**
- * The whole chrome a paging wall widget consumes inside its card (design.md D5;
- * specs/wall-display "Panel Fit"): the frame inset above and below, one
- * page-control row at the wall's minimum touch target, and the control gap
- * separating that row from the tiles. A widget that pages reserves all of it, so
- * a page's tile rows always fit the card's inner height — the wall never scrolls.
+ * The whole chrome a paging wall widget consumes inside its card: the frame inset,
+ * a page-control row, and the control gap.
  */
 export const WALL_PAGE_RESERVED_PX = WALL_FRAME_RESERVED_PX + WALL_PAGE_CONTROL_RESERVED_PX;
 
-/** A paging wall widget's resolved pagination (design.md D5, D12). */
+/** A paging wall widget's resolved pagination. */
 export interface WallPagePlan {
   /** The tile grid's column count — how many tiles fit across the widget's span. */
   readonly tilesAcross: number;
@@ -182,12 +84,8 @@ export interface WallPagePlan {
   /** How many pages the content occupies; `0` for no content. */
   readonly pageCount: number;
   /**
-   * The height each tile row gets, in CSS pixels. It is never shorter than the
-   * tile's own cell (`WALL_TILE_CELL_ROWS · unit + gutter`, and at the floors that
-   * cell is exactly the compact card's budget) and never taller than
-   * {@link WALL_TILE_ROW_HEIGHT_CAP} times it, so no promised row can clip a tile
-   * and no tile is inflated to fill the widget's leftover height — the widget
-   * centres that space instead (specs/wall-display "Paged Tile Sizing").
+   * The height each tile row gets, in CSS pixels, bounded against the tile's own
+   * cell so no promised row clips a tile and none is inflated.
    */
   readonly rowHeightPx: number;
 }
@@ -203,23 +101,15 @@ export interface WallPagesInput {
   /** The wall gutter between cells, in CSS pixels; the wall's own drawn floor by default. */
   readonly gutterPx?: number;
   /**
-   * Vertical space, in CSS pixels, the widget's own chrome consumes — reserved
-   * from the span's height before tiles are packed. `0` (the default) reserves
-   * nothing, which is the bare span math.
+   * Vertical space, in CSS pixels, the widget's own chrome consumes — reserved from
+   * the span before tiles are packed.
    */
   readonly reservedPx?: number;
 }
 
 /**
  * Resolves the page plan for a paging widget: the tile grid it draws and how many
- * pages its content occupies. Content that fits is one page; more pages, exactly
- * `ceil(count / tilesPerPage)` pages, so neither the renderer nor the editor has
- * to re-derive the count (design.md D7, D12).
- *
- * A row unit below the wall's floor — a panel not yet measured, where the grid
- * renders with a unit of `0` — is read as the floor, so the plan degrades to the
- * smallest cell the wall ever draws rather than dividing the span by an unknown
- * one.
+ * pages its content occupies.
  */
 export function resolvePages(input: WallPagesInput): WallPagePlan {
   const unit = Math.max(input.rowUnit, ROW_UNIT_MIN);
@@ -237,16 +127,12 @@ export function resolvePages(input: WallPagesInput): WallPagePlan {
     tilesDown: down,
     tilesPerPage,
     pageCount: input.count <= 0 ? 0 : Math.ceil(input.count / tilesPerPage),
-    // The row is bounded against the tile's own cell: never inflated past
-    // `WALL_TILE_ROW_HEIGHT_CAP` × it to fill the widget, and never shorter than
-    // it, so a promised row still holds its tile ("Paged Tile Sizing"). Both
-    // bounds act on the resolved height only — the pitch above is untouched, so
-    // `tilesDown` and the page count are unchanged.
+    // The row is bounded against the tile's own cell; the pitch above is untouched.
     rowHeightPx: Math.max(cellPx, Math.min(rowHeightPx, WALL_TILE_ROW_HEIGHT_CAP * cellPx)),
   };
 }
 
-/** One rendered page of a paging wall widget (design.md D5, D12). */
+/** One rendered page of a paging wall widget. */
 export interface WallPagedTiles<T> {
   /** The items this page draws, in the widget's own order. */
   readonly items: readonly T[];
@@ -262,9 +148,7 @@ export interface WallPagedTiles<T> {
   readonly tilesPerPage: number;
   /**
    * The height each tile row gets, in CSS pixels — bounded against the tile's own
-   * cell (at least it, at most {@link WALL_TILE_ROW_HEIGHT_CAP} times it), so a
-   * page this plan reports never clips a tile and never inflates one (see
-   * {@link WallPagePlan.rowHeightPx}).
+   * cell, so a page this plan reports never clips or inflates a tile.
    */
   readonly rowHeightPx: number;
 }
@@ -280,16 +164,13 @@ export interface WallPagedTilesInput<T> {
   /** The requested page; clamped into range. */
   readonly page: number;
   /**
-   * The grid rows the widget's own chrome — whatever it draws above its tiles,
-   * such as a header and a metric — consumes at the resolved row unit. It is
-   * reserved in every plan, because that chrome is always drawn.
+   * The grid rows the widget's own chrome consumes at the resolved row unit,
+   * reserved in every plan.
    */
   readonly reservedRows?: number;
   /**
-   * Whether the widget configures a title. The frame draws it inside the same cell
-   * above the renderer, so the plan reserves {@link WALL_FRAME_TITLE_ROWS} for it —
-   * the allowance that keeps a titled card's tile rows at the compact budget
-   * instead of squeezing them under it (wall-zones-and-fit D3, D4).
+   * Whether the widget configures a title, so the plan reserves
+   * {@link WALL_FRAME_TITLE_ROWS} for it.
    */
   readonly titled?: boolean;
   /** The wall gutter between cells, in CSS pixels; the wall's own drawn floor by default. */
@@ -297,27 +178,12 @@ export interface WallPagedTilesInput<T> {
 }
 
 /**
- * Resolves the page a widget draws through the wall's shared pagination layer:
- * the tile grid that holds it, the items it presents, and how many pages the
- * whole set occupies.
- *
- * The plan is resolved twice at most. Both plans reserve the frame's own chrome —
- * its inset, its title when the widget configures one, and the widget's header,
- * because the frame always pads and the widget always draws its header; only the
- * page-control row is held back from the first plan, so content that fits one page
- * uses every cell without reserving room for a control that will not be drawn.
- * When the content pages, the plan is resolved again with
- * {@link WALL_PAGE_CONTROL_RESERVED_PX} added, because a paging widget draws that
- * row. A page is therefore never promised a tile row the card cannot show, in
- * either case.
- *
- * The requested page is clamped into range, so an edit that removes pages moves
- * an open wall back onto a real page rather than onto a blank one.
+ * Resolves the page a widget draws through the wall's shared pagination layer: the
+ * tile grid, the items it presents, and the page count.
  */
 export function resolvePagedTiles<T>(input: WallPagedTilesInput<T>): WallPagedTiles<T> {
   const unit = Math.max(input.rowUnit, ROW_UNIT_MIN);
-  // The chrome every plan reserves: the frame's inset and its title when one is
-  // configured, and whatever the widget always draws above its tiles.
+  // The chrome every plan reserves: the frame inset, its title, and the widget's header.
   const alwaysPx =
     WALL_FRAME_RESERVED_PX +
     (input.reservedRows ?? 0) * unit +
@@ -351,36 +217,23 @@ export function resolvePagedTiles<T>(input: WallPagedTilesInput<T>): WallPagedTi
 }
 
 /**
- * How many minimum-span tiles fit across `columns` grid columns. The wall's
- * columns are equal, so a tile spanning {@link WALL_TILE_CELL_COLUMNS} of them fits
- * exactly `floor(columns / WALL_TILE_CELL_COLUMNS)` times — a twelve-column span
- * presents four tiles across, never more than the panel's own columns hold. At
- * least one, so a legal span always presents a page rather than an empty widget.
+ * How many minimum-span tiles fit across `columns` grid columns. At least one.
  */
 function tilesAcross(columns: number): number {
   return Math.max(1, Math.floor(columns / WALL_TILE_CELL_COLUMNS));
 }
 
 /**
- * The tile's own cell height, in CSS pixels: its row span multiplied by the
- * resolved row unit, plus the gutter it spans. The pitch the page math packs tiles
- * by is this cell plus one {@link WALL_TILE_GAP_PX}, and
- * {@link WALL_TILE_ROW_HEIGHT_CAP} is a multiple of it, so the row the plan
- * promises, the box a tile is drawn in, and the row unit's own derivation are all
- * the same geometry (specs/wall-display "Paged Tile Sizing"). Only the row span
- * enters it, so the tile-packing column span does not disturb the vertical bound.
+ * The tile's own cell height, in CSS pixels: its row span times the resolved row
+ * unit, plus the gutter it spans.
  */
 function tileCellPx(unit: number, gutterPx: number): number {
   return WALL_TILE_CELL_ROWS * unit + gutterPx;
 }
 
 /**
- * How many tile rows fit in `availablePx` of the widget's height at `unit`,
- * keeping one {@link WALL_TILE_GAP_PX} between adjacent tiles. The pitch is the
- * tile's own cell — {@link tileCellPx}, the box the wall's row unit is derived to
- * hold a compact card in — plus that gap, so every row this promises is at least a
- * tile's cell tall and no promised row can clip a tile. At least one, so a legal
- * span always presents a page rather than an empty widget.
+ * How many tile rows fit in `availablePx` at `unit`, keeping a tile gap between
+ * adjacent tiles. At least one.
  */
 function tilesDown(availablePx: number, unit: number, gutterPx: number): number {
   const pitch = tileCellPx(unit, gutterPx) + WALL_TILE_GAP_PX;

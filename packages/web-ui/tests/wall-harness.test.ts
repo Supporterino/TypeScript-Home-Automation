@@ -27,18 +27,8 @@ import { WALL_TYPE_RAMP } from "../src/app/wall/type-ramp.js";
 import { temperatureWidgetState } from "../src/app/wall/widgets/temperature-model.js";
 
 /**
- * The wall harness's shell and stage (tasks 3.1, 3.2, 4.1, 4.2, 4.3; design.md
- * D2, D3, D4, D8).
- *
- * The parts of the harness that are pure — its draft composition, its fixture
- * derivation, and its message contract — are asserted directly. The two
- * documents themselves need a DOM (and a browser) to render, so what is asserted
- * about them here is structural: that the stage mounts the production providers
- * and the production `WallGrid`, that the harness re-implements no wall layout,
- * and that nothing on either path reads a runtime switch. What no test here can
- * show is a browser rendering the composition, the `vmin` ramp resolving against
- * a real panel viewport, or hot reload — those are hand-verified (design.md D2,
- * D3, Non-Goals).
+ * The wall harness's shell and stage: the pure parts asserted directly; the two
+ * documents asserted structurally.
  */
 const APP_DIR = join(import.meta.dir, "..", "src/app");
 const HARNESS_DIR = join(APP_DIR, "wall/harness");
@@ -77,7 +67,7 @@ async function source(relative: string): Promise<string> {
   return stripComments(await readFile(join(HARNESS_DIR, relative), "utf8"));
 }
 
-/** The wall's own layout vocabulary: none of it may appear in a harness module (D2). */
+/** The wall's own layout vocabulary: none of it may appear in a harness module. */
 const WALL_LAYOUT_TOKENS = ["gridPlacementStyle", "resolveRowUnit", "resolveBands"];
 
 /** Reads that would let a deployment — rather than a call site — select what the harness shows. */
@@ -151,10 +141,8 @@ describe("the harness draft", () => {
   });
 
   it("binds a temperature widget to each sensor, so a walk reaches both reading cases", () => {
-    // The temperature widget presents its sensor's humidity where the sensor
-    // declares one and only its temperature where it does not (design.md W5; task
-    // 5.3): a walk of the stage reaches both, because a widget is bound to the hall
-    // sensor and another to the attic sensor, and neither is the paged grid's tile.
+    // The temperature widget presents its sensor's humidity where the sensor declares one
+    // and only its temperature where it does not.
     const devices = new Map(
       WALL_HARNESS_FIXTURES.devices.map((device) => [device.qualifiedId, device]),
     );
@@ -185,10 +173,8 @@ describe("the harness panel geometry", () => {
   });
 
   it("gives the portrait panel the aspect ratio `(orientation: portrait)` matches", () => {
-    // The one thing `useOrientation()` reads is that media query, and it matches
-    // on the viewport's aspect ratio — which, inside the stage document, is the
-    // panel's. The browser check is that a profile's override applies there
-    // (task 4.2); this pins the condition it applies under.
+    // The one thing `useOrientation()` reads is that media query, and it matches on the
+    // viewport's aspect ratio — which, inside the stage document, is the panel's.
     expect(HARNESS_PANEL_SIZES.portrait.height).toBeGreaterThan(HARNESS_PANEL_SIZES.portrait.width);
     expect(HARNESS_PANEL_SIZES.landscape.width).toBeGreaterThan(
       HARNESS_PANEL_SIZES.landscape.height,
@@ -196,10 +182,8 @@ describe("the harness panel geometry", () => {
   });
 
   it("resolves the hero ramp above its floor at the landscape panel", () => {
-    // The ramp's `vmin` term on the panel, from the same bound `type-ramp.ts`
-    // publishes. `clamp(36px, 5vmin, 76px)` collapses to its 36px floor on a
-    // small window — which is why the stage is the panel's own viewport (D3)
-    // rather than a transformed box in the panel document.
+    // The ramp's `vmin` term on the panel. `clamp(36px, 5vmin, 76px)` collapses to its floor
+    // on a small window — which is why the stage is the panel's own viewport.
     const { width, height } = HARNESS_PANEL_SIZES.landscape;
     const vmin = Math.min(width, height) / 100;
     const hero = Math.min(WALL_TYPE_RAMP.heroMax, Math.max(WALL_TYPE_RAMP.heroMin, 5 * vmin));
@@ -216,8 +200,7 @@ describe("the harness stage document", () => {
     expect(stage).toContain("<RouterProvider");
     expect(stage).toContain("<DataStoreProvider");
     expect(stage).toContain('from "../WallGrid.js"');
-    // The grid renders the composition the schema last accepted, never the raw
-    // message field — a refused draft cannot reach it (design.md D10).
+    // The grid renders the composition the schema last accepted, never the raw message field.
     expect(stage).toContain("<WallGrid config={config} />");
     expect(stage).toContain("applyHarnessUpdate(current, next)");
     expect(stage).not.toContain("<WallGrid config={update.config} />");
@@ -245,8 +228,7 @@ describe("the harness stage document", () => {
     const panel = await source("HarnessPanel.tsx");
     const stage = await source("stage.tsx");
 
-    // The iframe carries the panel as its key, so a panel change tears the
-    // document down and a config or fixture change cannot (design.md D3).
+    // The iframe carries the panel as its key, so a panel change tears the document down.
     expect(panel).toContain("key={panel}");
     expect(panel).toContain('src="/stage.html"');
     expect(panel).toContain("sendHarnessUpdate(");
@@ -360,11 +342,8 @@ describe("the harness message contract", () => {
   });
 
   it("refuses a composition the schema rejects without discarding the rest of the message", () => {
-    // A draft the panel's own controls can author into an invalid state — its
-    // x/y inputs write straight through the editor's placement rule, which
-    // permits an overlap and leaves the validator to report it. The composition
-    // must not reach the stage; the surface, scheme, fixture controls, and bench
-    // inputs must, or every other control would silently stop working.
+    // A draft the panel's controls can author into an invalid state: the composition must
+    // not reach the stage, but the surface, scheme, fixture controls, and bench must.
     const refused = panelUpdate({
       mode: "bench",
       theme: "light",

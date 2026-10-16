@@ -1,20 +1,6 @@
 /**
- * The ported device-card metrics (design.md D2, D4, D5, D7; specs/wall-display
- * "Wall Device Presentation", "Touch Operation", "Wall Visual Language",
- * "Span-Aware Card Presentation").
- *
- * The numbers are ported verbatim from `piitaya/lovelace-mushroom` (Apache-2.0),
- * which this repository re-implements under its GPL-3.0 Hearth language rather
- * than importing: Mushroom's cards are `LitElement` classes bound to Home
- * Assistant's frontend (`src/utils/theme.ts` declares the control/type/icon
- * tokens; `src/shared/{state-item,shape-icon,slider,card}.ts` the anatomy).
- * Hearth names win and the ported source is recorded, not vendored.
- *
- * This module is the numeric declaration site a renderer can consume; the CSS
- * tokens in `wall/hearth.css` mirror it and `tests/wall-tokens.test.ts` asserts
- * the two agree (`wall/type-ramp.ts` is the same pattern), so a card cannot
- * drift from the table. Deliberately dependency-free — no React, no DOM — so the
- * bounds are reachable by `bun test`.
+ * The ported device-card metrics, numbers ported verbatim from
+ * `piitaya/lovelace-mushroom` (Apache-2.0).
  */
 
 /** The wall device card's ported metrics, in CSS pixels (or a ratio where noted). */
@@ -85,10 +71,8 @@ export const WALL_CARD_METRICS: WallCardMetrics = Object.freeze({
 });
 
 /**
- * The glyph side, in CSS pixels: {@link WALL_CARD_METRICS.iconSize} at the
- * ported `0.667em` symbol ratio — Mushroom's 24 px glyph on a 36 px shape. A
- * caller sizes its icon element with this, since an SVG icon does not inherit
- * the shape's `font-size` the way Mushroom's `ha-icon` did.
+ * The glyph side, in CSS pixels: {@link WALL_CARD_METRICS.iconSize} at the ported
+ * `0.667em` symbol ratio.
  */
 export const WALL_CARD_GLYPH_SIZE = Math.round(
   WALL_CARD_METRICS.iconSize * WALL_CARD_METRICS.iconSymbol,

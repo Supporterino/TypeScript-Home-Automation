@@ -17,23 +17,14 @@ import type {
 import { collectAppModules } from "./import-graph.js";
 
 /**
- * The data layer's fixture seam (tasks 1.1-1.3; design.md D5; specs/web-ui
- * "Data Sources" — "Components render from an explicitly supplied fixture
- * set", "A deployment cannot select fixture data", "Supplying fixtures does
- * not change the API path").
- *
- * The seed and the sourcing decision are pure functions of the fixture set and
- * are called directly here. The wiring — that the provider consults them, and
- * that the snapshot fetch and the stream subscription now sit behind the
- * fixture gate — is asserted structurally, since this suite has no DOM, in the
- * style `wall-reconnect.test.ts` and `wall-single-surface.test.ts` established.
+ * The data layer's fixture seam: the seed and the sourcing decision are pure functions
+ * of the fixture set; the wiring is asserted structurally.
  */
 const APP_DIR = join(import.meta.dir, "..", "src/app");
 const DATA_STORE = join(APP_DIR, "lib/data-store.tsx");
 
 /**
- * Runtime reads that could select fixture data behind the caller's back, in a
- * deployment or a development session alike.
+ * Runtime reads that could select fixture data behind the caller's back.
  */
 const RUNTIME_SELECTION_TOKENS: readonly RegExp[] = [
   /\bprocess\.env\b/,
@@ -280,11 +271,8 @@ describe("fixture seam reachability", () => {
   });
 
   it("supplies a fixture set from no shipped module but the harness", async () => {
-    // Reachability, not a directory sweep: the harness is a development-only
-    // surface in its own documents (and `wall-harness-guard.test.ts` asserts it
-    // is unreachable from the entrypoint), so every module *this* walk reaches
-    // is one of the shipped app's own — and none of them may supply fixtures.
-    // The store itself is the declaration site, so it is the one exclusion.
+    // Reachability, not a directory sweep: every module this walk reaches is one of the
+    // shipped app's own — and none of them may supply fixtures.
     const graph = await collectAppModules();
     const offenders: string[] = [];
     for (const file of graph.files) {

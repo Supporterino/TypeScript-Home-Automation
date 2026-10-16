@@ -3,21 +3,16 @@ import { resolve } from "node:path";
 import { createEngine, type Engine, type EngineOptions } from "@ts-ha/core";
 
 /**
- * Default automations directory, resolved against the current working
- * directory (specs/cli "Run Command").
+ * Default automations directory, resolved against the current working directory.
  */
 export const DEFAULT_AUTOMATIONS_DIR = "./automations";
 
-/** The package loaded on demand when the web UI is enabled (design.md D3, D4). */
+/** The package loaded on demand when the web UI is enabled. */
 const WEB_UI_PACKAGE = "@ts-ha/web-ui";
 
 /**
- * Raw `WEB_UI_ENABLED` import gate (design.md D3; specs/web-ui "Enabling").
- *
- * This is a string comparison, not option parsing — `@ts-ha/web-ui` remains the
- * sole parser. It MUST match the package's enablement vocabulary exactly
- * (`true`/`1`/`yes`, trimmed, case-insensitive), otherwise a value the package
- * accepts would run headless here.
+ * Raw `WEB_UI_ENABLED` gate: a string comparison matching `@ts-ha/web-ui`'s
+ * enablement vocabulary (`true`/`1`/`yes`, trimmed, case-insensitive).
  */
 function isWebUiEnabled(value: string | undefined): boolean {
   if (value === undefined) return false;
@@ -56,8 +51,7 @@ export interface RunCommandOptions {
 }
 
 function defaultImportWebUi(): Promise<WebUiModule> {
-  // Variable specifier: the optional peer must stay unresolvable at build time
-  // so a headless install is not forced to carry the frontend tree (D4).
+  // Variable specifier: keeps the optional peer unresolvable so headless installs skip it.
   return import(WEB_UI_PACKAGE) as unknown as Promise<WebUiModule>;
 }
 
@@ -73,11 +67,7 @@ function isModuleNotFoundError(err: unknown): boolean {
   return false;
 }
 
-/**
- * Import the optional web UI package, parse its options, and register its
- * plugin with the engine. The import gate is the caller's raw string check;
- * option parsing stays inside `@ts-ha/web-ui` (design.md D3, D8).
- */
+/** Import the optional web UI package, parse its options, and register its plugin. */
 async function registerWebUi(
   engine: Engine,
   env: NodeJS.ProcessEnv,
@@ -134,7 +124,7 @@ export async function runCommand(options: RunCommandOptions = {}): Promise<void>
     );
   }
 
-  // Raw string gate only — the package parses its own options (design.md D3).
+  // Raw string gate only — the package parses its own options.
   if (isWebUiEnabled(env.WEB_UI_ENABLED)) {
     await registerWebUi(engine, env, importWebUi);
   }

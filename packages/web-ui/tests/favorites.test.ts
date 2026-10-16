@@ -7,9 +7,8 @@ import {
   toggleFavorite,
 } from "../src/app/lib/favorites.js";
 
-// Pure list logic — no DOM, no React. The store's optimistic write and the
-// stream reconciliation are thin wrappers over these functions (design.md
-// D9; specs/web-ui "Favorites"; task 8.1).
+// Pure list logic — no DOM, no React. The store's optimistic write and the stream
+// reconciliation are thin wrappers over these functions.
 
 describe("parseFavorites", () => {
   it("returns an empty list for a non-array value", () => {

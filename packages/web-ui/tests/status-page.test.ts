@@ -3,10 +3,8 @@ import { Hono } from "hono";
 import pino from "pino";
 import { createWebUiService } from "../src/index.js";
 
-// The web UI is now a service plugin mounted on a bare Hono app. These route
-// assertions live in `@ts-ha/web-ui` and must not import `@ts-ha/core`
-// (design.md D2, D7; task 3.7). Core's former `webUi` config assertions moved
-// to the core config tests.
+// The web UI is a service plugin mounted on a bare Hono app. These route assertions
+// live in `@ts-ha/web-ui` and must not import `@ts-ha/core`.
 
 const logger = pino({ level: "silent" });
 
@@ -92,7 +90,7 @@ describe("WebUiService — no auth", () => {
   });
 });
 
-// ── View segment routing (design.md D7; task 10.1) ────────────────────────
+// ── View segment routing ──────────────────────────────────────────────────
 
 describe("WebUiService — view segment allowlist", () => {
   describe("deep links serve the shell", () => {
@@ -133,11 +131,8 @@ describe("WebUiService — view segment allowlist", () => {
   });
 
   describe("a nested path beneath a registered segment still serves the shell", () => {
-    // Per the Routes requirement, `GET {path}/<ui-segment>/*` matches any
-    // depth beneath a registered top-level segment — the client router, not
-    // the server, decides whether a specific nested path is a view it
-    // recognises. The server's job is only to keep unregistered *top-level*
-    // segments out.
+    // `GET {path}/<ui-segment>/*` matches any depth beneath a registered top-level
+    // segment — the client router, not the server, decides whether a nested path is a view.
     it("GET /status/devices/x/y/z/nonexistent-nested still serves the shell", async () => {
       const app = await makeApp();
       const res = await req(app, "/status/devices/x/y/z/nonexistent-nested");
@@ -179,7 +174,7 @@ describe("WebUiService — view segment allowlist", () => {
   });
 });
 
-// ── PWA manifest and login retint (design.md D3; task 12.1) ───────────────
+// ── PWA manifest and login retint ─────────────────────────────────────────
 
 describe("WebUiService — brand manifest and icon", () => {
   it("keeps the ts-ha brand name with the Lumen dark manifest colours", async () => {
@@ -193,8 +188,7 @@ describe("WebUiService — brand manifest and icon", () => {
     };
     expect(manifest.name).toBe("ts-ha");
     expect(manifest.short_name).toBe("ts-ha");
-    // Drift guard: the manifest theme/background colours are the Lumen dark
-    // scheme's `--bg` token (specs/web-ui "PWA Support").
+    // Drift guard: the manifest theme/background colours are the Lumen dark scheme's `--bg`.
     expect(manifest.theme_color.toLowerCase()).toBe("#0b0f17");
     expect(manifest.background_color.toLowerCase()).toBe("#0b0f17");
   });

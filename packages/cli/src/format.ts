@@ -136,7 +136,7 @@ export function formatDevice(device: DeviceDescriptor): string {
 /**
  * Format one flattened capability as a single descriptor line.
  */
-export function formatCapability(capability: Capability): string {
+function formatCapability(capability: Capability): string {
   const access = `${capability.access.readable ? "r" : "-"}${capability.access.writable ? "w" : "-"}`;
   const property = capability.property ?? capability.kind;
 
@@ -158,9 +158,8 @@ export function formatCapability(capability: Capability): string {
 }
 
 /**
- * Summarize a trigger context for the compact execution-history view.
- * Unlike {@link formatTrigger}, this handles the runtime `TriggerContext`
- * union (including the device_* triggers).
+ * Summarize a runtime `TriggerContext` for the compact history view
+ * (including the device_* triggers).
  */
 export function summarizeTriggerContext(trigger: TriggerContext): string {
   switch (trigger.type) {
@@ -181,9 +180,8 @@ export function summarizeTriggerContext(trigger: TriggerContext): string {
 }
 
 /**
- * The CLI's message for an unconfigured weather feature. The engine reports
- * this as an unavailable marker (a 404/400), not an error, so the command
- * reports it plainly rather than failing.
+ * The CLI's message for an unconfigured weather feature, which the engine
+ * reports as an unavailable marker rather than an error.
  */
 export function weatherUnavailableMessage(reason: WeatherUnavailable["reason"]): string {
   return reason === "service_unregistered"
@@ -201,16 +199,16 @@ export function formatLogEntry(entry: {
   [key: string]: unknown;
 }): string {
   const time = new Date(entry.time).toISOString().slice(11, 23);
-  const level = levelToName(entry.level).padEnd(5);
+  const level = levelName(entry.level).padEnd(5);
   const automation = entry.automation ? ` [${entry.automation}]` : "";
   const service = entry.service ? ` (${entry.service})` : "";
   return `${time} ${level}${automation}${service} ${entry.msg}`;
 }
 
 /**
- * Map pino numeric level to name.
+ * Map pino numeric level to a display name.
  */
-function levelToName(level: number): string {
+export function levelName(level: number): string {
   if (level <= 10) return "TRACE";
   if (level <= 20) return "DEBUG";
   if (level <= 30) return "INFO";

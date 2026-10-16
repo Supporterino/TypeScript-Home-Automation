@@ -1,19 +1,6 @@
 /**
- * The editor's draft preview (wall-zones-and-fit D7; specs/wall-display "Wall
- * Configuration Editor"). A pure resolver that shows a draft composition as the
- * panel will: the wall's target panel (1920 × 1080 landscape), each widget's
- * cell in the panel's own pixel geometry, the zones the draft declares, the fit
- * verdict at the wall's floors, and how many pages each device grid would
- * present.
- *
- * It reuses the wall's own pure layout — `wall/grid.ts`'s fit resolver,
- * `wall/bands.ts`'s zones, and the same page rule the device grid renders
- * through — so the editor and the wall cannot disagree about a composition. The
- * preview is a *wireframe* drawn by the editor's own Lumen system: it renders no
- * wall widget and reaches no Hearth, so the wall's stylesheet stays on demand
- * (design.md D5, D7).
- *
- * Loaded only inside the lazy `wall` chunk; imported only by the editor.
+ * The editor's draft preview: a pure resolver that shows a draft composition as the
+ * wall's target panel will.
  */
 import { WALL_GRID_COLUMNS, type WallProfileConfig } from "@ts-ha/shared";
 import { resolveBands } from "../bands.js";
@@ -23,8 +10,7 @@ import { getWidgetDescriptor } from "../registry.js";
 import { deviceGridIds, resolveDeviceGridPage } from "../widgets/device-grid-model.js";
 
 /**
- * The wall's target panel, in CSS pixels (wall-zones-and-fit D7) — the panel the
- * editor previews at, and the panel the fit verdict is resolved against.
+ * The wall's target panel, in CSS pixels — the panel the editor previews at.
  */
 export const WALL_PANEL_WIDTH_PX = 1920;
 export const WALL_PANEL_HEIGHT_PX = 1080;
@@ -53,7 +39,7 @@ export interface WallPreviewBand {
   readonly box: WallPreviewBox;
 }
 
-/** A device grid's page count, as the widget itself would present it (design.md D12). */
+/** A device grid's page count, as the widget itself would present it. */
 export interface WallPreviewGrid {
   readonly widgetId: string;
   /** How many devices the grid's selection holds. */
@@ -62,7 +48,7 @@ export interface WallPreviewGrid {
   readonly pages: number;
 }
 
-/** The draft's resolved preview (design.md D7; specs/wall-display "Wall Configuration Editor"). */
+/** The draft's resolved preview. */
 export interface WallDraftPreview {
   readonly panel: { readonly width: number; readonly height: number };
   /** The wall's resolved gutter, in panel pixels. */
@@ -110,12 +96,6 @@ function cellBox(
 /**
  * Resolves a draft's preview: the panel it is judged at, the fit verdict, the
  * wireframe's geometry, and each device grid's page count.
- *
- * The editor edits the base layout, so the preview shows the base layout — the
- * composition a wall renders with no orientation override. The verdict comes
- * from the same resolver the wall renders through, at the panel's own height, so
- * a draft the editor reports as fitting is one the wall renders without
- * scrolling.
  */
 export function resolveDraftPreview(
   config: WallProfileConfig,
@@ -145,9 +125,7 @@ export function resolveDraftPreview(
     .filter((widget) => widget.type === "devices")
     .map((widget) => {
       const devices = deviceGridIds(widget.config);
-      // The page count comes from the same rule the widget pages through, at the
-      // row unit this panel resolves — including the rows a configured title costs,
-      // so the editor's report and the wall's page cannot disagree.
+      // The page count comes from the same rule the widget pages through.
       const page = resolveDeviceGridPage({
         ids: devices,
         span: widget,

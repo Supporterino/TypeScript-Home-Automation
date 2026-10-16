@@ -1,16 +1,6 @@
 /**
- * Wall-profile editor entry point (design.md D12; specs/web-ui "Wall Editor
- * Admission In Admin Navigation"; specs/wall-display "Wall Configuration
- * Editor"; task 6.4). Rendered inside the shell via `RouteOutlet`, so it is
- * reachable through admin navigation at its own reloadable URL. It lists
- * profiles and admits creating, renaming, deleting, and configuring them; the
- * profile editor itself opens as a full-screen overlay ({@link WallEditor}) —
- * the wall is not a route the editor lives under.
- *
- * Mutations surface the server's inline error (a 409 conflict or 400 invalid)
- * and reload the list on success, mirroring `RoomsView`'s pattern.
- *
- * Rebuilt on the Lumen primitive layer (`ui/*`) and `lucide-react`.
+ * Wall-profile editor entry point: lists profiles and admits creating, renaming,
+ * deleting, and configuring them.
  */
 import { Monitor, Pencil, Plus, Settings, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
@@ -29,16 +19,13 @@ import {
   DialogTitle,
   EmptyState,
   IconButton,
+  INPUT_CLASSES,
   Row,
   Spinner,
   Stack,
 } from "../ui/index.js";
 import { emptyWallConfig } from "../wall/editor/model.js";
 import { WallEditor } from "../wall/editor/WallEditor.js";
-
-/** The shared text-input treatment (the `ui/` layer carries no input primitive). */
-const INPUT_CLASSES =
-  "touch-target h-10 w-full rounded-input border border-hairline bg-surface px-3 text-sm text-ink motion-toggle focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus";
 
 export function WallsView() {
   const { basePath } = useRouter();

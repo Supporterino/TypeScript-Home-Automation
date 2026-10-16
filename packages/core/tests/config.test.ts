@@ -71,17 +71,15 @@ describe("loadConfig", () => {
       expect(config.mqtt.port).toBe(1883);
       expect(config.zigbee2mqttPrefix).toBe("zigbee2mqtt");
       expect(config.logLevel).toBe("info");
-      // Persistence now defaults on: the store holds rooms and automation
-      // enabled flags, which must survive a restart (design.md D6, R14).
+      // Persistence defaults on: the store holds rooms and automation enabled flags.
       expect(config.state.persist).toBe(true);
       expect(config.state.filePath).toBe("./state.json");
       expect(config.state.flushIntervalMs).toBe(1000);
       expect(config.automations.recursive).toBe(false);
       expect(config.httpServer.port).toBe(8080);
       expect(config.deviceRegistry.persist).toBe(true);
-      // Device state persistence defaults on, matching the state store and
-      // device registry defaults (specs/configuration "Device State
-      // Persistence").
+      // Device state persistence defaults on, matching the state store and device
+      // registry defaults.
       expect(config.deviceState.persist).toBe(true);
       expect(config.deviceState.filePath).toBe("./device-state.json");
       expect(config.deviceState.flushIntervalMs).toBe(1000);
@@ -361,10 +359,8 @@ describe("loadConfig", () => {
       expect(config.httpServer.port).toBe(9090);
     });
 
-    // The web UI is no longer part of core's surface: its enablement and path
-    // are parsed by `@ts-ha/web-ui` (specs/configuration; specs/web-ui
-    // "Enabling"). Core must expose no `webUi` section and must ignore the
-    // `WEB_UI_*` variables entirely.
+    // The web UI is not part of core's surface: its config is parsed by `@ts-ha/web-ui`,
+    // and core exposes no `webUi` section.
     it("has no webUi section", () => {
       const config = loadConfig();
       expect(config.httpServer).not.toHaveProperty("webUi");

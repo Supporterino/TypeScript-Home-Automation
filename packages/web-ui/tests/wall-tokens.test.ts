@@ -4,16 +4,8 @@ import { join } from "node:path";
 import { WALL_CARD_GLYPH_SIZE, WALL_CARD_METRICS } from "../src/app/wall/cards/metrics.js";
 
 /**
- * The ported device-card token table (design.md D2, D4, D7; specs/wall-display
- * "Wall Visual Language" — "A ported token table is declared once"). The metrics
- * are ported from Lovelace Mushroom and declared as Hearth's own tokens in
- * `wall/hearth.css`; `wall/cards/metrics.ts` mirrors them and is asserted here,
- * exactly as `wall-type-ramp.test.ts` asserts the ramp.
- *
- * The design-system page's own ported-metric table
- * (`design-system/ts-ha/pages/wall.md`) is asserted against the same numbers, so
- * the page a reader sees, the stylesheet the wall loads, and the module a
- * renderer consumes cannot state different values for one metric (task 3.1).
+ * The ported device-card token table: the metrics in `wall/cards/metrics.ts`,
+ * mirrored by Hearth's own tokens in `wall/hearth.css`.
  */
 
 /** The light scheme's rule selector — the boundary between the two token blocks. */
@@ -40,7 +32,7 @@ async function readHearthCss(): Promise<string> {
   return readFile(join(import.meta.dir, "..", "src/app/wall/hearth.css"), "utf8");
 }
 
-/** The design-system page that states the ported card metrics to a reader (task 3.1). */
+/** The design-system page that states the ported card metrics to a reader. */
 const WALL_PAGE = join(import.meta.dir, "..", "..", "..", "design-system/ts-ha/pages/wall.md");
 
 async function readWallPage(): Promise<string> {
@@ -48,10 +40,8 @@ async function readWallPage(): Promise<string> {
 }
 
 /**
- * The value cell of the page's table row whose first cell is `firstCell` — the
- * same metric, stated in prose, as a reader sees it. Returns `null` when the page
- * has no such row, so a table that lost a metric fails here rather than silently
- * asserting nothing.
+ * The value cell of the page's table row whose first cell is `firstCell`, or `null`
+ * when the page has no such row.
  */
 function pageMetricValue(page: string, firstCell: string): string | null {
   for (const line of page.split("\n")) {
@@ -63,10 +53,8 @@ function pageMetricValue(page: string, firstCell: string): string | null {
 }
 
 /**
- * Every ported metric and the token name it is declared under, with the value
- * rendered as the CSS text the token must carry. The list is the design's table
- * (design.md D2) written as code, so a missing or re-valued token fails here; the
- * ported numbers themselves are asserted against `WALL_CARD_METRICS` above.
+ * Every ported metric and the token name it is declared under, with the value as the
+ * CSS text the token must carry.
  */
 const PORTED_TOKENS: readonly { token: string; value: string }[] = [
   { token: "--hearth-card-icon-size", value: `${WALL_CARD_METRICS.iconSize}px` },
@@ -91,11 +79,8 @@ const PORTED_TOKENS: readonly { token: string; value: string }[] = [
 ];
 
 /**
- * Every ported metric as the design-system page must state it (design.md D2,
- * task 3.1): the page's table row (keyed by its first cell — the token, or the
- * `glyph` row) must carry a value cell beginning with the value the code declares.
- * The page's value cells add a human note after the number ("42 px (the wall's
- * touch target)"), so the prefix is asserted rather than whole-cell equality.
+ * Every ported metric as the design-system page must state it: the page's value cells
+ * add a human note after the number, so the prefix is asserted.
  */
 const PORTED_PAGE_ROWS: readonly { readonly row: string; readonly value: string }[] = [
   { row: "`--hearth-card-icon-size`", value: `${WALL_CARD_METRICS.iconSize} px` },
@@ -123,7 +108,7 @@ const PORTED_PAGE_ROWS: readonly { readonly row: string; readonly value: string 
 ];
 
 describe("the ported card metrics", () => {
-  it("ports Mushroom's values (design.md D2)", () => {
+  it("ports Mushroom's values", () => {
     expect(WALL_CARD_METRICS.iconSize).toBe(36);
     expect(WALL_CARD_METRICS.iconSymbol).toBe(0.667);
     expect(WALL_CARD_METRICS.iconShapeRadius).toBe("50%");

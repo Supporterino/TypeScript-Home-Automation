@@ -1,14 +1,6 @@
 /**
- * The wall clock/date widget (design.md D11, W1; specs/wall-display "Widget
- * Catalog", "Always-On Operation"). Ticks once a second from the client clock
- * and needs no server data, so it renders correctly while the engine is
- * unreachable.
- *
- * Composed on the wall's single card vocabulary (design.md W1): the ported
- * circular clock affordance, the date as the label, and the time as the reading —
- * the reading keeping the wall's hero tier, which is what is read from across the
- * room (design.md W2). Ambient — chrome-less, its large type sits directly on the
- * panel.
+ * The wall clock/date widget: ticks once a second from the client clock with no
+ * server data.
  */
 import { Clock } from "lucide-react";
 import { useNow } from "../../lib/use-now.js";

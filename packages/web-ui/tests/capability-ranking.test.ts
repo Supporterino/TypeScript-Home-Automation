@@ -65,10 +65,8 @@ describe("selectPrimaryAction — dimmable light", () => {
 });
 
 describe("selectPrimaryAction — canonical on/off preference", () => {
-  // A device declaring Zigbee2MQTT's `state` first and the canonical `on`
-  // second: both the tile's ranked action and the room command must resolve to
-  // `on`, so the tile's optimistic override key (`qid:on`) matches the property
-  // the room command commands.
+  // A device declaring Zigbee2MQTT's `state` first and the canonical `on` second: both
+  // the tile's ranked action and the room command must resolve to `on`.
   const capabilities = [onOff("state"), onOff("on")];
 
   it("prefers on over state regardless of declaration order", () => {
@@ -120,7 +118,7 @@ describe("selectPrimaryAction — an unrankable device", () => {
   });
 });
 
-describe("selectPrimaryAction — fallback ranks (gated on OUTPUT_KINDS, design D4)", () => {
+describe("selectPrimaryAction — fallback ranks (gated on OUTPUT_KINDS)", () => {
   it("falls back to a writable enum when it belongs to an output-kind capability", () => {
     const capabilities: Capability[] = [
       outputContainer("fan", [
@@ -139,9 +137,8 @@ describe("selectPrimaryAction — fallback ranks (gated on OUTPUT_KINDS, design 
   });
 
   it("does not fall back to a writable enum outside any output-kind capability", () => {
-    // A motion sensor's writable `sensitivity` setting — a bare enum with no
-    // output-kind container — must not become a primary action (specs/web-ui
-    // "A sensor's configuration setting is not its primary action").
+    // A motion sensor's writable `sensitivity` setting — a bare enum with no output-kind
+    // container — must not become a primary action.
     const capabilities: Capability[] = [
       {
         kind: "enum",
@@ -160,7 +157,7 @@ describe("selectPrimaryAction — fallback ranks (gated on OUTPUT_KINDS, design 
   });
 });
 
-describe("isOperableDevice — agrees with selectPrimaryAction (design D4)", () => {
+describe("isOperableDevice — agrees with selectPrimaryAction", () => {
   const fixtures: { name: string; capabilities: Capability[] }[] = [
     { name: "dimmable light", capabilities: [light([onOff("state"), numeric("brightness")])] },
     {
@@ -278,7 +275,7 @@ describe("rankDeviceTile", () => {
   });
 });
 
-describe("coverStopCommand (design D6)", () => {
+describe("coverStopCommand", () => {
   it("returns the stop property and the exact permitted value for a Zigbee cover", () => {
     const capabilities: Capability[] = [
       {
@@ -335,9 +332,8 @@ describe("coverStopCommand (design D6)", () => {
   });
 
   it("returns null when a cover's stop-capable state enum is read-only", () => {
-    // No writable transport action is declared, so a read-only movement state
-    // that names `stopped` still cannot be commanded — the case a Shelly cover
-    // had before task 1.5 gave it a writable `action` (design.md D15).
+    // No writable transport action is declared, so a read-only movement state that names
+    // `stopped` still cannot be commanded.
     const capabilities: Capability[] = [
       numeric("position"),
       {
@@ -371,8 +367,7 @@ describe("coverStopCommand (design D6)", () => {
   });
 
   it("finds stop on a Shelly cover's declared transport action", () => {
-    // Task 1.5 gave the Shelly cover a writable `action` enum, so the stop it
-    // could always perform is now expressible (design.md D15).
+    // A Shelly cover's writable `action` enum makes the stop it could perform expressible.
     const capabilities = [numeric("position"), transportEnum("action", ["open", "close", "stop"])];
     expect(coverStopCommand(capabilities)).toEqual({ property: "action", value: "stop" });
   });
@@ -383,7 +378,7 @@ describe("coverStopCommand (design D6)", () => {
   });
 });
 
-describe("coverTransportAction (design D15)", () => {
+describe("coverTransportAction", () => {
   it("finds the declared transport and its exact open/close/stop values", () => {
     const capabilities = [numeric("position"), transportEnum("action", ["open", "close", "stop"])];
     expect(coverTransportAction(capabilities)).toEqual({
@@ -434,7 +429,7 @@ describe("coverTransportAction (design D15)", () => {
   });
 });
 
-describe("coverTransportTargets (design D15)", () => {
+describe("coverTransportTargets", () => {
   it("commands the declared transport values when one is declared", () => {
     const capabilities = [numeric("position"), transportEnum("action", ["open", "close", "stop"])];
     expect(coverTransportTargets(coverTransportAction(capabilities), undefined)).toEqual({

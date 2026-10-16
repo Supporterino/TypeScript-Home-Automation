@@ -1,12 +1,6 @@
 /**
- * The application shell (design.md D4, D6; specs/web-ui "Responsive
- * Navigation", "Navigation and Information Architecture", "Theme Selection").
- *
- * Mobile-first: a sticky, safe-area-aware app bar carries the title, the
- * transport indicator, and the theme control; a control-first bottom tab bar
- * serves the narrow viewport while a persistent grouped rail serves the wide
- * one. The full-bleed wall renders with no chrome at all (specs/web-ui
- * "Full-Bleed Wall Rendering").
+ * The application shell: a sticky app bar, a wide-viewport rail and a
+ * narrow-viewport bottom bar, with no chrome on the full-bleed wall.
  */
 import { LoaderCircle, Monitor, Moon, RefreshCw, Sun, Wifi, WifiOff, Zap } from "lucide-react";
 import { lazy, type ReactNode, Suspense, useEffect } from "react";
@@ -78,9 +72,8 @@ const basePath =
   "/status";
 
 /**
- * The header copy for a transport state (design.md D6; specs/web-ui "Data
- * Sources" — degraded transport is visible). The distinct label per state is
- * the non-colour channel alongside the icon and its token.
+ * The header copy for a transport state; the distinct label per state is the
+ * non-colour channel alongside the icon and its token.
  */
 function transportPresentation(transport: TransportState): {
   label: string;
@@ -140,7 +133,7 @@ function isThemePreference(value: string): value is ThemePreference {
   return value === "light" || value === "dark" || value === "system";
 }
 
-/** The light/dark/system theme control (design.md D4; specs/web-ui "Theme Selection"). */
+/** The light/dark/system theme control. */
 function ThemeControl() {
   const { preference, resolvedTheme, setTheme } = useTheme();
   const Icon = preference === "system" ? Monitor : resolvedTheme === "dark" ? Moon : Sun;
@@ -228,12 +221,8 @@ function AppBar() {
 function Shell() {
   const { pathname, route } = useRouter();
 
-  // The wall is the one full-bleed view (specs/web-ui "Full-Bleed Wall
-  // Rendering"): it renders directly, with no app bar, rail, or tab bar, so its
-  // widgets use the whole panel. Every other view takes the shell path below
-  // unchanged. The store provider above still wraps it — the wall needs the data
-  // layer — and the boundary/suspense wrap matches the shell path's, so a chunk
-  // load or render failure behaves identically.
+  // The wall renders full-bleed, with no app bar, rail, or tab bar, so its
+  // widgets use the whole panel. Every other view takes the shell path below.
   if (isFullBleedView(route.view)) {
     return (
       <ErrorBoundary key={pathname}>
@@ -258,13 +247,8 @@ function Shell() {
         <DesktopSidebar />
         <div className="min-w-0 flex-1 pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
           {/*
-            Keyed by pathname: navigating to another view and back remounts the
-            boundary, which is how a caught render failure recovers. The single
-            structural point where routed view content is swapped. The
-            `motion-enter` wrapper replays the non-essential enter transition on
-            each navigation; it is transform/opacity only, so it never shifts
-            layout, and the token stylesheet suppresses it under
-            prefers-reduced-motion.
+            Keyed by pathname: navigating away and back remounts the boundary,
+            which is how a caught render failure recovers.
           */}
           <main className="px-3 pb-[calc(5.5rem+env(safe-area-inset-bottom))] pt-4 md:px-6 md:pb-8">
             <ErrorBoundary key={pathname}>
@@ -292,8 +276,7 @@ export function App() {
 
   return (
     <RouterProvider basePath={basePath}>
-      {/* Radix tooltips need one provider above every trigger; the app root is
-          the single place that guarantees it (design.md D5). */}
+      {/* Radix tooltips need one provider above every trigger. */}
       <TooltipProvider>
         <DataStoreProvider>
           <Shell />

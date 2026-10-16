@@ -18,7 +18,7 @@ export interface NavItemProps extends AnchorHTMLAttributes<HTMLAnchorElement> {
   asChild?: boolean;
 }
 
-/** A navigation row on `ui/` tokens with an accessible active state (design.md D5). */
+/** A navigation row on `ui/` tokens with an accessible active state. */
 export function NavItem({
   className,
   icon,

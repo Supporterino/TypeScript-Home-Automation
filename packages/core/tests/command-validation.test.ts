@@ -5,9 +5,8 @@ import {
   validateCommand,
 } from "../src/device-sources/command-validation.js";
 
-// A Zigbee-shaped capability set: an on/off switch (Z2M "state" convention)
-// plus a ranged numeric brightness and an enumerated effect — enough to
-// exercise every violation kind against one device (task 7.1).
+// A Zigbee-shaped capability set: an on/off switch plus a ranged numeric brightness
+// and an enumerated effect.
 const ZIGBEE_LIGHT_CAPABILITIES: Capability[] = [
   {
     kind: "light",
@@ -56,9 +55,8 @@ const STATE_TOGGLE_CAPABILITIES: Capability[] = [
   },
 ];
 
-// A Shelly-shaped switch: a real boolean encoding, declared explicitly
-// (design.md D1, task 3.1) rather than relying on the absent-declaration
-// default — the shape a Shelly `on` property has after that task.
+// A Shelly-shaped switch: a real boolean encoding, declared explicitly rather than
+// relying on the absent-declaration default.
 const SHELLY_SWITCH_CAPABILITIES: Capability[] = [
   {
     kind: "switch",
@@ -91,7 +89,7 @@ describe("validateCommand — Zigbee device", () => {
     expect(result).toEqual({ ok: true });
   });
 
-  it("rejects a value in a foreign encoding with a descriptive error (design D3)", () => {
+  it("rejects a value in a foreign encoding with a descriptive error", () => {
     const result = validateCommand(ZIGBEE_LIGHT_CAPABILITIES, { state: 1 });
     expect(result.ok).toBe(false);
     expect((result as { error: string }).error).toMatch(/must be a boolean/);
@@ -199,7 +197,7 @@ const TOP_LEVEL_POWER: Capability[] = [
   },
 ];
 
-describe("translateCommandProperties — dispatch encoding (design D2)", () => {
+describe("translateCommandProperties — dispatch encoding", () => {
   it("composes a real boolean into the declared on value of a nested capability", () => {
     expect(translateCommandProperties(ZIGBEE_LIGHT_CAPABILITIES, { state: true })).toEqual({
       state: "ON",

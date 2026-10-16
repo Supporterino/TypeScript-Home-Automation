@@ -1,16 +1,6 @@
 /**
- * Pure wall-profile editor logic (design.md D5, D10; wall-zones-and-fit D1, D7,
- * D11, D12; specs/wall-display "Wall Configuration Editor", "Widget Grid
- * Layout", "Wall Zones", "Wall Navigation", "Device Grid Widget"). Every
- * mutation the editor performs — adding, removing, moving, resizing, and
- * reconfiguring a widget, zoning it, choosing a link's target wall, choosing a
- * device grid's devices, and validating a draft before it is saved — lives here
- * as a pure function so it is reachable by `bun test` without a DOM. The save
- * path funnels through {@link submitProfileDraft}, which validates and checks the
- * draft against its panel first and only then calls the persist callback, so an
- * invalid or unfittable config can never reach the API.
- *
- * Loaded only inside the lazy `wall` chunk (the editor is its only consumer).
+ * Pure wall-profile editor logic: every mutation the editor performs, plus the save
+ * path that validates a draft before it reaches the API.
  */
 import {
   type DeviceDescriptor,
@@ -48,7 +38,7 @@ export type WallDraftValidation =
   | { ok: true; profile: WallProfile }
   | { ok: false; errors: string[] };
 
-/** A freshly created profile's composition — no widgets (task 6.1). */
+/** A freshly created profile's composition — no widgets. */
 export function emptyWallConfig(): WallProfileConfig {
   return { widgets: [] };
 }
@@ -66,14 +56,8 @@ function nextWidgetId(widgets: readonly WallWidget[], type: WallWidgetType): str
 }
 
 /**
- * The first top-left cell where a `{w, h}` span overlaps no existing widget,
- * scanning rows top-to-bottom and cells left-to-right. Bounded by the bottom
- * edge of the existing layout — at which every column is free — and by the
- * row bound, so it always terminates and never returns a row that would push
- * the span past {@link WALL_GRID_MAX_ROWS}. When the layout leaves no in-bound
- * free cell (a packed profile), the last in-bound row is returned and the
- * draft validator surfaces the resulting overlap rather than a row-bound
- * error the user did not cause.
+ * The first top-left cell where a `{w, h}` span overlaps no existing widget, scanning
+ * rows top-to-bottom and cells left-to-right.
  */
 function findFreePosition(
   widgets: readonly WallWidget[],
@@ -92,9 +76,7 @@ function findFreePosition(
 }
 
 /**
- * Adds a widget of `type` at the first free position that fits its default
- * span (design.md D6). The base layout is edited; a per-orientation override is
- * preserved untouched.
+ * Adds a widget of `type` at the first free position that fits its default span.
  */
 export function addWidget(
   config: WallProfileConfig,
@@ -122,16 +104,8 @@ export function removeWidget(config: WallProfileConfig, id: string): WallProfile
 }
 
 /**
- * Clamps a span to its type's minimum and maximum, and to the column bound
- * (specs/wall-display "A widget cannot be under-sized"). Values are rounded to
- * whole cells because the grid places by cell, not by flow.
- *
- * A widget that configures a title gains {@link WALL_TITLE_ROWS} of height floor:
- * the frame draws the title above the renderer inside the same cell, so a titled
- * card's cell must be taller than its type's own minimum span before the card can
- * render what that minimum guarantees (wall-zones-and-fit D4; the render-side twin
- * is `span.ts`'s `composesMinimumSpan`, and `wall-span.test.ts` asserts the row
- * floor and the box guard agree at every row unit).
+ * Clamps a span to its type's minimum and maximum and to the column bound, rounded to
+ * whole cells.
  */
 function clampSpan(
   span: WallWidgetSpan,
@@ -149,12 +123,7 @@ function clampSpan(
 }
 
 /**
- * Moves and/or resizes a widget, clamping its span to the type's min/max and
- * every cell to the grid: `x` is confined to `[0, columns - w]` and `y` to
- * `[0, rows - h]`. A widget that configures a title is floored one row higher, so
- * a resize can never leave a titled card below the box its type's minimum span
- * needs. A widget left overlapping another is a valid edit — the draft validator
- * surfaces that rather than the control silently refusing it.
+ * Moves and/or resizes a widget, clamping its span and every cell to the grid.
  */
 export function updateWidgetPlacement(
   config: WallProfileConfig,
@@ -193,12 +162,7 @@ function withoutZone(widget: WallWidget): WallWidget {
 }
 
 /**
- * Sets or clears a widget's zone label (wall-zones-and-fit D1; specs/wall-display
- * "Wall Zones"). The zone is the widget's own field, not part of its
- * type-specific config, so it has its own mutation. A blank label clears the
- * zone outright rather than storing an empty string, so the widget validates as
- * unzoned and renders outside every band again; the profile schema trims and
- * bounds what is stored.
+ * Sets or clears a widget's zone label. A blank label clears the zone outright.
  */
 export function updateWidgetZone(
   config: WallProfileConfig,
@@ -214,11 +178,7 @@ export function updateWidgetZone(
 }
 
 /**
- * Sets a link widget's target profile (wall-zones-and-fit D11; specs/wall-display
- * "A link target is configured"). The target is trimmed, so a stray space never
- * becomes part of a profile name the wall would fail to resolve; an emptied
- * field leaves the widget without a target, which the profile schema rejects —
- * the editor surfaces that rather than saving a link that opens nothing.
+ * Sets a link widget's target profile, trimmed.
  */
 export function setLinkTarget(
   config: WallProfileConfig,
@@ -230,10 +190,7 @@ export function setLinkTarget(
 
 /**
  * Adds or removes one device from a device grid's explicit selection, keeping the
- * authored order (wall-zones-and-fit D12; specs/wall-display "A device grid's
- * devices are selected"). The grid renders exactly this selection, so removing
- * the last device leaves the widget unconfigured and unsaveable — the editor
- * surfaces that rather than saving a grid that shows nothing.
+ * authored order.
  */
 export function toggleDeviceSelection(
   config: WallProfileConfig,
@@ -253,13 +210,8 @@ export function toggleDeviceSelection(
 }
 
 /**
- * The devices the editor offers a typed device widget of `deviceClass` (design.md
- * D3, D6; specs/wall-display "A device its class cannot drive is not offered").
- * The rule is the wall's own device-class resolver — the same one a widget
- * explains a mis-bound device with at runtime (`DeviceWidget`'s
- * `deviceCanDriveClass`) — so the editor can never offer a device whose
- * capabilities cannot drive the class, and the offer and the explanation cannot
- * drift. `entity` is the typed fallback, so every device drives it.
+ * The devices the editor offers a typed device widget of `deviceClass`, via the wall's
+ * own device-class resolver.
  */
 export function offeredDevices(
   deviceClass: WallDeviceClass,
@@ -269,11 +221,8 @@ export function offeredDevices(
 }
 
 /**
- * The smallest `{w, h}` a widget may occupy — its type's own minimum span, plus
- * the rows a configured title costs inside the same cell (wall-zones-and-fit D4;
- * specs/wall-display "A widget cannot be under-sized", "Span-Aware Card
- * Presentation"). This is {@link clampSpan}'s floor, and the row form of the wall's
- * own render guard (`span.ts`'s `composesMinimumSpan`).
+ * The smallest `{w, h}` a widget may occupy — its type's minimum span plus the rows a
+ * configured title costs.
  */
 function minimumSpanFor(descriptor: WallWidgetDescriptor, titled: boolean): WallWidgetSpan {
   return { w: descriptor.min.w, h: descriptor.min.h + (titled ? WALL_TITLE_ROWS : 0) };
@@ -285,12 +234,8 @@ function formatIssue(issue: { path: readonly PropertyKey[]; message: string }): 
 }
 
 /**
- * Whether a profile-schema issue is a widget's raw `config` failure. The
- * profile schema already validates each widget's config (via its
- * `superRefine`), but the loop below re-reports that fault id-labelled — the
- * form the editor renders. Dropping the schema-path copy keeps one message per
- * fault (task 6.2). Top-level `config` issues (path `["config"]` or
- * `["config","widgets"]`) have no second `config` segment and are kept.
+ * Whether a profile-schema issue is a widget's raw `config` failure, re-reported
+ * id-labelled below.
  */
 function isRawWidgetConfigIssue(path: readonly PropertyKey[]): boolean {
   return path[0] === "config" && path.slice(1).includes("config");
@@ -305,10 +250,8 @@ function everyWidgetList(config: WallProfileConfig): readonly (readonly WallWidg
 }
 
 /**
- * Validates a draft against the shared profile schema and each widget's own
- * descriptor schema (design.md D10 — the same pins the server enforces).
- * Returns the parsed profile on success, or the descriptive errors the editor
- * renders inline. The editor never persists a draft this rejects.
+ * Validates a draft against the shared profile schema and each widget's own descriptor
+ * schema.
  */
 export function validateProfileDraft(name: string, config: WallProfileConfig): WallDraftValidation {
   const errors: string[] = [];
@@ -321,8 +264,7 @@ export function validateProfileDraft(name: string, config: WallProfileConfig): W
   const profile = result.success ? result.data : null;
   if (!result.success) {
     for (const issue of result.error.issues) {
-      // A widget's config fault is re-reported id-labelled below; skip its
-      // redundant raw schema-path copy so each fault appears once.
+      // A widget's config fault is re-reported id-labelled below.
       if (isRawWidgetConfigIssue(issue.path)) continue;
       errors.push(formatIssue(issue));
     }
@@ -332,8 +274,7 @@ export function validateProfileDraft(name: string, config: WallProfileConfig): W
   for (const widgets of everyWidgetList(config)) {
     for (const widget of widgets) {
       const descriptor = registry[widget.type];
-      // An unknown type is already reported by the profile schema's enum; a
-      // descriptor-less type could not be rendered either way.
+      // An unknown type is already reported by the profile schema's enum.
       if (!descriptor) continue;
       const configResult = descriptor.configSchema.safeParse(widget.config);
       if (!configResult.success) {
@@ -341,10 +282,7 @@ export function validateProfileDraft(name: string, config: WallProfileConfig): W
           errors.push(`${widget.id}: ${issue.message}`);
         }
       }
-      // A placement below the type's minimum — including a titled card the title
-      // itself pushed below it, which no resize clamps — cannot render the card
-      // the wall guarantees, so the editor refuses to save it rather than letting
-      // the wall explain it (specs/wall-display "A widget cannot be under-sized").
+      // A placement below the type's minimum cannot render the card the wall guarantees.
       const titled = widgetTitle(widget) !== null;
       const minimum = minimumSpanFor(descriptor, titled);
       if (widget.w < minimum.w || widget.h < minimum.h) {
@@ -362,11 +300,7 @@ export function validateProfileDraft(name: string, config: WallProfileConfig): W
 }
 
 /**
- * Why a draft cannot be saved for its panel, or `null` when it fits (design.md
- * D7; specs/wall-display "An unfittable draft is refused"). The verdict comes
- * from the draft preview's resolver — the same fit rule the wall renders
- * through at the wall's target panel — so an author cannot save a composition
- * the panel would have to explain instead of render.
+ * Why a draft cannot be saved for its panel, or `null` when it fits.
  */
 export function draftFitError(config: WallProfileConfig): string | null {
   const preview = resolveDraftPreview(config);
@@ -374,12 +308,8 @@ export function draftFitError(config: WallProfileConfig): string | null {
 }
 
 /**
- * The editor's single save boundary: validate the draft first, refuse it when it
- * cannot fit its panel, and only then call `persist` with the parsed config.
- * Structuring the handler around this guarantees an invalid or unfittable draft
- * never reaches the API (task 6.4; specs/wall-display "An invalid profile is
- * rejected", "An unfittable draft is refused"). The `persist` callback is
- * expected to call `updateWall`/`createWall`.
+ * The editor's single save boundary: validate the draft, refuse it when it cannot fit
+ * its panel, then call `persist`.
  */
 export async function submitProfileDraft(
   name: string,

@@ -3,12 +3,8 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 
 /**
- * Structural assertions for the narrow-viewport control bar (design.md D6;
- * specs/web-ui "Responsive Navigation"). There is no DOM harness here, so — like
- * `device-name-presentation.test.ts` and `wall-card-archetypes.test.ts` — the
- * render decisions are asserted against the source. The bar's destinations must
- * render as stacked icon-over-label tabs, or each `grid-cols-4` cell truncates
- * its label; the desktop rail keeps the default row layout.
+ * Structural assertions for the narrow-viewport control bar: the bar's destinations
+ * render as stacked icon-over-label tabs, and the desktop rail keeps the row layout.
  */
 const APP_DIR = join(import.meta.dir, "..", "src/app");
 const NAV = join(APP_DIR, "components/Nav.tsx");

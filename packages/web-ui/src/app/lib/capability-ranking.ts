@@ -1,30 +1,13 @@
 /**
- * Primary-capability ranking for device tiles (design.md D12, D16; task 10.5).
- *
- * A tile has room for one primary action and one primary readout, while the
- * capability schema supplies an unranked set. This module is the single,
- * purely presentational place that curates one of each — nothing here has a
- * server-side representation, so it can be re-tuned against real hardware
- * without touching specs (design.md D16, D23).
- *
- * Ranking reads well-known property names authored across every source
- * (`on`, `state`, `position`, `brightness`, `power`, `temperature`, …). The
- * named branches consult only those property names; the enum/numeric
- * fall-through additionally consults {@link OUTPUT_KINDS}, the one
- * cross-source `kind` contract every source already authors deliberately
- * (design.md D4) — so a configuration setting on a purely-reporting device
- * (a motion sensor's sensitivity) is not mistaken for a primary action.
+ * Primary-capability ranking for device tiles: curates one primary action and
+ * one primary readout from an unranked capability schema.
  */
 
 import type { Capability, CapabilityAccess, CapabilityValueType } from "@ts-ha/shared";
 
 /**
- * The source-neutral output-device kinds — a cross-source `kind` contract
- * `shelly-capabilities.ts`, `nanoleaf-source.ts`, and `state-source.ts`
- * already author deliberately, and the mapped Zigbee2MQTT `exposes` use for
- * the same families. The single set behind both the ranking guard below and
- * the collection filter, so a device hidden by the filter is exactly one
- * that would not have offered a primary action (design.md D4).
+ * The source-neutral output-device kinds. The single set behind both the
+ * ranking guard below and the collection filter.
  */
 export const OUTPUT_KINDS: ReadonlySet<string> = new Set([
   "light",
@@ -45,14 +28,12 @@ export interface FlatCapability {
   permittedValues?: (string | number)[];
   range?: { min?: number; max?: number };
   step?: number;
-  /** The declared on/off encoding for a boolean property (design.md D1). */
+  /** The declared on/off encoding for a boolean property. */
   valueOn?: string | number | boolean;
   valueOff?: string | number | boolean;
   /**
-   * The `kind` of the top-level capability entry this leaf was flattened
-   * from — its own `kind` when it is not nested in a container, or its
-   * container's `kind` when it is (design.md D4). Consulted only by the
-   * enum/numeric fall-through via {@link OUTPUT_KINDS}.
+   * The `kind` of the top-level entry this leaf was flattened from. Consulted
+   * only by the enum/numeric fall-through via {@link OUTPUT_KINDS}.
    */
   kind: string;
 }
@@ -95,21 +76,17 @@ function find(
 }
 
 /**
- * The source-neutral boolean on/off property families: the canonical `on`
- * authored by Shelly, Nanoleaf, and state toggles, plus Zigbee2MQTT's `state`.
- * Shared with the room command so a device is treated as actuatable on exactly
- * the same properties this ranking reads.
+ * The source-neutral boolean on/off property families (`on` and `state`),
+ * shared with the room command.
  */
-export const ON_OFF_PROPERTIES: ReadonlySet<string> = new Set(["on", "state"]);
+const ON_OFF_PROPERTIES: ReadonlySet<string> = new Set(["on", "state"]);
 
 /** The access direction a boolean on/off capability must declare to be selected. */
 export type OnOffAccess = "readable" | "writable";
 
 /**
- * Picks the preferred boolean on/off capability from an already-flattened
- * schema: the canonical `on` family wins over Zigbee2MQTT's `state` regardless
- * of declaration order, so a device declaring both resolves to the same
- * property for tile ranking and room commands alike.
+ * Picks the preferred boolean on/off capability: `on` wins over `state`
+ * regardless of declaration order.
  */
 export function pickOnOffCapability(
   flat: FlatCapability[],
@@ -142,9 +119,8 @@ export interface PrimaryAction {
 }
 
 /**
- * Selects a device's single primary actuatable property, first match wins
- * (design.md D16). Returns `null` when nothing writable matches any rank —
- * the tile then degrades to read-only rather than failing to render.
+ * Selects a device's single primary actuatable property, first match wins.
+ * Returns `null` when nothing writable matches any rank.
  */
 export function selectPrimaryAction(capabilities: Capability[]): PrimaryAction | null {
   const flat = flattenCapabilities(capabilities);
@@ -170,11 +146,8 @@ export function selectPrimaryAction(capabilities: Capability[]): PrimaryAction |
   );
   if (setpoint) return { kind: "setpoint", capability: setpoint };
 
-  // Gated on OUTPUT_KINDS (design.md D4): a writable enum/numeric elsewhere
-  // in the schema is not promoted to a primary action unless it belongs to
-  // a capability whose declared category operates the physical world.
-  // Ungated, this branch is what promotes a motion sensor's writable
-  // `sensitivity` setting to its tile's primary control.
+  // Gated on OUTPUT_KINDS, so a writable enum/numeric elsewhere (a motion
+  // sensor's `sensitivity`) is not promoted to a primary action.
   const otherEnum = find(
     flat,
     (c) => c.valueType === "enum" && c.access.writable && OUTPUT_KINDS.has(c.kind),
@@ -191,12 +164,8 @@ export function selectPrimaryAction(capabilities: Capability[]): PrimaryAction |
 }
 
 /**
- * Whether a device would offer a tile primary action at all (design.md D4;
- * specs/web-ui "Device Tiles" — the output filter). Defined as exactly the
- * devices {@link selectPrimaryAction} finds one for, so a device hidden by
- * the filter is exactly one that would not have offered a primary action —
- * two independently maintained rules would drift and produce a device that
- * is filtered out yet has a working control, or vice versa.
+ * Whether a device would offer a tile primary action at all — defined as
+ * exactly the devices {@link selectPrimaryAction} finds one for.
  */
 export function isOperableDevice(capabilities: Capability[]): boolean {
   return selectPrimaryAction(capabilities) !== null;
@@ -222,7 +191,7 @@ export interface PrimaryReadout {
   capability: FlatCapability;
 }
 
-/** Readout candidates consulted when the device HAS a primary action — the property that best qualifies it. */
+/** Readout candidates consulted when the device HAS a primary action. */
 const ACTION_QUALIFYING_READOUTS: { kind: PrimaryReadoutKind; property: string }[] = [
   { kind: "brightness", property: "brightness" },
   { kind: "position", property: "position" },
@@ -242,9 +211,8 @@ const NO_ACTION_READOUT_PROPERTIES: { kind: PrimaryReadoutKind; property: string
 ];
 
 /**
- * Selects a device's single primary readout property (design.md D16).
- * `primaryAction` is the result of {@link selectPrimaryAction} for the same
- * device — the readout ranking differs depending on whether one was found.
+ * Selects a device's single primary readout property. The ranking differs
+ * depending on whether `primaryAction` was found for the same device.
  */
 export function selectPrimaryReadout(
   capabilities: Capability[],
@@ -275,29 +243,29 @@ export function selectPrimaryReadout(
   return null;
 }
 
-/** The decided tile ranking for one device — what {@link selectPrimaryAction}/{@link selectPrimaryReadout} together produce. */
+/** The decided tile ranking for one device. */
 export interface TileRanking {
   action: PrimaryAction | null;
   readout: PrimaryReadout | null;
 }
 
-/** Convenience: computes both the primary action and the primary readout for a device's capability schema. */
+/** Computes both the primary action and the primary readout for a device. */
 export function rankDeviceTile(capabilities: Capability[]): TileRanking {
   const action = selectPrimaryAction(capabilities);
   const readout = selectPrimaryReadout(capabilities, action);
   return { action, readout };
 }
 
-/** The stop-like permitted values a cover can be commanded to (design.md D6). */
+/** The stop-like permitted values a cover can be commanded to. */
 const COVER_STOP_TOKENS: ReadonlySet<string> = new Set(["stop"]);
 
-/** The open-like permitted values a cover's declared transport action can name (design.md D15). */
+/** The open-like permitted values a cover's declared transport action can name. */
 const COVER_OPEN_TOKENS: ReadonlySet<string> = new Set(["open", "up", "raise"]);
 
-/** The close-like permitted values a cover's declared transport action can name (design.md D15). */
+/** The close-like permitted values a cover's declared transport action can name. */
 const COVER_CLOSE_TOKENS: ReadonlySet<string> = new Set(["close", "down", "lower"]);
 
-/** The stop-like permitted value a capability declares, preserving its authored case (design.md D6). */
+/** The stop-like permitted value a capability declares, preserving its authored case. */
 function findStopToken(values: (string | number)[] | undefined): string | undefined {
   return (values ?? []).find(
     (value): value is string =>
@@ -305,7 +273,7 @@ function findStopToken(values: (string | number)[] | undefined): string | undefi
   );
 }
 
-/** The transport-like permitted value a capability declares, preserving its authored case (design.md D15). */
+/** The transport-like permitted value a capability declares, preserving its authored case. */
 function findTransportToken(
   values: (string | number)[] | undefined,
   tokens: ReadonlySet<string>,
@@ -315,7 +283,7 @@ function findTransportToken(
   );
 }
 
-/** The property and value of the stop command a cover's transport capability accepts (design.md D6). */
+/** The property and value of the stop command a cover's transport capability accepts. */
 export interface CoverStopCommand {
   property: string;
   value: string;
@@ -323,17 +291,7 @@ export interface CoverStopCommand {
 
 /**
  * The exact stop command a device declares, or `null` when no writable transport
- * property can express stop (design.md D6; specs/wall-display "Cover Transport
- * Controls"). Detection stays conservative so it never endorses a command
- * validation would reject:
- *
- * - a writable enum whose permitted values include a stop-like token yields that
- *   exact authored value (so a device expecting `"STOP"` is not sent `"stop"`), and
- * - a writable `state` enum with no enumerated values (Zigbee covers) yields the
- *   canonical `"stop"`, since the schema leaves the value unconstrained.
- *
- * A writable `state` enum that enumerates values *without* stop, and a read-only
- * movement state (Shelly covers), cannot express stop and return `null`.
+ * property can express stop. A stop-like permitted value is returned verbatim.
  */
 export function coverStopCommand(capabilities: Capability[]): CoverStopCommand | null {
   for (const c of flattenCapabilities(capabilities)) {
@@ -347,7 +305,7 @@ export function coverStopCommand(capabilities: Capability[]): CoverStopCommand |
   return null;
 }
 
-/** The declared transport action a cover accepts (design.md D15). */
+/** The declared transport action a cover accepts. */
 export interface CoverTransportAction {
   /** The writable property the transport values are set on. */
   property: string;
@@ -360,17 +318,8 @@ export interface CoverTransportAction {
 }
 
 /**
- * The writable transport action a cover declares, or `null` when it declares
- * none (design.md D15; specs/device-sources "Cover Transport Action").
- *
- * Detection stays conservative so a generic enum is never mistaken for
- * transport: the property must be a writable enum that names both an open-like
- * and a close-like permitted value — a fan's speed or a light's effect names
- * neither — and the exact authored values are returned so Open/Close command
- * what the device accepts (a device expecting `"OPEN"` is not sent `"open"`).
- * A device that can stop names a stop-like value too; one that cannot omits it,
- * so the wall omits Stop rather than rendering it inert (specs/wall-display "A
- * cover that cannot stop omits stop").
+ * The writable transport action a cover declares, or `null` when none. The
+ * property must be a writable enum naming both open-like and close-like values.
  */
 export function coverTransportAction(capabilities: Capability[]): CoverTransportAction | null {
   for (const c of flattenCapabilities(capabilities)) {
@@ -386,7 +335,7 @@ export function coverTransportAction(capabilities: Capability[]): CoverTransport
   return null;
 }
 
-/** The values a cover's Open and Close controls command (design.md D15). */
+/** The values a cover's Open and Close controls command. */
 export interface CoverTransportTargets {
   /** Open's value: the declared open value, else the position maximum. */
   open: unknown;
@@ -395,11 +344,8 @@ export interface CoverTransportTargets {
 }
 
 /**
- * Resolves the values a cover's Open and Close controls command (design.md D15;
- * specs/wall-display "Open and close use the declared transport"): the declared
- * transport action's own values when the device declares one, falling back to
- * the position extremes otherwise — so a cover that only positions (a Shelly
- * cover's read-only movement state) still commands its fully-open/closed ends.
+ * Resolves the values a cover's Open and Close controls command: the declared
+ * transport values, falling back to the position extremes.
  */
 export function coverTransportTargets(
   transport: CoverTransportAction | null,
@@ -413,12 +359,7 @@ export function coverTransportTargets(
 
 /**
  * The writable colour-temperature control a wall light card offers, or
- * `undefined` when the device declares none (design.md D12; specs/wall-display
- * "Wall Device Presentation" — "Colour controls appear only when supported").
- * Only a writable numeric `color_temp` can be driven by a control; a
- * colour-temperature the device only reports, or a non-numeric one, is not
- * offered rather than rendered inert. Consulted only inside the wall `light`
- * archetype, so no other card pays for the lookup.
+ * `undefined` when none: only a writable numeric `color_temp` qualifies.
  */
 export function writableColorTemperatureCapability(
   capabilities: Capability[],
@@ -430,13 +371,8 @@ export function writableColorTemperatureCapability(
 }
 
 /**
- * The writable colour control a wall light card offers, or `undefined` when the
- * device declares none (design.md D12). The canonical colour channel across
- * sources is `hue` — Nanoleaf authors it directly and a Zigbee colour light
- * exposes it beneath its `color` composite — so a writable numeric `hue`
- * qualifies; a writable numeric `color` does too. A composite (an xy/hs pair),
- * an enum, or a read-only colour cannot be driven by a single control and is
- * not offered, so the card never renders an inert control.
+ * The writable colour control a wall light card offers, or `undefined` when
+ * none: a writable numeric `hue`, else a writable numeric `color`.
  */
 export function writableColorCapability(capabilities: Capability[]): FlatCapability | undefined {
   const flat = flattenCapabilities(capabilities);
@@ -448,13 +384,7 @@ export function writableColorCapability(capabilities: Capability[]): FlatCapabil
 
 /**
  * The writable brightness control a wall light card drives, or `undefined` when
- * the device declares none. A brightness the device only reports would let the
- * wall qualify an on/off primary with a brightness readout, but no slider could
- * be driven — so its absence keeps such a device a plain on/off entity rather
- * than a broken light. Declared here, with the other writable-control lookups,
- * so the capability vocabulary owns every "can this device be driven" question
- * (`@ts-ha/shared`'s `Capability.kind` is open and source-derived, so the answer
- * is always read from the flattened schema).
+ * none. Only a writable numeric `brightness` qualifies.
  */
 export function writableBrightnessCapability(
   capabilities: Capability[],
@@ -466,11 +396,8 @@ export function writableBrightnessCapability(
 }
 
 /**
- * Formats a brightness value as a percentage of its declared range for a light
- * card's persistent readout. A raw `0–254` Zigbee brightness and a `0–100`
- * Nanoleaf one both read as a percentage, so the value is normalised against its
- * own range rather than assumed to already be one. A missing or non-numeric
- * value renders an em dash rather than a stale number.
+ * Formats a brightness value as a percentage of its declared range. A missing
+ * or non-numeric value renders an em dash.
  */
 export function formatBrightnessPercent(
   value: unknown,

@@ -5,13 +5,8 @@ import type { Capability } from "@ts-ha/shared";
 import { coverCardModel, coverCardReading } from "../src/app/wall/cards/CoverCard.js";
 
 /**
- * The wall cover card (task 4.2; design.md D1, D15; specs/wall-display "Wall
- * Device Presentation", "Cover Transport Controls"). The transport model — which
- * property carries Open/Close, which values they command, and whether Stop
- * exists — is pure and covered directly, including the position-less cover and
- * the cover without a stop, while the render is asserted structurally against
- * its source (there is no DOM harness), the same style as
- * `wall-card-anatomy.test.ts`.
+ * The wall cover card: the transport model covered directly, including the
+ * position-less cover and the cover without a stop; the render asserted structurally.
  */
 const APP_DIR = join(import.meta.dir, "..", "src/app");
 const CARD = join(APP_DIR, "wall/cards/CoverCard.tsx");
@@ -143,7 +138,9 @@ describe("wall cover card source", () => {
 
   it("presents discrete open/stop/close transport in the actions row", async () => {
     const source = await cardSource();
-    expect(source).toContain("<WallCardActions>");
+    // The transport is a row of fixed-size controls, so it is distributed across the
+    // card's width rather than bunched at its left.
+    expect(source).toContain('<WallCardActions distribution="distributed">');
     expect(source).toContain("<WallCardIconButton");
     expect(source).toContain("<ChevronUp");
     expect(source).toContain("<ChevronDown");

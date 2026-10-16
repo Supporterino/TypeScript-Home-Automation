@@ -27,10 +27,8 @@ function makeDevice(friendlyName: string, overrides: Partial<ZigbeeDevice> = {})
 }
 
 /**
- * A controllable mock `DeviceRegistry` for testing the metrics service.
- *
- * Stores listeners and lets the test fire device-add / device-remove / state-change
- * events without a real MQTT connection.
+ * A controllable mock `DeviceRegistry` storing listeners, so tests can fire device add/remove/
+ * state-change events without a real MQTT connection.
  */
 function createMockDeviceRegistry() {
   const addedHandlers: Set<(device: ZigbeeDevice) => void> = new Set();
@@ -594,7 +592,7 @@ describe("PrometheusMetricsService", () => {
   });
 
   // ---------------------------------------------------------------------------
-  // Automation execution counters (design.md D18; task 8.8)
+  // Automation execution counters
   // ---------------------------------------------------------------------------
 
   describe("automation execution counters", () => {
@@ -718,7 +716,7 @@ describe("PrometheusMetricsService", () => {
     });
   });
 
-  describe("no unbounded labels (task 8.8)", () => {
+  describe("no unbounded labels", () => {
     it("never derives a metric label from a trigger payload, device name, or state value", async () => {
       const recorder = new ExecutionRecorder(logger);
       await service.onStart({

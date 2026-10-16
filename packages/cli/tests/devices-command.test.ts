@@ -4,8 +4,7 @@ import type { DebugClient } from "../src/client.js";
 import { getDevice, listDevices } from "../src/commands/devices.js";
 import { projectDeviceRows } from "../src/device-rows.js";
 
-// specs/cli "Command Surface" (task 1.3). The devices command reads the
-// unified catalog and renders source-neutral descriptor rows.
+// The devices command reads the unified catalog and renders source-neutral descriptor rows.
 
 const originalLog = console.log;
 const originalError = console.error;

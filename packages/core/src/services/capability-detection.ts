@@ -1,12 +1,7 @@
 /**
- * HomeKit capability detection, expressed purely in terms of the
- * source-neutral capability vocabulary
- * (`packages/shared/src/capabilities.ts`).
- *
- * This module has no dependency on Zigbee2MQTT's `exposes` shape or on
- * `ZigbeeDevice` — it is severed from any specific device source two phases
- * before the group 6 device-source refactor needs that same decoupling for
- * paired hardware (design.md D22, R1).
+ * HomeKit capability detection, expressed purely in terms of the source-neutral
+ * capability vocabulary (`packages/shared/src/capabilities.ts`); no dependency on
+ * any specific device source's shape.
  */
 import type { Capability } from "@ts-ha/shared";
 

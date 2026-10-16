@@ -2,8 +2,6 @@ import { describe, expect, it } from "bun:test";
 import type { DeviceDescriptor } from "@ts-ha/shared";
 import { resolveDevice } from "../src/device-resolution.js";
 
-// specs/cli "Device Addressing" (task 1.2).
-
 function descriptor(overrides: Partial<DeviceDescriptor>): DeviceDescriptor {
   return {
     source: "zigbee",

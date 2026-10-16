@@ -9,12 +9,8 @@ import {
   supportsOnOffCommand,
 } from "../src/app/lib/room-command.js";
 
-// Pure room-command logic — no DOM. `findOnOffCapability`/`supportsOnOffCommand`
-// decide whether a member is actuatable and under which on/off property family;
-// `groupOnOffCommand` builds one request body per family (a mixed room needs
-// two, since the endpoint rejects a property a member does not declare); the
-// classifier drives per-member optimistic reconciliation (specs/web-ui
-// "Room-Level Command"; tasks 10.1–10.3).
+// Pure room-command logic — no DOM. `findOnOffCapability`/`supportsOnOffCommand` decide
+// whether a member is actuatable and under which on/off property family.
 
 const rw = { readable: true, writable: true };
 const ro = { readable: true, writable: false };

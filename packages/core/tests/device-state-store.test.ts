@@ -101,8 +101,8 @@ describe("DeviceStateStore", () => {
 
       const record = restored.get(ZIGBEE_ID);
       expect(record?.state).toEqual({ state: "ON" });
-      // The observation is restored verbatim — observedAt is when it was
-      // recorded, never the read time (design.md D4).
+      // The observation is restored verbatim — observedAt is when it was recorded, never
+      // the read time.
       expect(record?.observation.observedAt).toBe(RECORDED_AT);
       expect(record?.observation.mode).toBe("push");
     });

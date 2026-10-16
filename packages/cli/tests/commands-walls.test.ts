@@ -3,8 +3,6 @@ import type { WallProfile } from "@ts-ha/shared";
 import type { DebugClient } from "../src/client.js";
 import { createWall, deleteWall, getWall, listWalls, updateWall } from "../src/commands/walls.js";
 
-// specs/cli "Command Surface" — `ts-ha walls` (task 3.4; administration only).
-
 const originalLog = console.log;
 const originalError = console.error;
 const originalExit = process.exit;

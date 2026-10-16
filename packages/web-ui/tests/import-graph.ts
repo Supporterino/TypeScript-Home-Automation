@@ -1,25 +1,6 @@
 /**
- * The web UI app's own module graph, resolved from its entrypoint (task 7.2;
- * design.md D9).
- *
- * A real walk rather than a text scan: every *relative* specifier is resolved to
- * the file it names — the repo writes `.js` specifiers that resolve to the
- * `.ts`/`.tsx` source beside them — and every form that can add an edge counts:
- * a static `import`, a side-effect `import "x"`, a re-export (`export … from`),
- * and a dynamic `import()`. Following the dynamic ones is what makes a lazily
- * loaded view part of the graph, which is exactly the kind of path a guard about
- * what ships must see.
- *
- * Bare specifiers (`@ts-ha/shared`, `react`, …) and non-TS files (the
- * stylesheets) name another package or a non-module asset, so the walk stops
- * there. A relative specifier that names *no* file at all is a different case
- * and throws rather than being skipped — silently skipping one is how a guard
- * stops guarding — while a relative specifier for a non-TS file is a deliberate
- * stop, not a failure (see {@link resolveSpecifier}).
- *
- * This module is deliberately not a `*.test.ts` file — `bun test` does not pick
- * it up — so the harness guard and the fixture-seam scan share one walker
- * instead of two approximations of it.
+ * The web UI app's own module graph, resolved from its entrypoint. A real walk
+ * rather than a text scan: static, side-effect, re-export, and dynamic imports.
  */
 import { existsSync } from "node:fs";
 import { dirname, extname, join, normalize } from "node:path";
@@ -27,7 +8,7 @@ import { dirname, extname, join, normalize } from "node:path";
 /** The app directory every walked module lives in. */
 export const APP_DIR = join(import.meta.dirname, "..", "src/app");
 
-/** The application entrypoint the shipped build compiles (design.md D1, D9). */
+/** The application entrypoint the shipped build compiles. */
 export const APP_ENTRY = join(APP_DIR, "index.tsx");
 
 /** How a specifier was written in the importing module. */
@@ -48,11 +29,7 @@ export interface AppModuleGraph {
   /** Every reachable module, entry first, in breadth-first order. */
   readonly files: readonly string[];
   readonly edges: readonly AppImportEdge[];
-  /**
-   * Every dynamic `import()` whose argument is not a string literal. A computed
-   * specifier cannot be followed, so the graph is only complete while this is
-   * empty — the guard asserts that.
-   */
+  /** Non-literal dynamic `import()` arguments; the graph is complete only while this is empty. */
   readonly computedDynamicImports: readonly { readonly file: string; readonly source: string }[];
 }
 
@@ -94,13 +71,7 @@ function computedDynamicImportsIn(source: string): string[] {
   return computed;
 }
 
-/**
- * Extensions this walk treats as non-module assets: they travel in the shipped
- * bundle but carry no imports of their own, so the module graph ends at them.
- * The app imports its stylesheets this way (`./styles/app.css`,
- * `../wall/hearth.css`); the font and image kinds are listed so a future asset
- * import is a stop rather than a false alarm.
- */
+/** Extensions treated as non-module assets: they ship but carry no imports of their own. */
 const NON_MODULE_ASSET_EXTENSIONS = [
   ".css",
   ".woff2",
@@ -114,19 +85,7 @@ const NON_MODULE_ASSET_EXTENSIONS = [
   ".ico",
 ];
 
-/**
- * The file a relative specifier names, or `null` when the specifier is not a
- * module of the graph at all: a bare specifier (another package), or a relative
- * specifier naming a non-module asset — one of
- * {@link NON_MODULE_ASSET_EXTENSIONS}, which is only the stylesheets in the tree
- * today.
- *
- * Every other relative specifier must resolve to TypeScript source (`.js`
- * specifiers resolve to the `.ts`/`.tsx` file beside them; an extensionless one
- * resolves the same way), and one that resolves to nothing throws: silently
- * skipping it is how a guard stops guarding, and a specifier that names no file
- * is a broken import the build would fail on anyway.
- */
+/** Resolves a relative specifier to its file, or `null` when it is not a module of the graph. */
 function resolveSpecifier(importer: string, specifier: string): string | null {
   if (!specifier.startsWith(".")) return null;
   const base = normalize(join(dirname(importer), specifier));
@@ -192,12 +151,7 @@ export function appPath(path: string): string {
   return path.startsWith(APP_DIR) ? path.slice(APP_DIR.length + 1) : path;
 }
 
-/**
- * Every `.ts`/`.tsx` file under `dir`, whether or not the entrypoint can reach
- * it. Comparing this against a walk is how a caller proves the walk missed no
- * edge: an app module the walk did not reach is either genuinely unreachable
- * (the harness) or a hole in the walker.
- */
+/** Every `.ts`/`.tsx` file under `dir`, reachable or not — the completeness check for a walk. */
 export async function listAppModules(dir: string = APP_DIR): Promise<string[]> {
   const { readdir } = await import("node:fs/promises");
   const entries = await readdir(dir, { withFileTypes: true });

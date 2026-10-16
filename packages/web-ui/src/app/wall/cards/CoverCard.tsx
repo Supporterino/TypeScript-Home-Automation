@@ -1,22 +1,6 @@
 /**
- * The wall cover card (design.md D1, D15; specs/wall-display "Wall Device
- * Presentation", "Cover Transport Controls"). A cover is presented as discrete,
- * touch-friendly transport rather than a bare slider: its position (when it has
- * one) is the card's primary reading, and the actions row carries Open, Stop,
- * and Close as touch-sized icon controls.
- *
- * Stop is offered only when the pure {@link coverStopCommand} finds a writable
- * transport property that can express it, and Open/Close command the device's
- * declared transport action when it declares one and fall back to the position
- * extremes otherwise — so an inert control is never rendered, and a position-less
- * cover is still drivable. Each transport control runs on the shared optimistic
- * channel, so a command is reflected immediately, reconciled against reported
- * state, and reverted with the failure surfaced inline on the affordance that
- * issued it.
- *
- * The pure decisions — the transport properties, the Open/Close values, whether
- * Stop exists, and the reading — are exported so they are reachable by `bun test`
- * (design.md D23). Wall-chunk only (design.md D10).
+ * The wall cover card: its position (when it has one) is the reading, and the actions
+ * row carries Open, Stop, and Close as touch-sized icon controls.
  */
 import type { Capability } from "@ts-ha/shared";
 import { Blinds, ChevronDown, ChevronUp, Square } from "lucide-react";
@@ -55,10 +39,8 @@ import type { WallDeviceCardProps } from "./types.js";
 const CLOSED_STATE_TOKENS: ReadonlySet<string> = new Set(["closed", "close"]);
 
 /**
- * A cover's resolved transport (design.md D15). `position` is the numeric
- * capability the card reads; `transportProperty` is the property Open/Close
- * command and is `undefined` for a cover with nothing writable to drive;
- * `stop` is present only when the device can express it.
+ * A cover's resolved transport. `transportProperty` is the property Open/Close
+ * commands; `stop` is present only when the device can express it.
  */
 export interface WallCoverCardModel {
   position: FlatCapability | undefined;
@@ -74,10 +56,8 @@ function declaredTransport(capabilities: Capability[]): CoverTransportAction | n
 }
 
 /**
- * Resolves a cover's transport model (design.md D15; specs/wall-display "Cover
- * Transport Controls"). Open/Close command the declared transport's own property
- * when the device declares one, else the writable position's; Stop is detected
- * separately, so a cover that positions without a transport still omits it.
+ * Resolves a cover's transport model. Open/Close command the declared transport's own
+ * property when the device declares one, else the writable position's.
  */
 export function coverCardModel(capabilities: Capability[]): WallCoverCardModel {
   const flat = flattenCapabilities(capabilities);
@@ -96,10 +76,8 @@ export function coverCardModel(capabilities: Capability[]): WallCoverCardModel {
 }
 
 /**
- * The card's primary reading: the position with its unit when the device reports
- * one, else the readable movement/transport state (a position-less cover), else
- * an em dash. The value and unit stay one non-breaking unit (specs/wall-display
- * "A value stays with its unit").
+ * The card's primary reading: the position with its unit, else the readable state, else
+ * an em dash.
  */
 export function coverCardReading(input: {
   position: FlatCapability | undefined;
@@ -114,12 +92,8 @@ export function coverCardReading(input: {
 }
 
 /**
- * Whether a cover is active — the state `collapsible_controls` measures against
- * (design.md D6; specs/wall-display "A control's layout is configured"). A cover
- * is idle when it is fully closed, which the device reports either as a position
- * at its own minimum or as a movement state reading `closed`; a cover with
- * neither to read is always active, so its transport is never hidden with no way
- * to reveal it.
+ * Whether a cover is active — the state `collapsible_controls` measures against. A
+ * cover is idle when it is fully closed.
  */
 export function coverCardActive(input: {
   position: FlatCapability | undefined;
@@ -140,9 +114,7 @@ export function CoverCard({ device, config, box, contained }: WallDeviceCardProp
   const model = coverCardModel(device.capabilities);
   const disabled = !device.reachable;
 
-  // One optimistic channel per property, called unconditionally so hook order is
-  // stable. Stop shares the transport channel when the device commands stop on
-  // the same property, so two hooks never contend on one key (design.md D15).
+  // Called unconditionally so hook order is stable.
   const stopSharesTransport =
     model.stop !== null && model.stop.property === model.transportProperty;
   const transportControl = useOptimisticDeviceProperty(
@@ -165,10 +137,7 @@ export function CoverCard({ device, config, box, contained }: WallDeviceCardProp
     ? {}
     : { background: "var(--hearth-surface-raised)", borderRadius: WALL_CARD_METRICS.radius };
 
-  // The card's own options (design.md D6): its layout, its inactive-controls
-  // setting, and the box it was given. A closed cover is idle, so a cover with
-  // collapsible controls hides its transport until it is open again, without
-  // changing the composition around it.
+  // A closed cover is idle, so collapsible controls hide its transport until open.
   const composition = resolveDeviceCardComposition({
     box: box ?? DEFAULT_WALL_CARD_BOX,
     layout: config?.layout,
@@ -219,7 +188,7 @@ export function CoverCard({ device, config, box, contained }: WallDeviceCardProp
       </div>
 
       {model.transportProperty !== undefined && composition.controls && (
-        <WallCardActions>
+        <WallCardActions distribution="distributed">
           <WallCardIconButton
             glyph={<ChevronUp size={WALL_CARD_GLYPH_SIZE} aria-hidden />}
             label={`Open ${label}`}

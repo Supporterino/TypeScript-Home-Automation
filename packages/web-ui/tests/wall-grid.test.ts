@@ -97,8 +97,7 @@ describe("resolveRowUnit", () => {
 
   it("reserves a supplied gutter when sizing rows", () => {
     // Padding (2×12) and four inter-row gaps (4×12) are removed before dividing:
-    // (350 − 72) / 5 = 55.6, inside the bounds; without the reservation the same
-    // panel would clamp to the ceiling instead.
+    // (350 − 72) / 5 = 55.6, inside the bounds.
     expect(resolveRowUnit(350, 5, 12)).toBeCloseTo(55.6, 5);
     expect(resolveRowUnit(350, 5, 12)).toBeLessThan(resolveRowUnit(350, 5, 0));
   });
@@ -126,10 +125,8 @@ describe("wallGridMetrics", () => {
   });
 
   it("resolves the verdict without the frame's per-widget inset", () => {
-    // The frame's inset is chrome *inside* a widget's cell, so the panel's verdict
-    // is a property of the composition and the panel alone: the panel's padding and
-    // its inter-row gaps. Re-deriving the inset from the ported card padding cannot
-    // move a fit (design.md W3; specs/wall-display "Panel Fit").
+    // The frame's inset is chrome *inside* a widget's cell, so the panel's verdict is a
+    // property of the composition and the panel alone.
     const panelHeight = 1080;
     const widgets = [widget("a", 0, 0, 12, 8)];
     const metrics = wallGridMetrics(panelHeight, widgets, WALL_GUTTER_MAX_PX);
@@ -158,8 +155,8 @@ describe("wallGridMetrics", () => {
 
 describe("the row unit's bounds", () => {
   it("clamps the ceiling to the ported card's own density", () => {
-    // design.md D5 leaves the exact ceiling to the harness (roughly 52–56); it is
-    // settled at the top of that range and stays above the derived floor.
+    // The exact ceiling was left to the harness (roughly 52–56); it is settled at the top
+    // of that range and stays above the derived floor.
     expect(ROW_UNIT_MAX).toBe(56);
     expect(ROW_UNIT_MAX).toBeGreaterThan(ROW_UNIT_MIN);
     expect(resolveRowUnit(4096, 2)).toBe(ROW_UNIT_MAX);
@@ -195,11 +192,8 @@ describe("the row unit's bounds", () => {
   });
 
   it("derives the minimum device columns from the widest card control row", () => {
-    // The derivation `grid.ts` documents: the columns whose cell at the wall's
-    // floors is at least the widest control row a card draws at its minimum span
-    // (`wall/cards/card-composition.ts`'s `WALL_CARD_CONTROL_ROW_MIN_WIDTH_PX`),
-    // so a minimum-span card never clips a control horizontally (specs/wall-display
-    // "A light card fits its minimum span").
+    // The derivation `grid.ts` documents: the columns whose cell at the wall's floors is
+    // at least the widest control row a card draws at its minimum span.
     expect(WALL_MIN_DEVICE_COLUMNS).toBe(
       Math.max(
         1,

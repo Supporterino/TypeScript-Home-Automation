@@ -1,14 +1,7 @@
 /**
- * The state-toggle `DeviceSource` (design.md D19; tasks 6.8–6.11).
- *
- * Promotes a `StateManager` boolean toggle to an ordinary device: its stable
- * identity is the state key, its capability is one writable boolean, and its
- * liveness is push-backed and always reachable, since its backing store is
- * in-process. Toggles are declared explicitly; the source never derives them
- * from the contents of the state store, so keys the engine writes for its
- * own purposes — room assignments, automation enabled flags — are never
- * presented as user-facing devices. This holds whether or not the HomeKit
- * bridge is enabled, since this source has no dependency on it.
+ * The state-toggle `DeviceSource`: promotes a `StateManager` boolean toggle to an
+ * ordinary device. Toggles are declared explicitly, so the source never derives
+ * devices from keys the engine writes for its own purposes.
  */
 
 import type { Capability } from "@ts-ha/shared";
@@ -124,11 +117,8 @@ export class StateDeviceSource implements DeviceSource {
 
   private notify(stateKey: string): void {
     const descriptor = this.toDescriptor(stateKey);
-    // A state toggle changed — a real observation of the device's state,
-    // recorded at the point it is delivered, never on a read (design.md D2).
     // Recorded for durability/pruning only: `toDescriptor` reads the backing
-    // `StateManager`, which persists independently, so the store's seed path
-    // is intentionally never consulted here (design.md D2, Risks).
+    // `StateManager`, so the store's seed path is never consulted here.
     this.deviceStateStore?.record(descriptor.qualifiedId, descriptor.state, descriptor.observation);
     for (const listener of this.listeners) {
       try {
@@ -151,8 +141,7 @@ export class StateDeviceSource implements DeviceSource {
       capabilities: TOGGLE_CAPABILITIES,
       reachable: true,
       observation: { mode: "push", observedAt: Date.now() },
-      // Stamped by `AggregateDeviceSource` (design.md D8) — a source does
-      // not know a user's visibility preference for its own devices.
+      // Stamped by `AggregateDeviceSource`; a source does not know visibility preferences.
       hidden: false,
     };
   }

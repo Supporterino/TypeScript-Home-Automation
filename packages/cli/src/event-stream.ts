@@ -1,12 +1,6 @@
 /**
- * Realtime event-stream reader (specs/cli "Engine Communication", "Realtime
- * Dashboard Updates"; design.md D3).
- *
- * An `EventSource` cannot attach an `Authorization` header, so the stream is
- * requested with `fetch`, read from its `ReadableStream` body, and parsed with
- * {@link parseSseFrames}. The reader is cancellable (an `AbortSignal`) and
- * reconnects with exponential backoff on a dropped connection; a `401` is a
- * distinguishable error marker that is surfaced rather than retried forever.
+ * Realtime event-stream reader: fetches the stream (an `EventSource` cannot
+ * attach an `Authorization` header), parses it, and reconnects on drops.
  */
 
 import type { StreamEvent } from "@ts-ha/shared";
@@ -16,10 +10,10 @@ const DEFAULT_RECONNECT_BASE_MS = 1_000;
 const DEFAULT_RECONNECT_MAX_MS = 30_000;
 
 /** Marker code carried by the plain `Error` for a stream `401`. */
-export const STREAM_AUTH_CODE = "unauthorized";
+const STREAM_AUTH_CODE = "unauthorized";
 
-/** Build the distinguishable 401 error (plain `Error`, no subclass — AGENTS.md). */
-export function streamAuthError(message = "Event stream authentication failed (HTTP 401)"): Error {
+/** Build the distinguishable 401 marker error (a plain `Error`, not a subclass). */
+function streamAuthError(message = "Event stream authentication failed (HTTP 401)"): Error {
   return Object.assign(new Error(message), { name: "StreamAuthError", code: STREAM_AUTH_CODE });
 }
 
@@ -39,10 +33,8 @@ export interface EventStreamOptions {
   /** Called after each successful connection (including the first). */
   onOpen?: () => void;
   /**
-   * Called on a failure. Invoked for a `401` before the reader throws the
-   * distinguishable 401 error (see {@link isStreamAuthError}) and stops — it
-   * does not reconnect; also called on a recoverable failure before
-   * reconnecting.
+   * Called on a failure; for a `401` it runs before the reader throws the
+   * distinguishable error and stops (no reconnect).
    */
   onError?: (error: Error) => void;
   reconnectBaseMs?: number;
@@ -126,10 +118,8 @@ async function consume(
 }
 
 /**
- * Abortable delay — resolves early (and immediately) when `signal` aborts.
- *
- * The `abort` listener is removed on both paths (abort and normal timeout), so
- * a long-lived signal does not accumulate a listener per reconnect.
+ * Abortable delay — resolves early (and immediately) when `signal` aborts; the
+ * `abort` listener is removed on both the abort and timeout paths.
  */
 export function abortableSleep(ms: number, signal: AbortSignal): Promise<void> {
   return new Promise((resolve) => {

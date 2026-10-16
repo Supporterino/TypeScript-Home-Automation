@@ -111,11 +111,8 @@ describe("WALL_WIDGET_REGISTRY", () => {
   });
 
   it("keeps the paged types' minimum spans tall enough to page", () => {
-    // A paged card must hold, at the wall's floors, its frame inset, the chrome it
-    // draws above the tiles, one tile row, and the page-control row: otherwise a
-    // minimum-span card clips a tile below the wall's touch target
-    // (wall-zones-and-fit D5; specs/wall-display "Panel Fit"). `devices` was
-    // derived for this first; favorites and room are derived the same way.
+    // A paged card must hold, at the wall's floors, its frame inset, the chrome it draws
+    // above the tiles, one tile row, and the page-control row.
     const floors = (rows: number): number => rows * ROW_UNIT_MIN + (rows - 1) * WALL_GUTTER_MIN_PX;
 
     for (const [type, headerRows] of [
@@ -144,9 +141,8 @@ describe("WALL_WIDGET_REGISTRY", () => {
 
 describe("the typed device catalogue", () => {
   it("registers one widget type per device class, with its card", () => {
-    // The catalogue the change lands (design.md D1, D3; specs/wall-display "A
-    // device class has its own widget type"): one type per class the capability
-    // model can drive, each rendering its own card.
+    // The catalogue: one type per class the capability model can drive, each rendering its
+    // own card.
     for (const deviceClass of WALL_DEVICE_CLASSES) {
       const descriptor = WALL_WIDGET_REGISTRY[deviceClass];
       expect(descriptor.type).toBe(deviceClass);
@@ -164,10 +160,8 @@ describe("the typed device catalogue", () => {
   it("gives every typed device widget the ported card's derived minimum span as its default", () => {
     for (const deviceClass of WALL_DEVICE_CLASSES) {
       const { min, defaults, max } = WALL_WIDGET_REGISTRY[deviceClass];
-      // The width is the columns whose cell holds the widest control row a card
-      // draws (`wall/grid.ts`'s `WALL_MIN_DEVICE_COLUMNS`); the height is the rows
-      // the row unit is derived to hold a compact card in with nothing to spare.
-      // Both are the default — the smallest legal placement (design.md D2, D5).
+      // The width is the columns whose cell holds the widest control row a card draws; the
+      // height is the rows the row unit is derived to hold a compact card in.
       expect(min).toEqual({ w: WALL_MIN_DEVICE_COLUMNS, h: WALL_MIN_DEVICE_ROWS });
       expect(defaults).toEqual({ w: WALL_MIN_DEVICE_COLUMNS, h: WALL_MIN_DEVICE_ROWS });
       expect(max).toEqual({ w: 6, h: 6 });
@@ -202,5 +196,18 @@ describe("temperature descriptor", () => {
     const { configSchema } = WALL_WIDGET_REGISTRY.temperature;
     expect(configSchema.safeParse({ qualifiedId: "zigbee:0xabc" }).success).toBe(true);
     expect(configSchema.safeParse({}).success).toBe(false);
+  });
+});
+
+describe("scene descriptor", () => {
+  it("offers a scene at a one-row minimum, so a slim scene is authorable", () => {
+    const descriptor = WALL_WIDGET_REGISTRY.scene;
+    expect(descriptor.type).toBe("scene");
+    expect(descriptor.grammar).toBe("control");
+    // Only the minimum changes: a scene may be authored one row tall, but a new one
+    // still lands at the two-row default.
+    expect(descriptor.min).toEqual({ w: 2, h: 1 });
+    expect(descriptor.defaults).toEqual({ w: 2, h: 2 });
+    expect(descriptor.configSchema).toBe(WALL_WIDGET_CONFIG_SCHEMAS.scene);
   });
 });

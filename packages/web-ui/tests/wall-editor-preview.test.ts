@@ -10,9 +10,8 @@ import { WALL_GUTTER_MAX_PX, wallGridMetrics } from "../src/app/wall/grid.js";
 import { deviceGridIds, resolveDeviceGridPage } from "../src/app/wall/widgets/device-grid-model.js";
 
 /**
- * The editor's draft preview (wall-zones-and-fit D7; specs/wall-display "Wall
- * Configuration Editor"). The resolver is pure, so the panel geometry, the
- * verdict, and the page counts are asserted directly — no DOM, no Hearth.
+ * The editor's draft preview: the resolver is pure, so the panel geometry, the verdict,
+ * and the page counts are asserted directly.
  */
 
 function widget(
@@ -161,9 +160,8 @@ describe("the previewed device grids", () => {
   });
 
   it("counts the rows a configured title costs the grid, as the wall does", () => {
-    // The title is drawn inside the grid's own cell, so the preview must reserve it
-    // exactly as the widget does — otherwise the editor would report a page count
-    // the wall cannot draw (specs/wall-display "Wall Configuration Editor").
+    // The title is drawn inside the grid's own cell, so the preview must reserve it exactly
+    // as the widget does.
     const selected = Array.from({ length: 40 }, (_, index) => `light.${index}`);
     const grid = widget(
       "grid",

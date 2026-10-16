@@ -36,10 +36,8 @@ function makeDevice(friendlyName: string, type: ZigbeeDevice["type"] = "Router")
 }
 
 /**
- * A device fixture whose `definition.exposes` holds the *raw* Zigbee2MQTT
- * shape, exactly as it arrives over MQTT — before the registry maps it into
- * the capability vocabulary. Cast through `unknown` because `ZigbeeDevice`'s
- * type now declares the already-mapped shape (design.md D22).
+ * A device fixture whose `definition.exposes` holds the raw Zigbee2MQTT shape, before
+ * the registry maps it; cast through `unknown` since `ZigbeeDevice` declares the mapped shape.
  */
 function makeDeviceWithRawExposes(friendlyName: string, rawExposes: unknown[]): ZigbeeDevice {
   return {
@@ -275,7 +273,7 @@ describe("DeviceRegistry", () => {
   });
 
   // ---------------------------------------------------------------------------
-  // Group discovery (tasks 1.2-1.5; specs/zigbee-groups "Group Discovery")
+  // Group discovery
   // ---------------------------------------------------------------------------
 
   describe("group discovery", () => {
@@ -416,7 +414,7 @@ describe("DeviceRegistry", () => {
   });
 
   // ---------------------------------------------------------------------------
-  // Capability schema mapping (design.md D22; tasks 4.1b, 4.2)
+  // Capability schema mapping
   // ---------------------------------------------------------------------------
 
   describe("capability schema", () => {
@@ -957,8 +955,7 @@ describe("DeviceRegistry", () => {
     }
 
     it("defaults persist to true when no persistence options are given", async () => {
-      // No `persistenceOptions` argument at all — exercises the class's own
-      // default (design.md D6; task 2.7), not merely config.ts's default.
+      // No `persistenceOptions` argument — exercises the class's own default, not config.ts's.
       const tmpFile = `/tmp/ts-ha-test-default-persist-${Date.now()}.json`;
       const { writeFile: wf, mkdir: mk } = await import("node:fs/promises");
       const { dirname: dn } = await import("node:path");

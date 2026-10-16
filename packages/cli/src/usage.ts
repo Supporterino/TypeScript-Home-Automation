@@ -1,6 +1,5 @@
 /**
- * CLI help text, extracted so it can be asserted without executing the
- * dispatcher (specs/cli "Command Surface").
+ * CLI help text, extracted so it can be asserted without running the dispatcher.
  */
 export const USAGE = `
 ts-ha — CLI for managing a running TypeScript Home Automation engine

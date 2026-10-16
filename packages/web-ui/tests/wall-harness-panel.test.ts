@@ -26,20 +26,14 @@ import {
   shownWidgets,
 } from "../src/app/wall/harness/draft.js";
 import { HARNESS_PANEL_SIZES, type HarnessPanel } from "../src/app/wall/harness/messages.js";
-import { getWidgetDescriptor } from "../src/app/wall/registry.js";
+import { getWidgetDescriptor, WALL_MIN_TOUCH_TARGET } from "../src/app/wall/registry.js";
 import { cardHeightPx, resolveCardFormForHeight, resolveSpanTier } from "../src/app/wall/span.js";
 import { deviceGridIds, resolveDeviceGridPage } from "../src/app/wall/widgets/device-grid-model.js";
+import { sceneTileLayout } from "../src/app/wall/widgets/scene-model.js";
 
 /**
- * The harness panel and bench (tasks 5.1-5.3, 6.1, 6.2; design.md D2, D7).
- *
- * Everything the panel shows or sets is asserted against the wall's own
- * functions — the helpers are imported here a second time and compared, so a
- * harness module that starts doing its own arithmetic fails rather than quietly
- * disagreeing with the wall. What no test here can show is a browser rendering a
- * control's effect, the scheme flipping Hearth's tokens, a card crossing the
- * compact/full boundary on screen, or the unreachable marking appearing: those
- * are hand-verified (design.md D7; change Non-Goals).
+ * The harness panel and bench: everything the panel shows or sets is asserted against
+ * the wall's own functions.
  */
 const HARNESS_DIR = join(import.meta.dir, "..", "src/app/wall/harness");
 const PANELS: readonly HarnessPanel[] = ["landscape", "portrait"];
@@ -62,7 +56,7 @@ function draftWidget(panel: HarnessPanel, id: string): WallWidget {
 /** The wall's own chain for one widget, computed here to compare against `widgetValues`. */
 function expectedValues(widget: WallWidget, rowUnit: number) {
   const descriptor = getWidgetDescriptor(widget.type);
-  const framed = wallFrameDrawsSurface(widget.type, descriptor.grammar);
+  const framed = wallFrameDrawsSurface(widget.type, descriptor.grammar, widget);
   const titled = widgetTitle(widget) !== null;
   const cellHeightPx = cardHeightPx({ rows: widget.h, rowUnit });
   const rendererHeightPx = rendererBoxHeightPx({ cellHeightPx, framed, titled });
@@ -114,9 +108,8 @@ describe("the panel's Stage-computed values", () => {
         expect(actual.tooSmall, `${panel} ${widget.id}`).toBe(false);
       }
 
-      // The type-specific checks the three widgets stand for: the `device` widget's
-      // frame is chrome-less, the titled clock spends rows on its title, and the
-      // grid's selection genuinely pages at this panel's row unit.
+      // The type-specific checks the three widgets stand for: the `device` widget's frame is
+      // chrome-less, the titled clock spends rows on its title, and the grid pages.
       expect(widgetValues(device, rowUnit).framed).toBe(false);
       expect(widgetValues(titled, rowUnit).rendererHeightPx).toBeLessThan(
         widgetValues(clock, rowUnit).rendererHeightPx,
@@ -154,6 +147,32 @@ describe("the panel's Stage-computed values", () => {
 
     expect(panelFitSummary(tall.widgets, "landscape")).not.toBeNull();
     expect(panelFitSummary(tall.widgets, "portrait")).toBeNull();
+  });
+
+  it("composes a one-row scene chrome-less within its cell, at the landscape panel", () => {
+    // The harness's own chain for the slim scene: the frame drops the surface at one
+    // row, so the whole cell is the scene's touch target and the compact composition
+    // fits it — resolved through the wall's functions at 1920×1080.
+    const panel: HarnessPanel = "landscape";
+    const rowUnit = panelRowUnit(
+      shownWidgets(DEFAULT_DRAFT, panel),
+      HARNESS_PANEL_SIZES[panel].height,
+    );
+    const scene = draftWidget(panel, "scene-evening");
+    const oneRow: WallWidget = { ...scene, h: 1 };
+
+    const values = widgetValues(oneRow, rowUnit);
+    expect(values.framed).toBe(false);
+    expect(values.titled).toBe(false);
+    expect(values.rendererHeightPx).toBe(cardHeightPx({ rows: 1, rowUnit }));
+    expect(values.tooSmall).toBe(false);
+    expect(values.rendererHeightPx).toBeGreaterThanOrEqual(WALL_MIN_TOUCH_TARGET);
+    expect(sceneTileLayout({ rendererHeightPx: values.rendererHeightPx, placement: oneRow })).toBe(
+      "compact",
+    );
+
+    // The same scene at two rows keeps the framed tile.
+    expect(widgetValues(scene, rowUnit).framed).toBe(true);
   });
 });
 
@@ -232,12 +251,8 @@ describe("the bench", () => {
     const bench = await source("Bench.tsx");
     const stage = await source("stage.tsx");
 
-    // Hearth declares every `--hearth-*` token under `[data-wall-chunk]` and
-    // nowhere else, and in bench mode the wall grid — whose root carries that
-    // scope — is not rendered. So the bench surface must carry it itself, or
-    // every token it and its renderer paint with resolves to nothing (surfaces
-    // go transparent, colours fall back) and the scheme toggle has nothing to
-    // switch. Stage mode is unaffected: there the wall's own root is the scope.
+    // Hearth declares every `--hearth-*` token under `[data-wall-chunk]` and nowhere else,
+    // and in bench mode the wall grid that carries that scope is not rendered.
     expect(stage).toContain("<Bench widget={update.bench.widget} controls={update.bench} />");
     expect(bench).toContain('data-wall-chunk=""');
     // A scope, not a marker: the wall grid's `data-wall-chunk` value is the wall
@@ -359,9 +374,8 @@ describe("the scheme toggle", () => {
     const stage = await source("stage.tsx");
     const panel = await source("HarnessPanel.tsx");
 
-    // Hearth's light palette is scoped `[data-theme="light"] [data-wall-chunk]`, so
-    // the attribute goes on the stage document's root — the panel's own document
-    // is a different one.
+    // Hearth's light palette is scoped `[data-theme="light"] [data-wall-chunk]`, so the
+    // attribute goes on the stage document's root — the panel's document is a different one.
     expect(stage).toContain("document.documentElement.dataset.theme = update.theme");
     // The panel only sends its choice; it applies no scheme mechanism of its own.
     expect(panel).not.toContain("dataset");

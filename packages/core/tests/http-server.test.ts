@@ -311,7 +311,7 @@ describe("HttpServer — /api/automations", () => {
     });
   });
 
-  describe("GET /api/automations/:name/history (task 8.6)", () => {
+  describe("GET /api/automations/:name/history", () => {
     it("returns 404 for an unknown automation", async () => {
       const server = makeServer({ automations: [] });
       const res = await req(server, "/api/automations/nonexistent/history");
@@ -344,7 +344,7 @@ describe("HttpServer — /api/automations", () => {
     });
   });
 
-  describe("GET /api/automations/:name/relationships (task 8.6)", () => {
+  describe("GET /api/automations/:name/relationships", () => {
     it("returns 404 for an unknown automation", async () => {
       const server = makeServer({ automations: [] });
       const res = await req(server, "/api/automations/nonexistent/relationships");
@@ -668,14 +668,14 @@ describe("HttpServer — GET /api/events", () => {
     expect(res.status).toBe(503);
   });
 
-  it("is subject to the same authorisation as other API endpoints (task 5.2)", async () => {
+  it("is subject to the same authorisation as other API endpoints", async () => {
     const server = makeServer({ token: "secret", eventBus: new EventBus() });
     const res = await req(server, "/api/events");
     expect(res.status).toBe(401);
     await res.body?.cancel();
   });
 
-  it("authorises from the session cookie alone, with no request header (task 5.3)", async () => {
+  it("authorises from the session cookie alone, with no request header", async () => {
     const server = makeServer({ token: "secret", eventBus: new EventBus() });
     const res = await req(server, "/api/events", {
       headers: { Cookie: "ts-ha-session=secret" },
@@ -692,10 +692,9 @@ describe("HttpServer — GET /api/events", () => {
     expect(res.status).toBe(401);
   });
 
-  it("logs a connect and a disconnect retrievable through the log query API (task 5.0c)", async () => {
-    // The lifecycle logger writes into the same LogBuffer the log category
-    // (and /api/logs) reads from — unlike the delivery-path logger, which
-    // must not (design.md D32; asserted separately below).
+  it("logs a connect and a disconnect retrievable through the log query API", async () => {
+    // The lifecycle logger writes into the same LogBuffer the log category reads from,
+    // unlike the delivery-path logger, which must not.
     const logBuffer = new LogBuffer(100);
     const realLogger = pino({ level: "info" }, logBuffer);
     const bus = new EventBus();
@@ -736,8 +735,7 @@ describe("HttpServer — GET /api/events", () => {
     const { value } = await reader.read();
     const chunk = new TextDecoder().decode(value);
     const payload = JSON.parse(chunk.replace(/^data: /, "").trim());
-    // Only the changed key is present — a delta, not a full state snapshot
-    // (task 5.4).
+    // Only the changed key is present — a delta, not a full state snapshot.
     expect(payload).toEqual({
       category: "state",
       key: "night_mode",
@@ -818,7 +816,7 @@ describe("HttpServer — /api/device-catalog", () => {
     ]);
   });
 
-  it("returns every device carrying its hidden status, including hidden devices (task 5.2)", async () => {
+  it("returns every device carrying its hidden status, including hidden devices", async () => {
     const server = makeServer();
     const visible = {
       source: "shelly",
@@ -1320,7 +1318,7 @@ const INVALID_WALL_CONFIG = {
   widgets: [{ id: "wide", type: "clock", config: {}, x: 6, y: 0, w: 8, h: 1 }],
 };
 
-/** A config whose sole room widget is missing its required `roomId` (design.md D10). */
+/** A config whose sole room widget is missing its required `roomId`. */
 const INVALID_WIDGET_CONFIG = {
   widgets: [{ id: "room", type: "room", config: {}, x: 0, y: 0, w: 6, h: 5 }],
 };
@@ -1616,7 +1614,7 @@ describe("HttpServer — /api/walls", () => {
   });
 });
 
-// ── Room batch command (design.md D5; tasks 5.1–5.4) ──────────────────────
+// ── Room batch command ────────────────────────────────────────────────────
 
 const ON_CAPABILITY: Capability = {
   kind: "switch",
@@ -1656,10 +1654,8 @@ function makeDescriptor(qualifiedId: string, capabilities: Capability[]): Device
 }
 
 /**
- * A server whose room manager and device accessor share one stub aggregate,
- * so membership resolution and command dispatch agree. The stub's `command`
- * runs the real `validateCommand`, making task 5.4's "validation is not
- * bypassed" observable end to end.
+ * A server whose room manager and device accessor share one stub aggregate, whose `command`
+ * runs the real `validateCommand`, so "validation is not bypassed" is observable.
  */
 function makeBatchServer(members: DeviceDescriptor[]) {
   const aggregate = {
@@ -1810,7 +1806,7 @@ describe("HttpServer — POST /api/rooms/:id/command", () => {
   });
 });
 
-// ── Weather endpoint (design.md D8; tasks 6.1–6.3) ────────────────────────
+// ── Weather endpoint ─────────────────────────────────────────────────────
 
 const CURRENT_WEATHER: CurrentWeather = {
   temperature: 20,
@@ -2181,6 +2177,9 @@ describe("HttpServer — GET /api/energy", () => {
   const populated: EnergyData = {
     powerWatts: 35,
     energyWh: 4000,
+    usageWh: 4200,
+    windowMinutes: 1440,
+    coveredMinutes: 360,
     breakdown: [
       {
         qualifiedId: "shelly:plug",
@@ -2215,6 +2214,9 @@ describe("HttpServer — GET /api/energy", () => {
 
     const body = (await res.json()) as EnergyData;
     expect(body).toEqual(populated);
+    expect(body.usageWh).toBe(4200);
+    expect(body.windowMinutes).toBe(1440);
+    expect(body.coveredMinutes).toBe(360);
     expect(body.breakdown[1]?.available).toBe(false);
     expect(body.history.map((sample) => sample.timestamp)).toEqual([1000, 2000]);
   });

@@ -1,14 +1,6 @@
 /**
- * The wall status/presence summary widget (design.md D11; specs/wall-display
- * "Widget Catalog"). Reuses the overview's pure {@link summarizeDevices} over
- * the live device map, so counts update as `device_state`/`device_reachability`
- * events stream in — no manual refresh.
- *
- * Composed on the wall's single card vocabulary (design.md W1): each count is a
- * state item — the ported circular affordance, its label, and the count on the
- * wall's own metric tier (design.md W2) — laid out on the wall's own grid.
- * Ambient — chrome-less, its readings on the panel. State is conveyed by the
- * label text as well as the glyph, never colour alone.
+ * The wall status/presence summary widget: reuses the overview's `summarizeDevices`
+ * over the live device map.
  */
 import { Activity, Clock, Power, Unplug } from "lucide-react";
 import { type ReactNode, useMemo } from "react";

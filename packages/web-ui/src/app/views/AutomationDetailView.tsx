@@ -1,21 +1,6 @@
 /**
- * Automation detail — triggers, enabled state, manual trigger, source,
- * execution history, and relationships (design.md D11, D12; specs/web-ui
- * "Automation Management Interface"; task 6.1).
- *
- * The manual trigger control is unavailable while the automation is disabled,
- * so the server's 409 is a guard this view prevents from being reached in the
- * ordinary case, not an expected response the user sees.
- *
- * Declared relationships (required services, related devices, watched state
- * keys — complete without ever having run) are presented distinctly from
- * observed relationships (state keys written since startup, growing with use),
- * so a never-run automation is not misread as one that writes nothing.
- *
- * The source highlighter is rendered only once the source section is opened and
- * its contents fetched, so Prism stays out of first paint.
- *
- * Rebuilt on the Lumen primitive layer (`ui/*`) and `lucide-react`.
+ * Automation detail — triggers, enabled state, manual trigger, source, execution
+ * history, and declared vs observed relationships.
  */
 import {
   CircleCheck,
@@ -39,6 +24,7 @@ import {
 } from "../api.js";
 import { SourceViewer } from "../components/SourceViewer.js";
 import { useDataStore } from "../lib/data-store.js";
+import { entryKey, formatDateTime, formatTime, LEVEL_NAMES } from "../lib/log-utils.js";
 import { deviceDetailPath } from "../lib/router.js";
 import { Link, useRouter } from "../lib/router-context.js";
 import type { AutomationRelationships, ExecutionRecord, TriggerContext } from "../types.js";
@@ -55,7 +41,6 @@ import {
   Stack,
   Switch,
 } from "../ui/index.js";
-import { entryKey, formatDateTime, formatTime, LEVEL_NAMES } from "../utils/logUtils.js";
 
 /** How many of an automation's most recent log entries the detail view lists. */
 const LOG_LIMIT = 50;
@@ -114,19 +99,16 @@ export function AutomationDetailView({ name }: { name: string }) {
     setSource(null);
     setSourceOpen(false);
     void loadDetails();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [name]);
 
-  // New executions appear without a manual refresh: a completion event for this
-  // automation triggers a lightweight history re-fetch rather than trying to
-  // reconstruct the record client-side.
+  // A completion event for this automation triggers a lightweight history
+  // re-fetch rather than reconstructing the record client-side.
   useEffect(() => {
     return subscribe((event) => {
       if (event.category === "automation_execution" && event.automation === name) {
         void loadDetails();
       }
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [subscribe, name]);
 
   // The store's log buffer updates from the stream, so this list appends live.

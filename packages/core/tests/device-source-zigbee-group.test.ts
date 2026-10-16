@@ -128,7 +128,7 @@ function createMockMqtt() {
 }
 
 // ---------------------------------------------------------------------------
-// Pure functions: capability intersection (task 2.1)
+// Pure functions: capability intersection
 // ---------------------------------------------------------------------------
 
 describe("intersectCapabilities", () => {
@@ -209,7 +209,7 @@ describe("intersectCapabilities", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Pure functions: state derivation (task 2.2)
+// Pure functions: state derivation
 // ---------------------------------------------------------------------------
 
 describe("deriveGroupState", () => {
@@ -358,7 +358,7 @@ describe("ZigbeeGroupDeviceSource", () => {
     ]);
   });
 
-  it("dispatches an accepted real boolean in the group capability's declared encoding (task 3.2)", async () => {
+  it("dispatches an accepted real boolean in the group capability's declared encoding", async () => {
     seedMembers();
     seedGroup();
     source.start();
@@ -430,7 +430,7 @@ describe("ZigbeeGroupDeviceSource", () => {
     );
   });
 
-  it("produces a light-shaped descriptor for a group of real Zigbee bulbs (task 4.4)", () => {
+  it("produces a light-shaped descriptor for a group of real Zigbee bulbs", () => {
     const lightExpose = {
       type: "light",
       features: [RAW_ON_OFF, RAW_BRIGHTNESS],
@@ -465,10 +465,10 @@ describe("ZigbeeGroupDeviceSource", () => {
   });
 
   // -------------------------------------------------------------------------
-  // Durable device state store (design.md D2; task 2.1)
+  // Durable device state store
   // -------------------------------------------------------------------------
 
-  it("records a derived group observation into the durable store (task 2.1)", () => {
+  it("records a derived group observation into the durable store", () => {
     const store = new DeviceStateStore(logger, { persist: false });
     const withStore = new ZigbeeGroupDeviceSource(registry, mqttMock.mqtt, logger, store);
     withStore.start();

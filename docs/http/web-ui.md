@@ -256,7 +256,9 @@ The wall is drawn in **Hearth**, the wall's own visual language, whose styleshee
 is loaded only with the wall and never by the dashboard (see
 [Asset delivery](#asset-delivery)). Its **eighteen** widget types are: a clock/date
 readout (client clock — no server data); current weather and, when the registered
-service provides it, a forecast; instantaneous and cumulative energy; a
+service provides it, a forecast; instantaneous power and the home's recent
+rolling-window usage, labelled with the span it covers, and no lifetime total (the
+dashboard's own energy view keeps its Cumulative stat); a
 temperature reading from a configured sensor, together with that sensor's humidity
 where it declares one; a status/presence summary; a room's devices with an
 all-on/all-off room command; the user's favorites; one or more
@@ -268,17 +270,21 @@ widget per device class** — `light`, `cover`, `fan`, `climate`, `lock`, `numbe
 **grammar**: **ambient** readouts (clock, weather, energy, temperature, status)
 render chrome-less with large type directly on the background, while **control**
 widgets (room, favorites, scene, link, devices, and every device widget) render as
-surfaces whose whole card is the touch target. A widget whose backing feature is
-unconfigured — for example weather with no weather service registered — reports that
-inside its own area and never prevents the rest of the profile from rendering.
+surfaces whose whole card is the touch target — except a `scene` at its one-row
+minimum, which draws no surface and is still the whole cell's touch target. A
+widget whose backing feature is unconfigured — for example weather with no weather
+service registered — reports that inside its own area and never prevents the rest
+of the profile from rendering.
 
 A readout widget presents the readings its configured device declares, and presents
 one the device does not declare as absent rather than as an empty line or a
-placeholder. A temperature widget bound to a sensor that also declares a humidity
-reading presents both — the humidity beneath the temperature, as the widget's
-secondary reading, with its own unit — while a sensor that declares only a
-temperature presents only the temperature. Neither case needs a second device or a
-per-profile setting.
+placeholder. The temperature widget identifies its sensor by the device's **room
+name** where the store assigns it one, otherwise by the device's shortened name,
+keeping the full name as the label's tooltip. A temperature widget bound to a
+sensor that also declares a humidity reading presents both — the humidity beneath
+the temperature, as the widget's secondary reading, with its own unit — while a
+sensor that declares only a temperature presents only the temperature. Neither case
+needs a second device or a per-profile setting.
 
 The **weather** widget composes for the box the frame hands it (design.md W7).
 Leading with the ported 36 px circular icon makes its stacked layout — condition
@@ -426,22 +432,28 @@ re-implemented in React; the attribution is recorded in
 Every card is composed from the ported anatomy: a circular icon affordance (36 px,
 with a 24 px glyph) drawn on a tinted shape of the device's own colour — which is
 the on/off control where the device has one — the device's name over its state or
-primary reading, and one actions row carrying the active control as a slider with
-the device's other controls beside it as touch-sized affordances. Each control is
-bounded horizontally — an icon control is the ported 42 px control height wide, and
+primary reading, and one actions row that uses the card's full width. A row of
+fixed-size controls — an icon control, or an enumerated control drawn as its
+segmented form of one option per permitted value — distributes across that width,
+while a row containing a flexible control — a slider, or an enumerated control
+drawn as its single dropdown — keeps that control growing and centres the fixed
+controls beside it, so no control is stretched into a different-looking affordance
+or left bunched at the card's left. Each control is bounded horizontally — an icon
+control is the ported 42 px control height wide, and
 an enumerated control draws one touch-sized option per permitted value, each label
 bounded to that same width with an ellipsis — so an actions row is bounded by its
 control count rather than by its labels, and a card at its minimum span never clips
 a control. An enumerated control whose permitted values do not fit the row at that
 42 px target — a select card's values, a thermostat's mode, a fan's presets — draws
 a single dropdown affordance carrying them all instead, so no option shrinks below
-the target and every value stays reachable. The metrics are the ported ones, declared
-once as Hearth tokens: **42 px** control height (the
-wall's touch target) and slider height, **12 px** control radius, control spacing,
-card radius, and slider track radius, **10 px** card padding, **14 px/500** primary
-over **12 px/400** secondary type, and a **10 px** slider bar thumb. The slider
-keeps a native range input and redraws only its chrome, so the control stays
-keyboard- and touch-operable at the ported height.
+the target and every value stays reachable. Distribution only consumes width a card
+already has, so the ported 42 px control height and 12 px control radius are
+unchanged. The metrics are the ported ones, declared once as Hearth tokens:
+**42 px** control height (the wall's touch target) and slider height, **12 px**
+control radius, control spacing, card radius, and slider track radius, **10 px** card
+padding, **14 px/500** primary over **12 px/400** secondary type, and a **10 px**
+slider bar thumb. The slider keeps a native range input and redraws only its chrome,
+so the control stays keyboard- and touch-operable at the ported height.
 
 - **Light** — the icon affordance is the on/off control (state carried by the
   glyph's fill as well as its colour); the name sits over the brightness reading or

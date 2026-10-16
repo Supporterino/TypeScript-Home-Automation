@@ -9,7 +9,7 @@ export interface SpinnerProps {
   className?: string;
 }
 
-/** A token-driven busy indicator (design.md D5). */
+/** A token-driven busy indicator. */
 export function Spinner({ size = 20, label = "Loading", className }: SpinnerProps) {
   return (
     <LoaderCircle

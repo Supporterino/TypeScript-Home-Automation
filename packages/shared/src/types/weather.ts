@@ -1,9 +1,4 @@
-/**
- * Generic weather service types.
- *
- * Defines a provider-agnostic interface for weather data. Implementations
- * map provider-specific responses to these common types.
- */
+/** Generic, provider-agnostic weather service types. */
 
 // ---------------------------------------------------------------------------
 // Current conditions
@@ -105,44 +100,12 @@ export interface WeatherLocation {
 // ---------------------------------------------------------------------------
 
 /**
- * Abstract weather service interface.
- *
- * Implement this to integrate any weather data provider.
- * The engine accepts an optional `WeatherService` registered under the `"weather"` key.
- * Access it in automations via `this.services.get<WeatherService>("weather")`.
- *
- * @example
- * ```ts
- * const weather = this.services.get<WeatherService>("weather");
- * if (!weather) return;
- *
- * const current = await weather.getCurrent();
- * if (current.temperature > 30) {
- *   this.logger.info("It's hot!");
- * }
- *
- * const forecast = await weather.getForecast(3);
- * if (forecast[0].precipitationChance > 0.5) {
- *   this.logger.info("Rain expected tomorrow");
- * }
- * ```
+ * Abstract weather service interface; registered under the `"weather"` service key.
  */
 export interface WeatherService {
-  /**
-   * Get current weather conditions.
-   *
-   * @param location Optional per-call location overriding the service's
-   *   configured default. Providers that bake a location into their
-   *   constructor still use it when this is omitted.
-   */
+  /** Gets current weather conditions. */
   getCurrent(location?: WeatherLocation): Promise<CurrentWeather>;
 
-  /**
-   * Get daily forecast.
-   * @param days Number of days to forecast (1-7, provider may limit)
-   * @param location Optional per-call location overriding the service's
-   *   configured default. Trailing so existing `getForecast(n)` callers are
-   *   unaffected.
-   */
+  /** Gets the daily forecast. */
   getForecast(days?: number, location?: WeatherLocation): Promise<DailyForecast[]>;
 }

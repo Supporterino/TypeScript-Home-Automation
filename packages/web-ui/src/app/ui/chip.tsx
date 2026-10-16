@@ -7,8 +7,8 @@ export interface ChipProps extends ComponentPropsWithoutRef<"span"> {
 }
 
 /**
- * A neutral, outlined metadata tag (design.md D5) — distinct from `Badge`,
- * which is tone-coded status. Non-interactive; wrap in a button for filters.
+ * A neutral, outlined metadata tag, distinct from the tone-coded `Badge`.
+ * Non-interactive; wrap in a button for filters.
  */
 export function Chip({ className, icon, children, ...props }: ChipProps) {
   return (

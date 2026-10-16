@@ -6,11 +6,8 @@ import {
   themeBootstrapScript,
 } from "../src/components/theme-bootstrap.js";
 
-// Pure test — no DOM. The theme behaves correctly in the browser via
-// `useTheme()`, but its two testable pieces are pure strings/logic: the
-// no-flash bootstrap script inlined into the shell's <head>, and the
-// preference → scheme resolution rule (design.md D4; specs/web-ui "Theme
-// Selection").
+// Pure test — no DOM. The theme's two testable pieces: the no-flash bootstrap
+// script inlined into the shell's <head>, and the preference → scheme resolution.
 
 describe("themeBootstrapScript", () => {
   it("reads the persisted preference from the dashboard's scoped storage key", () => {

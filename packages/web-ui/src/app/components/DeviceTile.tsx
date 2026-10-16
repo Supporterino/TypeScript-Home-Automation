@@ -1,24 +1,6 @@
 /**
- * A device tile: one dominant primary action or readout, selected by the
- * curated capability ranking (design.md D5, D12; specs/web-ui "Device Tile
- * Presentation"), plus an explicit affordance that opens the device's detail
- * view. Degrades to a read-only tile — fully activatable as a whole — when
- * nothing ranks.
- *
- * State is never colour-only (design.md D9): every on/off and reachability
- * condition carries a distinct icon shape and label alongside its token,
- * produced by the pure {@link deviceTileState} helper.
- *
- * Also takes an optional action slot and an optional unavailable mode — a room
- * places its unassign control in the slot, and renders an unavailable member
- * through the unavailable variant, so every device collection shares one tile
- * shape rather than a room inventing a second one.
- *
- * This tile is the dashboard's own; the wall draws the ported card system that
- * lives under `wall/cards/` instead (design.md D1, D10). Its props and behaviour
- * contracts are unchanged — the wall's `size="wall"` presentation, its span tier
- * and card form, and its `contained` mode retired with the wall's use of this
- * tile, so the tile is first-paint, dashboard-only, and smaller.
+ * A device tile: one dominant primary action or readout from the curated
+ * capability ranking, plus an affordance opening the device's detail view.
  */
 import {
   ChevronRight,
@@ -55,9 +37,7 @@ import { CapabilityControl, formatReadoutValue } from "./CapabilityControl.js";
 
 /**
  * Renders a state glyph from the symbolic icon name the pure state helper
- * produces, coloured by a design token rather than a literal hex (design.md
- * D9). The on/off pair differs in fill as well as colour, so it is
- * distinguishable with colour removed.
+ * produces, coloured by a design token.
  */
 function StateGlyph({
   icon,
@@ -85,15 +65,12 @@ function StateGlyph({
   }
 }
 
-/**
- * The "Hidden" marker: the Lumen badge (design.md D1). Its eye-off glyph keeps
- * the state readable without colour.
- */
+/** The "Hidden" marker badge. */
 function HiddenMarker() {
   return <Badge tone="neutral">Hidden</Badge>;
 }
 
-/** The on/off label + filled/outline power glyph — the non-colour on/off channel (design.md D9). */
+/** The on/off label + filled/outline power glyph — the non-colour on/off channel. */
 function OnOffChip({ state, fontSize }: { state: DeviceTileOnOffState; fontSize: string }) {
   return (
     <Row gap={1} align="center" wrap={false}>
@@ -106,10 +83,8 @@ function OnOffChip({ state, fontSize }: { state: DeviceTileOnOffState; fontSize:
 }
 
 /**
- * The observation state (design.md D5, D9; specs/web-ui "A tile MUST indicate ...
- * the age of the observation when polled"): the glyph shape and token still
- * distinguish push, polled/stale, and unreachable without colour, and the visible
- * label carries the state — including a polled device's age — as text.
+ * The observation state: glyph shape and token distinguish push, polled/stale,
+ * and unreachable without colour, and the label carries the state as text.
  */
 function ObservationIndicator({
   observation,
@@ -148,9 +123,7 @@ function GroupMarker() {
 
 /**
  * The tile's corner action slot: favorite, visibility, and any caller-supplied
- * action. In normal flow at the end of the header row rather than absolutely
- * positioned, so it never overlays the name and a long name truncates before
- * reaching it.
+ * action, in normal flow so it never overlays the name.
  */
 function ActionSlot({ action }: { action: ReactNode }) {
   return (
@@ -166,9 +139,8 @@ function ActionSlot({ action }: { action: ReactNode }) {
 }
 
 /**
- * A favorite star toggle, never requiring the caller to know a device's
- * qualified identifier (specs/web-ui "Favorites"). Uses the store's optimistic
- * write and stream reconciliation, so a change is reflected across clients.
+ * A favorite star toggle, using the store's optimistic write and stream
+ * reconciliation.
  */
 function FavoriteToggle({ device }: { device: DeviceDescriptor }) {
   const { isFavorite, toggleFavorite } = useDataStore();
@@ -198,11 +170,8 @@ function FavoriteToggle({ device }: { device: DeviceDescriptor }) {
 }
 
 /**
- * A hide/unhide toggle, never requiring the caller to know a device's
- * qualified identifier — it reads it off the descriptor itself (specs/web-ui
- * "Hiding And Unhiding From The Interface"). Composed alongside any
- * caller-supplied `action` in the tile's corner slot, so a room's own unassign
- * control and this toggle can coexist.
+ * A hide/unhide toggle reading the identifier off the descriptor, composed
+ * alongside any caller-supplied `action` in the corner slot.
  */
 function VisibilityToggle({ device }: { device: DeviceDescriptor }) {
   const { hideDevice, unhideDevice } = useDataStore();
@@ -236,10 +205,8 @@ interface UnavailableProps {
 type Props = AvailableProps | UnavailableProps;
 
 /**
- * The unavailable variant: qualified identifier and an unavailable marker,
- * with no control, no state readout, and no detail affordance — no live
- * descriptor exists to open, and its stale state is never presented as current
- * (specs/web-ui "Unavailable member is visible but distinct").
+ * The unavailable variant: qualified identifier and an unavailable marker, with
+ * no control, state readout, or detail affordance.
  */
 function UnavailableTile({ qualifiedId, action }: UnavailableProps) {
   const inner = (
@@ -289,20 +256,13 @@ function AvailableTile({ device, action }: AvailableProps) {
     ? flat.find((c) => c.property === ranking.readout?.capability.property)
     : undefined;
 
-  // A tile with no ranked action is read-only: the whole tile then activates the
-  // detail view (specs/web-ui "A read-only tile still opens detail"). A tile with
-  // a control opens detail only through its explicit affordance, so the embedded
-  // control is never mistaken for it.
+  // A tile with no ranked action is read-only and the whole tile opens detail; a
+  // tile with a control opens detail only through its explicit affordance.
   const readOnly = !actionCapability;
   const state = deviceTileState(device, now);
 
-  // One optimistic resolution for the tile's primary action, shared by the
-  // embedded control and the on/off chip. The chip and control must agree while
-  // a command is in flight; deriving the chip from confirmed state alone would
-  // let them contradict until the round trip (design.md D12; specs/web-ui
-  // "Device Tile Presentation"). The hook resolves a store-level override (room
-  // command) ahead of this component's local override, so the tile still
-  // reflects room-wide commands.
+  // One optimistic resolution shared by the embedded control and the on/off chip,
+  // so they agree while a command is in flight.
   const actionControl = useOptimisticDeviceProperty(
     device.qualifiedId,
     actionCapability?.property ?? "",
@@ -323,8 +283,7 @@ function AvailableTile({ device, action }: AvailableProps) {
   }
 
   const cardAction = readOnly ? openDetail : null;
-  // The dashboard read-only card takes role="button" because it contains no
-  // embedded control; a tile with a control leaves activation to that control.
+  // A read-only card takes role="button"; a tile with a control does not.
   const cardKeyboardAction = cardAction;
 
   const observation = (
@@ -357,8 +316,7 @@ function AvailableTile({ device, action }: AvailableProps) {
 
   const stop = (event: { stopPropagation: () => void }) => event.stopPropagation();
 
-  // The embedded control set: the ranked primary action, a bare readout when
-  // nothing ranks, or an empty-state line.
+  // The ranked primary action, a bare readout, or an empty-state line.
   let controls: ReactNode;
   if (actionCapability) {
     controls = (

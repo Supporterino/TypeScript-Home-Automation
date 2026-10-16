@@ -1,20 +1,6 @@
 /**
- * Every value the panel shows, and every value the bench hands a renderer,
- * computed through the wall's own functions (design.md D2, D7; tasks 5.3, 6.1,
- * 6.2).
- *
- * The harness re-implements no composition arithmetic: `cellHeightPx` is
- * `span.ts`'s `cardHeightPx`, the renderer's box is `frame.ts`'s
- * `rendererBoxHeightPx`, the tier is `span.ts`'s `resolveSpanTier`, the form is
- * `resolveCardFormForHeight`, the row unit is `grid.ts`'s `wallGridMetrics`, and
- * "could the editor author this span?" is `editor/model.ts`'s
- * `updateWidgetPlacement` — the same call the editor's own resize control makes,
- * so a span the editor would clamp is clamped here too. This module is pure, so
- * the whole derivation is reachable by `bun test` without a DOM.
- *
- * `WidgetFrame` resolves the same chain for the wall it renders; this module is
- * the panel's and the bench's view of it, and `tests/wall-harness-panel.test.ts`
- * asserts the two agree.
+ * Every value the panel shows, and every value the bench hands a renderer, computed
+ * through the wall's own functions.
  */
 import { WALL_GRID_COLUMNS, WALL_GRID_MAX_ROWS, type WallWidget } from "@ts-ha/shared";
 import { updateWidgetPlacement } from "../editor/model.js";
@@ -37,10 +23,10 @@ import {
 } from "../span.js";
 import { HARNESS_PANEL_SIZES, type HarnessBenchControls, type HarnessPanel } from "./messages.js";
 
-/** The wall's own composition values for one widget at one panel (tasks 5.3, 6.1). */
+/** The wall's own composition values for one widget at one panel. */
 export interface HarnessWidgetValues {
   descriptor: WallWidgetDescriptor;
-  /** The wall's `contained` for this type — `wallFrameDrawsSurface(type, grammar)` (D2). */
+  /** What the wall passes as `contained` here — `wallFrameDrawsSurface(type, grammar, widget)`. */
   framed: boolean;
   titled: boolean;
   /** The widget's cell height, in CSS pixels — `cardHeightPx({ rows: h, rowUnit })`. */
@@ -58,12 +44,12 @@ export interface HarnessWidgetValues {
   max: { w: number; h: number };
 }
 
-/** The panel's resolved row unit for a widget list — the wall's own `wallGridMetrics` (D2). */
+/** The panel's resolved row unit for a widget list — the wall's own `wallGridMetrics`. */
 export function panelRowUnit(widgets: readonly WallWidget[], panelHeightPx: number): number {
   return wallGridMetrics(panelHeightPx, widgets).rowUnit;
 }
 
-/** The panel size the stage document is laid out at (D3). */
+/** The panel size the stage document is laid out at. */
 export function panelHeightPx(panel: HarnessPanel): number {
   return HARNESS_PANEL_SIZES[panel].height;
 }
@@ -71,7 +57,7 @@ export function panelHeightPx(panel: HarnessPanel): number {
 /** Resolves every value the panel shows for one widget, through the wall's own functions. */
 export function widgetValues(widget: WallWidget, rowUnit: number): HarnessWidgetValues {
   const descriptor = getWidgetDescriptor(widget.type);
-  const framed = wallFrameDrawsSurface(widget.type, descriptor.grammar);
+  const framed = wallFrameDrawsSurface(widget.type, descriptor.grammar, widget);
   const titled = widgetTitle(widget) !== null;
   const cellHeightPx = cardHeightPx({ rows: widget.h, rowUnit });
   const rendererHeightPx = rendererBoxHeightPx({ cellHeightPx, framed, titled });
@@ -98,10 +84,8 @@ export function widgetValues(widget: WallWidget, rowUnit: number): HarnessWidget
 }
 
 /**
- * Whether the editor would author a `{w, h}` span for this widget. Decided by the
- * editor's own placement rule — its clamping is the test — so a span below the
- * type's minimum, above its maximum, or under a titled card's raised floor is
- * not reachable, with no bounds re-declared here.
+ * Whether the editor would author a `{w, h}` span for this widget, decided by the
+ * editor's own placement rule.
  */
 function editorAcceptsSpan(widget: WallWidget, w: number, h: number): boolean {
   const placed = updateWidgetPlacement({ widgets: [widget] }, widget.id, { w, h, x: 0, y: 0 });
@@ -110,21 +94,18 @@ function editorAcceptsSpan(widget: WallWidget, w: number, h: number): boolean {
 }
 
 /**
- * Every renderer-box height a legal placement of this widget's type produces at
- * this row unit (task 6.2). The candidate spans cover the whole grid and the
- * editor's own rule decides which of them are legal, so the set is exact for the
- * panel the bench is judged at — which is what makes a hand-set height that no
- * placement produces visibly unreachable rather than merely unusual.
+ * Every renderer-box height a legal placement of this widget's type produces at this
+ * row unit.
  */
 export function reachableRendererHeights(widget: WallWidget, rowUnit: number): readonly number[] {
   const descriptor = getWidgetDescriptor(widget.type);
-  const framed = wallFrameDrawsSurface(widget.type, descriptor.grammar);
   const titled = widgetTitle(widget) !== null;
   const heights = new Set<number>();
 
   for (let w = 1; w <= WALL_GRID_COLUMNS; w += 1) {
     for (let h = 1; h <= WALL_GRID_MAX_ROWS; h += 1) {
       if (!editorAcceptsSpan(widget, w, h)) continue;
+      const framed = wallFrameDrawsSurface(widget.type, descriptor.grammar, { w, h });
       heights.add(
         rendererBoxHeightPx({ cellHeightPx: cardHeightPx({ rows: h, rowUnit }), framed, titled }),
       );
@@ -135,10 +116,8 @@ export function reachableRendererHeights(widget: WallWidget, rowUnit: number): r
 }
 
 /**
- * The panel's bench overrides (design.md D7; tasks 6.1, 6.2). A field left `null`
- * falls back to the value the Stage computes, so the bench opens agreeing with
- * the stage, a hand-set field is always shown *beside* that value, and one click
- * puts every field back (D7's mitigation).
+ * The panel's bench overrides. A field left `null` falls back to the value the Stage
+ * computes.
  */
 export interface HarnessBenchOverrides {
   contained: boolean | null;
@@ -175,12 +154,8 @@ export function resolveBenchControls(
 }
 
 /**
- * The editor's own fit verdict for the widget list this panel renders, at this
- * panel — `null` when it fits. The preview resolver is the editor's, so the panel
- * reports a refusal in the editor's words rather than in a second opinion;
- * passing the panel's own size is what makes the verdict true for the panel the
- * developer is looking at rather than for the wall's reference panel (tasks 5.1,
- * 6.2).
+ * The editor's own fit verdict for the widget list this panel renders, at this panel —
+ * `null` when it fits.
  */
 export function panelFitSummary(
   widgets: readonly WallWidget[],

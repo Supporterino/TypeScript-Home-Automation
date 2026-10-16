@@ -1,4 +1,5 @@
 import type { DebugClient } from "../client.js";
+import { parseCommandValue } from "../command-value.js";
 import { formatTable, formatValue } from "../format.js";
 
 export async function listState(client: DebugClient, json: boolean): Promise<void> {
@@ -41,14 +42,7 @@ export async function setState(
   rawValue: string,
   json: boolean,
 ): Promise<void> {
-  // Parse the value as JSON — supports booleans, numbers, strings, objects, arrays
-  let value: unknown;
-  try {
-    value = JSON.parse(rawValue);
-  } catch {
-    // If it's not valid JSON, treat it as a plain string
-    value = rawValue;
-  }
+  const value = parseCommandValue(rawValue);
 
   const result = await client.setState(key, value);
 

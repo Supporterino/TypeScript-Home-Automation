@@ -16,7 +16,7 @@ export interface IconButtonProps extends Omit<ButtonProps, "children" | "size"> 
   size?: ButtonSize;
 }
 
-/** A square icon-only button with a required accessible name (design.md D9). */
+/** A square icon-only button with a required accessible name. */
 export function IconButton({
   label,
   className,

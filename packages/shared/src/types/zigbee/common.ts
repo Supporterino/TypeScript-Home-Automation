@@ -1,9 +1,4 @@
-/**
- * Common Zigbee2MQTT primitives and generic payloads.
- *
- * These types work across all brands and device categories. Use them when
- * writing automations that should work with any compatible device.
- */
+/** Common Zigbee2MQTT primitives and generic, cross-brand payloads. */
 
 // ===========================================================================
 // Common primitives
@@ -57,12 +52,7 @@ export type Color = ColorXY | ColorHS | ColorRGB | ColorHex;
 // Generic light payloads
 // ---------------------------------------------------------------------------
 
-/**
- * Generic state payload for any dimmable light.
- *
- * Covers all lights that support on/off and brightness control.
- * Works with: Philips Hue, IKEA TRADFRI, and other dimmable bulbs/drivers.
- */
+/** Generic state payload for any dimmable light. */
 export interface DimmableLightPayload {
   state: DeviceState;
   brightness?: number;
@@ -70,35 +60,20 @@ export interface DimmableLightPayload {
   linkquality?: number;
 }
 
-/**
- * Generic state payload for any white-spectrum (color temperature) light.
- *
- * Extends dimmable with color temperature support.
- * Works with: any bulb that supports warm-to-cool white adjustment.
- */
+/** Generic state payload for any white-spectrum (color temperature) light. */
 export interface WhiteSpectrumLightPayload extends DimmableLightPayload {
   /** Color temperature in mired. Lower = cooler, higher = warmer. */
   color_temp?: number;
   color_temp_startup?: number | "previous";
 }
 
-/**
- * Generic state payload for any color light.
- *
- * Extends white-spectrum with full color support.
- * Works with: any bulb that supports RGB/XY color.
- */
+/** Generic state payload for any color light. */
 export interface ColorLightPayload extends WhiteSpectrumLightPayload {
   /** Color in CIE xy coordinates (reported by device). */
   color?: ColorXY;
 }
 
-/**
- * Generic state payload covering all light types.
- *
- * Use this when you don't know or don't care about the exact light type.
- * All fields are optional except `state`.
- */
+/** Generic state payload covering all light types. */
 export interface LightPayload {
   state: DeviceState;
   brightness?: number;
@@ -113,11 +88,7 @@ export interface LightPayload {
 // Generic light set commands
 // ---------------------------------------------------------------------------
 
-/**
- * Generic set command for any dimmable light.
- *
- * Supports on/off, brightness, transition, and timed auto-off.
- */
+/** Generic set command for any dimmable light. */
 export interface DimmableLightSetCommand {
   state?: DeviceStateSet;
   brightness?: number;
@@ -140,11 +111,7 @@ export interface DimmableLightSetCommand {
   brightness_step_onoff?: number;
 }
 
-/**
- * Generic set command for any white-spectrum light.
- *
- * Extends dimmable with color temperature controls.
- */
+/** Generic set command for any white-spectrum light. */
 export interface WhiteSpectrumLightSetCommand extends DimmableLightSetCommand {
   /** Color temperature in mired. */
   color_temp?: number;
@@ -155,11 +122,7 @@ export interface WhiteSpectrumLightSetCommand extends DimmableLightSetCommand {
   color_temp_step?: number;
 }
 
-/**
- * Generic set command for any color light.
- *
- * Extends white-spectrum with full color and hue/saturation controls.
- */
+/** Generic set command for any color light. */
 export interface ColorLightSetCommand extends WhiteSpectrumLightSetCommand {
   /** Color in CIE xy, hue/saturation, RGB, or hex. */
   color?: Color;
@@ -173,11 +136,7 @@ export interface ColorLightSetCommand extends WhiteSpectrumLightSetCommand {
   saturation_step?: number;
 }
 
-/**
- * Generic set command covering all light types.
- *
- * Use this when you don't know or don't care about the exact light type.
- */
+/** Generic set command covering all light types. */
 export interface LightSetCommand {
   state?: DeviceStateSet;
   brightness?: number;
@@ -205,11 +164,7 @@ export interface LightSetCommand {
 // Generic sensor payloads
 // ---------------------------------------------------------------------------
 
-/**
- * Generic occupancy / motion sensor payload.
- *
- * Works with: any PIR motion sensor (Aqara, Philips Hue, IKEA, etc.).
- */
+/** Generic occupancy / motion sensor payload. */
 export interface OccupancyPayload {
   occupancy: boolean;
   illuminance?: number;
@@ -219,11 +174,7 @@ export interface OccupancyPayload {
   linkquality?: number;
 }
 
-/**
- * Generic temperature and humidity sensor payload.
- *
- * Works with: Aqara WSDCGQ11LM, IKEA VINDSTYRKA, and similar.
- */
+/** Generic temperature and humidity sensor payload. */
 export interface TemperatureHumidityPayload {
   temperature: number;
   humidity: number;
@@ -233,11 +184,7 @@ export interface TemperatureHumidityPayload {
   linkquality?: number;
 }
 
-/**
- * Generic contact (door/window) sensor payload.
- *
- * Works with: any magnetic contact sensor (Aqara, IKEA PARASOLL, etc.).
- */
+/** Generic contact (door/window) sensor payload. */
 export interface ContactPayload {
   contact: boolean;
   battery?: number;
@@ -245,11 +192,7 @@ export interface ContactPayload {
   linkquality?: number;
 }
 
-/**
- * Generic mmWave presence sensor payload.
- *
- * Works with: any mmWave presence sensor (Aqara FP300, FP1, etc.).
- */
+/** Generic mmWave presence sensor payload. */
 export interface PresencePayload {
   presence: boolean;
   target_distance?: number;
@@ -261,11 +204,7 @@ export interface PresencePayload {
   linkquality?: number;
 }
 
-/**
- * Generic water leak sensor payload.
- *
- * Works with: any water leak sensor (Aqara SJCGQ11LM, etc.).
- */
+/** Generic water leak sensor payload. */
 export interface WaterLeakPayload {
   water_leak: boolean;
   battery?: number;
@@ -275,11 +214,7 @@ export interface WaterLeakPayload {
   linkquality?: number;
 }
 
-/**
- * Generic air quality sensor payload.
- *
- * Works with: any sensor reporting PM2.5, VOC, temperature, humidity.
- */
+/** Generic air quality sensor payload. */
 export interface AirQualitySensorPayload {
   temperature?: number;
   humidity?: number;
@@ -292,13 +227,7 @@ export interface AirQualitySensorPayload {
 // Generic remote / button payloads
 // ---------------------------------------------------------------------------
 
-/**
- * Generic button or remote payload.
- *
- * The `action` field is a plain string — use brand-specific types for
- * narrowed action values.
- * Works with: any Zigbee button, remote, or dimmer.
- */
+/** Generic button or remote payload; `action` is a plain string. */
 export interface ButtonPayload {
   action: string;
   battery?: number;
@@ -310,11 +239,7 @@ export interface ButtonPayload {
 // Generic plug / switch payloads
 // ---------------------------------------------------------------------------
 
-/**
- * Generic smart plug payload with optional power monitoring.
- *
- * Works with: any on/off plug or switch with power metering.
- */
+/** Generic smart plug payload with optional power monitoring. */
 export interface PlugPayload {
   state: DeviceState;
   power?: number;
@@ -324,11 +249,7 @@ export interface PlugPayload {
   linkquality?: number;
 }
 
-/**
- * Generic set command for any mmWave presence sensor.
- *
- * Works with: any presence sensor that supports motion sensitivity configuration.
- */
+/** Generic set command for any mmWave presence sensor. */
 export interface PresenceSetCommand {
   motion_sensitivity?: "low" | "medium" | "high";
 }
@@ -344,11 +265,7 @@ export interface SwitchSetCommand {
 // Generic air purifier payloads
 // ---------------------------------------------------------------------------
 
-/**
- * Generic air purifier payload.
- *
- * Works with: IKEA STARKVIND and similar fan/purifier combos.
- */
+/** Generic air purifier payload. */
 export interface AirPurifierPayload {
   fan_state: DeviceState;
   fan_speed?: number;

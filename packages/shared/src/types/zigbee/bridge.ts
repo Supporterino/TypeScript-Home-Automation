@@ -20,11 +20,8 @@ export type ZigbeeDeviceType = "Coordinator" | "Router" | "EndDevice";
 export type ZigbeeInterviewState = "PENDING" | "IN_PROGRESS" | "SUCCESSFUL" | "FAILED";
 
 /**
- * Device definition from Zigbee2MQTT — present when `supported` is `true`.
- *
- * `exposes` is the bridge's published capability description mapped into the
- * source-neutral capability vocabulary by the device registry — it is no
- * longer Zigbee2MQTT's raw `exposes` shape (design.md D22).
+ * Device definition from Zigbee2MQTT; `exposes` holds the source-neutral capability
+ * vocabulary, not Zigbee2MQTT's raw shape.
  */
 export interface ZigbeeDeviceDefinition {
   model: string;
@@ -35,11 +32,7 @@ export interface ZigbeeDeviceDefinition {
   options: unknown[];
 }
 
-/**
- * A Zigbee device as reported on `zigbee2mqtt/bridge/devices`.
- *
- * The `definition` field is `null` when `supported` is `false` (unrecognised device).
- */
+/** A Zigbee device as reported on `zigbee2mqtt/bridge/devices`. */
 export interface ZigbeeDevice {
   ieee_address: string;
   friendly_name: string;
@@ -62,13 +55,7 @@ export interface ZigbeeGroupMember {
   endpoint: number;
 }
 
-/**
- * A Zigbee2MQTT group as reported on `zigbee2mqtt/bridge/groups`.
- *
- * Identity is `id`, the numeric identifier the bridge assigns — not
- * `friendly_name`, which can be renamed without affecting identity
- * (design.md D2).
- */
+/** A Zigbee2MQTT group as reported on `zigbee2mqtt/bridge/groups`. */
 export interface ZigbeeGroup {
   id: number;
   friendly_name: string;

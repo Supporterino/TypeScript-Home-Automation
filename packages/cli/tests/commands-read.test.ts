@@ -4,8 +4,6 @@ import { getAutomationHistory, getAutomationRelationships } from "../src/command
 import { formatEnergy, showEnergy } from "../src/commands/energy.js";
 import { formatWeather, showWeather } from "../src/commands/weather.js";
 
-// specs/cli "Command Surface" (task 2.3) — history, relationships, energy, weather.
-
 const originalLog = console.log;
 
 function output(log: ReturnType<typeof mock>): string {

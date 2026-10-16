@@ -1,11 +1,6 @@
 /**
- * Energy view derivation (specs/energy-monitoring; specs/web-ui "Energy View";
- * design.md D7, D12).
- *
- * The endpoint reports watt-hours (the canonical aggregation unit); the view
- * converts to kWh for display. The trend is hand-rendered as an inline SVG
- * polyline rather than pulling in a charting library (design.md D12) — the
- * geometry lives here as pure functions so it is reachable by `bun test`.
+ * Energy view derivation: converts the endpoint's watt-hours to kWh and
+ * hand-renders the trend as an inline SVG polyline.
  */
 
 import type { EnergyHistorySample } from "@ts-ha/shared";
@@ -19,10 +14,8 @@ export const SPARKLINE_HEIGHT = 36;
 const SPARKLINE_PADDING = 3;
 
 /**
- * Event categories that can change the aggregated totals: a state reading
- * changes power/energy, reachability changes what is summed, and device
- * appear/disappear changes the breakdown. The endpoint carries no aggregated
- * value on the stream, so a matching event means "refetch `/api/energy`".
+ * Event categories that can change the aggregated totals; a matching event
+ * means "refetch `/api/energy`".
  */
 export const ENERGY_DEVICE_EVENT_CATEGORIES = [
   "device_state",
@@ -54,10 +47,8 @@ export function formatKwh(wh: number): string {
 }
 
 /**
- * Maps a chronological power series to an SVG `points` string in a
- * `width`×`height` coordinate space, oldest first. Returns an empty string for
- * no samples and a flat mid-height line when every sample is equal — neither
- * case is an error, so the caller can simply omit the trend.
+ * Maps a chronological power series to an SVG `points` string, oldest first.
+ * Returns `""` for no samples, and a flat mid-height line when all are equal.
  */
 export function sparklinePoints(
   samples: readonly EnergyHistorySample[],
@@ -87,9 +78,8 @@ export function sparklinePoints(
 }
 
 /**
- * Describes a trend for assistive technology. Color/sparkline alone is not a
- * channel (MASTER "State Encoding Rule"), so this textual summary is exposed
- * as the SVG's accessible name.
+ * Describes a trend for assistive technology, exposed as the SVG's accessible
+ * name since color and sparkline alone are not a channel.
  */
 export function sparklineLabel(samples: readonly EnergyHistorySample[]): string {
   if (samples.length === 0) return "";

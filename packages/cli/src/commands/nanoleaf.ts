@@ -14,12 +14,8 @@ function normalizeHost(host: string): string {
 }
 
 /**
- * Nanoleaf pairing command.
- *
- * Guides the user through generating an auth token by pressing the
- * physical power button on the Nanoleaf device.
- *
- * Usage: ts-ha nanoleaf pair <host>
+ * Nanoleaf pairing command: guides the user through generating an auth token
+ * by pressing the physical power button on the device.
  */
 export async function pairNanoleaf(hostArg: string): Promise<void> {
   const host = normalizeHost(hostArg);

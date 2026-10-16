@@ -1,15 +1,12 @@
 /**
- * Pure Rooms-tab model (specs/cli "Command Surface" — `ts-ha rooms`).
- *
- * Projects rooms with their membership for display, composes a batch command
- * from a single `property value` line, and summarizes a batch's per-member
- * outcomes. DOM/JSX-free so it is unit-testable without a render harness.
+ * Pure Rooms-tab model: projects rooms with their members, composes a batch
+ * command line, and counts a batch's per-member outcomes.
  */
 
 import type { RoomCommandResult, RoomWithMembers } from "@ts-ha/shared";
 import { parseCommandValue } from "./command-value.js";
 
-export interface RoomMemberRow {
+interface RoomMemberRow {
   qualifiedId: string;
   displayName: string;
   available: boolean;
@@ -45,9 +42,8 @@ export interface ParsedRoomCommand {
 }
 
 /**
- * Parse a batch-control line of the form `<property> <value>`. The value is
- * JSON when valid, else the raw string (mirroring `state set`). Returns `null`
- * for an empty or property-only input.
+ * Parse a batch-control line of the form `<property> <value>`; the value is
+ * JSON when valid, else the raw string. Returns `null` when malformed.
  */
 export function parseRoomCommandInput(input: string): ParsedRoomCommand | null {
   const trimmed = input.trim();

@@ -12,27 +12,18 @@ import {
   WALL_TYPE_RAMP,
 } from "../src/app/wall/type-ramp.js";
 
-// Pure ramp bounds — no DOM (wall-zones-and-fit D6, D10; mushroom-wall-widgets
-// W2; specs/wall-display "Wall Glanceability"). The change reduces the wall's
-// component scale ~25–30 %, moves its two smallest tiers onto the ported card
-// system's primary (14 px) and secondary (12 px) sizes, and retires the compact
-// status-chip exception — so the floor is the ported secondary size and no tier
-// sits below it. The page that declares the ramp to a reader is a declaration
-// site too (`design-system/ts-ha/pages/wall.md`), so it is asserted here; Hearth
-// must re-derive the same bounds, so the stylesheet is asserted against the ramp
-// as well.
+// Pure ramp bounds — no DOM. The floor is the ported card system's secondary size
+// and no tier sits below it.
 
 /** The dashboard's largest type; the wall's rendered readouts must exceed it. */
 const DASHBOARD_TYPE_CEILING_PX = 34;
 
 /**
- * One `vmin` on the wall's own target panel, in CSS pixels. The panel is
- * 1920 × 1080 (wall-zones-and-fit D7), so `vmin` is 1 % of 1080 = 10.8 px and a
- * `clamp(...)` token resolves at its `vmin` term unless a bound caps it.
+ * One `vmin` on the wall's own target panel, in CSS pixels: 1 % of 1080 = 10.8 px.
  */
 const PANEL_VMIN_PX = 10.8;
 
-/** The pre-change ramp table (design.md D10's "before" column), for the reduction assertion. */
+/** The pre-change ramp table, for the reduction assertion. */
 const PRE_CHANGE = {
   hero: "clamp(48px, 7vmin, 104px)",
   metric: "clamp(36px, 5vmin, 76px)",
@@ -85,7 +76,7 @@ async function readHearthCss(): Promise<string> {
   return readFile(join(import.meta.dir, "..", "src/app/wall/hearth.css"), "utf8");
 }
 
-/** The design-system page that states the ramp to a reader — a declaration site this test reads. */
+/** The design-system page that states the ramp to a reader. */
 const WALL_PAGE = join(import.meta.dir, "..", "..", "..", "design-system/ts-ha/pages/wall.md");
 
 async function readWallPage(): Promise<string> {
@@ -93,10 +84,8 @@ async function readWallPage(): Promise<string> {
 }
 
 /**
- * The size cell of the page's type-ramp row whose first cell is `tier`, with
- * Markdown emphasis stripped (`**12 px**` → `12 px`, `` `clamp(…)` `` → the
- * token). Returns `null` when the page carries no such row, so a table that lost
- * a tier fails here rather than silently asserting nothing.
+ * The size cell of the page's type-ramp row whose first cell is `tier`, with Markdown
+ * emphasis stripped, or `null` when the page carries no such row.
  */
 function pageRampRow(page: string, tier: string): string | null {
   for (const line of page.split("\n")) {
@@ -109,13 +98,11 @@ function pageRampRow(page: string, tier: string): string | null {
 
 describe("WALL_TYPE_RAMP", () => {
   it("declares its own body floor at the ported card system's secondary size", () => {
-    // specs/wall-display "The ramp defines the body floor": the floor is the
-    // ported secondary size, and no tier sits below it.
+    // The floor is the ported secondary size, and no tier sits below it.
     expect(WALL_TYPE_RAMP.bodyMin).toBe(WALL_CARD_METRICS.secondarySize);
     expect(px(WALL_BODY_FONT_SIZE)).toBe(WALL_TYPE_RAMP.bodyMin);
 
-    // The label tier is the ported primary size (specs/wall-display "Supporting
-    // text is drawn at the ported sizes").
+    // The label tier is the ported primary size.
     expect(WALL_TYPE_RAMP.label).toBe(WALL_CARD_METRICS.primarySize);
     expect(px(WALL_LABEL_FONT_SIZE)).toBe(WALL_TYPE_RAMP.label);
 
@@ -130,8 +117,7 @@ describe("WALL_TYPE_RAMP", () => {
   });
 
   it("declares no tier below the floor — the chip exception retires", () => {
-    // With the floor at the ported secondary size there is nothing left below it
-    // to except, so the tier and its token are gone (mushroom-wall-widgets W2).
+    // With the floor at the ported secondary size there is nothing left below it to except.
     expect(Object.keys(WALL_TYPE_RAMP)).not.toContain("chip");
   });
 
@@ -238,9 +224,8 @@ describe("hearth.css", () => {
   it("states the supporting tiers as the ported type sizes", async () => {
     const tokens = hearthTokens(await readHearthCss(), "dark");
 
-    // The label tier is the ported primary size and the floor the ported
-    // secondary size, so a widget's supporting text and a device card's cannot
-    // disagree (mushroom-wall-widgets W2).
+    // The label tier is the ported primary size and the floor the ported secondary size,
+    // so a widget's supporting text and a device card's cannot disagree.
     expect(px(tokens["--hearth-text-label"] ?? "")).toBe(
       px(tokens["--hearth-card-primary-size"] ?? ""),
     );

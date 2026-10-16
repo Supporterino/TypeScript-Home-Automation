@@ -6,15 +6,8 @@ import { ExecutionRecorder } from "../src/observability/execution-recorder.js";
 const logger = pino({ level: "silent" });
 
 /**
- * Benchmark for the execution context and history recording overhead
- * (design.md D11, R9; task 8.9).
- *
- * The execution context (`AsyncLocalStorage`) sits on every automation run —
- * a leak, or a measurable slowdown, would be a blocker per R9. This measures
- * calling an automation's `execute()` equivalent directly against calling it
- * through `ExecutionRecorder.run()` (context + history + completion
- * broadcast), on the same terms as the existing MQTT dispatch and LogBuffer
- * write benchmarks (`tests/mqtt-perf.test.ts`, `tests/log-buffer-perf.test.ts`).
+ * Benchmark for the execution context and history recording overhead: measures calling
+ * `execute()` directly against calling it through `ExecutionRecorder.run()`.
  */
 const trigger: TriggerContext = { type: "cron", expression: "0 7 * * *", firedAt: new Date(0) };
 
@@ -40,7 +33,7 @@ async function recordedCalls(recorder: ExecutionRecorder, count: number): Promis
   return performance.now() - start;
 }
 
-describe("ExecutionRecorder overhead (task 8.9)", () => {
+describe("ExecutionRecorder overhead", () => {
   const CALL_COUNT = 2000;
 
   it("is not measurably slower than calling execute() directly", async () => {

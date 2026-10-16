@@ -1,7 +1,7 @@
 import { useTerminalDimensions } from "@opentui/react";
 import { energySummary, weatherSummary } from "../dashboard-model.js";
-import { summarizeTriggers } from "../format.js";
-import { COLORS, formatUptime, formatValue, levelColor, levelName, valueColor } from "./theme.js";
+import { levelName, summarizeTriggers } from "../format.js";
+import { COLORS, formatUptime, formatValue, levelColor, valueColor } from "./theme.js";
 import type { DashboardData } from "./types.js";
 
 export function OverviewTab({ data }: { data: DashboardData }) {

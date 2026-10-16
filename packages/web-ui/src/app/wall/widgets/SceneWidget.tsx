@@ -1,28 +1,6 @@
 /**
- * The wall scene-button widget (design.md D11, D14; wall-zones-and-fit D3, D4;
- * specs/wall-display "Scene Buttons Trigger Automations", "Span-Aware Card
- * Presentation"). A configurable label triggers an existing automation through
- * the same manual-trigger path the admin interface uses — no scene subsystem.
- *
- * Redesigned from the centred Play glyph into a Hearth scene tile on the wall's
- * single card vocabulary (design.md W1): the tile's own button is the vocabulary's
- * labelled control — the ported control height and radius, the label drawn through
- * {@link WallCardLabel} at the ported primary size (specs/wall-display "A control
- * is the ported control", "Touch Operation") — carrying a leading scene glyph
- * beside the label, the whole tile as the trigger affordance. Only on a card with
- * room — a span above the type's own minimum *and* a box the frame actually gives
- * it that holds the scene's own
- * stacked budget — does the tile centre a larger glyph over the label instead, so
- * a scene card composes for the space it has rather than for the light card's
- * budget: a wide, short cell keeps the row and cannot clip, and a genuinely large
- * card composes differently from the minimum (D3). A card the frame cannot give
- * the box its minimum span needs never reaches this tile at all — the frame
- * explains it (specs/wall-display "Panel Fit").
- * The pressed/active and busy states and the error surface are identical in both
- * compositions. Both states are token-driven and change only paint (background,
- * elevation, opacity), never geometry, so the tile does not shift while it is
- * operated. A trigger failure is caught and surfaced on the tile itself, so a
- * broken or deleted automation never takes down the profile.
+ * The wall scene-button widget: a configurable label triggers an existing
+ * automation through the manual-trigger path.
  */
 import { Play } from "lucide-react";
 import { useState } from "react";
@@ -37,6 +15,7 @@ import { WALL_LABEL_FONT_SIZE } from "../type-ramp.js";
 import {
   SCENE_LARGE_GLYPH_PX,
   SCENE_LARGE_GLYPH_SIZE,
+  sceneTileInset,
   sceneTileLayout,
   sceneTriggerRequest,
 } from "./scene-model.js";
@@ -56,12 +35,7 @@ export function SceneWidget({ widget, rendererHeightPx }: WallWidgetProps) {
   const [pressed, setPressed] = useState(false);
 
   const minTouchTarget = wallTileMetrics("wall").control;
-  // The box the frame gave the renderer, and the span the widget was placed at,
-  // decide the composition — the glyph beside the label, or centred above it on a
-  // card with room for the taller composition. The budgets and the minimum span
-  // are the scene's own (see `scene-model.ts`), so the tile composes for the space
-  // it has rather than for the wall light card's much larger full form. The states
-  // below are shared by both.
+  // The box the frame gave the renderer and the span decide the composition.
   const layout = sceneTileLayout({ rendererHeightPx, placement: widget });
   const stacked = layout === "column";
   const glyphSide = stacked ? SCENE_LARGE_GLYPH_PX : minTouchTarget;
@@ -117,7 +91,7 @@ export function SceneWidget({ widget, rendererHeightPx }: WallWidgetProps) {
           justifyContent: stacked ? "center" : "flex-start",
           gap: stacked ? "var(--hearth-space-2)" : "var(--hearth-space-3)",
           borderRadius: WALL_CARD_METRICS.controlRadius,
-          padding: "var(--hearth-space-3)",
+          padding: sceneTileInset(layout),
           textAlign: stacked ? "center" : "left",
           color: "var(--hearth-text)",
           background: pressed ? "var(--hearth-surface-raised)" : "transparent",

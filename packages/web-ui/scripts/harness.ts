@@ -1,28 +1,9 @@
 #!/usr/bin/env bun
 /**
- * The wall harness's development server (design.md D8, D9; tasks 3.1, 3.2).
- *
- * Serves the two harness documents — the control document at `/` and the stage
- * document at `/stage.html` — and rebuilds them when their source changes, so a
- * reload shows the edit.
- *
- * **Why the documented fallback rather than the fullstack HTML import.** D8's
- * primary shape is `Bun.serve({ routes: { "/*": htmlImport } })`, and on Bun
- * 1.4.3 that server does compile Tailwind — but it ignores the `@source` globs
- * in `styles/app.css`, so none of the wall's `className` sites produce a utility
- * (checked: the served stylesheet contains neither `.flex` nor the app's own
- * `min-h-dvh`, while the shipped build's does). A wall harness that renders the
- * wall's markup without the wall's utilities would misreport exactly the thing
- * it exists to show. So this is D8's stated fallback: `Bun.build` with an
- * explicit `conditions: ["development"]` plus a static server and a
- * watch/rebuild loop in place of HMR.
- *
- * Nothing is written to disk — the artifacts stay in memory and are served from
- * there — so `scripts/build-web-ui.ts`, the asset manifest, and the shipped
- * entrypoint are untouched (design.md D9).
- *
- * Run with `bun run --filter @ts-ha/web-ui harness` (which passes
- * `--conditions=development`, so `@ts-ha/shared` resolves to source).
+ * The wall harness's development server: serves the control document at `/` and
+ * the stage document at `/stage.html`, rebuilding in memory on source changes.
+ * Uses `Bun.build` rather than `Bun.serve`'s HTML import, whose Tailwind build
+ * ignores `styles/app.css`'s `@source` globs. Nothing is written to disk.
  */
 import { watch } from "node:fs";
 import { extname, join } from "node:path";
@@ -71,10 +52,8 @@ function contentType(path: string): string {
 }
 
 /**
- * Compiles both harness documents in one bundle, so a chunk shared by the panel
- * and the stage is emitted once. The Tailwind plugin is the same one the shipped
- * build uses, which is what makes `@source` scanning work; `development`
- * conditions are what make `@ts-ha/shared` resolve to `src`.
+ * Compiles both harness documents in one bundle, with the same Tailwind plugin
+ * and `development` conditions the shipped build uses.
  */
 async function compile(): Promise<Map<string, ServedAsset>> {
   const result = await Bun.build({
@@ -119,9 +98,7 @@ console.log(`[harness] built ${assets.size} asset(s)`);
 
 const server = Bun.serve({
   port: portFromArgs(Bun.argv.slice(2)),
-  // Loopback only: the harness serves the app's own source bundle, so it has no
-  // business being reachable from another machine on a shared network. Bun's
-  // default is every interface.
+  // Loopback only: this serves the app's own source bundle.
   hostname: "127.0.0.1",
   fetch(request) {
     const path = new URL(request.url).pathname;
@@ -136,8 +113,7 @@ const server = Bun.serve({
     return new Response(asset.body, {
       headers: {
         "content-type": asset.type,
-        // The browser must never serve a stale bundle from its cache: names are
-        // content-hashed, but the documents that reference them are not.
+        // Documents are not content-hashed, so never cache them.
         "cache-control": "no-store",
       },
     });
@@ -151,10 +127,8 @@ let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 let state: RebuildState = IDLE_REBUILD;
 
 /**
- * Builds until no change arrived while building. The scheduling decisions are
- * `rebuild-loop.ts`'s pure transitions — the same rule `scripts/build-web-ui.ts`
- * proves for its own watch loop, so a change that lands mid-build is re-run
- * rather than dropped.
+ * Builds until no change arrived while building, so a change that lands
+ * mid-build is re-run rather than dropped.
  */
 async function rebuildLoop(): Promise<void> {
   for (;;) {
@@ -164,8 +138,7 @@ async function rebuildLoop(): Promise<void> {
       const ms = Math.round((Bun.nanoseconds() - started) / 1_000_000);
       console.log(`[harness] rebuilt ${assets.size} asset(s) in ${ms}ms — reload to see it`);
     } catch (err) {
-      // Keep serving the last good bundle so a syntax error mid-edit does not
-      // leave the developer with a dead server.
+      // Keep serving the last good bundle on a mid-edit syntax error.
       console.error("[harness] rebuild failed, still serving the previous bundle");
       console.error(err);
     }

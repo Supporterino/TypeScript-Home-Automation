@@ -1,8 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { parseSseFrames } from "../src/sse.js";
 
-// specs/cli "Realtime Dashboard Updates" (task 2.2). The frame parser is pure
-// so it can be fed buffers directly.
+// The frame parser is pure so it can be fed buffers directly.
 
 describe("parseSseFrames", () => {
   it("parses multiple events from one buffer", () => {

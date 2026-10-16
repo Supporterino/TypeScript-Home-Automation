@@ -1,11 +1,6 @@
 /**
- * Web UI option parsing (design.md D3, D8; specs/web-ui "Enabling", "URL Path").
- *
- * `@ts-ha/web-ui` owns its own configuration: it reads `WEB_UI_ENABLED` and
- * `WEB_UI_PATH` and nothing else. The auth token is never read here — the
- * registering entry point supplies the core engine's resolved
- * `httpServer.token`, so the shell, asset, and login routes share one secret
- * definition with the core `/api/*` middleware (design.md D8).
+ * Web UI option parsing. Reads `WEB_UI_ENABLED` and `WEB_UI_PATH`; the auth
+ * token is supplied by the registering entry point, not read here.
  */
 
 /** Environment variables the web UI package parses. */
@@ -24,11 +19,8 @@ export interface WebUiOptions {
 }
 
 /**
- * Parse `WEB_UI_ENABLED` / `WEB_UI_PATH` into plugin options.
- *
- * Returns `null` when the UI is disabled (unset or a false-y value), so a
- * caller can skip constructing the plugin entirely. Throws when
- * `WEB_UI_PATH` is set to a value that does not start with `/`.
+ * Parse `WEB_UI_ENABLED` / `WEB_UI_PATH` into plugin options. Returns `null`
+ * when disabled; throws when `WEB_UI_PATH` does not start with `/`.
  */
 export function parseWebUiOptions(env: NodeJS.ProcessEnv = process.env): WebUiOptions | null {
   if (!isEnabled(env[ENV_ENABLED])) return null;
@@ -42,11 +34,8 @@ export function parseWebUiOptions(env: NodeJS.ProcessEnv = process.env): WebUiOp
 }
 
 /**
- * Whether `WEB_UI_ENABLED` is set to a true-y value.
- *
- * Matches the boolean vocabulary the removed core schema accepted
- * (`booleanEnv`): `1`, `true`, `yes` (case-insensitive) are true; everything
- * else (including unset, `0`, `false`, `no`) is false.
+ * Whether `WEB_UI_ENABLED` is set to a true-y value: `1`, `true`, or `yes`
+ * (case-insensitive) are true; everything else is false.
  */
 function isEnabled(value: string | undefined): boolean {
   if (value === undefined) return false;

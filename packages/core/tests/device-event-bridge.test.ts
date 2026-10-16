@@ -177,7 +177,7 @@ describe("wireDeviceEvents", () => {
     expect(disappeared).toEqual([{ category: "device_disappeared", qualifiedId: "zigbee:0xaaa" }]);
   });
 
-  it("flows events from a push-backed change and a polled change alike (task 7.5)", async () => {
+  it("flows events from a push-backed change and a polled change alike", async () => {
     const pushSource = makeFakeSource("zigbee", [
       makeDescriptor("zigbee", "0xaaa", {
         state: { on: false },
@@ -237,7 +237,7 @@ describe("wireDeviceEvents", () => {
     expect(events).toHaveLength(0);
   });
 
-  it("hiding a device emits no device_disappeared (design.md D9; task 3.8)", async () => {
+  it("hiding a device emits no device_disappeared", async () => {
     const fake = makeFakeSource("zigbee", [makeDescriptor("zigbee", "0xaaa")]);
     // Total enumeration is unaffected by visibility — hiding stamps the
     // descriptor but does not remove it from list(), so the bridge's
@@ -258,7 +258,7 @@ describe("wireDeviceEvents", () => {
     expect(events.some((e) => e.category === "device_disappeared")).toBe(false);
   });
 
-  it("prunes a disappeared device's store record so it is not restored on the next start (task 3.3)", async () => {
+  it("prunes a disappeared device's store record so it is not restored on the next start", async () => {
     const filePath = "./test-device-event-bridge-prune.json";
     await removeFiles(filePath);
 
@@ -291,7 +291,7 @@ describe("wireDeviceEvents", () => {
     await removeFiles(filePath);
   });
 
-  it("prunes a store record for an available source whose device is absent at wiring (design.md D5)", async () => {
+  it("prunes a store record for an available source whose device is absent at wiring", async () => {
     const filePath = "./test-device-event-bridge-reconcile.json";
     await removeFiles(filePath);
 
@@ -319,7 +319,7 @@ describe("wireDeviceEvents", () => {
     await removeFiles(filePath);
   });
 
-  it("retains a store record for a currently unavailable source (design.md D5)", async () => {
+  it("retains a store record for a currently unavailable source", async () => {
     const store = new DeviceStateStore(logger, { persist: false });
     store.record("shelly:plug", { on: true }, { mode: "polled", observedAt: 1 });
 

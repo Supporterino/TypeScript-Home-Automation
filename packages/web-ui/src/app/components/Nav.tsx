@@ -1,23 +1,6 @@
 /**
- * Audience-split navigation, rendered through two components sharing one
- * information architecture (design.md D6; specs/web-ui "Navigation and
- * Information Architecture", "Responsive Navigation").
- *
- * A control group (favorites, overview, rooms, unassigned, all devices) and an
- * operator group (automations, state, logs, HomeKit, energy, weather, walls
- * editor). The wide-viewport rail shows both, each collapsible; the Favorites
- * sub-list only appears when the user has favorites, and is labelled distinctly
- * from the rooms. The narrow-viewport control bar offers the control group's
- * primary destinations from `MOBILE_NAV_ITEMS` plus an overflow affordance for
- * the remaining control entries, so the phone's most-used surface is never
- * behind a disclosure while every operator view stays reachable by URL rather
- * than promoted (design.md D6).
- *
- * Active-state matching follows a detail route back to its collection entry
- * (`isUnder`), while a sibling static route such as `/devices/unassigned` is
- * excluded from activating "All devices".
- *
- * Rebuilt on `ui/NavItem` and `lucide-react` (task 3.2).
+ * Audience-split navigation: a control group and an operator group, rendered as
+ * a wide-viewport rail and a narrow-viewport bottom bar.
  */
 import {
   Bot,
@@ -74,10 +57,8 @@ import {
 } from "../ui/index.js";
 
 /**
- * A `ui/NavItem` wired to the History API. `NavItem` renders the anchor, so the
- * SPA navigation behaviour of the router's `<Link>` is reproduced on it: a plain
- * left click is intercepted, every other click keeps its native behaviour
- * (open in a new tab, and so on).
+ * A `ui/NavItem` wired to the History API: a plain left click is intercepted,
+ * every other click keeps its native behaviour.
  */
 function NavLink({
   to,
@@ -159,8 +140,7 @@ export function DesktopSidebar() {
       <div className="flex flex-col gap-1 p-3">
         <NavGroup label="Home" open={homeOpen} onOpenChange={setHomeOpen}>
           {favoriteDevices.length > 0 && (
-            // A separate label keeps the favorites list distinct from the rooms
-            // beneath it (specs/web-ui "Favorites are a navigable group").
+            // A separate label keeps the favorites list distinct from the rooms.
             <div className="flex flex-col gap-0.5 pb-1">
               <div className="flex items-center gap-1.5 px-2.5 pt-1">
                 <Star size={12} aria-hidden className="text-stale" />
@@ -192,9 +172,8 @@ export function DesktopSidebar() {
           />
           {rooms.map((room) => {
             const path = roomPath(basePath, room.id);
-            // Counts what a user sees on the room's own default listing (reveal
-            // off) — a count that includes hidden members would disagree with the
-            // list beneath it.
+            // Counts what the room's default listing shows; hidden members are
+            // excluded so the count agrees with the list beneath it.
             const count = room.members.filter((m) => m.available && !m.device?.hidden).length;
             return (
               <NavLink
@@ -218,8 +197,7 @@ export function DesktopSidebar() {
             to={devicesPath(basePath)}
             icon={<LayoutList size={16} aria-hidden />}
             label="All devices"
-            // `/devices/unassigned` has its own entry and must not light this
-            // one up; a device detail route keeps it active.
+            // `/devices/unassigned` has its own entry and must not light this up.
             active={
               isUnder(pathname, devicesPath(basePath)) &&
               !isUnder(pathname, unassignedDevicesPath(basePath))
@@ -268,9 +246,8 @@ export function DesktopSidebar() {
             to={wallsPath(basePath)}
             icon={<Monitor size={16} aria-hidden />}
             label="Walls"
-            // The `/wall/:name` surface is deliberately not a navigation
-            // destination; only the editor's own `/walls` route lights this
-            // entry.
+            // The `/wall/:name` surface is not a navigation destination; only
+            // `/walls` lights this entry.
             active={isUnder(pathname, wallsPath(basePath))}
           />
         </NavGroup>
@@ -291,10 +268,7 @@ const TAB_ITEM_CLASS =
 
 /**
  * The narrow-viewport control bar: the control group's primary destinations
- * plus an overflow affordance for its remaining entries (unassigned, all
- * devices). The destinations are pure data in `router.ts` (`MOBILE_NAV_ITEMS`)
- * so no operator view is ever promoted here — those stay URL-reachable
- * (design.md D6; specs/web-ui "Responsive Navigation").
+ * plus an overflow affordance for the remaining entries.
  */
 export function MobileBottomBar() {
   const { basePath, pathname, navigate } = useRouter();
@@ -307,11 +281,8 @@ export function MobileBottomBar() {
       <div className="grid grid-cols-4">
         {MOBILE_NAV_ITEMS.map((item) => {
           const path = item.buildPath(basePath);
-          // The overview is active on both its base path and the `/overview`
-          // alias; rooms/devices keep their detail routes highlighted. Like the
-          // sidebar's "All devices", the devices tab excludes
-          // `/devices/unassigned`, which has its own control-group entry
-          // (design.md D6).
+          // Like the sidebar, the devices tab excludes `/devices/unassigned`,
+          // which has its own control-group entry.
           const active =
             item.view === "overview"
               ? isOverviewView(pathname, basePath)
@@ -344,10 +315,8 @@ export function MobileBottomBar() {
           <DropdownMenuContent side="top" align="end" className="w-56">
             <DropdownMenuLabel>Devices</DropdownMenuLabel>
             {/*
-              Navigation runs on the menu item's own `onSelect` rather than an
-              anchor's click: Radix closes the menu and restores focus on
-              select, and a child link that prevents the default would suppress
-              that. The destinations themselves stay real URLs.
+              Navigation runs on the item's `onSelect`: a child link that prevents
+              the default would suppress Radix's focus restore.
             */}
             <DropdownMenuItem onSelect={() => navigate(unassignedDevicesPath(basePath))}>
               <CircleQuestionMark size={16} aria-hidden />

@@ -25,7 +25,7 @@ function invalidConfig(): WallProfileConfig {
   };
 }
 
-/** A config whose sole room widget is missing its required `roomId` (design.md D10). */
+/** A config whose sole room widget is missing its required `roomId`. */
 function invalidWidgetConfig(): WallProfileConfig {
   return {
     widgets: [{ id: "room", type: "room", config: {}, x: 0, y: 0, w: 6, h: 5 }],

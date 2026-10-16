@@ -1,11 +1,4 @@
-/**
- * HTTP wire-response DTOs.
- *
- * These shapes are produced by the engine's HTTP API and consumed by the web
- * UI app and the CLI. They are HTTP response contracts, not private
- * view-models, so they live here rather than being re-declared per consumer
- * (design.md D1; specs/packaging "Shared Owns The Contracts").
- */
+/** HTTP wire-response DTOs produced by the engine's API, consumed by the web UI and CLI. */
 
 import type { CurrentWeather, DailyForecast, WeatherLocation } from "./types/weather.js";
 
@@ -64,13 +57,7 @@ export interface HomekitStatus {
 // Energy (`GET /api/energy`)
 // ---------------------------------------------------------------------------
 
-/**
- * One device's contribution to the home-wide energy view.
- *
- * `powerWatts` and `energyWh` are absent — not zero — when the device reports
- * no such reading, so a non-metering device is distinguishable from one
- * drawing a genuine zero (specs/energy-monitoring).
- */
+/** One device's contribution to the home-wide energy view. */
 export interface EnergyDeviceBreakdown {
   /** The device's qualified identifier. */
   qualifiedId: string;
@@ -92,15 +79,33 @@ export interface EnergyHistorySample {
   powerWatts: number;
 }
 
-/**
- * Response body of `GET /api/energy` (specs/energy-monitoring "Energy Endpoint
- * Contract").
- */
+/** Response body of `GET /api/energy`. */
 export interface EnergyData {
   /** Home instantaneous power across reachable metering devices, in watts. */
   powerWatts: number;
   /** Home cumulative consumption across reachable metering devices, in watt-hours. */
   energyWh: number;
+  /**
+   * Home usage over the rolling window, in watt-hours: the total change over the
+   * retained span, summed across the devices that report a cumulative reading at
+   * both ends. A device that is unreachable or declares no reading at either end
+   * is excluded rather than counted as having consumed nothing. Absent when there
+   * is no baseline or no device contributes at both ends, so a client presents
+   * usage as absent rather than as a zero or a full-window figure.
+   */
+  usageWh?: number;
+  /**
+   * Length of the rolling window, in minutes. Absent when history is disabled
+   * (`ENERGY_HISTORY_MINUTES=0`), since no window is retained.
+   */
+  windowMinutes?: number;
+  /**
+   * Extent the retained samples actually cover, in minutes, never exceeding
+   * `windowMinutes`. Present only alongside `usageWh`; a value below
+   * `windowMinutes` marks a partial window, and an absent value marks no
+   * coverage.
+   */
+  coveredMinutes?: number;
   /** Per-device contributions; empty when no device meters energy. */
   breakdown: EnergyDeviceBreakdown[];
   /** Rolling history, oldest first; empty when history is disabled. */
@@ -111,10 +116,7 @@ export interface EnergyData {
 // Weather (`GET /api/weather`)
 // ---------------------------------------------------------------------------
 
-/**
- * Response body of `GET /api/weather` for a resolvable location
- * (specs/weather-services "HTTP Exposure").
- */
+/** Response body of `GET /api/weather` for a resolvable location. */
 export interface WeatherData {
   /** The location the data was resolved for. */
   location: WeatherLocation;
@@ -124,11 +126,7 @@ export interface WeatherData {
   forecast: DailyForecast[];
 }
 
-/**
- * Marker the weather surface reports when it cannot produce conditions because
- * the feature is unconfigured rather than errored — no service registered, or
- * no default and no supplied location (specs/weather-services).
- */
+/** Marker the weather surface reports when it cannot produce conditions. */
 export interface WeatherUnavailable {
   available: false;
   /** Why no weather can be produced. */
@@ -139,7 +137,7 @@ export interface WeatherUnavailable {
 // Room batch command (`POST /api/rooms/:id/command`)
 // ---------------------------------------------------------------------------
 
-/** Per-device outcome of a room batch command (design.md D5). */
+/** Per-device outcome of a room batch command. */
 export type RoomCommandOutcome = "applied" | "skipped" | "failed";
 
 /** One member's result within a room batch-command response. */
@@ -150,9 +148,5 @@ export interface RoomCommandResult {
   outcome: RoomCommandOutcome;
 }
 
-/**
- * Response body of `POST /api/rooms/:id/command`: one result per room member
- * (design.md D5). The batch is best-effort — the response never promises
- * atomicity across members.
- */
+/** Response body of `POST /api/rooms/:id/command`: one result per room member. */
 export type RoomBatchCommandResponse = RoomCommandResult[];

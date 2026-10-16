@@ -20,8 +20,7 @@ function light(features: Partial<Capability>[]): Capability {
 
 describe("detectCapabilities (source-neutral)", () => {
   it("consumes the capability vocabulary directly, with no Zigbee-specific input", () => {
-    // detectCapabilities takes Capability[] — this module never imports
-    // ZigbeeDevice or any source-specific type (design.md D22).
+    // detectCapabilities takes Capability[] — this module never imports a source-specific type.
     const caps = detectCapabilities([light([{ property: "state" }])]);
     expect(caps.isLight).toBe(true);
   });

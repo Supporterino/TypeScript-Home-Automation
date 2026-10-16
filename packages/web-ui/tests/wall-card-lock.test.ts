@@ -6,12 +6,8 @@ import { resolveDeviceClass } from "../src/app/wall/cards/device-class.js";
 import { lockCardLocked, lockCardModel, lockCardReading } from "../src/app/wall/cards/LockCard.js";
 
 /**
- * The wall lock card (task 4.5; design.md D1, D3, D6; specs/wall-display "Widget
- * Catalog" — "a lock"; "Wall Device Presentation"). The pure decisions — the
- * property the lock is driven on, the exact lock/unlock values, and what the
- * reading says — are covered directly, and the render is asserted structurally
- * against its source (there is no DOM harness), the same style as
- * `wall-card-anatomy.test.ts`.
+ * The wall lock card: the property it is driven on and the exact lock/unlock values
+ * covered directly; the render asserted structurally.
  */
 const APP_DIR = join(import.meta.dir, "..", "src/app");
 const CARD = join(APP_DIR, "wall/cards/LockCard.tsx");
@@ -132,7 +128,8 @@ describe("wall lock card source", () => {
 
   it("presents lock and unlock as the actions row's controls", async () => {
     const source = await cardSource();
-    expect(source).toContain("<WallCardActions>");
+    // Two fixed-size options spread across the card's width.
+    expect(source).toContain('<WallCardActions distribution="distributed">');
     expect(source).toContain("<WallCardOption");
     expect(source).toContain("model.lock");
     expect(source).toContain("model.unlock");

@@ -1,16 +1,6 @@
 /**
- * Pure client-side route matching (design.md D7; task 10.1).
- *
- * The route table here MUST stay in sync with the server's
- * `UI_VIEW_SEGMENTS` allowlist (`packages/web-ui/src/web-ui-routes.ts`) — every
- * top-level segment matched here has a corresponding server registration
- * that serves the shell for it, so a reload of any matched path is served
- * the same view. No wildcard/catch-all route exists; an unmatched path
- * resolves to the `"not-found"` view rather than guessing.
- *
- * Kept dependency-free (no React, no DOM) so matching is reachable by
- * `bun test` (design.md D23) — `router-context.tsx` layers the History API
- * and a `<Link>` component on top of this, and is the part verified by hand.
+ * Pure client-side route matching. The route table must stay in sync with the
+ * server's `UI_VIEW_SEGMENTS` allowlist; an unmatched path resolves to `"not-found"`.
  */
 
 export type ViewName =
@@ -41,15 +31,12 @@ interface RoutePattern {
   view: ViewName;
 }
 
-// Order matters only between routes that could both match the same
-// segment count with one static and one parametrised segment — static
-// segments are tried first regardless of table order (see `matchRoute`),
-// but the table is still written most-specific-first for readability.
+// Written most-specific-first for readability; static segments are tried
+// first regardless of table order (see `matchRoute`).
 const ROUTE_TABLE: { pattern: string; view: ViewName }[] = [
   { pattern: "/", view: "overview" },
-  // Alias for the landing view so `UI_VIEW_SEGMENTS` can list "overview" and
-  // the server registration stays in sync with a client route (see the module
-  // comment). `/` remains the canonical landing path.
+  // Alias for the landing view so the server registration stays in sync; `/` is
+  // the canonical landing path.
   { pattern: "/overview", view: "overview" },
   { pattern: "/rooms", view: "rooms" },
   { pattern: "/rooms/:id", view: "room" },
@@ -77,9 +64,8 @@ const COMPILED_ROUTES: RoutePattern[] = ROUTE_TABLE.map((r) => ({
 }));
 
 /**
- * Strips `basePath` from the start of `pathname`, returning the remainder
- * (always starting with `/`, or empty for an exact match). Returns `null`
- * when `pathname` is not beneath `basePath` at all.
+ * Strips `basePath` from the start of `pathname`, returning the remainder or
+ * `null` when `pathname` is not beneath `basePath`.
  */
 export function stripBasePath(pathname: string, basePath: string): string | null {
   if (basePath === "/") return pathname;
@@ -89,23 +75,16 @@ export function stripBasePath(pathname: string, basePath: string): string | null
 }
 
 /**
- * Matches `pathname` (already stripped of `basePath`) against the route
- * table. A parametrised segment (`:id`) captures and URI-decodes that path
- * segment; a static segment must match literally, and static segments are
- * always preferred over a parametrised one at the same position (so
- * `/devices/unassigned` never falls through to `/devices/:qualifiedId`,
- * mirroring the server's `/api/rooms/unassigned` vs `/api/rooms/:id`
- * ordering convention).
+ * Matches a base-path-stripped `pathname` against the route table. A `:id`
+ * segment captures and URI-decodes; static segments win at the same position.
  */
 export function matchRoute(strippedPathname: string): RouteMatch {
   const requestSegments = splitSegments(strippedPathname);
 
   const candidates = COMPILED_ROUTES.filter((r) => r.segments.length === requestSegments.length);
 
-  // Static (non-":"-prefixed) segments win over parametrised ones at the
-  // same position — sort candidates by how many static segments they have,
-  // most static first, so an exact literal match is always tried before a
-  // param capture of the same length.
+  // Rank candidates by static-segment count so a literal match is tried before
+  // a param capture of the same length.
   const ranked = [...candidates].sort((a, b) => {
     const staticCount = (segs: string[]) => segs.filter((s) => !s.startsWith(":")).length;
     return staticCount(b.segments) - staticCount(a.segments);
@@ -139,31 +118,23 @@ export function resolveRoute(pathname: string, basePath: string): RouteMatch {
 
 /**
  * Whether `pathname` is `collectionPath` itself or a detail route nested
- * beneath it (design.md D10; specs/web-ui "Active view is indicated within a
- * collection"). Used so an item's detail route keeps its collection entry
- * active, while a sibling static route (e.g. `/devices/unassigned` under
- * `/devices`) is excluded by the caller.
+ * beneath it, so a detail route keeps its collection entry active.
  */
 export function isUnder(pathname: string, collectionPath: string): boolean {
   return pathname === collectionPath || pathname.startsWith(`${collectionPath}/`);
 }
 
 /**
- * Whether `pathname` resolves to the overview view. Covers both the canonical
- * base path and the `/overview` alias, so either one highlights the
- * Overview/Home navigation entry (design.md D10; specs/web-ui "Active view is
- * indicated within a collection").
+ * Whether `pathname` resolves to the overview view, covering both the base path
+ * and the `/overview` alias.
  */
 export function isOverviewView(pathname: string, basePath: string): boolean {
   return resolveRoute(pathname, basePath).view === "overview";
 }
 
 /**
- * Whether `view` renders full-bleed, without the application chrome (design.md
- * D3; specs/web-ui "Full-Bleed Wall Rendering"). The wall is the only view that
- * does so — every other view keeps the app shell's header, navigation, and
- * footer. Pure and dependency-free so `App.tsx`'s render branch is a single
- * inspectable decision and the test can assert it directly.
+ * Whether `view` renders full-bleed, without the application chrome; the wall
+ * is the only such view.
  */
 export function isFullBleedView(view: ViewName): boolean {
   return view === "wall";
@@ -236,12 +207,8 @@ export function wallPath(basePath: string, name: string): string {
 }
 
 /**
- * The wall a wall was opened from, as the path to return to — or `null` when the
- * previous route was not a wall (wall-zones-and-fit D11; specs/wall-display "Wall
- * Navigation"). A wall reached from another wall's link returns to *that* wall's
- * own address; one reached by a deep link (or from anywhere else in the app) has
- * no wall to return to and offers no back affordance, because there is nowhere
- * in-app to go back to. Pure, so the rule is reachable by `bun test`.
+ * The wall a wall was opened from, as the path to return to, or `null` when the
+ * previous route was not a wall.
  */
 export function backToWallPath(originPathname: string | null, basePath: string): string | null {
   if (originPathname === null) return null;
@@ -251,7 +218,7 @@ export function backToWallPath(originPathname: string | null, basePath: string):
   return name === undefined ? null : wallPath(basePath, name);
 }
 
-// ── Mobile bottom bar — control-only (design.md D10, D13) ──────────────────
+// ── Mobile bottom bar — control-only ─────────────────────────────────────
 
 /** The control-surface views the narrow-viewport bottom bar may offer. */
 export type ControlView = "overview" | "rooms" | "devices";
@@ -263,11 +230,8 @@ export interface MobileNavItem {
 }
 
 /**
- * The narrow-viewport bottom bar's item descriptors, as pure data so a test
- * can assert the bar never promotes an operator view (automations, state,
- * logs, HomeKit, energy, weather) — those stay URL-reachable. The bar is a
- * control surface, not a debugger (design.md D10, D13). Icons are supplied
- * by the renderer; this module stays dependency-free.
+ * The narrow-viewport bottom bar's item descriptors. The bar is a control
+ * surface only, so it never promotes an operator view.
  */
 export const MOBILE_NAV_ITEMS: readonly MobileNavItem[] = [
   { label: "Home", view: "overview", buildPath: overviewPath },
