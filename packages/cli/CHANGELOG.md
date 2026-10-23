@@ -1,5 +1,12 @@
 # @ts-ha/cli
 
+## 0.2.9
+
+### Patch Changes
+
+- Updated dependencies [a3946f0]
+  - @ts-ha/core@0.7.1
+
 ## 0.2.8
 
 ### Patch Changes
