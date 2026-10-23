@@ -135,7 +135,7 @@ avoiding an fsync-backed full-map rewrite on routine sensor traffic.
 | Variable | Default | Description |
 |---|---|---|
 | `STATE_PERSIST` | `true` | Save state (write-behind) and restore on startup. Defaults on because the store holds room definitions and automation enabled flags, which must survive a restart. |
-| `STATE_FILE_PATH` | `./state.json` | Path to the state persistence JSON file |
+| `STATE_FILE_PATH` | `./state.json` | Path to the state persistence JSON file. The previous file is kept beside it as `<path>.bak` for recovery. |
 | `STATE_FLUSH_MS` | `1000` | Milliseconds between coalesced saves. `0` saves on every mutation instead of scheduling — raise this on SD-card-backed hosts, lower it on fast storage. |
 
 The reserved internal namespace (`$internal:` prefix — rooms, automation
@@ -181,7 +181,7 @@ Automatically discovers all Zigbee2MQTT devices and tracks their live state. Req
 |---|---|---|
 | `DEVICE_REGISTRY_ENABLED` | `false` | Enable automatic Zigbee2MQTT device discovery and state tracking |
 | `DEVICE_REGISTRY_PERSIST` | `true` | Persist the device list, last-known device states, and mapped capability schema to disk on shutdown and restore them on startup. Defaults on, alongside `STATE_PERSIST`, so the device list is available immediately on boot rather than after Zigbee2MQTT republishes. |
-| `DEVICE_REGISTRY_FILE_PATH` | `./device-registry.json` | Path to the device registry JSON persistence file |
+| `DEVICE_REGISTRY_FILE_PATH` | `./device-registry.json` | Path to the device registry JSON persistence file. The previous snapshot is kept beside it as `<path>.bak` for recovery. |
 
 See [Device Registry](../device-registry.md) for full details including nice names, device triggers, persistence, and the capability vocabulary.
 
@@ -217,7 +217,8 @@ authority** — a reported observation always wins over the persisted value, and
 a restored record keeps its original observation time, so a stale value still
 reads as last-known rather than live. Records are pruned when a device drops
 out of enumeration (design.md D5), but a record is retained while its owning
-source is unavailable so a source outage does not discard that device's
+source is unavailable or has not yet completed its authoritative enumeration,
+so neither a source outage nor a restart race discards that device's
 last-known state.
 
 Persistence mirrors [state persistence](#state-persistence): a debounced,
@@ -226,7 +227,7 @@ coalesced write-behind JSON file.
 | Variable | Default | Description |
 |---|---|---|
 | `DEVICE_STATE_PERSIST` | `true` | Persist last-known device state (write-behind) and restore it before any source starts. Defaults on, alongside `STATE_PERSIST` and `DEVICE_REGISTRY_PERSIST`, so enumeration reports last-known state immediately after a restart. Set to a false value to write no device-state file and start the store empty. |
-| `DEVICE_STATE_FILE` | `./device-state.json` | Path to the device state persistence JSON file |
+| `DEVICE_STATE_FILE` | `./device-state.json` | Path to the device state persistence JSON file. The previous file is kept beside it as `<path>.bak` for recovery. |
 | `DEVICE_STATE_FLUSH_MS` | `1000` | Milliseconds between coalesced saves. `0` saves on every write instead of scheduling. A non-numeric value fails startup validation. |
 
 The engine also exposes the store's settings programmatically via

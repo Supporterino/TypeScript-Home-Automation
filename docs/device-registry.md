@@ -38,8 +38,9 @@ The registry is accessible as `engine.deviceRegistry` (type `DeviceRegistry | nu
 design.md D6, R14): the device list and its mapped capability schema should
 be readable immediately on boot, before Zigbee2MQTT republishes, and this
 now matches `STATE_PERSIST` defaulting on for the same reason. Persistence
-saves both the device list and last-known device states to a JSON file on
-shutdown and restores them on startup. Set `DEVICE_REGISTRY_PERSIST=false`
+saves the device list (including each device's mapped capability schema), the
+tracked groups, and the last-known device states to a JSON file on shutdown and
+restores them on startup. Set `DEVICE_REGISTRY_PERSIST=false`
 explicitly to opt back out to the old purely-in-memory behaviour, where the
 registry rebuilds from Zigbee2MQTT on every engine startup.
 
@@ -106,11 +107,31 @@ const engine = createEngine({
       "brightness": 200,
       "color_temp": 4000
     }
-  }
+  },
+  "groups": []
 }
 ```
 
-The file is written atomically on engine shutdown. Parent directories are created automatically. If the file does not exist on startup, the registry starts fresh without error.
+The file is written once, on graceful engine shutdown. Parent directories are created automatically. If the file does not exist on startup, the registry starts fresh without error.
+
+### Files on disk
+
+The snapshot is written durably: a transient `device-registry.json.tmp` next to the target path is written and flushed to disk, the previous snapshot (when one exists) is copied to `device-registry.json.bak`, and the temp file is then atomically renamed over `device-registry.json`. An interrupted write therefore leaves the previous complete snapshot in place, and the `.tmp` file is never read on load — it only exists while a save is in progress.
+
+Loading `device-registry.json` falls back to `device-registry.json.bak` when the primary cannot be used. Top-level fields are validated before anything is applied, so a wrong-typed field is treated as structural failure rather than a per-entry problem — `{"devices": []}` logs the corrupt-snapshot error and falls back to the backup instead of warning per device:
+
+| Condition | Behaviour |
+|---|---|
+| Primary missing | Debug log `No persisted device registry file found, starting fresh`; start empty (the `.bak` is not consulted when the primary is absent) |
+| Primary unparseable, its top level is not a JSON object, a present `devices`/`states` field is not a JSON object, or a present `groups` field is not an array | Error log `Persisted device registry file is corrupt, attempting backup recovery`; restore from the `.bak` file |
+| Primary and `.bak` both unusable (or the `.bak` is missing) | Error log `Backup device registry file missing or corrupt, starting with an empty store`; start empty |
+| An individual device, state, group, or group member entry is malformed | Warning (`Skipping malformed …` while restoring the device registry, naming the entry kind); that entry is skipped and the rest of the snapshot is restored. A malformed group member is dropped individually while its group is still restored; only a group-level defect — the entry is not an object, or lacks a numeric `id`, a string `friendly_name`, or a `members` array — drops the group |
+
+A successful restore logs `Device registry restored from disk` naming the file that was used — `device-registry.json.bak` when the backup was the source. Loading never throws: a corrupt snapshot costs the restored seed, not the boot.
+
+Saving is equally forgiving. Each device, state, and group entry is serialized on its own, so an unserializable entry is logged and omitted instead of aborting the snapshot; a failed save is logged and does not block the remaining shutdown steps.
+
+Everything restored from the snapshot is a **cold-start seed**: the retained `bridge/devices` and `bridge/groups` payloads replace the restored lists, and live device state merges on top of the restored values. An empty or missing snapshot cannot erase state the engine already knows either — the Zigbee device and group sources seed descriptor state from the device state store (`device-state.json`) whenever the registry has no state for a device or group member, carrying the stored observation with it. Startup reconciliation also waits until each source has received its authoritative device list before pruning stored records, so a transiently empty registry cannot clear the store before that seed is read.
 
 ---
 

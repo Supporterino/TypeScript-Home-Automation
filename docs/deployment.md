@@ -201,7 +201,9 @@ See [Health Probes](http/health-probes.md) for response format details.
 
 - Enable `STATE_PERSIST=true` so automations retain their state across restarts.
 - Enable `DEVICE_REGISTRY_PERSIST=true` so the device list is available immediately on cold start (before Zigbee2MQTT sends the retained `bridge/devices` message).
-- Back up `state.json` and `device-registry.json` periodically — they are plain JSON files.
+- Back up `state.json`, `device-registry.json`, and `device-state.json` periodically — they are plain JSON files.
+- Each store keeps a rolling `*.bak` copy of its previous contents (`state.json.bak`, `device-registry.json.bak`, `device-state.json.bak`). Include these in the backup if you want the recovery fallback preserved alongside the primary; a missing `.bak` is recreated on the next save.
+- A `*.tmp` file (`state.json.tmp`, …) exists only during an in-progress write. It is transient and need not be backed up.
 
 ### Logging
 
