@@ -57,6 +57,11 @@ export class StateDeviceSource implements DeviceSource {
     return true;
   }
 
+  /** The toggle inventory is in-process and synchronous, so it is always enumerated. */
+  get hasEnumerated(): boolean {
+    return true;
+  }
+
   start(): void {
     const seen = new Set<string>();
     for (const toggle of this.toggles) {

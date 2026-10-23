@@ -237,7 +237,22 @@ describe("ShellyDeviceSource", () => {
   it("reports unavailable and yields no devices when the shelly service is null", () => {
     const source = new ShellyDeviceSource(null, mqttMock.mqtt, logger, 1_000_000);
     expect(source.available).toBe(false);
+    expect(source.hasEnumerated).toBe(false);
     expect(source.list()).toEqual([]);
+  });
+
+  it("becomes enumerated once the discovery sweep resolves and resets on stop", async () => {
+    const http = createMockHttp({ output: false, apower: 0, voltage: 230, current: 0 });
+    const shelly = new ShellyService(http, mqttMock.mqtt, logger);
+    shelly.register("plug", "192.168.1.50", "switch");
+    const source = new ShellyDeviceSource(shelly, mqttMock.mqtt, logger, 1_000_000);
+
+    expect(source.hasEnumerated).toBe(false);
+    await source.start();
+    expect(source.hasEnumerated).toBe(true);
+
+    source.stop();
+    expect(source.hasEnumerated).toBe(false);
   });
 
   it("declares a full capability description for a switch device", async () => {

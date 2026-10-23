@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
-import type { Capability } from "@ts-ha/shared";
+import type { Capability, DeviceObservation } from "@ts-ha/shared";
 import type { ZigbeeDevice, ZigbeeGroup } from "@ts-ha/shared/types";
 import pino from "pino";
 import type { Config } from "../src/config.js";
+import { qualifyDeviceId } from "../src/device-sources/device-source.js";
 import { DeviceStateStore } from "../src/device-sources/device-state-store.js";
 import { formatQualifiedId } from "../src/device-sources/qualified-id.js";
 import {
@@ -282,6 +283,18 @@ describe("ZigbeeGroupDeviceSource", () => {
     expect(source.available).toBe(true);
   });
 
+  it("reports enumerated only after an authoritative bridge/groups payload", () => {
+    expect(source.hasEnumerated).toBe(false);
+    expect(new ZigbeeGroupDeviceSource(null, mqttMock.mqtt, logger).hasEnumerated).toBe(false);
+
+    mqttMock.emit("zigbee2mqtt/bridge/groups", { not: "an array" });
+    expect(source.hasEnumerated).toBe(false);
+
+    // An empty array is authoritative: the bridge has no groups.
+    mqttMock.emit("zigbee2mqtt/bridge/groups", [] as unknown as Record<string, unknown>);
+    expect(source.hasEnumerated).toBe(true);
+  });
+
   it("reports unavailable and yields no groups when the registry is null", () => {
     const disabled = new ZigbeeGroupDeviceSource(null, mqttMock.mqtt, logger);
     disabled.start();
@@ -482,6 +495,46 @@ describe("ZigbeeGroupDeviceSource", () => {
     expect(record?.state).toEqual({ state: "ON", brightness: 100 });
     expect(record?.observation.mode).toBe("push");
     expect(withStore.get("5")?.state).toEqual(record?.state);
+
+    withStore.stop();
+  });
+
+  it("seeds member state from the durable store and reports the oldest member observation", () => {
+    const testStartedAt = Date.now();
+    const store = new DeviceStateStore(logger, { persist: false });
+    const oldestObservation: DeviceObservation = {
+      mode: "push",
+      observedAt: testStartedAt - 120_000,
+    };
+    const newerObservation: DeviceObservation = {
+      mode: "push",
+      observedAt: testStartedAt - 60_000,
+    };
+    store.record(
+      qualifyDeviceId(ZIGBEE_SOURCE_ID, "0xa"),
+      { state: "ON", brightness: 120 },
+      oldestObservation,
+    );
+    store.record(
+      qualifyDeviceId(ZIGBEE_SOURCE_ID, "0xb"),
+      { state: "OFF", brightness: 40 },
+      newerObservation,
+    );
+
+    const withStore = new ZigbeeGroupDeviceSource(registry, mqttMock.mqtt, logger, store);
+    seedMembers();
+    seedGroup();
+    withStore.start();
+
+    const group = withStore.get("5");
+    // Derived from the seeded member values: any member on reports on, brightness from the
+    // members that are on.
+    expect(group?.state).toEqual({ state: "ON", brightness: 120 });
+    // A group is only as fresh as its stalest member.
+    expect(group?.observation).toEqual({
+      mode: "push",
+      observedAt: oldestObservation.observedAt,
+    });
 
     withStore.stop();
   });

@@ -142,6 +142,7 @@ function makeFakeSource(
   return {
     id,
     available: true,
+    hasEnumerated: true,
     start: () => {},
     stop: () => {},
     list: () => live,

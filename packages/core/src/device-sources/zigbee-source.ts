@@ -31,8 +31,10 @@ export class ZigbeeDeviceSource implements DeviceSource {
 
   private readonly listeners: Set<DeviceChangeListener> = new Set();
   private readonly stateHandlers: Map<string, DeviceStateChangeHandler> = new Map();
+  private readonly setChangedListeners: Set<() => void> = new Set();
   private onAddedCb: DeviceAddedHandler | null = null;
   private onRemovedCb: DeviceRemovedHandler | null = null;
+  private onListAppliedCb: (() => void) | null = null;
 
   constructor(
     private readonly registry: DeviceRegistry | null,
@@ -43,6 +45,11 @@ export class ZigbeeDeviceSource implements DeviceSource {
 
   get available(): boolean {
     return this.registry !== null;
+  }
+
+  /** True once the registry has received an authoritative `bridge/devices` array. */
+  get hasEnumerated(): boolean {
+    return this.registry?.hasReceivedDeviceList ?? false;
   }
 
   start(): void {
@@ -61,19 +68,32 @@ export class ZigbeeDeviceSource implements DeviceSource {
     };
     this.registry.onDeviceAdded(this.onAddedCb);
     this.registry.onDeviceRemoved(this.onRemovedCb);
+    this.onListAppliedCb = () => {
+      for (const listener of this.setChangedListeners) {
+        try {
+          listener();
+        } catch (err) {
+          this.logger.error({ err }, "Error in device set change listener");
+        }
+      }
+    };
+    this.registry.onDeviceListApplied(this.onListAppliedCb);
   }
 
   stop(): void {
     if (this.registry) {
       if (this.onAddedCb) this.registry.offDeviceAdded(this.onAddedCb);
       if (this.onRemovedCb) this.registry.offDeviceRemoved(this.onRemovedCb);
+      if (this.onListAppliedCb) this.registry.offDeviceListApplied(this.onListAppliedCb);
       for (const [friendlyName, handler] of this.stateHandlers) {
         this.registry.offDeviceStateChange(friendlyName, handler);
       }
     }
     this.onAddedCb = null;
     this.onRemovedCb = null;
+    this.onListAppliedCb = null;
     this.stateHandlers.clear();
+    this.setChangedListeners.clear();
     this.listeners.clear();
   }
 
@@ -112,6 +132,12 @@ export class ZigbeeDeviceSource implements DeviceSource {
     return () => this.listeners.delete(listener);
   }
 
+  /** Subscribe to authoritative device-list changes that emit no descriptor notification. */
+  onDeviceSetChanged(listener: () => void): () => void {
+    this.setChangedListeners.add(listener);
+    return () => this.setChangedListeners.delete(listener);
+  }
+
   // ---------------------------------------------------------------------------
   // Internal
   // ---------------------------------------------------------------------------
@@ -141,8 +167,8 @@ export class ZigbeeDeviceSource implements DeviceSource {
 
   private notify(device: ZigbeeDevice): void {
     const descriptor = this.toDescriptor(device);
-    // Recorded for durability/pruning only: `toDescriptor` seeds from the registry's
-    // independently persisted state, so the store's seed path is never consulted here.
+    // Recorded for durability/pruning: when `toDescriptor` seeded from the store, this
+    // re-record writes the same state and the stored observation, leaving the seed intact.
     this.deviceStateStore?.record(descriptor.qualifiedId, descriptor.state, descriptor.observation);
     for (const listener of this.listeners) {
       try {
@@ -154,17 +180,23 @@ export class ZigbeeDeviceSource implements DeviceSource {
   }
 
   private toDescriptor(device: ZigbeeDevice): DeviceDescriptor {
-    const state = this.registry?.getDeviceState(device.friendly_name) ?? {};
+    const qualifiedId = qualifyDeviceId(this.id, device.ieee_address);
+    const registryState = this.registry?.getDeviceState(device.friendly_name);
+    // `=== undefined`, not truthiness: a real `{}` payload from the registry is a fresh
+    // observation and must win over a stored seed.
+    const stored =
+      registryState === undefined ? this.deviceStateStore?.get(qualifiedId) : undefined;
+    const state = registryState ?? stored?.state ?? {};
     const capabilities: Capability[] = device.definition?.exposes ?? [];
     return {
       source: this.id,
       id: device.ieee_address,
-      qualifiedId: qualifyDeviceId(this.id, device.ieee_address),
+      qualifiedId,
       displayName: device.friendly_name,
       state,
       capabilities,
       reachable: true,
-      observation: { mode: "push", observedAt: Date.now() },
+      observation: stored?.observation ?? { mode: "push", observedAt: Date.now() },
       // Stamped by `AggregateDeviceSource`; a source does not know visibility preferences.
       hidden: false,
     };

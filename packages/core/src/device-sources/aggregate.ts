@@ -12,10 +12,12 @@ import type {
 } from "./device-source.js";
 import { parseQualifiedId } from "./qualified-id.js";
 
-/** Availability of one registered source, as reported by the aggregate. */
+/** Availability and enumeration readiness of one registered source, as reported by the aggregate. */
 export interface DeviceSourceStatus {
   id: string;
   available: boolean;
+  /** Whether the source has completed an authoritative enumeration; see `DeviceSource.hasEnumerated`. */
+  hasEnumerated: boolean;
 }
 
 export class AggregateDeviceSource {
@@ -23,6 +25,8 @@ export class AggregateDeviceSource {
   private readonly started: Set<DeviceSource> = new Set();
   private readonly listeners: Set<DeviceChangeListener> = new Set();
   private readonly unsubscribers: Map<DeviceSource, () => void> = new Map();
+  private readonly setChangedListeners: Set<() => void> = new Set();
+  private readonly setChangedUnsubscribers: Map<DeviceSource, () => void> = new Map();
   private readonly allSources: DeviceSource[];
 
   constructor(
@@ -50,6 +54,12 @@ export class AggregateDeviceSource {
           source,
           source.subscribe((descriptor) => this.notify(descriptor)),
         );
+        if (source.onDeviceSetChanged) {
+          this.setChangedUnsubscribers.set(
+            source,
+            source.onDeviceSetChanged(() => this.notifyDeviceSetChanged()),
+          );
+        }
       } catch (err) {
         this.logger.error(
           { err, source: source.id },
@@ -64,6 +74,7 @@ export class AggregateDeviceSource {
     for (const source of this.started) {
       try {
         this.unsubscribers.get(source)?.();
+        this.setChangedUnsubscribers.get(source)?.();
         await source.stop();
       } catch (err) {
         this.logger.error({ err, source: source.id }, "Error stopping device source");
@@ -71,6 +82,8 @@ export class AggregateDeviceSource {
     }
     this.started.clear();
     this.unsubscribers.clear();
+    this.setChangedUnsubscribers.clear();
+    this.setChangedListeners.clear();
     this.listeners.clear();
   }
 
@@ -109,9 +122,13 @@ export class AggregateDeviceSource {
     return descriptor ? this.stamp(descriptor) : undefined;
   }
 
-  /** Report which sources exist and whether each is currently available. */
+  /** Report which sources exist, whether each is available, and whether it has enumerated. */
   sources(): DeviceSourceStatus[] {
-    return this.allSources.map((source) => ({ id: source.id, available: source.available }));
+    return this.allSources.map((source) => ({
+      id: source.id,
+      available: source.available,
+      hasEnumerated: source.hasEnumerated === true,
+    }));
   }
 
   /** Dispatch a command to the device named by a qualified identifier. */
@@ -137,6 +154,16 @@ export class AggregateDeviceSource {
     return () => this.listeners.delete(listener);
   }
 
+  /**
+   * Subscribe to device-set changes that arrive without a descriptor notification — a
+   * removal, or a group-list change — so a consumer can reconcile disappearances.
+   * Returns an unsubscribe function.
+   */
+  onDeviceSetChanged(listener: () => void): () => void {
+    this.setChangedListeners.add(listener);
+    return () => this.setChangedListeners.delete(listener);
+  }
+
   private notify(descriptor: DeviceDescriptor): void {
     // Stamped here too: subscriber-delivered descriptors bypass list()/get(),
     // so skipping this would leave `hidden` unset on live updates.
@@ -146,6 +173,16 @@ export class AggregateDeviceSource {
         listener(stamped);
       } catch (err) {
         this.logger.error({ err }, "Error in aggregate device change listener");
+      }
+    }
+  }
+
+  private notifyDeviceSetChanged(): void {
+    for (const listener of this.setChangedListeners) {
+      try {
+        listener();
+      } catch (err) {
+        this.logger.error({ err }, "Error in aggregate device set change listener");
       }
     }
   }

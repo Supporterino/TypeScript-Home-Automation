@@ -4,7 +4,12 @@
  * and member state aggregated from the same `DeviceRegistry` `ZigbeeDeviceSource` reads.
  */
 
-import type { Capability, CapabilityAccess, CapabilityRange } from "@ts-ha/shared";
+import type {
+  Capability,
+  CapabilityAccess,
+  CapabilityRange,
+  DeviceObservation,
+} from "@ts-ha/shared";
 import type { ZigbeeDevice, ZigbeeGroup } from "@ts-ha/shared/types";
 import type { Logger } from "pino";
 import type { MqttService } from "../mqtt/mqtt-service.js";
@@ -260,11 +265,13 @@ export class ZigbeeGroupDeviceSource implements DeviceSource {
   readonly id = ZIGBEE_GROUP_SOURCE_ID;
 
   private readonly listeners: Set<DeviceChangeListener> = new Set();
+  private readonly setChangedListeners: Set<() => void> = new Set();
   /** Per-member-friendly-name state handlers, rebuilt on every group-list change. */
   private readonly memberStateHandlers: Map<string, DeviceStateChangeHandler> = new Map();
   /** IEEE address → set of group ids containing that member, rebuilt on `onGroupsChanged`. */
   private ieeeToGroupIds: Map<string, Set<number>> = new Map();
   private onGroupsChangedCb: GroupsChangedHandler | null = null;
+  private onGroupListAppliedCb: (() => void) | null = null;
 
   constructor(
     private readonly registry: DeviceRegistry | null,
@@ -277,6 +284,11 @@ export class ZigbeeGroupDeviceSource implements DeviceSource {
     return this.registry !== null;
   }
 
+  /** True once the registry has received an authoritative `bridge/groups` array. */
+  get hasEnumerated(): boolean {
+    return this.registry?.hasReceivedGroupList ?? false;
+  }
+
   start(): void {
     if (!this.registry) return;
 
@@ -284,17 +296,30 @@ export class ZigbeeGroupDeviceSource implements DeviceSource {
 
     this.onGroupsChangedCb = () => this.rebuildIndexAndSubscriptions();
     this.registry.onGroupsChanged(this.onGroupsChangedCb);
+    this.onGroupListAppliedCb = () => {
+      for (const listener of this.setChangedListeners) {
+        try {
+          listener();
+        } catch (err) {
+          this.logger.error({ err }, "Error in device set change listener");
+        }
+      }
+    };
+    this.registry.onGroupListApplied(this.onGroupListAppliedCb);
   }
 
   stop(): void {
     if (this.registry) {
       if (this.onGroupsChangedCb) this.registry.offGroupsChanged(this.onGroupsChangedCb);
+      if (this.onGroupListAppliedCb) this.registry.offGroupListApplied(this.onGroupListAppliedCb);
       for (const [friendlyName, handler] of this.memberStateHandlers) {
         this.registry.offDeviceStateChange(friendlyName, handler);
       }
     }
     this.onGroupsChangedCb = null;
+    this.onGroupListAppliedCb = null;
     this.memberStateHandlers.clear();
+    this.setChangedListeners.clear();
     this.ieeeToGroupIds.clear();
     this.listeners.clear();
   }
@@ -333,6 +358,12 @@ export class ZigbeeGroupDeviceSource implements DeviceSource {
   subscribe(listener: DeviceChangeListener): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
+  }
+
+  /** Subscribe to authoritative group-list changes that emit no descriptor notification. */
+  onDeviceSetChanged(listener: () => void): () => void {
+    this.setChangedListeners.add(listener);
+    return () => this.setChangedListeners.delete(listener);
   }
 
   // ---------------------------------------------------------------------------
@@ -398,8 +429,8 @@ export class ZigbeeGroupDeviceSource implements DeviceSource {
 
   private notify(group: ZigbeeGroup): void {
     const descriptor = this.toDescriptor(group);
-    // Recorded for durability/pruning only: `toDescriptor` derives from the registry's
-    // independently persisted member state, so the store's seed path is never consulted.
+    // Recorded for durability/pruning: when `toDescriptor` seeded members from the store,
+    // this re-record writes the same derived state and the oldest member observation.
     this.deviceStateStore?.record(descriptor.qualifiedId, descriptor.state, descriptor.observation);
     for (const listener of this.listeners) {
       try {
@@ -410,16 +441,33 @@ export class ZigbeeGroupDeviceSource implements DeviceSource {
     }
   }
 
-  /** Resolves each member to its current device record and tracked state, skipping any member not yet known. */
+  /**
+   * Resolves each member to its current device record, state, and observation, seeding
+   * from the durable store when the registry holds no state for it; skips any member not
+   * yet known.
+   */
   private resolveMembers(
     group: ZigbeeGroup,
-  ): { device: ZigbeeDevice; state: Record<string, unknown> }[] {
-    const resolved: { device: ZigbeeDevice; state: Record<string, unknown> }[] = [];
+  ): { device: ZigbeeDevice; state: Record<string, unknown>; observation: DeviceObservation }[] {
+    const resolved: {
+      device: ZigbeeDevice;
+      state: Record<string, unknown>;
+      observation: DeviceObservation;
+    }[] = [];
     for (const member of group.members) {
       const device = this.findDeviceByIeee(member.ieee_address);
       if (!device) continue;
-      const state = this.registry?.getDeviceState(device.friendly_name) ?? {};
-      resolved.push({ device, state });
+      const qualifiedId = qualifyDeviceId(ZIGBEE_SOURCE_ID, device.ieee_address);
+      const registryState = this.registry?.getDeviceState(device.friendly_name);
+      // `=== undefined`, not truthiness: a real `{}` payload from the registry is a fresh
+      // observation and must win over a stored seed.
+      const stored =
+        registryState === undefined ? this.deviceStateStore?.get(qualifiedId) : undefined;
+      resolved.push({
+        device,
+        state: registryState ?? stored?.state ?? {},
+        observation: stored?.observation ?? { mode: "push", observedAt: Date.now() },
+      });
     }
     return resolved;
   }
@@ -438,6 +486,12 @@ export class ZigbeeGroupDeviceSource implements DeviceSource {
       capabilities,
       members.map(({ state }) => state),
     );
+    // A group is only as fresh as its stalest member, so report the oldest observation
+    // among the members whose state it aggregates.
+    const observedAt =
+      members.length === 0
+        ? Date.now()
+        : Math.min(...members.map(({ observation }) => observation.observedAt));
 
     return {
       source: this.id,
@@ -447,7 +501,7 @@ export class ZigbeeGroupDeviceSource implements DeviceSource {
       state,
       capabilities,
       reachable: true,
-      observation: { mode: "push", observedAt: Date.now() },
+      observation: { mode: "push", observedAt },
       // Stamped by `AggregateDeviceSource`; a source does not know visibility preferences.
       hidden: false,
       memberQualifiedIds: members.map(({ device }) =>

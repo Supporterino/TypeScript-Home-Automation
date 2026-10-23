@@ -19,6 +19,11 @@ describe("StateDeviceSource", () => {
     expect(source.available).toBe(true);
   });
 
+  it("is always enumerated — the toggle inventory is in-process", () => {
+    const source = new StateDeviceSource(state, [], logger);
+    expect(source.hasEnumerated).toBe(true);
+  });
+
   it("enumerates each configured toggle as a device with one writable boolean", () => {
     const toggles: StateToggleConfig[] = [{ stateKey: "night_mode", name: "Night Mode" }];
     const source = new StateDeviceSource(state, toggles, logger);

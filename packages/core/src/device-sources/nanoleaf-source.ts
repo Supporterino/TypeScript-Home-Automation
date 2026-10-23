@@ -89,6 +89,11 @@ export class NanoleafDeviceSource implements DeviceSource {
     return this.nanoleaf !== null;
   }
 
+  /** The device inventory is registered from config at construction, so it is always enumerated. */
+  get hasEnumerated(): boolean {
+    return true;
+  }
+
   start(): void {
     if (!this.nanoleaf) return;
 

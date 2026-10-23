@@ -38,6 +38,14 @@ export interface DeviceSource {
    */
   readonly available: boolean;
 
+  /**
+   * Whether the source has completed at least one authoritative enumeration this boot.
+   * Guards destructive reconciliation: a source that has not enumerated yet may be
+   * transiently empty, so its device-state store records must not be pruned. Implementations
+   * should report it once they have enumerated; omitting it is treated as not-yet-enumerated.
+   */
+  readonly hasEnumerated?: boolean;
+
   /** Begin producing devices: replay known inventory and subscribe to change/freshness mechanisms. */
   start(): Promise<void> | void;
 
@@ -58,6 +66,13 @@ export interface DeviceSource {
 
   /** Subscribe to every device change this source produces. Returns an unsubscribe function. */
   subscribe(listener: DeviceChangeListener): () => void;
+
+  /**
+   * Subscribe to device-set changes that arrive without a descriptor notification — a
+   * removal, or a group-list change — so a consumer can reconcile disappearances.
+   * Returns an unsubscribe function. Omitting this method is safe.
+   */
+  onDeviceSetChanged?(listener: () => void): () => void;
 }
 
 /**

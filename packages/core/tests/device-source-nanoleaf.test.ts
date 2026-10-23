@@ -49,6 +49,11 @@ describe("NanoleafDeviceSource", () => {
     expect(source.list()).toEqual([]);
   });
 
+  it("is always enumerated — the inventory is registered at construction", () => {
+    const source = new NanoleafDeviceSource(null, logger, 1_000_000);
+    expect(source.hasEnumerated).toBe(true);
+  });
+
   it("enumerates registered devices with power, brightness, and colour capabilities", async () => {
     const nanoleaf = new NanoleafService(createMockHttp(), logger);
     nanoleaf.register("panels", { host: "192.168.1.60", token: "abc" });

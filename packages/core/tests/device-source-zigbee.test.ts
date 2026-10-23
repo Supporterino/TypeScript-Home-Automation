@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
+import type { DeviceObservation } from "@ts-ha/shared";
 import type { ZigbeeDevice } from "@ts-ha/shared/types";
 import pino from "pino";
 import type { Config } from "../src/config.js";
+import { qualifyDeviceId } from "../src/device-sources/device-source.js";
 import { DeviceStateStore } from "../src/device-sources/device-state-store.js";
 import { formatQualifiedId } from "../src/device-sources/qualified-id.js";
-import { ZigbeeDeviceSource } from "../src/device-sources/zigbee-source.js";
+import { ZIGBEE_SOURCE_ID, ZigbeeDeviceSource } from "../src/device-sources/zigbee-source.js";
 import type { MqttMessageHandler, MqttService } from "../src/mqtt/mqtt-service.js";
 import { DeviceRegistry } from "../src/zigbee/device-registry.js";
 
@@ -119,6 +121,18 @@ describe("ZigbeeDeviceSource", () => {
     expect(devices[0].qualifiedId).toBe(formatQualifiedId("zigbee", "0xaaa"));
     expect(devices[0].displayName).toBe("lamp");
     expect(devices[0].observation.mode).toBe("push");
+  });
+
+  it("reports enumerated only after an authoritative bridge/devices payload", () => {
+    expect(source.hasEnumerated).toBe(false);
+    expect(new ZigbeeDeviceSource(null, mqttMock.mqtt, logger).hasEnumerated).toBe(false);
+
+    mqttMock.emit("zigbee2mqtt/bridge/devices", { not: "an array" });
+    expect(source.hasEnumerated).toBe(false);
+
+    // An empty array is authoritative: the bridge has no devices.
+    mqttMock.emit("zigbee2mqtt/bridge/devices", [] as unknown as Record<string, unknown>);
+    expect(source.hasEnumerated).toBe(true);
   });
 
   it("preserves a binary expose's declared on/off encoding end-to-end", () => {
@@ -278,6 +292,49 @@ describe("ZigbeeDeviceSource", () => {
     expect(record?.state).toEqual({ state: "ON" });
     expect(record?.observation.mode).toBe("push");
     expect(withStore.get("0xaaa")?.state).toEqual(record?.state);
+
+    withStore.stop();
+  });
+
+  it("seeds a descriptor from the durable store and lets a live observation supersede it", () => {
+    const testStartedAt = Date.now();
+    const store = new DeviceStateStore(logger, { persist: false });
+    const qualifiedId = qualifyDeviceId(ZIGBEE_SOURCE_ID, "0xaaa");
+    const storedState = { state: "ON", brightness: 42 };
+    const storedObservation: DeviceObservation = {
+      mode: "push",
+      observedAt: testStartedAt - 60_000,
+    };
+    store.record(qualifiedId, storedState, storedObservation);
+
+    const withStore = new ZigbeeDeviceSource(registry, mqttMock.mqtt, logger, store);
+    withStore.start();
+    mqttMock.emit("zigbee2mqtt/bridge/devices", [makeDevice("lamp", "0xaaa")] as unknown as Record<
+      string,
+      unknown
+    >);
+
+    // Enumeration with no registry state reports the stored value and observation.
+    const seeded = withStore.get("0xaaa");
+    expect(seeded?.state).toEqual(storedState);
+    expect(seeded?.observation).toEqual(storedObservation);
+
+    // The device-added notification re-records the seed without advancing it.
+    const afterSeedNotification = store.get(qualifiedId);
+    expect(afterSeedNotification?.state).toEqual(storedState);
+    expect(afterSeedNotification?.observation).toEqual(storedObservation);
+
+    // A live payload supersedes the seed: the registry wins and stamps a current observation.
+    mqttMock.emit("zigbee2mqtt/lamp", { state: "OFF", brightness: 10 });
+
+    const live = withStore.get("0xaaa");
+    expect(live?.state).toEqual({ state: "OFF", brightness: 10 });
+    expect(live?.observation.mode).toBe("push");
+    expect(live?.observation.observedAt).toBeGreaterThanOrEqual(testStartedAt);
+
+    const updated = store.get(qualifiedId);
+    expect(updated?.state).toEqual(live?.state);
+    expect(updated?.observation).toEqual(live?.observation);
 
     withStore.stop();
   });

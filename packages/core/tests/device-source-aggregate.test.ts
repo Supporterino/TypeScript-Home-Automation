@@ -24,15 +24,23 @@ function makeFakeSource(
   id: string,
   options: {
     available?: boolean;
+    hasEnumerated?: boolean;
     devices?: DeviceDescriptor[];
     throwOnStart?: boolean;
   } = {},
-): DeviceSource & { stopped: boolean; started: boolean; listeners: Set<DeviceChangeListener> } {
+): DeviceSource & {
+  stopped: boolean;
+  started: boolean;
+  listeners: Set<DeviceChangeListener>;
+  emitSetChanged: () => void;
+} {
   const devices = options.devices ?? [];
   const listeners = new Set<DeviceChangeListener>();
+  const setChangedListeners = new Set<() => void>();
   const source = {
     id,
     available: options.available ?? true,
+    hasEnumerated: options.hasEnumerated ?? true,
     started: false,
     stopped: false,
     listeners,
@@ -53,6 +61,13 @@ function makeFakeSource(
       listeners.add(listener);
       return () => listeners.delete(listener);
     }),
+    onDeviceSetChanged: mock((listener: () => void) => {
+      setChangedListeners.add(listener);
+      return () => setChangedListeners.delete(listener);
+    }),
+    emitSetChanged(): void {
+      for (const listener of setChangedListeners) listener();
+    },
   };
   return source;
 }
@@ -93,11 +108,45 @@ describe("AggregateDeviceSource", () => {
 
     expect(aggregate.list()).toHaveLength(1);
     expect(aggregate.sources()).toEqual([
-      { id: "zigbee", available: false },
-      { id: "shelly", available: true },
+      { id: "zigbee", available: false, hasEnumerated: true },
+      { id: "shelly", available: true, hasEnumerated: true },
     ]);
 
     await aggregate.stop();
+  });
+
+  it("reports each source's enumeration readiness alongside availability", () => {
+    const zigbee = makeFakeSource("zigbee", { hasEnumerated: false });
+    const shelly = makeFakeSource("shelly", { available: false, hasEnumerated: true });
+    const aggregate = new AggregateDeviceSource([zigbee, shelly], makeVisibility(), logger);
+
+    expect(aggregate.sources()).toEqual([
+      { id: "zigbee", available: true, hasEnumerated: false },
+      { id: "shelly", available: false, hasEnumerated: true },
+    ]);
+  });
+
+  it("treats a source that omits hasEnumerated as not enumerated", () => {
+    const fake = makeFakeSource("zigbee");
+    delete fake.hasEnumerated;
+    const aggregate = new AggregateDeviceSource([fake], makeVisibility(), logger);
+
+    expect(aggregate.sources()).toEqual([{ id: "zigbee", available: true, hasEnumerated: false }]);
+  });
+
+  it("forwards a source's device-set change and releases it on stop", async () => {
+    const fake = makeFakeSource("zigbee");
+    const aggregate = new AggregateDeviceSource([fake], makeVisibility(), logger);
+    const seen = mock(() => {});
+    aggregate.onDeviceSetChanged(seen);
+    await aggregate.start();
+
+    fake.emitSetChanged();
+    expect(seen).toHaveBeenCalledTimes(1);
+
+    await aggregate.stop();
+    fake.emitSetChanged();
+    expect(seen).toHaveBeenCalledTimes(1);
   });
 
   it("keeps a name collision distinct across sources by qualified id", async () => {

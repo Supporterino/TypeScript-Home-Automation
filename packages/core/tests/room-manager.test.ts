@@ -53,6 +53,7 @@ function makeMutableSource(id: string, initialDevices: DeviceDescriptor[] = []) 
     get available() {
       return available;
     },
+    hasEnumerated: true,
     start: () => {},
     stop: () => {},
     list: () => (available ? [...devices] : []),

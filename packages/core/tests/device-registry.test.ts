@@ -90,6 +90,17 @@ function createMockMqtt() {
   return { mqtt, subscriptions, unsubscriptions, publications, emit };
 }
 
+/** Create a pino logger that records its JSON lines so tests can assert log messages. */
+function createCapturingLogger() {
+  const lines: Record<string, unknown>[] = [];
+  const stream = {
+    write(chunk: string): void {
+      lines.push(JSON.parse(chunk) as Record<string, unknown>);
+    },
+  };
+  return { logger: pino({ level: "debug" }, stream), lines };
+}
+
 describe("DeviceRegistry", () => {
   let registry: DeviceRegistry;
   let mqttMock: ReturnType<typeof createMockMqtt>;
@@ -126,14 +137,21 @@ describe("DeviceRegistry", () => {
   });
 
   describe("stop", () => {
-    it("unsubscribes bridge topics on stop", () => {
+    it("unsubscribes bridge topics and resets list readiness on stop", () => {
       registry.start();
+      mqttMock.emit("zigbee2mqtt/bridge/devices", [] as unknown as Record<string, unknown>);
+      mqttMock.emit("zigbee2mqtt/bridge/groups", [] as unknown as Record<string, unknown>);
+      expect(registry.hasReceivedDeviceList).toBe(true);
+      expect(registry.hasReceivedGroupList).toBe(true);
+
       registry.stop();
 
       const unsubTopics = mqttMock.unsubscriptions.map((u) => u.topic);
       expect(unsubTopics).toContain("zigbee2mqtt/bridge/devices");
       expect(unsubTopics).toContain("zigbee2mqtt/bridge/groups");
       expect(unsubTopics).toContain("zigbee2mqtt/bridge/event");
+      expect(registry.hasReceivedDeviceList).toBe(false);
+      expect(registry.hasReceivedGroupList).toBe(false);
     });
 
     it("clears the group list on stop", () => {
@@ -837,6 +855,68 @@ describe("DeviceRegistry", () => {
   });
 
   // ---------------------------------------------------------------------------
+  // List-applied handlers
+  // ---------------------------------------------------------------------------
+
+  describe("list-applied handlers", () => {
+    it("fires each applied handler once per array and never for a non-array payload", () => {
+      const deviceApplied = mock(() => {});
+      const groupApplied = mock(() => {});
+      registry.onDeviceListApplied(deviceApplied);
+      registry.onGroupListApplied(groupApplied);
+      registry.start();
+
+      mqttMock.emit("zigbee2mqtt/bridge/devices", [] as unknown as Record<string, unknown>);
+      mqttMock.emit("zigbee2mqtt/bridge/groups", [] as unknown as Record<string, unknown>);
+      expect(deviceApplied).toHaveBeenCalledTimes(1);
+      expect(groupApplied).toHaveBeenCalledTimes(1);
+
+      mqttMock.emit("zigbee2mqtt/bridge/devices", { not: "an array" });
+      mqttMock.emit("zigbee2mqtt/bridge/groups", { not: "an array" });
+      expect(deviceApplied).toHaveBeenCalledTimes(1);
+      expect(groupApplied).toHaveBeenCalledTimes(1);
+
+      mqttMock.emit("zigbee2mqtt/bridge/devices", [makeDevice("lamp")] as unknown as Record<
+        string,
+        unknown
+      >);
+      mqttMock.emit("zigbee2mqtt/bridge/groups", [makeGroup(1, "lamp")] as unknown as Record<
+        string,
+        unknown
+      >);
+      expect(deviceApplied).toHaveBeenCalledTimes(2);
+      expect(groupApplied).toHaveBeenCalledTimes(2);
+    });
+
+    it("isolates errors in applied handlers so later handlers still fire", () => {
+      const badDevice = mock(() => {
+        throw new Error("boom");
+      });
+      const goodDevice = mock(() => {});
+      registry.onDeviceListApplied(badDevice);
+      registry.onDeviceListApplied(goodDevice);
+
+      const badGroup = mock(() => {
+        throw new Error("boom");
+      });
+      const goodGroup = mock(() => {});
+      registry.onGroupListApplied(badGroup);
+      registry.onGroupListApplied(goodGroup);
+      registry.start();
+
+      expect(() =>
+        mqttMock.emit("zigbee2mqtt/bridge/devices", [] as unknown as Record<string, unknown>),
+      ).not.toThrow();
+      expect(goodDevice).toHaveBeenCalledTimes(1);
+
+      expect(() =>
+        mqttMock.emit("zigbee2mqtt/bridge/groups", [] as unknown as Record<string, unknown>),
+      ).not.toThrow();
+      expect(goodGroup).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
   // getNiceName
   // ---------------------------------------------------------------------------
 
@@ -960,7 +1040,11 @@ describe("DeviceRegistry", () => {
       const { writeFile: wf, mkdir: mk } = await import("node:fs/promises");
       const { dirname: dn } = await import("node:path");
       await mk(dn(tmpFile), { recursive: true });
-      await wf(tmpFile, JSON.stringify({ devices: [makeDevice("lamp")], states: {} }), "utf-8");
+      await wf(
+        tmpFile,
+        JSON.stringify({ devices: { lamp: makeDevice("lamp") }, states: {} }),
+        "utf-8",
+      );
 
       const registry = new DeviceRegistry(mqttMock.mqtt, config, logger, {}, { filePath: tmpFile });
       await registry.load();
@@ -1276,6 +1360,684 @@ describe("DeviceRegistry", () => {
       const parsed = JSON.parse(content) as { devices: unknown; states: unknown };
       expect(parsed).toHaveProperty("devices");
       expect(parsed).toHaveProperty("states");
+    });
+
+    it("writes the previous snapshot to a .bak file on a second save", async () => {
+      const { mkdtemp, readFile, rm, stat } = await import("node:fs/promises");
+      const { tmpdir } = await import("node:os");
+      const { join } = await import("node:path");
+      const dir = await mkdtemp(join(tmpdir(), "ts-ha-registry-bak-"));
+      const tmpFile = join(dir, "device-registry.json");
+      const freshMqtt = createMockMqtt();
+
+      const registry = new DeviceRegistry(
+        freshMqtt.mqtt,
+        { ...config, deviceRegistry: { enabled: true, persist: true, filePath: tmpFile } },
+        logger,
+        {},
+        { persist: true, filePath: tmpFile },
+      );
+      registry.start();
+      freshMqtt.emit("zigbee2mqtt/bridge/devices", [makeDevice("bulb")] as unknown as Record<
+        string,
+        unknown
+      >);
+      await registry.save();
+      const firstSnapshot = await readFile(tmpFile, "utf-8");
+
+      freshMqtt.emit("zigbee2mqtt/bridge/devices", [
+        makeDevice("bulb"),
+        makeDevice("sensor"),
+      ] as unknown as Record<string, unknown>);
+      freshMqtt.emit("zigbee2mqtt/bridge/groups", [makeGroup(1, "lamp")] as unknown as Record<
+        string,
+        unknown
+      >);
+      await registry.save();
+
+      const backup = await readFile(`${tmpFile}.bak`, "utf-8");
+      expect(backup).toBe(firstSnapshot);
+      const parsedBackup = JSON.parse(backup) as { devices: Record<string, unknown> };
+      expect(Object.keys(parsedBackup.devices)).toEqual(["bulb"]);
+
+      const primary = JSON.parse(await readFile(tmpFile, "utf-8")) as {
+        devices: Record<string, unknown>;
+        groups: unknown[];
+      };
+      expect(Object.keys(primary.devices)).toEqual(["bulb", "sensor"]);
+      expect(primary.groups).toHaveLength(1);
+
+      // The transient temp file is renamed over the primary, never left behind.
+      await expect(stat(`${tmpFile}.tmp`)).rejects.toThrow();
+
+      await rm(dir, { recursive: true, force: true });
+    });
+
+    it("restores from the backup when the primary snapshot is corrupt", async () => {
+      const { mkdtemp, rm, writeFile } = await import("node:fs/promises");
+      const { tmpdir } = await import("node:os");
+      const { join } = await import("node:path");
+      const dir = await mkdtemp(join(tmpdir(), "ts-ha-registry-corrupt-primary-"));
+      const tmpFile = join(dir, "device-registry.json");
+      const capturing = createCapturingLogger();
+
+      await writeFile(
+        `${tmpFile}.bak`,
+        JSON.stringify({
+          devices: { bulb: makeDevice("bulb") },
+          states: { bulb: { state: "ON", brightness: 120 } },
+          groups: [makeGroup(1, "lamp")],
+        }),
+        "utf-8",
+      );
+      await writeFile(tmpFile, '{ "devices": { "bulb": ', "utf-8");
+
+      const registry = new DeviceRegistry(
+        createMockMqtt().mqtt,
+        { ...config, deviceRegistry: { enabled: true, persist: true, filePath: tmpFile } },
+        capturing.logger,
+        {},
+        { persist: true, filePath: tmpFile },
+      );
+
+      await expect(registry.load()).resolves.toBeUndefined();
+
+      expect(registry.hasDevice("bulb")).toBe(true);
+      expect(registry.getDeviceState("bulb")).toEqual({ state: "ON", brightness: 120 });
+      expect(registry.getGroup(1)?.friendly_name).toBe("lamp");
+
+      const corruptionLog = capturing.lines.find(
+        (line) =>
+          line.msg === "Persisted device registry file is corrupt, attempting backup recovery",
+      );
+      expect(corruptionLog?.file).toBe(tmpFile);
+
+      const restoredLog = capturing.lines.find(
+        (line) => line.msg === "Device registry restored from disk",
+      );
+      expect(restoredLog?.file).toBe(`${tmpFile}.bak`);
+
+      await rm(dir, { recursive: true, force: true });
+    });
+
+    it("starts empty when the primary is corrupt and the backup is missing", async () => {
+      const { mkdtemp, rm, writeFile } = await import("node:fs/promises");
+      const { tmpdir } = await import("node:os");
+      const { join } = await import("node:path");
+      const dir = await mkdtemp(join(tmpdir(), "ts-ha-registry-no-backup-"));
+      const tmpFile = join(dir, "device-registry.json");
+      const capturing = createCapturingLogger();
+
+      await writeFile(tmpFile, "not json at all", "utf-8");
+
+      const registry = new DeviceRegistry(
+        createMockMqtt().mqtt,
+        { ...config, deviceRegistry: { enabled: true, persist: true, filePath: tmpFile } },
+        capturing.logger,
+        {},
+        { persist: true, filePath: tmpFile },
+      );
+
+      await expect(registry.load()).resolves.toBeUndefined();
+
+      expect(registry.getDevices()).toHaveLength(0);
+      expect(registry.getGroups()).toHaveLength(0);
+      expect(registry.getDeviceState("bulb")).toBeUndefined();
+
+      expect(
+        capturing.lines.some(
+          (line) =>
+            line.msg === "Persisted device registry file is corrupt, attempting backup recovery" &&
+            line.file === tmpFile,
+        ),
+      ).toBe(true);
+      expect(
+        capturing.lines.some(
+          (line) =>
+            line.msg ===
+              "Backup device registry file missing or corrupt, starting with an empty store" &&
+            line.file === `${tmpFile}.bak`,
+        ),
+      ).toBe(true);
+
+      await rm(dir, { recursive: true, force: true });
+    });
+
+    it("starts empty when both the primary and the backup are corrupt", async () => {
+      const { mkdtemp, rm, writeFile } = await import("node:fs/promises");
+      const { tmpdir } = await import("node:os");
+      const { join } = await import("node:path");
+      const dir = await mkdtemp(join(tmpdir(), "ts-ha-registry-corrupt-both-"));
+      const tmpFile = join(dir, "device-registry.json");
+      const capturing = createCapturingLogger();
+
+      await writeFile(tmpFile, "{ truncated", "utf-8");
+      await writeFile(`${tmpFile}.bak`, "{ also truncated", "utf-8");
+
+      const registry = new DeviceRegistry(
+        createMockMqtt().mqtt,
+        { ...config, deviceRegistry: { enabled: true, persist: true, filePath: tmpFile } },
+        capturing.logger,
+        {},
+        { persist: true, filePath: tmpFile },
+      );
+
+      await expect(registry.load()).resolves.toBeUndefined();
+
+      expect(registry.getDevices()).toHaveLength(0);
+      expect(registry.getGroups()).toHaveLength(0);
+
+      expect(
+        capturing.lines.some(
+          (line) =>
+            line.msg === "Persisted device registry file is corrupt, attempting backup recovery" &&
+            line.file === tmpFile,
+        ),
+      ).toBe(true);
+      expect(
+        capturing.lines.some(
+          (line) =>
+            line.msg ===
+              "Backup device registry file missing or corrupt, starting with an empty store" &&
+            line.file === `${tmpFile}.bak`,
+        ),
+      ).toBe(true);
+
+      await rm(dir, { recursive: true, force: true });
+    });
+
+    it("skips malformed device, state, and group entries while restoring the rest", async () => {
+      const { mkdtemp, rm, writeFile } = await import("node:fs/promises");
+      const { tmpdir } = await import("node:os");
+      const { join } = await import("node:path");
+      const dir = await mkdtemp(join(tmpdir(), "ts-ha-registry-malformed-"));
+      const tmpFile = join(dir, "device-registry.json");
+      const capturing = createCapturingLogger();
+
+      await writeFile(
+        tmpFile,
+        JSON.stringify({
+          devices: {
+            bulb: makeDevice("bulb"),
+            missing_name: { type: "Router", ieee_address: "0xbad" },
+            numeric_name: { ...makeDevice("numeric"), friendly_name: 42 },
+            missing_ieee: { friendly_name: "no_ieee", type: "Router" },
+          },
+          states: {
+            bulb: { state: "ON" },
+            bad_state: "not-an-object",
+            also_bad: 7,
+          },
+          groups: [
+            makeGroup(1, "lamp"),
+            { id: "one", friendly_name: "bad" },
+            { id: 2, friendly_name: 3 },
+            { id: 3, friendly_name: "no_members" },
+            { id: 4, friendly_name: "bad_member", members: [{ ieee_address: 7, endpoint: 1 }] },
+          ],
+        }),
+        "utf-8",
+      );
+
+      const freshMqtt = createMockMqtt();
+      const registry = new DeviceRegistry(
+        freshMqtt.mqtt,
+        { ...config, deviceRegistry: { enabled: true, persist: true, filePath: tmpFile } },
+        capturing.logger,
+        {},
+        { persist: true, filePath: tmpFile },
+      );
+
+      await expect(registry.load()).resolves.toBeUndefined();
+
+      expect(registry.getDevices().map((device) => device.friendly_name)).toEqual(["bulb"]);
+      expect(registry.getDeviceState("bulb")).toEqual({ state: "ON" });
+      expect(registry.getDeviceState("bad_state")).toBeUndefined();
+      expect(registry.getDeviceState("also_bad")).toBeUndefined();
+      // The group with one bad member survives with its valid members only.
+      expect(registry.getGroups().map((group) => group.id)).toEqual([1, 4]);
+      expect(registry.getGroup(4)?.members).toEqual([]);
+
+      const topics = freshMqtt.subscriptions.map((subscription) => subscription.topic);
+      expect(topics).toContain("zigbee2mqtt/bulb");
+      expect(topics).not.toContain("zigbee2mqtt/missing_name");
+      expect(topics).not.toContain("zigbee2mqtt/no_ieee");
+      expect(topics).not.toContain("zigbee2mqtt/undefined");
+
+      const messages = capturing.lines.map((line) => line.msg);
+      expect(messages).toContain(
+        "Skipping malformed device entry while restoring the device registry",
+      );
+      expect(messages).toContain(
+        "Skipping malformed device state entry while restoring the device registry",
+      );
+      expect(messages).toContain(
+        "Skipping malformed group entry while restoring the device registry",
+      );
+      expect(messages).toContain(
+        "Skipping malformed group member while restoring the device registry",
+      );
+      expect(messages).not.toContain(
+        "Persisted device registry file is corrupt, attempting backup recovery",
+      );
+
+      await rm(dir, { recursive: true, force: true });
+    });
+
+    it("falls back to the backup when the primary snapshot has the wrong shape", async () => {
+      const { mkdtemp, rm, writeFile } = await import("node:fs/promises");
+      const { tmpdir } = await import("node:os");
+      const { join } = await import("node:path");
+      const dir = await mkdtemp(join(tmpdir(), "ts-ha-registry-wrong-shape-"));
+      const tmpFile = join(dir, "device-registry.json");
+      const capturing = createCapturingLogger();
+
+      await writeFile(tmpFile, "[]", "utf-8");
+      await writeFile(
+        `${tmpFile}.bak`,
+        JSON.stringify({ devices: { bulb: makeDevice("bulb") }, states: {}, groups: [] }),
+        "utf-8",
+      );
+
+      const registry = new DeviceRegistry(
+        createMockMqtt().mqtt,
+        { ...config, deviceRegistry: { enabled: true, persist: true, filePath: tmpFile } },
+        capturing.logger,
+        {},
+        { persist: true, filePath: tmpFile },
+      );
+
+      await expect(registry.load()).resolves.toBeUndefined();
+
+      expect(registry.hasDevice("bulb")).toBe(true);
+      expect(
+        capturing.lines.some(
+          (line) =>
+            line.msg === "Persisted device registry file is corrupt, attempting backup recovery" &&
+            line.file === tmpFile,
+        ),
+      ).toBe(true);
+      expect(
+        capturing.lines.some(
+          (line) =>
+            line.msg === "Device registry restored from disk" && line.file === `${tmpFile}.bak`,
+        ),
+      ).toBe(true);
+
+      await rm(dir, { recursive: true, force: true });
+    });
+
+    it("starts empty when the primary snapshot has the wrong shape and no backup exists", async () => {
+      const { mkdtemp, rm, writeFile } = await import("node:fs/promises");
+      const { tmpdir } = await import("node:os");
+      const { join } = await import("node:path");
+      const dir = await mkdtemp(join(tmpdir(), "ts-ha-registry-wrong-shape-empty-"));
+      const tmpFile = join(dir, "device-registry.json");
+      const capturing = createCapturingLogger();
+
+      await writeFile(tmpFile, "[]", "utf-8");
+
+      const registry = new DeviceRegistry(
+        createMockMqtt().mqtt,
+        { ...config, deviceRegistry: { enabled: true, persist: true, filePath: tmpFile } },
+        capturing.logger,
+        {},
+        { persist: true, filePath: tmpFile },
+      );
+
+      await expect(registry.load()).resolves.toBeUndefined();
+
+      expect(registry.getDevices()).toHaveLength(0);
+      expect(registry.getGroups()).toHaveLength(0);
+      expect(capturing.lines.map((line) => line.msg)).toContain(
+        "Backup device registry file missing or corrupt, starting with an empty store",
+      );
+
+      await rm(dir, { recursive: true, force: true });
+    });
+
+    it("skips unserializable entries while persisting the rest of the snapshot", async () => {
+      const { mkdtemp, readFile, rm } = await import("node:fs/promises");
+      const { tmpdir } = await import("node:os");
+      const { join } = await import("node:path");
+      const dir = await mkdtemp(join(tmpdir(), "ts-ha-registry-unserializable-"));
+      const tmpFile = join(dir, "device-registry.json");
+      const capturing = createCapturingLogger();
+      const freshMqtt = createMockMqtt();
+
+      const registry = new DeviceRegistry(
+        freshMqtt.mqtt,
+        { ...config, deviceRegistry: { enabled: true, persist: true, filePath: tmpFile } },
+        capturing.logger,
+        {},
+        { persist: true, filePath: tmpFile },
+      );
+      registry.start();
+      freshMqtt.emit("zigbee2mqtt/bridge/devices", [
+        makeDevice("bulb"),
+        { ...makeDevice("bad_device"), junk: 1n },
+      ] as unknown as Record<string, unknown>);
+      freshMqtt.emit("zigbee2mqtt/bridge/groups", [
+        makeGroup(1, "lamp"),
+        { ...makeGroup(2, "bad_group"), junk: 1n },
+      ] as unknown as Record<string, unknown>);
+      freshMqtt.emit("zigbee2mqtt/bulb", { state: "ON" });
+      freshMqtt.emit("zigbee2mqtt/bad_device", { reading: 1n });
+
+      await expect(registry.save()).resolves.toBeUndefined();
+
+      const parsed = JSON.parse(await readFile(tmpFile, "utf-8")) as {
+        devices: Record<string, unknown>;
+        states: Record<string, unknown>;
+        groups: { id: number }[];
+      };
+      expect(Object.keys(parsed.devices)).toEqual(["bulb"]);
+      expect(Object.keys(parsed.states)).toEqual(["bulb"]);
+      expect(parsed.states.bulb).toEqual({ state: "ON" });
+      expect(parsed.groups.map((group) => group.id)).toEqual([1]);
+
+      const messages = capturing.lines.map((line) => line.msg);
+      expect(messages).toContain(
+        "Skipping unserializable device while persisting the device registry",
+      );
+      expect(messages).toContain(
+        "Skipping unserializable device state while persisting the device registry",
+      );
+      expect(messages).toContain(
+        "Skipping unserializable group while persisting the device registry",
+      );
+
+      await rm(dir, { recursive: true, force: true });
+    });
+
+    it("logs a failed save without throwing so shutdown can continue", async () => {
+      const { mkdtemp, rm, writeFile } = await import("node:fs/promises");
+      const { tmpdir } = await import("node:os");
+      const { join } = await import("node:path");
+      const dir = await mkdtemp(join(tmpdir(), "ts-ha-registry-save-failure-"));
+      // A regular file where the parent directory should be makes the write fail.
+      const blockedParent = join(dir, "blocker");
+      await writeFile(blockedParent, "", "utf-8");
+      const tmpFile = join(blockedParent, "device-registry.json");
+      const capturing = createCapturingLogger();
+
+      const registry = new DeviceRegistry(
+        createMockMqtt().mqtt,
+        { ...config, deviceRegistry: { enabled: true, persist: true, filePath: tmpFile } },
+        capturing.logger,
+        {},
+        { persist: true, filePath: tmpFile },
+      );
+
+      await expect(registry.save()).resolves.toBeUndefined();
+
+      const failure = capturing.lines.find(
+        (line) => line.msg === "Failed to persist device registry",
+      );
+      expect(failure?.file).toBe(tmpFile);
+      expect(failure?.err).toBeDefined();
+
+      await rm(dir, { recursive: true, force: true });
+    });
+
+    it("ignores a leftover .tmp file and loads the primary snapshot", async () => {
+      const { mkdtemp, rm, writeFile } = await import("node:fs/promises");
+      const { tmpdir } = await import("node:os");
+      const { join } = await import("node:path");
+      const dir = await mkdtemp(join(tmpdir(), "ts-ha-registry-leftover-tmp-"));
+      const tmpFile = join(dir, "device-registry.json");
+      const capturing = createCapturingLogger();
+
+      await writeFile(
+        tmpFile,
+        JSON.stringify({
+          devices: { bulb: makeDevice("bulb") },
+          states: { bulb: { state: "ON" } },
+          groups: [makeGroup(1, "lamp")],
+        }),
+        "utf-8",
+      );
+      // A torn temp file from an interrupted write must never be read.
+      await writeFile(`${tmpFile}.tmp`, '{ "devices": { "stale"', "utf-8");
+
+      const registry = new DeviceRegistry(
+        createMockMqtt().mqtt,
+        { ...config, deviceRegistry: { enabled: true, persist: true, filePath: tmpFile } },
+        capturing.logger,
+        {},
+        { persist: true, filePath: tmpFile },
+      );
+
+      await expect(registry.load()).resolves.toBeUndefined();
+
+      expect(registry.getDevices().map((device) => device.friendly_name)).toEqual(["bulb"]);
+      expect(registry.getDeviceState("bulb")).toEqual({ state: "ON" });
+      expect(registry.getGroups().map((group) => group.id)).toEqual([1]);
+
+      const messages = capturing.lines.map((line) => line.msg);
+      expect(messages).toContain("Device registry restored from disk");
+      expect(messages).not.toContain(
+        "Persisted device registry file is corrupt, attempting backup recovery",
+      );
+
+      await rm(dir, { recursive: true, force: true });
+    });
+
+    it("persists a __proto__ device key as an own data property", async () => {
+      const { mkdtemp, readFile, rm } = await import("node:fs/promises");
+      const { tmpdir } = await import("node:os");
+      const { join } = await import("node:path");
+      const dir = await mkdtemp(join(tmpdir(), "ts-ha-registry-proto-key-"));
+      const tmpFile = join(dir, "device-registry.json");
+      const freshMqtt = createMockMqtt();
+
+      const registry = new DeviceRegistry(
+        freshMqtt.mqtt,
+        { ...config, deviceRegistry: { enabled: true, persist: true, filePath: tmpFile } },
+        logger,
+        {},
+        { persist: true, filePath: tmpFile },
+      );
+      registry.start();
+      freshMqtt.emit("zigbee2mqtt/bridge/devices", [makeDevice("__proto__")] as unknown as Record<
+        string,
+        unknown
+      >);
+
+      await registry.save();
+
+      const parsed = JSON.parse(await readFile(tmpFile, "utf-8")) as {
+        devices: Record<string, unknown>;
+      };
+      expect(Object.keys(parsed.devices)).toContain("__proto__");
+      expect(Object.getPrototypeOf(parsed.devices)).toBe(Object.prototype);
+
+      await rm(dir, { recursive: true, force: true });
+    });
+
+    it("falls back to the backup when a snapshot field has the wrong type", async () => {
+      const { mkdtemp, rm, writeFile } = await import("node:fs/promises");
+      const { tmpdir } = await import("node:os");
+      const { join } = await import("node:path");
+      const dir = await mkdtemp(join(tmpdir(), "ts-ha-registry-field-type-"));
+      const tmpFile = join(dir, "device-registry.json");
+      const capturing = createCapturingLogger();
+
+      await writeFile(tmpFile, JSON.stringify({ devices: [], states: {}, groups: [] }), "utf-8");
+      await writeFile(
+        `${tmpFile}.bak`,
+        JSON.stringify({
+          devices: { bulb: makeDevice("bulb") },
+          states: { bulb: { state: "ON" } },
+          groups: [makeGroup(1, "lamp")],
+        }),
+        "utf-8",
+      );
+
+      const registry = new DeviceRegistry(
+        createMockMqtt().mqtt,
+        { ...config, deviceRegistry: { enabled: true, persist: true, filePath: tmpFile } },
+        capturing.logger,
+        {},
+        { persist: true, filePath: tmpFile },
+      );
+
+      await expect(registry.load()).resolves.toBeUndefined();
+
+      expect(registry.getDevices().map((device) => device.friendly_name)).toEqual(["bulb"]);
+      expect(registry.getDeviceState("bulb")).toEqual({ state: "ON" });
+      expect(registry.getGroups().map((group) => group.id)).toEqual([1]);
+
+      expect(
+        capturing.lines.some(
+          (line) =>
+            line.msg === "Persisted device registry file is corrupt, attempting backup recovery" &&
+            line.file === tmpFile,
+        ),
+      ).toBe(true);
+      expect(
+        capturing.lines.some(
+          (line) =>
+            line.msg === "Device registry restored from disk" && line.file === `${tmpFile}.bak`,
+        ),
+      ).toBe(true);
+
+      await rm(dir, { recursive: true, force: true });
+    });
+
+    it("starts empty when a snapshot field has the wrong type and no backup exists", async () => {
+      const { mkdtemp, rm, writeFile } = await import("node:fs/promises");
+      const { tmpdir } = await import("node:os");
+      const { join } = await import("node:path");
+      const dir = await mkdtemp(join(tmpdir(), "ts-ha-registry-field-type-empty-"));
+      const tmpFile = join(dir, "device-registry.json");
+      const capturing = createCapturingLogger();
+
+      await writeFile(tmpFile, JSON.stringify({ devices: [], states: {}, groups: [] }), "utf-8");
+
+      const registry = new DeviceRegistry(
+        createMockMqtt().mqtt,
+        { ...config, deviceRegistry: { enabled: true, persist: true, filePath: tmpFile } },
+        capturing.logger,
+        {},
+        { persist: true, filePath: tmpFile },
+      );
+
+      await expect(registry.load()).resolves.toBeUndefined();
+
+      expect(registry.getDevices()).toHaveLength(0);
+      expect(registry.getGroups()).toHaveLength(0);
+
+      const messages = capturing.lines.map((line) => line.msg);
+      expect(messages).toContain(
+        "Persisted device registry file is corrupt, attempting backup recovery",
+      );
+      expect(messages).toContain(
+        "Backup device registry file missing or corrupt, starting with an empty store",
+      );
+
+      await rm(dir, { recursive: true, force: true });
+    });
+
+    it("releases a failed restore subscription without treating it as corruption", async () => {
+      const { mkdtemp, rm, writeFile } = await import("node:fs/promises");
+      const { tmpdir } = await import("node:os");
+      const { join } = await import("node:path");
+      const dir = await mkdtemp(join(tmpdir(), "ts-ha-registry-subscribe-failure-"));
+      const tmpFile = join(dir, "device-registry.json");
+      const capturing = createCapturingLogger();
+
+      await writeFile(
+        tmpFile,
+        JSON.stringify({
+          devices: { bulb: makeDevice("bulb"), sensor: makeDevice("sensor") },
+          states: {},
+          groups: [],
+        }),
+        "utf-8",
+      );
+
+      const unsubscriptions: { topic: string; handler: MqttMessageHandler }[] = [];
+      const failingMqtt = {
+        subscribe: mock((topic: string) => {
+          if (topic === "zigbee2mqtt/bulb") throw new Error("subscribe failed");
+        }),
+        unsubscribe: mock((topic: string, handler: MqttMessageHandler) => {
+          unsubscriptions.push({ topic, handler });
+        }),
+        publish: mock(() => {}),
+      } as unknown as MqttService;
+
+      const registry = new DeviceRegistry(
+        failingMqtt,
+        { ...config, deviceRegistry: { enabled: true, persist: true, filePath: tmpFile } },
+        capturing.logger,
+        {},
+        { persist: true, filePath: tmpFile },
+      );
+
+      await expect(registry.load()).resolves.toBeUndefined();
+
+      expect(registry.hasDevice("bulb")).toBe(true);
+      expect(registry.hasDevice("sensor")).toBe(true);
+
+      const messages = capturing.lines.map((line) => line.msg);
+      expect(messages).toContain("Failed to subscribe to restored device topic");
+      expect(messages).not.toContain(
+        "Persisted device registry file is corrupt, attempting backup recovery",
+      );
+      // The failed subscribe was released immediately, not left for stop().
+      expect(unsubscriptions.map((entry) => entry.topic)).toEqual(["zigbee2mqtt/bulb"]);
+
+      registry.stop();
+      expect(unsubscriptions.filter((entry) => entry.topic === "zigbee2mqtt/bulb")).toHaveLength(1);
+
+      await rm(dir, { recursive: true, force: true });
+    });
+
+    it("reports list readiness only after an authoritative bridge payload", async () => {
+      const { mkdtemp, rm, writeFile } = await import("node:fs/promises");
+      const { tmpdir } = await import("node:os");
+      const { join } = await import("node:path");
+      const dir = await mkdtemp(join(tmpdir(), "ts-ha-registry-readiness-"));
+      const tmpFile = join(dir, "device-registry.json");
+
+      await writeFile(
+        tmpFile,
+        JSON.stringify({
+          devices: { bulb: makeDevice("bulb") },
+          states: {},
+          groups: [makeGroup(1, "lamp")],
+        }),
+        "utf-8",
+      );
+      const restored = new DeviceRegistry(
+        createMockMqtt().mqtt,
+        { ...config, deviceRegistry: { enabled: true, persist: true, filePath: tmpFile } },
+        logger,
+        {},
+        { persist: true, filePath: tmpFile },
+      );
+      await restored.load();
+
+      // A restored snapshot is a seed, not an enumeration.
+      expect(restored.hasReceivedDeviceList).toBe(false);
+      expect(restored.hasReceivedGroupList).toBe(false);
+
+      registry.start();
+      mqttMock.emit("zigbee2mqtt/bridge/devices", { not: "an array" });
+      expect(registry.hasReceivedDeviceList).toBe(false);
+      expect(registry.hasReceivedGroupList).toBe(false);
+
+      // Empty arrays are authoritative for their own list only.
+      mqttMock.emit("zigbee2mqtt/bridge/devices", [] as unknown as Record<string, unknown>);
+      expect(registry.hasReceivedDeviceList).toBe(true);
+      expect(registry.hasReceivedGroupList).toBe(false);
+
+      mqttMock.emit("zigbee2mqtt/bridge/groups", [] as unknown as Record<string, unknown>);
+      expect(registry.hasReceivedGroupList).toBe(true);
+
+      await rm(dir, { recursive: true, force: true });
     });
   });
 });

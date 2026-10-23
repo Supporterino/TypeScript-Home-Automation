@@ -145,6 +145,8 @@ export class ShellyDeviceSource implements DeviceSource {
    * in-flight discovery cannot resume a stopped source.
    */
   private generation = 0;
+  /** Whether the discovery sweep has completed since the last `start()`. */
+  private enumerated = false;
 
   constructor(
     private readonly shelly: ShellyService | null,
@@ -156,6 +158,11 @@ export class ShellyDeviceSource implements DeviceSource {
 
   get available(): boolean {
     return this.shelly !== null;
+  }
+
+  /** True once `start()`'s discovery sweep has resolved; the inventory is config-driven. */
+  get hasEnumerated(): boolean {
+    return this.enumerated;
   }
 
   async start(): Promise<void> {
@@ -186,6 +193,9 @@ export class ShellyDeviceSource implements DeviceSource {
     // `stop()` may have run during the await; do not let this lifecycle resume.
     if (generation !== this.generation) return;
 
+    // The inventory sweep is complete; destructive reconciliation may now run.
+    this.enumerated = true;
+
     this.pollTimer = setInterval(() => {
       void this.poll();
     }, this.pollIntervalMs);
@@ -193,6 +203,7 @@ export class ShellyDeviceSource implements DeviceSource {
 
   stop(): void {
     this.generation += 1;
+    this.enumerated = false;
     if (this.pollTimer) {
       clearInterval(this.pollTimer);
       this.pollTimer = null;

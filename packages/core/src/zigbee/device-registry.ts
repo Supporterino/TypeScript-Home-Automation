@@ -1,9 +1,15 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
-import type { BridgeEventPayload, ZigbeeDevice, ZigbeeGroup } from "@ts-ha/shared/types";
+import type {
+  BridgeEventPayload,
+  ZigbeeDevice,
+  ZigbeeGroup,
+  ZigbeeGroupMember,
+} from "@ts-ha/shared/types";
 import type { Logger } from "pino";
 import type { Config } from "../config.js";
 import type { MqttMessageHandler, MqttService } from "../mqtt/mqtt-service.js";
+import { readJsonWithBackup, writeJsonAtomically } from "../state/json-persistence.js";
 import { mapZ2MExposes } from "./z2m-mapper.js";
 
 /**
@@ -66,6 +72,18 @@ export class DeviceRegistry {
   /** Handlers fired whenever a `bridge/groups` message changes the tracked set. */
   private readonly groupsChangedHandlers: Set<GroupsChangedHandler> = new Set();
 
+  /** Handlers fired once per applied `bridge/devices` payload. */
+  private readonly deviceListAppliedHandlers: Set<() => void> = new Set();
+
+  /** Handlers fired once per applied `bridge/groups` payload. */
+  private readonly groupListAppliedHandlers: Set<() => void> = new Set();
+
+  /** Whether an authoritative `bridge/devices` array has arrived since `start()`. */
+  private deviceListReceived = false;
+
+  /** Whether an authoritative `bridge/groups` array has arrived since `start()`. */
+  private groupListReceived = false;
+
   /** Per-device state change handlers. */
   private readonly stateHandlers: Map<string, Set<DeviceStateChangeHandler>> = new Map();
 
@@ -109,61 +127,129 @@ export class DeviceRegistry {
   // ---------------------------------------------------------------------------
 
   /**
-   * Restore persisted device list and state from disk (if persistence is enabled).
-   * Must be called before `start()` so that the registry is seeded before MQTT
-   * subscriptions fire. Incoming MQTT data always wins over persisted data.
+   * Restore persisted device list and state from disk (if persistence is enabled),
+   * recovering from the `.bak` backup when the primary is missing or corrupt. Must be
+   * called before `start()` so that the registry is seeded before MQTT subscriptions
+   * fire. Incoming MQTT data always wins over persisted data.
    */
   async load(): Promise<void> {
     if (!this.persist) return;
 
-    try {
-      const data = await readFile(this.filePath, "utf-8");
-      const parsed = JSON.parse(data) as {
-        devices?: Record<string, ZigbeeDevice>;
-        states?: Record<string, Record<string, unknown>>;
-        groups?: ZigbeeGroup[];
-      };
+    await readJsonWithBackup(this.filePath, this.logger, "device registry", (parsed, file) =>
+      this.restore(parsed, file),
+    );
+  }
 
-      // Restore last-known device states
-      for (const [name, state] of Object.entries(parsed.states ?? {})) {
+  /**
+   * Load a parsed snapshot: last-known states first, then groups, then device metadata
+   * with per-device MQTT subscriptions. A wrong-typed top-level field throws so the
+   * caller falls back to the backup; malformed entries inside well-typed fields are
+   * skipped with a warning so one bad record cannot discard the rest of the snapshot.
+   */
+  private restore(parsed: Record<string, unknown>, file: string): void {
+    if (!isPlainObject(parsed)) {
+      throw new Error("Device registry snapshot is not an object");
+    }
+
+    // Validate every top-level field before applying anything: a structurally invalid
+    // snapshot is recoverable from `.bak`, and throwing here cannot leave a half-applied
+    // primary that the backup apply would merge into.
+    const states = snapshotObjectField(parsed.states, "states");
+    const groups = snapshotArrayField(parsed.groups, "groups");
+    const devices = snapshotObjectField(parsed.devices, "devices");
+
+    if (states !== undefined) {
+      for (const [name, state] of Object.entries(states)) {
+        if (!isPlainObject(state)) {
+          this.logger.warn(
+            { friendlyName: name },
+            "Skipping malformed device state entry while restoring the device registry",
+          );
+          continue;
+        }
         this.deviceStates.set(name, state);
       }
+    }
 
-      // Restore tracked groups; a snapshot without a `groups` key loads as an empty list.
-      for (const group of parsed.groups ?? []) {
-        this.groups.set(group.id, group);
+    // Restore tracked groups; a snapshot without a `groups` key loads as an empty list.
+    // Members are filtered individually so one bad member cannot discard its group.
+    if (groups !== undefined) {
+      for (const candidate of groups) {
+        if (!isPersistedGroup(candidate)) {
+          this.logger.warn(
+            { group: candidate },
+            "Skipping malformed group entry while restoring the device registry",
+          );
+          continue;
+        }
+        const members: ZigbeeGroupMember[] = [];
+        for (const member of candidate.members) {
+          if (isPersistedGroupMember(member)) {
+            members.push(member);
+          } else {
+            this.logger.warn(
+              { groupId: candidate.id, member },
+              "Skipping malformed group member while restoring the device registry",
+            );
+          }
+        }
+        this.groups.set(candidate.id, { ...candidate, members });
       }
+    }
 
-      // Restore device metadata and register per-device MQTT subscriptions.
-      // Coordinator is never persisted, but guard anyway.
-      // We do this after states so that if a state handler fires immediately
-      // on subscription it already has the restored state to merge into.
+    // Restore device metadata and register per-device MQTT subscriptions.
+    // Coordinator is never persisted, but guard anyway.
+    // We do this after states so that if a state handler fires immediately
+    // on subscription it already has the restored state to merge into.
+    if (devices !== undefined) {
       const prefix = this.config.zigbee2mqttPrefix;
-      for (const device of Object.values(parsed.devices ?? {})) {
-        if (device.type === "Coordinator") continue;
-        this.devices.set(device.friendly_name, device);
+      for (const candidate of Object.values(devices)) {
+        if (!isPersistedDevice(candidate)) {
+          this.logger.warn(
+            { device: candidate },
+            "Skipping malformed device entry while restoring the device registry",
+          );
+          continue;
+        }
+        if (candidate.type === "Coordinator") continue;
+
+        const device = candidate;
         const { friendly_name } = device;
+        this.devices.set(friendly_name, device);
+
+        const topic = `${prefix}/${friendly_name}`;
         const handler: MqttMessageHandler = (_topic, payload) => {
           this.handleDeviceState(friendly_name, payload);
         };
+        // Register the handler before subscribing so a throwing subscribe cannot leave a
+        // live handler in MqttService that stop() has no record of.
         this.mqttDeviceHandlers.set(friendly_name, handler);
-        this.mqtt.subscribe(`${prefix}/${friendly_name}`, handler);
-      }
-
-      this.logger.info(
-        { devices: this.devices.size, states: this.deviceStates.size, file: this.filePath },
-        "Device registry restored from disk",
-      );
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException).code === "ENOENT") {
-        this.logger.debug(
-          { file: this.filePath },
-          "No persisted device registry found, starting fresh",
-        );
-      } else {
-        this.logger.error({ err, file: this.filePath }, "Failed to load persisted device registry");
+        try {
+          this.mqtt.subscribe(topic, handler);
+        } catch (err) {
+          this.mqttDeviceHandlers.delete(friendly_name);
+          try {
+            this.mqtt.unsubscribe(topic, handler);
+          } catch (unsubscribeErr) {
+            this.logger.warn(
+              { err: unsubscribeErr, friendlyName: friendly_name },
+              "Failed to unsubscribe after a failed restore subscription",
+            );
+          }
+          // A subscription failure must not be mistaken for file corruption by the
+          // readJsonWithBackup caller — log it and keep the remaining devices.
+          this.logger.error(
+            { err, friendlyName: friendly_name },
+            "Failed to subscribe to restored device topic",
+          );
+        }
       }
     }
+
+    this.logger.info(
+      { devices: this.devices.size, states: this.deviceStates.size, file },
+      "Device registry restored from disk",
+    );
   }
 
   /**
@@ -174,30 +260,65 @@ export class DeviceRegistry {
     if (!this.persist) return;
 
     try {
-      const devicesObj: Record<string, ZigbeeDevice> = {};
+      // Serialize each entry individually so one bad value cannot abort the
+      // entire save — unserializable entries are skipped and logged. Building the
+      // maps from entries keeps a `__proto__` key an own data property.
+      const deviceEntries: [string, ZigbeeDevice][] = [];
       for (const [name, device] of this.devices) {
-        devicesObj[name] = device;
+        try {
+          JSON.stringify(device);
+          deviceEntries.push([name, device]);
+        } catch (err) {
+          this.logger.warn(
+            { err, friendlyName: name },
+            "Skipping unserializable device while persisting the device registry",
+          );
+        }
       }
+      const devicesObj = Object.fromEntries(deviceEntries);
 
-      const statesObj: Record<string, Record<string, unknown>> = {};
+      const stateEntries: [string, Record<string, unknown>][] = [];
       for (const [name, state] of this.deviceStates) {
-        statesObj[name] = state;
+        try {
+          JSON.stringify(state);
+          stateEntries.push([name, state]);
+        } catch (err) {
+          this.logger.warn(
+            { err, friendlyName: name },
+            "Skipping unserializable device state while persisting the device registry",
+          );
+        }
+      }
+      const statesObj = Object.fromEntries(stateEntries);
+
+      const groupsArr: ZigbeeGroup[] = [];
+      for (const [id, group] of this.groups) {
+        try {
+          JSON.stringify(group);
+          groupsArr.push(group);
+        } catch (err) {
+          this.logger.warn(
+            { err, groupId: id },
+            "Skipping unserializable group while persisting the device registry",
+          );
+        }
       }
 
-      const groupsArr: ZigbeeGroup[] = Array.from(this.groups.values());
+      // Every surviving entry serialized individually, so this cannot throw.
+      const contents = JSON.stringify(
+        { devices: devicesObj, states: statesObj, groups: groupsArr },
+        null,
+        2,
+      );
 
       await mkdir(dirname(this.filePath), { recursive: true });
-      await writeFile(
-        this.filePath,
-        JSON.stringify({ devices: devicesObj, states: statesObj, groups: groupsArr }, null, 2),
-        "utf-8",
-      );
+      await writeJsonAtomically(this.filePath, contents, this.logger, "device registry");
 
       this.logger.info(
         {
-          devices: this.devices.size,
-          states: this.deviceStates.size,
-          groups: this.groups.size,
+          devices: Object.keys(devicesObj).length,
+          states: Object.keys(statesObj).length,
+          groups: groupsArr.length,
           file: this.filePath,
         },
         "Device registry persisted to disk",
@@ -265,6 +386,10 @@ export class DeviceRegistry {
     this.devices.clear();
     this.deviceStates.clear();
     this.groups.clear();
+    // A stopped registry holds nothing authoritative; a later empty list after restart
+    // must not be mistaken for an enumeration of the pre-stop state.
+    this.deviceListReceived = false;
+    this.groupListReceived = false;
 
     this.logger.info("Device registry stopped");
   }
@@ -276,6 +401,22 @@ export class DeviceRegistry {
   /** Return all tracked non-coordinator devices. */
   getDevices(): ZigbeeDevice[] {
     return Array.from(this.devices.values());
+  }
+
+  /**
+   * Whether an authoritative `bridge/devices` array has arrived since `start()`. A
+   * restored snapshot is a seed, not an enumeration, so it does not set this.
+   */
+  get hasReceivedDeviceList(): boolean {
+    return this.deviceListReceived;
+  }
+
+  /**
+   * Whether an authoritative `bridge/groups` array has arrived since `start()`. A
+   * restored snapshot is a seed, not an enumeration, so it does not set this.
+   */
+  get hasReceivedGroupList(): boolean {
+    return this.groupListReceived;
   }
 
   /** Return a single device by `friendly_name`, or `undefined` if not found. */
@@ -306,6 +447,32 @@ export class DeviceRegistry {
   /** Remove a previously-registered groups-changed handler. */
   offGroupsChanged(handler: GroupsChangedHandler): void {
     this.groupsChangedHandlers.delete(handler);
+  }
+
+  /**
+   * Register a handler that fires once per applied `bridge/devices` payload, after the
+   * whole list — removals, additions, and their notifications — has been processed.
+   */
+  onDeviceListApplied(handler: () => void): void {
+    this.deviceListAppliedHandlers.add(handler);
+  }
+
+  /** Remove a previously-registered device-list-applied handler. */
+  offDeviceListApplied(handler: () => void): void {
+    this.deviceListAppliedHandlers.delete(handler);
+  }
+
+  /**
+   * Register a handler that fires once per applied `bridge/groups` payload, after the
+   * tracked set has been updated and the groups-changed handlers have run.
+   */
+  onGroupListApplied(handler: () => void): void {
+    this.groupListAppliedHandlers.add(handler);
+  }
+
+  /** Remove a previously-registered group-list-applied handler. */
+  offGroupListApplied(handler: () => void): void {
+    this.groupListAppliedHandlers.delete(handler);
   }
 
   /**
@@ -423,13 +590,34 @@ export class DeviceRegistry {
       }
     }
 
-    // Detect additions and updates
+    // Detect additions and updates. Notifications are deferred until the whole
+    // authoritative list is applied, so a listener that reconciles on readiness cannot
+    // observe a partial enumeration and prune records for devices later in this payload.
+    const added: ZigbeeDevice[] = [];
     for (const [friendlyName, device] of incomingMap) {
       if (this.devices.has(friendlyName)) {
         // Update device definition in place (e.g. after rename or re-interview)
         this.devices.set(friendlyName, device);
       } else {
         this.addDevice(device);
+        added.push(device);
+      }
+    }
+
+    // An array — including an empty one — is the bridge's authoritative device list.
+    this.deviceListReceived = true;
+
+    for (const device of added) {
+      this.fireDeviceAdded(device);
+    }
+
+    // Fired after the full list and its notifications, so a topology consumer sees a
+    // complete enumeration (a removal-only payload sends no descriptor notification).
+    for (const handler of this.deviceListAppliedHandlers) {
+      try {
+        handler();
+      } catch (err) {
+        this.logger.error({ err }, "Error in onDeviceListApplied handler");
       }
     }
   }
@@ -443,6 +631,9 @@ export class DeviceRegistry {
       this.logger.warn("bridge/groups payload is not an array — ignoring");
       return;
     }
+
+    // An array — including an empty one — is the bridge's authoritative group list.
+    this.groupListReceived = true;
 
     const incomingMap = new Map<number, ZigbeeGroup>();
     for (const group of incoming) {
@@ -477,13 +668,23 @@ export class DeviceRegistry {
       }
     }
 
-    if (!changed) return;
+    if (changed) {
+      for (const handler of this.groupsChangedHandlers) {
+        try {
+          handler();
+        } catch (err) {
+          this.logger.error({ err }, "Error in onGroupsChanged handler");
+        }
+      }
+    }
 
-    for (const handler of this.groupsChangedHandlers) {
+    // Fired per applied payload, even when the set is unchanged: an authoritative group
+    // list can remove a group without any descriptor notification.
+    for (const handler of this.groupListAppliedHandlers) {
       try {
         handler();
       } catch (err) {
-        this.logger.error({ err }, "Error in onGroupsChanged handler");
+        this.logger.error({ err }, "Error in onGroupListApplied handler");
       }
     }
   }
@@ -523,8 +724,8 @@ export class DeviceRegistry {
   }
 
   /**
-   * Add a device to the registry: store metadata, subscribe to its topic,
-   * and fire `onDeviceAdded` listeners.
+   * Add a device to the registry: store metadata and subscribe to its topic. The
+   * `onDeviceAdded` listeners are fired by the caller once the whole list is applied.
    */
   private addDevice(device: ZigbeeDevice): void {
     const { friendly_name } = device;
@@ -539,12 +740,18 @@ export class DeviceRegistry {
     this.mqtt.subscribe(`${prefix}/${friendly_name}`, handler);
 
     this.logger.debug({ friendlyName: friendly_name }, "Device added to registry");
+  }
 
+  /** Fire `onDeviceAdded` listeners for a device whose metadata is already registered. */
+  private fireDeviceAdded(device: ZigbeeDevice): void {
     for (const cb of this.deviceAddedHandlers) {
       try {
         cb(device);
       } catch (err) {
-        this.logger.error({ err, friendlyName: friendly_name }, "Error in onDeviceAdded handler");
+        this.logger.error(
+          { err, friendlyName: device.friendly_name },
+          "Error in onDeviceAdded handler",
+        );
       }
     }
   }
@@ -603,4 +810,59 @@ export class DeviceRegistry {
       }
     }
   }
+}
+
+/** Structural guard for a JSON object read back from a snapshot. */
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** Structural guard for a persisted device entry read back from disk. */
+function isPersistedDevice(value: unknown): value is ZigbeeDevice {
+  if (!isPlainObject(value)) return false;
+  return typeof value.friendly_name === "string" && typeof value.ieee_address === "string";
+}
+
+/** Structural guard for a persisted group member read back from disk. */
+function isPersistedGroupMember(value: unknown): value is ZigbeeGroupMember {
+  if (!isPlainObject(value)) return false;
+  return typeof value.ieee_address === "string" && typeof value.endpoint === "number";
+}
+
+/** A persisted group entry whose members have not been filtered yet. */
+interface PersistedGroupCandidate {
+  id: number;
+  friendly_name: string;
+  members: unknown[];
+}
+
+/**
+ * Structural guard for a persisted group entry read back from disk. Individual members are
+ * filtered separately so one malformed member cannot discard its group.
+ */
+function isPersistedGroup(value: unknown): value is PersistedGroupCandidate {
+  if (!isPlainObject(value)) return false;
+  return (
+    typeof value.id === "number" &&
+    typeof value.friendly_name === "string" &&
+    Array.isArray(value.members)
+  );
+}
+
+/** Read an optional snapshot field as a plain object, throwing on a wrong type. */
+function snapshotObjectField(value: unknown, field: string): Record<string, unknown> | undefined {
+  if (value === undefined) return undefined;
+  if (!isPlainObject(value)) {
+    throw new Error(`Device registry snapshot has a malformed \`${field}\` field`);
+  }
+  return value;
+}
+
+/** Read an optional snapshot field as an array, throwing on a wrong type. */
+function snapshotArrayField(value: unknown, field: string): unknown[] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) {
+    throw new Error(`Device registry snapshot has a malformed \`${field}\` field`);
+  }
+  return value;
 }
